@@ -129,6 +129,7 @@ WEB_SEARCH_CITATION_TOOL_NAMES = frozenset(
         "web_search_tavily",
         "web_search_bocha",
         "web_search_brave",
+        "web_search_exa",
     }
 )
 WEB_SEARCH_CITATION_PROMPT = (

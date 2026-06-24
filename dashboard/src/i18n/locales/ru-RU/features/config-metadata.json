@@ -129,6 +129,10 @@
                     "description": "API-ключ Brave Search",
                     "hint": "Можно добавить несколько ключей для ротации."
                 },
+                "websearch_exa_key": {
+                    "description": "API-ключ Exa",
+                    "hint": "Можно добавить несколько ключей для ротации."
+                },
                 "websearch_firecrawl_key": {
                     "description": "API-ключ Firecrawl",
                     "hint": "Можно добавить несколько ключей для ротации."

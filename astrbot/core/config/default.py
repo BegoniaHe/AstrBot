@@ -113,6 +113,7 @@ DEFAULT_CONFIG = {
         "websearch_tavily_key": [],
         "websearch_bocha_key": [],
         "websearch_brave_key": [],
+        "websearch_exa_key": [],
         "websearch_baidu_app_builder_key": "",
         "websearch_firecrawl_key": [],
         "web_search_link": False,
@@ -3285,6 +3286,7 @@ CONFIG_METADATA_3 = {
                             "baidu_ai_search",
                             "bocha",
                             "brave",
+                            "exa",
                             "firecrawl",
                         ],
                         "condition": {
@@ -3318,6 +3320,16 @@ CONFIG_METADATA_3 = {
                         "hint": "可添加多个 Key 进行轮询。",
                         "condition": {
                             "provider_settings.websearch_provider": "brave",
+                            "provider_settings.web_search": True,
+                        },
+                    },
+                    "provider_settings.websearch_exa_key": {
+                        "description": "Exa API Key",
+                        "type": "list",
+                        "items": {"type": "string"},
+                        "hint": "可添加多个 Key 进行轮询。",
+                        "condition": {
+                            "provider_settings.websearch_provider": "exa",
                             "provider_settings.web_search": True,
                         },
                     },

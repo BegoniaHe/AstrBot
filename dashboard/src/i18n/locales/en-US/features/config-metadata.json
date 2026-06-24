@@ -129,6 +129,10 @@
           "description": "Brave Search API Key",
           "hint": "Multiple keys can be added for rotation."
         },
+        "websearch_exa_key": {
+          "description": "Exa API Key",
+          "hint": "Multiple keys can be added for rotation."
+        },
         "websearch_firecrawl_key": {
           "description": "Firecrawl API Key",
           "hint": "Multiple keys can be added for rotation."

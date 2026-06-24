@@ -19,8 +19,10 @@ WEB_SEARCH_TOOL_NAMES = [
     "tavily_extract_web_page",
     "web_search_bocha",
     "web_search_brave",
+    "web_search_exa",
     "web_search_firecrawl",
     "firecrawl_extract_web_page",
+    "exa_get_contents",
 ]
 _TAVILY_WEB_SEARCH_TOOL_CONFIG = {
     "provider_settings.web_search": True,
@@ -33,6 +35,10 @@ _BOCHA_WEB_SEARCH_TOOL_CONFIG = {
 _BRAVE_WEB_SEARCH_TOOL_CONFIG = {
     "provider_settings.web_search": True,
     "provider_settings.websearch_provider": "brave",
+}
+_EXA_WEB_SEARCH_TOOL_CONFIG = {
+    "provider_settings.web_search": True,
+    "provider_settings.websearch_provider": "exa",
 }
 _FIRECRAWL_WEB_SEARCH_TOOL_CONFIG = {
     "provider_settings.web_search": True,
@@ -75,6 +81,7 @@ class _KeyRotator:
 _TAVILY_KEY_ROTATOR = _KeyRotator("websearch_tavily_key", "Tavily")
 _BOCHA_KEY_ROTATOR = _KeyRotator("websearch_bocha_key", "BoCha")
 _BRAVE_KEY_ROTATOR = _KeyRotator("websearch_brave_key", "Brave")
+_EXA_KEY_ROTATOR = _KeyRotator("websearch_exa_key", "Exa")
 _FIRECRAWL_KEY_ROTATOR = _KeyRotator("websearch_firecrawl_key", "Firecrawl")
 
 
@@ -299,6 +306,66 @@ async def _firecrawl_scrape(provider_settings: dict, payload: dict) -> dict:
                     "Error: Firecrawl web scraper does not return any results."
                 )
             return result
+
+
+async def _exa_search(
+    provider_settings: dict,
+    payload: dict,
+) -> list[SearchResult]:
+    exa_key = await _EXA_KEY_ROTATOR.get(provider_settings)
+    headers = {
+        "x-api-key": exa_key,
+        "Content-Type": "application/json",
+    }
+    async with aiohttp.ClientSession(trust_env=True) as session:
+        async with session.post(
+            "https://api.exa.ai/search",
+            json=payload,
+            headers=headers,
+        ) as response:
+            if response.status != 200:
+                reason = await response.text()
+                raise Exception(
+                    f"Exa web search failed: {reason}, status: {response.status}",
+                )
+            data = await response.json()
+            return [
+                SearchResult(
+                    title=item.get("title", ""),
+                    url=item.get("url", ""),
+                    snippet=(
+                        item.get("text")
+                        or (item.get("highlights") or [""])[0]
+                        or item.get("summary", "")
+                    ),
+                )
+                for item in data.get("results", [])
+                if item.get("url")
+            ]
+
+
+async def _exa_get_contents(
+    provider_settings: dict,
+    payload: dict,
+) -> list[dict]:
+    exa_key = await _EXA_KEY_ROTATOR.get(provider_settings)
+    headers = {
+        "x-api-key": exa_key,
+        "Content-Type": "application/json",
+    }
+    async with aiohttp.ClientSession(trust_env=True) as session:
+        async with session.post(
+            "https://api.exa.ai/contents",
+            json=payload,
+            headers=headers,
+        ) as response:
+            if response.status != 200:
+                reason = await response.text()
+                raise Exception(
+                    f"Exa get contents failed: {reason}, status: {response.status}",
+                )
+            data = await response.json()
+            return data.get("results", [])
 
 
 async def _baidu_search(
@@ -591,6 +658,106 @@ class BraveWebSearchTool(FunctionTool[AstrAgentContext]):
         return _search_result_payload(results)
 
 
+@builtin_tool(config=_EXA_WEB_SEARCH_TOOL_CONFIG)
+@pydantic_dataclass
+class ExaWebSearchTool(FunctionTool[AstrAgentContext]):
+    name: str = "web_search_exa"
+    description: str = (
+        "A web search tool powered by Exa. Supports keyword and semantic search "
+        "with domain, date, and category filters."
+    )
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Required. Search query."},
+                "num_results": {
+                    "type": "integer",
+                    "description": "Optional. Number of results to return. Default is 10.",
+                },
+                "type": {
+                    "type": "string",
+                    "description": 'Optional. Search type: "auto", "keyword", or "neural".',
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional. Category filter for Exa results.",
+                },
+                "include_domains": {
+                    "type": "string",
+                    "description": "Optional. Comma-separated domains to include.",
+                },
+                "exclude_domains": {
+                    "type": "string",
+                    "description": "Optional. Comma-separated domains to exclude.",
+                },
+                "start_published_date": {
+                    "type": "string",
+                    "description": "Optional. Start date filter in ISO 8601 format.",
+                },
+                "end_published_date": {
+                    "type": "string",
+                    "description": "Optional. End date filter in ISO 8601 format.",
+                },
+            },
+            "required": ["query"],
+        }
+    )
+
+    async def call(self, context, **kwargs) -> ToolExecResult:
+        _, provider_settings, _ = _get_runtime(context)
+        if not provider_settings.get("websearch_exa_key", []):
+            return "Error: Exa API key is not configured in AstrBot."
+
+        try:
+            num_results = int(kwargs.get("num_results", 10))
+        except (TypeError, ValueError):
+            num_results = 10
+        if num_results < 1:
+            num_results = 1
+
+        search_type = kwargs.get("type", "auto")
+        if search_type not in ("auto", "keyword", "neural"):
+            search_type = "auto"
+
+        payload: dict[str, object] = {
+            "query": kwargs["query"],
+            "numResults": num_results,
+            "type": search_type,
+            "contents": {"text": {"maxCharacters": 500}},
+        }
+
+        category = str(kwargs.get("category", "")).strip()
+        if category:
+            payload["category"] = category
+
+        include_domains = str(kwargs.get("include_domains", "")).strip()
+        if include_domains:
+            payload["includeDomains"] = [
+                domain.strip()
+                for domain in include_domains.split(",")
+                if domain.strip()
+            ]
+
+        exclude_domains = str(kwargs.get("exclude_domains", "")).strip()
+        if exclude_domains:
+            payload["excludeDomains"] = [
+                domain.strip()
+                for domain in exclude_domains.split(",")
+                if domain.strip()
+            ]
+
+        if kwargs.get("start_published_date"):
+            payload["startPublishedDate"] = kwargs["start_published_date"]
+        if kwargs.get("end_published_date"):
+            payload["endPublishedDate"] = kwargs["end_published_date"]
+
+        results = await _exa_search(provider_settings, payload)
+        if not results:
+            return "Error: Exa web search does not return any results."
+        return _search_result_payload(results)
+
+
 @builtin_tool(config=_FIRECRAWL_WEB_SEARCH_TOOL_CONFIG)
 @pydantic_dataclass
 class FirecrawlWebSearchTool(FunctionTool[AstrAgentContext]):
@@ -709,6 +876,57 @@ class FirecrawlExtractWebPageTool(FunctionTool[AstrAgentContext]):
         return ret or "Error: Firecrawl web scraper does not return any results."
 
 
+@builtin_tool(config=_EXA_WEB_SEARCH_TOOL_CONFIG)
+@pydantic_dataclass
+class ExaGetContentsTool(FunctionTool[AstrAgentContext]):
+    name: str = "exa_get_contents"
+    description: str = "Extract the content of a web page using Exa."
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Required. A URL to extract content from.",
+                },
+                "max_characters": {
+                    "type": "integer",
+                    "description": "Optional. Maximum number of characters to return. Default is 3000.",
+                },
+            },
+            "required": ["url"],
+        }
+    )
+
+    async def call(self, context, **kwargs) -> ToolExecResult:
+        _, provider_settings, _ = _get_runtime(context)
+        if not provider_settings.get("websearch_exa_key", []):
+            return "Error: Exa API key is not configured in AstrBot."
+
+        url = str(kwargs.get("url", "")).strip()
+        if not url:
+            return "Error: url must be a non-empty string."
+
+        try:
+            max_characters = int(kwargs.get("max_characters", 3000))
+        except (TypeError, ValueError):
+            max_characters = 3000
+
+        results = await _exa_get_contents(
+            provider_settings,
+            {
+                "ids": [url],
+                "text": {"maxCharacters": max_characters},
+            },
+        )
+        ret_ls = []
+        for result in results:
+            ret_ls.append(f"URL: {result.get('url', 'No URL')}")
+            ret_ls.append(f"Content: {result.get('text', 'No content')}")
+        ret = "\n".join(ret_ls)
+        return ret or "Error: Exa get contents does not return any results."
+
+
 @builtin_tool(config=_BAIDU_WEB_SEARCH_TOOL_CONFIG)
 @pydantic_dataclass
 class BaiduWebSearchTool(FunctionTool[AstrAgentContext]):
@@ -776,6 +994,8 @@ __all__ = [
     "BaiduWebSearchTool",
     "BochaWebSearchTool",
     "BraveWebSearchTool",
+    "ExaGetContentsTool",
+    "ExaWebSearchTool",
     "TavilyExtractWebPageTool",
     "TavilyWebSearchTool",
     "WEB_SEARCH_TOOL_NAMES",
