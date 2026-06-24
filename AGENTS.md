@@ -1,134 +1,116 @@
-## Setup commands
+# AGENTS.md
 
-### Core
+This file provides guidance to Agents when working with code in this repository.
 
+## Project philosophy
+
+This repository is a **modernized fork of AstrBot**. The guiding principle is to keep the codebase lean and forward-looking rather than infinitely backward-compatible.
+
+- **Do not add or preserve compatibility shims for legacy APIs, old plugin formats, or deprecated knowledge-base layouts.** When you touch code that carries such compatibility layers, prefer removing the legacy path over extending it.
+- Target the current Python and platform baseline only (Python 3.12+). Do not reintroduce 3.10/3.11 fallbacks.
+- When a feature has an old and a new code path, build on the new one and delete the old one rather than bridging the two.
+
+If a change would require resurrecting a legacy compatibility layer to work, that is a signal the approach is wrong — find the modern path instead.
+
+## Setup & common commands
+
+### Backend (Python, managed by `uv`)
+
+```bash
+uv sync                 # install deps (use --group dev for quality/test tooling)
+uv run main.py          # run AstrBot; WebUI/API on http://localhost:6185
 ```
-uv sync
-uv run main.py
-```
 
-Exposed an API server on `http://localhost:6185` by default.
+Default WebUI credentials are `astrbot`/`astrbot`. Runtime data (config, plugins, temp) lives under `data/`.
 
-### Dashboard(WebUI)
+### Dashboard (Vue 3 + Vite, managed by `pnpm`)
 
-```
+```bash
 cd dashboard
-pnpm install # First time only. Use npm install -g pnpm if pnpm is not installed.
-pnpm dev
+pnpm install            # first time only
+pnpm dev                # http://localhost:3000
+pnpm build              # production build into dashboard/dist/
+pnpm generate:api       # regenerate the typed API client (see below)
 ```
 
-Runs on `http://localhost:3000` by default.
-
-## Pre-commit setup
-
-AstrBot uses [pre-commit](https://pre-commit.com/) hooks to automatically format and lint Python code before each commit. The hooks run `ruff check`, `ruff format`, and `pyupgrade` (see [`.pre-commit-config.yaml`](.pre-commit-config.yaml) for details).
-
-To set it up:
+### Tests
 
 ```bash
-pip install pre-commit
-pre-commit install
+uv run pytest                                  # full suite
+uv run pytest tests/unit                       # unit tests only
+uv run pytest tests/unit/test_event_bus.py     # single file
+uv run pytest tests/unit/test_event_bus.py::TestEventBus::test_dispatch  # single test
+uv run pytest --test-profile blocking          # exclude auto-classified tier_c/tier_d (slow/integration) tests
 ```
 
-After installation, the hooks will run automatically on `git commit`. You can also run them manually at any time:
+Tests use `pytest-asyncio`; async tests are marked explicitly with `@pytest.mark.asyncio`. `conftest.py` sets `TESTING=true` and `ASTRBOT_TEST_MODE=true`, reorders unit tests before integration tests, and auto-classifies slow/integration tests into `tier_c`/`tier_d`. Shared fixtures (`event_queue`, `temp_data_dir`, etc.) live in `tests/conftest.py` and `tests/fixtures/`.
+
+### Lint, format, quality
 
 ```bash
-ruff format .
-ruff check .
+ruff format .           # format (run before committing)
+ruff check .            # lint
+make quality            # scoped pyright + bandit + pip-audit + radon on key modules
+make quality-report     # same checks across the whole astrbot package
 ```
 
-> **Note:** If you use VSCode, install the `Ruff` extension for real-time formatting and linting in the editor.
-
-## Dev environment tips
-
-### Basic
-
-1. When modifying the WebUI, be sure to maintain componentization and clean code. Avoid duplicate code.
-2. Do not add any report files such as xxx_SUMMARY.md.
-3. After finishing, use `ruff format .` and `ruff check .` to format and check the code.
-4. When committing, ensure to use conventional commits messages, such as `feat: add new agent for data analysis` or `fix: resolve bug in provider manager`.
-5. Use English for all new comments.
-6. For path handling, use `pathlib.Path` instead of string paths, and use `astrbot.core.utils.path_utils` to get the AstrBot data and temp directory.
-7. When backend API routes, request/response schemas, or OpenAPI definitions change, regenerate the frontend API client by running `cd dashboard && pnpm generate:api`.
-8. When updating the project version, keep `[project].version` in `pyproject.toml` and `__version__` in `astrbot/__init__.py` in sync. `VERSION` in `astrbot/core/config/default.py` should derive from `astrbot.__version__` instead of hardcoding a separate version string.
-
-### KISS and First Principles
-
-Follow the KISS principle and reason from first principles during development. Start by identifying the real problem, required behavior, and smallest useful change before adding code. Do not pile on features, configuration switches, abstractions, dependencies, or compatibility layers unless they directly solve the current problem and have clear evidence of need.
-
-Prefer the simplest implementation that is correct, maintainable, and consistent with the existing codebase. If a broader design seems attractive, reduce it to the essential behavior needed now and leave optional expansion for a later, explicit requirement.
-
-### No Unnecessary Helpers
-
-Prioritize inline implementation over abstraction. Avoid over-engineering and do not create helper functions unless absolutely necessary.
-
-1. **Inline-First Rule**: If a logic block can be implemented directly within the main function without breaking overall readability, **do not** extract it into a new helper function.
-2. **Strict Justification for Helpers**: You may only create a separate helper function if it meets at least one of these criteria:
-   - **High Reuse**: The exact same logic is repeated across **3 or more** different locations.
-   - **Extreme Complexity**: Inlining the logic makes the main function too long (e.g., >50 lines) or severely derails the main execution flow.
-3. **No Fragmentation**: Do not split continuous linear logic (e.g., a single API call, simple form validation, or one-time data formatting) into tiny functions just for the sake of "clean code."
-4. **Keep Context Compact**: Handle edge cases, error catching, and logging directly inside the main function block instead of offloading them.
-5. **Refactoring Constraint**: When modifying existing code, do not alter the current function structure or extract code into new helpers unless the existing code already violates the complexity or reuse rules above.
-
-### Mandatory Google-Style Docstrings
-* **Comment the complex**: Add clear comments to any non-obvious function, method, or parameter.
-* **Google Format**: All docstrings must strictly use the Google format (`Args:`, `Returns:`, `Raises:`).
-
-#### Example:
-
-```py
-def calculate_metrics(user_id: int, force_refresh: bool = False) -> dict:
-    """Brief description of the function.
-
-    Args:
-        user_id: Description of the ID.
-        force_refresh: Description of the flag.
-
-    Returns:
-        Description of the returned dict.
-
-    Raises:
-        ValueError: Description of when this occurs.
-    """
-    # Inline implementation here...
-```
-
-
-## PR instructions
-
-1. Title format: use conventional commit messages
-2. Use English to write PR title and descriptions.
-
-## Release versions
-
-Use a short-lived `release/*` branch for each release. The release branch is the stabilization area for version bumps, changelog updates, release-blocking fixes, and final validation only. Do not add unrelated features or broad refactors to a release branch.
-
-Prepare a release from a clean worktree with:
+`ruff` is configured in `pyproject.toml` (line-length 88, py312 target, mccabe max-complexity 15). Pre-commit hooks run `ruff-check`, `ruff-format`, and `pyupgrade --py312-plus`:
 
 ```bash
-uv run python scripts/prepare_release.py 4.25.0
+pip install pre-commit && pre-commit install
 ```
 
-The script updates `pyproject.toml` and `astrbot/__init__.py`, creates `changelogs/v4.25.0.md`, runs the required Python checks, and prints the remaining steps. Use these flags when needed:
+## Architecture
+
+AstrBot routes incoming messages from many IM platforms through a staged pipeline that ultimately invokes an LLM agent and/or plugins, then sends a response back. The big pieces:
+
+### Message flow
+
+1. **Platform adapters** (`astrbot/core/platform/sources/*`) connect to each IM (QQ official, OneBot/aiocqhttp, Telegram, Discord, Lark, DingTalk, Slack, etc.). Each adapter normalizes inbound messages into an `AstrMessageEvent` (`astrbot/core/platform/astr_message_event.py`) and pushes it onto a shared asyncio queue.
+2. **`EventBus`** (`astrbot/core/event_bus.py`) pulls events off the queue, looks up the right `PipelineScheduler` for the event's config (keyed by config id via `AstrBotConfigManager`), and spawns a task to run it.
+3. **Pipeline** (`astrbot/core/pipeline/`) runs the event through ordered stages defined in `stage_order.py`:
+   `WakingCheck → WhitelistCheck → SessionStatusCheck → RateLimit → ContentSafetyCheck → PreProcess → Process → ResultDecorate → Respond`.
+   The **ProcessStage** is where plugins (Stars) and the LLM agent run; `ResultDecorate` applies reply prefixes, text-to-image, TTS; `Respond` sends the message back through the platform adapter.
+
+### Agent & providers
+
+- **`astrbot/core/agent/`** is the LLM agent runtime: tool execution (`tool_executor.py`), MCP client (`mcp_client.py`), handoffs, runners, and run context. The main agent assembly lives in `astrbot/core/astr_main_agent.py` and related `astr_agent_*` modules. `subagent_orchestrator.py` manages sub-agents.
+- **`astrbot/core/provider/`** abstracts LLM/STT/TTS/embedding/rerank services. Concrete integrations live in `provider/sources/*` (OpenAI, Anthropic, Gemini, Dify, etc.). `ProviderManager` (`provider/manager.py`) tracks instances and the default provider; `func_tool_manager.py` manages function tools exposed to the LLM.
+
+### Plugins ("Stars")
+
+- The plugin system is under `astrbot/core/star/`. Plugins are called **Stars**; `StarMetadata` (`star/star.py`) describes each one. Built-in plugins live in `astrbot/builtin_stars/`; user-installed plugins load from `data/plugins/`. `PluginManager` (`star_manager.py`) loads/registers them and `star_handler.py` wires their handlers and filters into the pipeline.
+
+### Lifecycle & supporting subsystems
+
+- **`AstrBotCoreLifecycle`** (`astrbot/core/core_lifecycle.py`) is the startup/shutdown orchestrator — it constructs the provider/platform/conversation/plugin managers, pipeline schedulers, event bus, cron manager, knowledge base, and persona manager, then runs all tasks.
+- Other core subsystems: `knowledge_base/` (chunking + retrieval, FAISS/BM25), `conversation_mgr.py`, `persona_mgr.py`, `cron/` (APScheduler-based jobs), `skills/`, `computer/` (agent sandbox), `db/`, and `backup/`.
+
+### Dashboard ↔ backend contract
+
+- The backend API lives under `astrbot/dashboard/`. The OpenAPI definition is `openspec/openapi-v1.yaml`. The frontend (`dashboard/src/api/generated/`) is a **generated** typed client. **When you change backend routes, request/response schemas, or the OpenAPI spec, regenerate the client with `cd dashboard && pnpm generate:api`** and commit the result.
+
+### CLI
+
+The `astrbot` console entry point (`astrbot/cli/__main__.py`, commands in `astrbot/cli/commands/`) drives `astrbot init` / `astrbot run` for `uv tool` installs.
+
+## Conventions
+
+- **KISS / first principles.** Identify the real problem and the smallest correct change. Do not add features, config switches, abstractions, dependencies, or compatibility layers without clear, current need.
+- **Inline-first, few helpers.** Implement logic inline within the main function. Only extract a helper when the exact logic repeats in 3+ places or inlining makes a function exceed ~50 lines. Do not split continuous linear logic into tiny functions. When editing existing code, don't restructure or extract helpers unless the code already violates these rules.
+- **Paths:** use `pathlib.Path`, not string paths. Get AstrBot data/temp directories via `astrbot.core.utils.path_utils` — don't hardcode.
+- **Docstrings:** Google style (`Args:` / `Returns:` / `Raises:`). Comment non-obvious logic. Write all new comments in English. (Note: much existing code has Chinese comments; match the surrounding file when editing, but prefer English for new code.)
+- **Version sync:** keep `[project].version` in `pyproject.toml` and `__version__` in `astrbot/__init__.py` in sync. `VERSION` in `astrbot/core/config/default.py` derives from `astrbot.__version__` — don't hardcode it.
+- **No report files.** Don't create `*_SUMMARY.md` or similar artifacts.
+- **Commits & PRs:** conventional commit format (`feat:`, `fix:`, `refactor:`, `chore:`), in English. Title under ~70 chars.
+
+## Releases
+
+Prepare releases from a clean worktree on a short-lived `release/*` branch:
 
 ```bash
-uv run python scripts/prepare_release.py 4.25.0 --generate-api-client
-uv run python scripts/prepare_release.py 4.25.0 --dashboard-build
-uv run python scripts/prepare_release.py 4.25.0 --commit --push
+uv run python scripts/prepare_release.py 4.26.0    # bumps version, writes changelog, runs checks
+# flags: --generate-api-client  --dashboard-build  --commit --push
 ```
 
-Open a PR from `release/4.25.0` to `master`. The PR title must use the conventional commit format, for example `chore: bump version to 4.25.0`. After the release PR is merged, create and push the tag from the updated `master` branch so the tag points to the exact code that was merged:
-
-```bash
-git checkout master
-git pull --ff-only origin master
-git tag v4.25.0
-git push origin v4.25.0
-```
-
-For one-off release candidate branches, delete the release branch after the tag is pushed and verified. For maintained release lines, use a branch such as `release/4.25` and keep it until that line reaches EOL.
-
-```bash
-git branch -d release/4.25.0
-git push origin --delete release/4.25.0
-```
+Open a PR from `release/x.y.z` to `master`. After merge, tag from the updated `master` (`git tag vx.y.z && git push origin vx.y.z`). Keep release branches only for maintained lines; delete one-off RC branches after tagging.
