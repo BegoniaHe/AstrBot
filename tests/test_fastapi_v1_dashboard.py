@@ -1706,7 +1706,9 @@ async def test_v1_token_file_is_public(
 ):
     token_file = tmp_path / "token-file.txt"
     token_file.write_text("token:demo-token", encoding="utf-8")
-    file_token = await file_token_service.register_file(str(token_file), timeout=60)
+    file_token = await file_token_service.register_file(
+        str(token_file), ttl_seconds=60
+    )
 
     response = await asgi_client.get(f"/api/v1/files/tokens/{file_token}")
 
