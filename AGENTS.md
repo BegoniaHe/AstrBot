@@ -101,6 +101,7 @@ The `astrbot` console entry point (`astrbot/cli/__main__.py`, commands in `astrb
 - **Paths:** use `pathlib.Path`, not string paths. Get AstrBot data/temp directories via `astrbot.core.utils.path_utils` — don't hardcode.
 - **Docstrings:** Google style (`Args:` / `Returns:` / `Raises:`). Comment non-obvious logic. Write all new comments in English. (Note: much existing code has Chinese comments; match the surrounding file when editing, but prefer English for new code.)
 - **Version sync:** keep `[project].version` in `pyproject.toml` and `__version__` in `astrbot/__init__.py` in sync. `VERSION` in `astrbot/core/config/default.py` derives from `astrbot.__version__` — don't hardcode it.
+- **Upstream sync marker:** after syncing from `AstrBotDevs/AstrBot`, update `upstream-sync.yaml` at the repository root in the same change set. Record the upstream repo, branch, full commit hash, UTC sync time, sync method, and source PR or note. Use the full object name instead of an abbreviated hash so the recorded sync point stays unambiguous as the repository grows. Do not treat `.git/FETCH_HEAD` or `git notes` as the shared source of truth for upstream sync state.
 - **No report files.** Don't create `*_SUMMARY.md` or similar artifacts.
 - **Commits & PRs:** conventional commit format (`feat:`, `fix:`, `refactor:`, `chore:`), in English. Title under ~70 chars.
 

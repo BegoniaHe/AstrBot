@@ -1,0 +1,12 @@
+schema_version: 1
+
+upstream:
+  repo: https://github.com/AstrBotDevs/AstrBot.git
+  branch: master
+
+last_synced:
+  commit: 952d1bfad7e516df5c5dd4f9e7414b81cb4e5bde
+  synced_at_utc: 2026-06-24T21:54:10.6853477Z
+  sync_method: cherry-pick
+  source_pr: https://github.com/BegoniaHe/AstrBot/pull/1
+  note: Latest upstream commit included by the current sync batch.
