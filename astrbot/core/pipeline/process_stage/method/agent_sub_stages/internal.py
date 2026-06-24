@@ -104,10 +104,14 @@ class InternalAgentSubStage(Stage):
             "llm_compress_provider_id", ""
         )
         self.max_context_length = settings["max_context_length"]  # int
-        self.dequeue_context_length: int = min(
-            max(1, settings["dequeue_context_length"]),
-            self.max_context_length - 1,
-        )
+        configured_dequeue_context_length = max(1, settings["dequeue_context_length"])
+        if self.max_context_length == -1:
+            self.dequeue_context_length = configured_dequeue_context_length
+        else:
+            self.dequeue_context_length = min(
+                configured_dequeue_context_length,
+                self.max_context_length - 1,
+            )
         if self.dequeue_context_length <= 0:
             self.dequeue_context_length = 1
         self.fallback_max_context_tokens: int = settings.get(
