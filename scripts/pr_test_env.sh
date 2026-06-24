@@ -8,6 +8,7 @@ cd "$ROOT_DIR"
 PROFILE="neo"
 RUN_SYNC=true
 RUN_LINT=true
+RUN_QUALITY=false
 RUN_SMOKE=true
 RUN_DASHBOARD=false
 
@@ -22,6 +23,7 @@ Options:
   --no-dashboard        Disable dashboard build (even for full profile)
   --skip-sync           Skip `uv sync`
   --skip-lint           Skip `ruff format --check` and `ruff check`
+  --with-quality        Run focused type, security, dependency, and complexity checks
   --skip-smoke          Skip startup smoke test
   -h, --help            Show this help message
 
@@ -52,6 +54,10 @@ while (($# > 0)); do
       RUN_LINT=false
       shift
       ;;
+    --with-quality)
+      RUN_QUALITY=true
+      shift
+      ;;
     --skip-smoke)
       RUN_SMOKE=false
       shift
@@ -79,6 +85,7 @@ fi
 echo "==> Profile: $PROFILE"
 echo "==> Sync dependencies: $RUN_SYNC"
 echo "==> Run lint: $RUN_LINT"
+echo "==> Run quality checks: $RUN_QUALITY"
 echo "==> Run smoke test: $RUN_SMOKE"
 echo "==> Build dashboard: $RUN_DASHBOARD"
 
@@ -97,6 +104,41 @@ if [[ "$RUN_LINT" == true ]]; then
   uv run ruff format --check .
   echo "==> Running Ruff lint check"
   uv run ruff check .
+fi
+
+if [[ "$RUN_QUALITY" == true ]]; then
+  echo "==> Running focused Pyright quality checks"
+  uv run pyright --project pyrightconfig.quality.json
+  echo "==> Running focused Bandit security checks"
+  PYTHONIOENCODING=utf-8 uv run bandit -r \
+    astrbot/api \
+    astrbot/cli \
+    astrbot/core/backup \
+    astrbot/core/knowledge_base \
+    astrbot/core/skills \
+    astrbot/utils \
+    -c pyproject.toml
+  echo "==> Running dependency vulnerability audit"
+  uv run pip-audit
+  echo "==> Running complexity reports"
+  uv run radon cc \
+    astrbot/api \
+    astrbot/cli \
+    astrbot/core/backup \
+    astrbot/core/config \
+    astrbot/core/knowledge_base \
+    astrbot/core/skills \
+    astrbot/utils \
+    -s -n C
+  uv run radon mi \
+    astrbot/api \
+    astrbot/cli \
+    astrbot/core/backup \
+    astrbot/core/config \
+    astrbot/core/knowledge_base \
+    astrbot/core/skills \
+    astrbot/utils \
+    -s
 fi
 
 echo "==> Running pytest"

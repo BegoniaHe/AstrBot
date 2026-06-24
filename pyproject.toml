@@ -72,9 +72,13 @@ dependencies = [
 [dependency-groups]
 dev = [
   "commitizen>=4.9.1",
+  "bandit[toml]>=1.9.4",
+  "pip-audit>=2.10.1",
+  "pyright>=1.1.410",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=6.2.1",
+  "radon>=6.0.1",
   "ruff>=0.15.0",
 ]
 
@@ -87,7 +91,7 @@ Repository = "https://github.com/AstrBotDevs/AstrBot"
 [tool.ruff]
 exclude = ["astrbot/core/utils/t2i/local_strategy.py", "astrbot/api/all.py", "tests"]
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -109,13 +113,12 @@ ignore = [
   "ASYNC240", # TODO: handle ASYNC240 in AstrBot
 ]
 
-[tool.pyright]
-typeCheckingMode = "basic"
-pythonVersion = "3.10"
-reportMissingTypeStubs = false
-reportMissingImports = false
-include = ["astrbot"]
-exclude = ["dashboard", "node_modules", "dist", "data", "tests"]
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.bandit]
+exclude_dirs = ["tests", "data", ".venv", "dashboard/node_modules"]
+skips = ["B101", "B105", "B110"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

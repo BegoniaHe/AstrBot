@@ -1,6 +1,6 @@
 .PHONY: worktree worktree-add worktree-rm pr-test-neo pr-test-full pr-test-full-fast \
 	build build-backend build-dashboard run run-backend run-dashboard \
-	stop stop-backend stop-dashboard clean status
+	stop stop-backend stop-dashboard clean status quality quality-report
 
 WORKTREE_DIR ?= ../astrbot_worktree
 BRANCH ?= $(word 2,$(MAKECMDGOALS))
@@ -11,6 +11,8 @@ RUN_DIR ?= .make
 DASHBOARD_DIR ?= dashboard
 PS := powershell -NoProfile -ExecutionPolicy Bypass -File
 PNPM := npm exec --yes pnpm@10 --
+QUALITY_TYPE_TARGETS := astrbot/api astrbot/cli astrbot/core/backup astrbot/core/config astrbot/core/knowledge_base astrbot/core/skills astrbot/utils
+QUALITY_SECURITY_TARGETS := astrbot/api astrbot/cli astrbot/core/backup astrbot/core/knowledge_base astrbot/core/skills astrbot/utils
 
 worktree:
 	@echo "Usage:"
@@ -73,6 +75,22 @@ status:
 
 clean: stop
 	@$(PS) scripts/make_dev.ps1 clean
+
+quality:
+	uv sync --group dev
+	uv run pyright --project pyrightconfig.quality.json
+	PYTHONIOENCODING=utf-8 uv run bandit -r $(QUALITY_SECURITY_TARGETS) -c pyproject.toml
+	uv run pip-audit
+	uv run radon cc $(QUALITY_TYPE_TARGETS) -s -n C
+	uv run radon mi $(QUALITY_TYPE_TARGETS) -s
+
+quality-report:
+	uv sync --group dev
+	uv run pyright
+	PYTHONIOENCODING=utf-8 uv run bandit -r astrbot -c pyproject.toml
+	uv run pip-audit
+	uv run radon cc astrbot -s -n C
+	uv run radon mi astrbot -s
 
 # Swallow extra args (branch/base) so make doesn't treat them as targets
 %:

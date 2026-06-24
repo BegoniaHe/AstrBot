@@ -221,7 +221,7 @@ You can contribute by reviewing issues or helping with pull request reviews. Any
 
 ### Development Environment
 
-AstrBot uses `ruff` for code formatting and linting.
+AstrBot uses `ruff` for code formatting and linting. Focused type, security, dependency, and complexity checks are available through `make quality` or `scripts/pr_test_env.sh --with-quality`.
 
 ```bash
 git clone https://github.com/AstrBotDevs/AstrBot

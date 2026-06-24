@@ -2,5 +2,10 @@
   "pythonVersion": "3.12",
   "venvPath": ".",
   "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "include": ["astrbot"],
+  "exclude": ["dashboard", "node_modules", "dist", "data", "tests"],
   "reportMissingModuleSource": "none"
 }

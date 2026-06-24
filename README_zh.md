@@ -214,7 +214,7 @@ yay -S astrbot-git
 
 ### 开发环境
 
-AstrBot 使用 `ruff` 进行代码格式化和检查。
+AstrBot 使用 `ruff` 进行代码格式化和检查。聚焦的类型、安全、依赖与复杂度检查可以通过 `make quality` 或 `scripts/pr_test_env.sh --with-quality` 运行。
 
 ```bash
 git clone https://github.com/AstrBotDevs/AstrBot

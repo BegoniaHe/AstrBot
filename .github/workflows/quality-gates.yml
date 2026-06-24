@@ -1,0 +1,68 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  quality-gates:
+    name: Run focused quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run focused Pyright checks
+        run: uv run pyright --project pyrightconfig.quality.json
+
+      - name: Run focused Bandit checks
+        run: |
+          PYTHONIOENCODING=utf-8 uv run bandit -r \
+            astrbot/api \
+            astrbot/cli \
+            astrbot/core/backup \
+            astrbot/core/knowledge_base \
+            astrbot/core/skills \
+            astrbot/utils \
+            -c pyproject.toml
+
+      - name: Audit dependencies
+        run: uv run pip-audit
+
+      - name: Report complexity
+        run: |
+          uv run radon cc \
+            astrbot/api \
+            astrbot/cli \
+            astrbot/core/backup \
+            astrbot/core/config \
+            astrbot/core/knowledge_base \
+            astrbot/core/skills \
+            astrbot/utils \
+            -s -n C
+          uv run radon mi \
+            astrbot/api \
+            astrbot/cli \
+            astrbot/core/backup \
+            astrbot/core/config \
+            astrbot/core/knowledge_base \
+            astrbot/core/skills \
+            astrbot/utils \
+            -s

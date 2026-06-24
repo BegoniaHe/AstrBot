@@ -1,0 +1,13 @@
+{
+  "extends": "./pyrightconfig.json",
+  "typeCheckingMode": "standard",
+  "include": [
+    "astrbot/api",
+    "astrbot/cli",
+    "astrbot/core/backup",
+    "astrbot/core/config",
+    "astrbot/core/knowledge_base",
+    "astrbot/core/skills",
+    "astrbot/utils"
+  ]
+}
