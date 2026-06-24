@@ -42,6 +42,65 @@ class RankFusion:
         self.kb_db = kb_db
         self.k = k
 
+    @staticmethod
+    def _build_dense_lookup(dense_results: list[Result]) -> dict[str, Result]:
+        return {result.data["doc_id"]: result for result in dense_results}
+
+    @staticmethod
+    def _build_sparse_lookup(
+        sparse_results: list[SparseResult],
+    ) -> dict[str, SparseResult]:
+        return {result.chunk_id: result for result in sparse_results}
+
+    @staticmethod
+    def _build_rank_map(
+        identifiers: list[str],
+    ) -> dict[str, int]:
+        return {identifier: index + 1 for index, identifier in enumerate(identifiers)}
+
+    def _score_identifier(
+        self,
+        identifier: str,
+        dense_ranks: dict[str, int],
+        sparse_ranks: dict[str, int],
+    ) -> float:
+        score = 0.0
+        if identifier in dense_ranks:
+            score += 1.0 / (self.k + dense_ranks[identifier])
+        if identifier in sparse_ranks:
+            score += 1.0 / (self.k + sparse_ranks[identifier])
+        return score
+
+    @staticmethod
+    def _build_sparse_fused_result(
+        sparse_result: SparseResult,
+        score: float,
+    ) -> FusedResult:
+        return FusedResult(
+            chunk_id=sparse_result.chunk_id,
+            chunk_index=sparse_result.chunk_index,
+            doc_id=sparse_result.doc_id,
+            kb_id=sparse_result.kb_id,
+            content=sparse_result.content,
+            score=score,
+        )
+
+    @staticmethod
+    def _build_dense_fused_result(
+        identifier: str,
+        dense_result: Result,
+        score: float,
+    ) -> FusedResult:
+        chunk_metadata = json.loads(dense_result.data["metadata"])
+        return FusedResult(
+            chunk_id=identifier,
+            chunk_index=chunk_metadata["chunk_index"],
+            doc_id=chunk_metadata["kb_doc_id"],
+            kb_id=chunk_metadata["kb_id"],
+            content=dense_result.data["text"],
+            score=score,
+        )
+
     async def fuse(
         self,
         dense_results: list[Result],
@@ -62,81 +121,42 @@ class RankFusion:
             List[FusedResult]: 融合后的结果列表
 
         """
-        # 1. 构建排名映射
-        dense_ranks = {
-            r.data["doc_id"]: (idx + 1) for idx, r in enumerate(dense_results)
-        }  # 这里的 doc_id 实际上是 chunk_id
-        sparse_ranks = {r.chunk_id: (idx + 1) for idx, r in enumerate(sparse_results)}
-
-        # 2. 收集所有唯一的 ID
-        # 需要统一为 chunk_id
-        all_chunk_ids = set()
-        vec_doc_id_to_dense: dict[str, Result] = {}  # vec_doc_id -> Result
-        chunk_id_to_sparse: dict[str, SparseResult] = {}  # chunk_id -> SparseResult
-
-        # 处理稀疏检索结果
-        for r in sparse_results:
-            all_chunk_ids.add(r.chunk_id)
-            chunk_id_to_sparse[r.chunk_id] = r
-
-        # 处理稠密检索结果 (需要转换 vec_doc_id 到 chunk_id)
-        for r in dense_results:
-            vec_doc_id = r.data["doc_id"]
-            all_chunk_ids.add(vec_doc_id)
-            vec_doc_id_to_dense[vec_doc_id] = r
-
-        # 3. 计算 RRF 分数
-        rrf_scores: dict[str, float] = {}
-
-        for identifier in all_chunk_ids:
-            score = 0.0
-
-            # 来自稠密检索的贡献
-            if identifier in dense_ranks:
-                score += 1.0 / (self.k + dense_ranks[identifier])
-
-            # 来自稀疏检索的贡献
-            if identifier in sparse_ranks:
-                score += 1.0 / (self.k + sparse_ranks[identifier])
-
-            rrf_scores[identifier] = score
-
-        # 4. 排序
+        dense_lookup = self._build_dense_lookup(dense_results)
+        sparse_lookup = self._build_sparse_lookup(sparse_results)
+        dense_ranks = self._build_rank_map(list(dense_lookup))
+        sparse_ranks = self._build_rank_map(list(sparse_lookup))
+        all_chunk_ids = set(dense_lookup) | set(sparse_lookup)
+        rrf_scores = {
+            identifier: self._score_identifier(
+                identifier,
+                dense_ranks=dense_ranks,
+                sparse_ranks=sparse_ranks,
+            )
+            for identifier in all_chunk_ids
+        }
         sorted_ids = sorted(
-            rrf_scores.keys(),
-            key=lambda cid: rrf_scores[cid],
+            rrf_scores,
+            key=rrf_scores.__getitem__,
             reverse=True,
         )[:top_k]
 
-        # 5. 构建融合结果
-        fused_results = []
+        fused_results: list[FusedResult] = []
         for identifier in sorted_ids:
-            # 优先从稀疏检索获取完整信息
-            if identifier in chunk_id_to_sparse:
-                sr = chunk_id_to_sparse[identifier]
+            if identifier in sparse_lookup:
                 fused_results.append(
-                    FusedResult(
-                        chunk_id=sr.chunk_id,
-                        chunk_index=sr.chunk_index,
-                        doc_id=sr.doc_id,
-                        kb_id=sr.kb_id,
-                        content=sr.content,
-                        score=rrf_scores[identifier],
-                    ),
+                    self._build_sparse_fused_result(
+                        sparse_lookup[identifier],
+                        rrf_scores[identifier],
+                    )
                 )
-            elif identifier in vec_doc_id_to_dense:
-                # 从向量检索获取信息,需要从数据库获取块的详细信息
-                vec_result = vec_doc_id_to_dense[identifier]
-                chunk_md = json.loads(vec_result.data["metadata"])
+                continue
+            if identifier in dense_lookup:
                 fused_results.append(
-                    FusedResult(
-                        chunk_id=identifier,
-                        chunk_index=chunk_md["chunk_index"],
-                        doc_id=chunk_md["kb_doc_id"],
-                        kb_id=chunk_md["kb_id"],
-                        content=vec_result.data["text"],
-                        score=rrf_scores[identifier],
-                    ),
+                    self._build_dense_fused_result(
+                        identifier,
+                        dense_lookup[identifier],
+                        rrf_scores[identifier],
+                    )
                 )
 
         return fused_results

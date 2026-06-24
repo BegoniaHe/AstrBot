@@ -14,10 +14,10 @@ from astrbot.core.knowledge_base.retrieval.rank_fusion import RankFusion
 from astrbot.core.knowledge_base.retrieval.sparse_retriever import SparseRetriever
 from astrbot.core.provider.provider import RerankProvider
 
-from ..kb_helper import KBHelper
-
 if TYPE_CHECKING:
     from astrbot.core.db.vec_db.faiss_impl import FaissVecDB
+
+    from ..kb_helper import KBHelper
 
 
 @dataclass
@@ -61,11 +61,110 @@ class RetrievalManager:
         self.rank_fusion = rank_fusion
         self.kb_db = kb_db
 
+    def _build_kb_options(
+        self,
+        kb_ids: list[str],
+        kb_id_helper_map: dict[str, "KBHelper"],
+    ) -> tuple[list[str], dict[str, dict]]:
+        kb_options: dict[str, dict] = {}
+        available_kb_ids: list[str] = []
+        for kb_id in kb_ids:
+            kb_helper = kb_id_helper_map.get(kb_id)
+            if kb_helper is None:
+                logger.warning(f"知识库 ID {kb_id} 实例未找到, 已跳过该知识库的检索")
+                continue
+            kb = kb_helper.kb
+            kb_options[kb_id] = {
+                "top_k_dense": kb.top_k_dense or 50,
+                "top_k_sparse": kb.top_k_sparse or 50,
+                "top_m_final": kb.top_m_final or 5,
+                "vec_db": kb_helper.vec_db,
+                "rerank_provider_id": kb.rerank_provider_id,
+            }
+            available_kb_ids.append(kb_id)
+        return available_kb_ids, kb_options
+
+    async def _measure_async_step(self, label: str, operation):
+        time_start = time.time()
+        result = await operation
+        time_end = time.time()
+        logger.debug(f"{label} took {time_end - time_start:.2f}s.")
+        return result
+
+    async def _build_retrieval_results(self, fused_results) -> list[RetrievalResult]:
+        doc_ids = {fused_result.doc_id for fused_result in fused_results}
+        metadata_map = await self.kb_db.get_documents_with_metadata_batch(doc_ids)
+        retrieval_results: list[RetrievalResult] = []
+        for fused_result in fused_results:
+            metadata_dict = metadata_map.get(fused_result.doc_id)
+            if metadata_dict is None:
+                continue
+            retrieval_results.append(
+                RetrievalResult(
+                    chunk_id=fused_result.chunk_id,
+                    doc_id=fused_result.doc_id,
+                    doc_name=metadata_dict["document"].doc_name,
+                    kb_id=fused_result.kb_id,
+                    kb_name=metadata_dict["knowledge_base"].kb_name,
+                    content=fused_result.content,
+                    score=fused_result.score,
+                    metadata={
+                        "chunk_index": fused_result.chunk_index,
+                        "char_count": len(fused_result.content),
+                    },
+                )
+            )
+        return retrieval_results
+
+    def _select_rerank_provider(
+        self,
+        kb_ids: list[str],
+        kb_options: dict[str, dict],
+    ) -> RerankProvider | None:
+        for kb_id in kb_ids:
+            vec_db = kb_options[kb_id]["vec_db"]
+            rerank_provider = (
+                getattr(vec_db, "rerank_provider", None) if vec_db else None
+            )
+            rerank_provider_id = kb_options[kb_id]["rerank_provider_id"]
+            if (
+                vec_db
+                and rerank_provider
+                and rerank_provider_id
+                and rerank_provider_id == rerank_provider.meta().id
+            ):
+                return rerank_provider
+        return None
+
+    async def _maybe_rerank_results(
+        self,
+        *,
+        query: str,
+        kb_ids: list[str],
+        kb_options: dict[str, dict],
+        retrieval_results: list[RetrievalResult],
+        top_m_final: int,
+    ) -> list[RetrievalResult]:
+        rerank_provider = self._select_rerank_provider(kb_ids, kb_options)
+        if rerank_provider is None or not retrieval_results:
+            return retrieval_results
+
+        try:
+            return await self._rerank(
+                query=query,
+                results=retrieval_results,
+                top_k=top_m_final,
+                rerank_provider=rerank_provider,
+            )
+        except Exception as e:
+            logger.warning(f"Rerank 执行失败，已跳过重排序并使用融合结果: {e}")
+            return retrieval_results
+
     async def retrieve(
         self,
         query: str,
         kb_ids: list[str],
-        kb_id_helper_map: dict[str, KBHelper],
+        kb_id_helper_map: dict[str, "KBHelper"],
         top_k_fusion: int = 20,
         top_m_final: int = 5,
     ) -> list[RetrievalResult]:
@@ -90,115 +189,38 @@ class RetrievalManager:
         if not kb_ids:
             return []
 
-        kb_options: dict = {}
-        new_kb_ids = []
-        for kb_id in kb_ids:
-            kb_helper = kb_id_helper_map.get(kb_id)
-            if kb_helper:
-                kb = kb_helper.kb
-                kb_options[kb_id] = {
-                    "top_k_dense": kb.top_k_dense or 50,
-                    "top_k_sparse": kb.top_k_sparse or 50,
-                    "top_m_final": kb.top_m_final or 5,
-                    "vec_db": kb_helper.vec_db,
-                    "rerank_provider_id": kb.rerank_provider_id,
-                }
-                new_kb_ids.append(kb_id)
-            else:
-                logger.warning(f"知识库 ID {kb_id} 实例未找到, 已跳过该知识库的检索")
-
-        kb_ids = new_kb_ids
-
-        # 1. 稠密检索
-        time_start = time.time()
-        dense_results = await self._dense_retrieve(
+        kb_ids, kb_options = self._build_kb_options(kb_ids, kb_id_helper_map)
+        dense_results = await self._measure_async_step(
+            (f"Dense retrieval across {len(kb_ids)} bases returning results"),
+            self._dense_retrieve(query=query, kb_ids=kb_ids, kb_options=kb_options),
+        )
+        logger.debug(f"Dense retrieval returned {len(dense_results)} results.")
+        sparse_results = await self._measure_async_step(
+            f"Sparse retrieval across {len(kb_ids)} bases returning results",
+            self.sparse_retriever.retrieve(
+                query=query,
+                kb_ids=kb_ids,
+                kb_options=kb_options,
+            ),
+        )
+        logger.debug(f"Sparse retrieval returned {len(sparse_results)} results.")
+        fused_results = await self._measure_async_step(
+            "Rank fusion returning results",
+            self.rank_fusion.fuse(
+                dense_results=dense_results,
+                sparse_results=sparse_results,
+                top_k=top_k_fusion,
+            ),
+        )
+        logger.debug(f"Rank fusion returned {len(fused_results)} results.")
+        retrieval_results = await self._build_retrieval_results(fused_results)
+        retrieval_results = await self._maybe_rerank_results(
             query=query,
             kb_ids=kb_ids,
             kb_options=kb_options,
+            retrieval_results=retrieval_results,
+            top_m_final=top_m_final,
         )
-        time_end = time.time()
-        logger.debug(
-            f"Dense retrieval across {len(kb_ids)} bases took {time_end - time_start:.2f}s and returned {len(dense_results)} results.",
-        )
-
-        # 2. 稀疏检索
-        time_start = time.time()
-        sparse_results = await self.sparse_retriever.retrieve(
-            query=query,
-            kb_ids=kb_ids,
-            kb_options=kb_options,
-        )
-        time_end = time.time()
-        logger.debug(
-            f"Sparse retrieval across {len(kb_ids)} bases took {time_end - time_start:.2f}s and returned {len(sparse_results)} results.",
-        )
-
-        # 3. 结果融合
-        time_start = time.time()
-        fused_results = await self.rank_fusion.fuse(
-            dense_results=dense_results,
-            sparse_results=sparse_results,
-            top_k=top_k_fusion,
-        )
-        time_end = time.time()
-        logger.debug(
-            f"Rank fusion took {time_end - time_start:.2f}s and returned {len(fused_results)} results.",
-        )
-
-        # 4. 转换为 RetrievalResult (批量获取元数据)
-        doc_ids = {fr.doc_id for fr in fused_results}
-        metadata_map = await self.kb_db.get_documents_with_metadata_batch(doc_ids)
-
-        retrieval_results = []
-        for fr in fused_results:
-            metadata_dict = metadata_map.get(fr.doc_id)
-            if metadata_dict:
-                retrieval_results.append(
-                    RetrievalResult(
-                        chunk_id=fr.chunk_id,
-                        doc_id=fr.doc_id,
-                        doc_name=metadata_dict["document"].doc_name,
-                        kb_id=fr.kb_id,
-                        kb_name=metadata_dict["knowledge_base"].kb_name,
-                        content=fr.content,
-                        score=fr.score,
-                        metadata={
-                            "chunk_index": fr.chunk_index,
-                            "char_count": len(fr.content),
-                        },
-                    ),
-                )
-
-        # 5. Rerank
-        first_rerank = None
-        for kb_id in kb_ids:
-            vec_db = kb_options[kb_id]["vec_db"]
-            rerank_provider = (
-                getattr(vec_db, "rerank_provider", None) if vec_db else None
-            )
-            if rerank_provider is None:
-                continue
-
-            rerank_pi = kb_options[kb_id]["rerank_provider_id"]
-            if (
-                vec_db
-                and rerank_provider
-                and rerank_pi
-                and rerank_pi == rerank_provider.meta().id
-            ):
-                first_rerank = rerank_provider
-                break
-        if first_rerank and retrieval_results:
-            try:
-                retrieval_results = await self._rerank(
-                    query=query,
-                    results=retrieval_results,
-                    top_k=top_m_final,
-                    rerank_provider=first_rerank,
-                )
-            except Exception as e:
-                logger.warning(f"Rerank 执行失败，已跳过重排序并使用融合结果: {e}")
-
         return retrieval_results[:top_m_final]
 
     async def _dense_retrieve(

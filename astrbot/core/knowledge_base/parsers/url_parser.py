@@ -64,7 +64,9 @@ class URLExtractor:
                     api_url,
                     json=payload,
                     headers=headers,
-                    timeout=30.0,  # 增加超时时间，因为内容提取可能需要更长时间
+                    timeout=aiohttp.ClientTimeout(
+                        total=30.0
+                    ),  # 增加超时时间，因为内容提取可能需要更长时间
                 ) as response:
                     if response.status != 200:
                         reason = await response.text()

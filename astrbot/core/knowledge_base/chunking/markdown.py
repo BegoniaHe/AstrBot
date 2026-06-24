@@ -6,6 +6,7 @@
 
 import re
 from dataclasses import dataclass
+from typing import TypedDict
 
 from .base import BaseChunker
 from .recursive import RecursiveCharacterChunker
@@ -18,6 +19,18 @@ class _Section:
     heading_path: list[str]
     text: str
     has_body: bool
+
+
+class _Heading(TypedDict):
+    level: int
+    title: str
+    start: int
+    end: int
+
+
+class _HeadingPathItem(TypedDict):
+    level: int
+    title: str
 
 
 class MarkdownChunker(BaseChunker):
@@ -172,32 +185,22 @@ class MarkdownChunker(BaseChunker):
             if not chunk_text:
                 continue
             if not has_body:
-                # 纯标题节，暂存；但如果 pending 已经够长，先 flush
-                if pending and len(pending) + len(chunk_text) + 2 > chunk_size:
-                    merged.append(pending.strip())
-                    pending = ""
-                pending += chunk_text + "\n\n"
-            else:
-                if pending:
-                    combined = pending + chunk_text
-                    if len(combined) <= chunk_size:
-                        merged.append(combined.strip())
-                    else:
-                        merged.append(pending.strip())
-                        merged.append(chunk_text.strip())
-                    pending = ""
-                else:
-                    merged.append(chunk_text.strip())
+                pending = self._append_pending_heading_chunk(
+                    merged,
+                    pending,
+                    chunk_text,
+                    chunk_size,
+                )
+                continue
+            pending = self._append_chunk_with_pending(
+                merged,
+                pending,
+                chunk_text,
+                chunk_size,
+            )
 
-        # 处理尾部残留的 pending
-        if pending:
-            pending_text = pending.strip()
-            if merged and len(merged[-1] + "\n\n" + pending_text) <= chunk_size:
-                merged[-1] = merged[-1] + "\n\n" + pending_text
-            else:
-                merged.append(pending_text)
-
-        return [c for c in merged if c.strip()]
+        self._flush_pending_heading_chunk(merged, pending, chunk_size)
+        return [chunk for chunk in merged if chunk.strip()]
 
     def _merge_short_chunks(self, chunks: list[str], chunk_size: int) -> list[str]:
         """合并过短的相邻 chunk（低于 min_chunk_size）"""
@@ -209,26 +212,91 @@ class MarkdownChunker(BaseChunker):
 
         for c in chunks:
             if buf:
-                combined = buf + "\n\n" + c
-                if len(combined) <= chunk_size:
-                    buf = combined
-                else:
-                    final.append(buf)
-                    buf = c if len(c) < self.min_chunk_size else ""
-                    if len(c) >= self.min_chunk_size:
-                        final.append(c)
-            elif len(c) < self.min_chunk_size:
+                buf = self._merge_buffered_short_chunk(final, buf, c, chunk_size)
+                continue
+            if len(c) < self.min_chunk_size:
                 buf = c
-            else:
-                final.append(c)
+                continue
+            final.append(c)
 
         if buf:
-            if final and len(final[-1] + "\n\n" + buf) <= chunk_size:
-                final[-1] = final[-1] + "\n\n" + buf
-            else:
-                final.append(buf)
+            self._flush_short_chunk_buffer(final, buf, chunk_size)
 
         return final
+
+    def _append_pending_heading_chunk(
+        self,
+        merged: list[str],
+        pending: str,
+        chunk_text: str,
+        chunk_size: int,
+    ) -> str:
+        if pending and len(pending) + len(chunk_text) + 2 > chunk_size:
+            merged.append(pending.strip())
+            pending = ""
+        return pending + chunk_text + "\n\n"
+
+    def _append_chunk_with_pending(
+        self,
+        merged: list[str],
+        pending: str,
+        chunk_text: str,
+        chunk_size: int,
+    ) -> str:
+        if not pending:
+            merged.append(chunk_text.strip())
+            return ""
+        combined = pending + chunk_text
+        if len(combined) <= chunk_size:
+            merged.append(combined.strip())
+        else:
+            merged.append(pending.strip())
+            merged.append(chunk_text.strip())
+        return ""
+
+    def _flush_pending_heading_chunk(
+        self,
+        merged: list[str],
+        pending: str,
+        chunk_size: int,
+    ) -> None:
+        if not pending:
+            return
+        pending_text = pending.strip()
+        if merged and len(merged[-1] + "\n\n" + pending_text) <= chunk_size:
+            merged[-1] = merged[-1] + "\n\n" + pending_text
+            return
+        merged.append(pending_text)
+
+    def _merge_buffered_short_chunk(
+        self,
+        final_chunks: list[str],
+        buffered_chunk: str,
+        chunk_text: str,
+        chunk_size: int,
+    ) -> str:
+        combined = buffered_chunk + "\n\n" + chunk_text
+        if len(combined) <= chunk_size:
+            return combined
+        final_chunks.append(buffered_chunk)
+        if len(chunk_text) < self.min_chunk_size:
+            return chunk_text
+        final_chunks.append(chunk_text)
+        return ""
+
+    @staticmethod
+    def _flush_short_chunk_buffer(
+        final_chunks: list[str],
+        buffered_chunk: str,
+        chunk_size: int,
+    ) -> None:
+        if (
+            final_chunks
+            and len(final_chunks[-1] + "\n\n" + buffered_chunk) <= chunk_size
+        ):
+            final_chunks[-1] = final_chunks[-1] + "\n\n" + buffered_chunk
+            return
+        final_chunks.append(buffered_chunk)
 
     def _parse_sections(self, text: str) -> list[_Section]:
         """解析 Markdown 文本为章节列表
@@ -242,23 +310,7 @@ class MarkdownChunker(BaseChunker):
         # 先标记围栏代码块的范围，解析时跳过
         fenced_ranges = self._find_fenced_code_ranges(text)
 
-        # 匹配 Markdown 标题行（支持 # 后有或无空格）
-        heading_pattern = re.compile(
-            r"^(#{1," + str(self.max_heading_depth) + r"})\s*(.+)$", re.MULTILINE
-        )
-
-        # 找到所有标题及其位置（排除代码块内的）
-        headings = []
-        for match in heading_pattern.finditer(text):
-            if self._is_in_fenced_block(match.start(), fenced_ranges):
-                continue
-            level = len(match.group(1))
-            title = match.group(2).strip()
-            start = match.start()
-            end = match.end()
-            headings.append(
-                {"level": level, "title": title, "start": start, "end": end}
-            )
+        headings = self._collect_headings(text, fenced_ranges)
 
         if not headings:
             return []
@@ -271,42 +323,74 @@ class MarkdownChunker(BaseChunker):
             sections.append(_Section(heading_path=[], text=preamble, has_body=True))
 
         # 维护标题栈来追踪层级路径
-        heading_stack: list[dict] = []
+        heading_stack: list[_HeadingPathItem] = []
 
-        for i, heading in enumerate(headings):
-            # 更新标题栈
-            while heading_stack and heading_stack[-1]["level"] >= heading["level"]:
-                heading_stack.pop()
-            heading_stack.append({"level": heading["level"], "title": heading["title"]})
-
-            # 获取当前章节的内容范围
-            content_start = heading["end"]
-            if i + 1 < len(headings):
-                content_end = headings[i + 1]["start"]
-            else:
-                content_end = len(text)
-
-            # 提取内容（标题行 + 正文）
-            heading_line = text[heading["start"] : heading["end"]]
-            body = text[content_start:content_end].strip()
-
-            # 组合章节文本
-            section_text = heading_line
-            if body:
-                section_text += "\n" + body
-
-            # 构建标题路径
-            heading_path = [h["title"] for h in heading_stack[:-1]]
-
+        for index, heading in enumerate(headings):
+            self._update_heading_stack(heading_stack, heading)
             sections.append(
-                _Section(
-                    heading_path=heading_path,
-                    text=section_text,
-                    has_body=bool(body),
+                self._build_section(
+                    text=text,
+                    headings=headings,
+                    index=index,
+                    heading=heading,
+                    heading_stack=heading_stack,
                 )
             )
 
         return sections
+
+    def _collect_headings(
+        self,
+        text: str,
+        fenced_ranges: list[tuple[int, int]],
+    ) -> list[_Heading]:
+        heading_pattern = re.compile(
+            r"^(#{1," + str(self.max_heading_depth) + r"})\s*(.+)$",
+            re.MULTILINE,
+        )
+        headings: list[_Heading] = []
+        for match in heading_pattern.finditer(text):
+            if self._is_in_fenced_block(match.start(), fenced_ranges):
+                continue
+            headings.append(
+                {
+                    "level": len(match.group(1)),
+                    "title": match.group(2).strip(),
+                    "start": match.start(),
+                    "end": match.end(),
+                }
+            )
+        return headings
+
+    @staticmethod
+    def _update_heading_stack(
+        heading_stack: list[_HeadingPathItem],
+        heading: _Heading,
+    ) -> None:
+        while heading_stack and heading_stack[-1]["level"] >= heading["level"]:
+            heading_stack.pop()
+        heading_stack.append({"level": heading["level"], "title": heading["title"]})
+
+    @staticmethod
+    def _build_section(
+        text: str,
+        headings: list[_Heading],
+        index: int,
+        heading: _Heading,
+        heading_stack: list[_HeadingPathItem],
+    ) -> _Section:
+        content_start = heading["end"]
+        content_end = (
+            headings[index + 1]["start"] if index + 1 < len(headings) else len(text)
+        )
+        heading_line = text[heading["start"] : heading["end"]]
+        body = text[content_start:content_end].strip()
+        section_text = heading_line if not body else heading_line + "\n" + body
+        return _Section(
+            heading_path=[item["title"] for item in heading_stack[:-1]],
+            text=section_text,
+            has_body=bool(body),
+        )
 
     @staticmethod
     def _find_fenced_code_ranges(text: str) -> list[tuple[int, int]]:

@@ -161,6 +161,84 @@ class KnowledgeBaseManager:
         kbs = [kb_helper.kb for kb_helper in self.kb_insts.values()]
         return kbs
 
+    @staticmethod
+    def _snapshot_kb_state(kb: KnowledgeBase) -> dict[str, object]:
+        return {
+            "kb_name": kb.kb_name,
+            "description": kb.description,
+            "emoji": kb.emoji,
+            "embedding_provider_id": kb.embedding_provider_id,
+            "rerank_provider_id": kb.rerank_provider_id,
+            "chunk_size": kb.chunk_size,
+            "chunk_overlap": kb.chunk_overlap,
+            "top_k_dense": kb.top_k_dense,
+            "top_k_sparse": kb.top_k_sparse,
+            "top_m_final": kb.top_m_final,
+        }
+
+    @staticmethod
+    def _restore_kb_state(kb: KnowledgeBase, previous_state: dict[str, object]) -> None:
+        kb.kb_name = str(previous_state["kb_name"])
+        kb.description = previous_state["description"]  # type: ignore[assignment]
+        kb.emoji = previous_state["emoji"]  # type: ignore[assignment]
+        kb.embedding_provider_id = previous_state["embedding_provider_id"]  # type: ignore[assignment]
+        kb.rerank_provider_id = previous_state["rerank_provider_id"]  # type: ignore[assignment]
+        kb.chunk_size = previous_state["chunk_size"]  # type: ignore[assignment]
+        kb.chunk_overlap = previous_state["chunk_overlap"]  # type: ignore[assignment]
+        kb.top_k_dense = previous_state["top_k_dense"]  # type: ignore[assignment]
+        kb.top_k_sparse = previous_state["top_k_sparse"]  # type: ignore[assignment]
+        kb.top_m_final = previous_state["top_m_final"]  # type: ignore[assignment]
+
+    @staticmethod
+    def _apply_kb_updates(
+        kb: KnowledgeBase,
+        *,
+        kb_name: str | None,
+        description: str | None,
+        emoji: str | None,
+        embedding_provider_id: str | None,
+        rerank_provider_id: str | None,
+        chunk_size: int | None,
+        chunk_overlap: int | None,
+        top_k_dense: int | None,
+        top_k_sparse: int | None,
+        top_m_final: int | None,
+    ) -> None:
+        if kb_name is not None:
+            kb.kb_name = kb_name
+        if description is not None:
+            kb.description = description
+        if emoji is not None:
+            kb.emoji = emoji
+        if embedding_provider_id is not None:
+            kb.embedding_provider_id = embedding_provider_id
+        kb.rerank_provider_id = rerank_provider_id
+        if chunk_size is not None:
+            kb.chunk_size = chunk_size
+        if chunk_overlap is not None:
+            kb.chunk_overlap = chunk_overlap
+        if top_k_dense is not None:
+            kb.top_k_dense = top_k_dense
+        if top_k_sparse is not None:
+            kb.top_k_sparse = top_k_sparse
+        if top_m_final is not None:
+            kb.top_m_final = top_m_final
+
+    def _build_kb_helper(self, kb: KnowledgeBase) -> KBHelper:
+        return KBHelper(
+            kb_db=self.kb_db,
+            kb=kb,
+            provider_manager=self.provider_manager,
+            kb_root_dir=FILES_PATH,
+            chunker=CHUNKER,
+        )
+
+    async def _persist_kb_changes(self, kb: KnowledgeBase) -> None:
+        async with self.kb_db.get_db() as session:
+            session.add(kb)
+            await session.commit()
+            await session.refresh(kb)
+
     async def update_kb(
         self,
         kb_id: str,
@@ -181,63 +259,31 @@ class KnowledgeBaseManager:
             return None
 
         kb = kb_helper.kb
-        previous_state = {
-            "kb_name": kb.kb_name,
-            "description": kb.description,
-            "emoji": kb.emoji,
-            "embedding_provider_id": kb.embedding_provider_id,
-            "rerank_provider_id": kb.rerank_provider_id,
-            "chunk_size": kb.chunk_size,
-            "chunk_overlap": kb.chunk_overlap,
-            "top_k_dense": kb.top_k_dense,
-            "top_k_sparse": kb.top_k_sparse,
-            "top_m_final": kb.top_m_final,
-        }
+        previous_state = self._snapshot_kb_state(kb)
         previous_init_error = kb_helper.init_error
 
-        if kb_name is not None:
-            kb.kb_name = kb_name
-        if description is not None:
-            kb.description = description
-        if emoji is not None:
-            kb.emoji = emoji
-        if embedding_provider_id is not None:
-            kb.embedding_provider_id = embedding_provider_id
-        kb.rerank_provider_id = rerank_provider_id  # 允许设置为 None
-        if chunk_size is not None:
-            kb.chunk_size = chunk_size
-        if chunk_overlap is not None:
-            kb.chunk_overlap = chunk_overlap
-        if top_k_dense is not None:
-            kb.top_k_dense = top_k_dense
-        if top_k_sparse is not None:
-            kb.top_k_sparse = top_k_sparse
-        if top_m_final is not None:
-            kb.top_m_final = top_m_final
+        self._apply_kb_updates(
+            kb,
+            kb_name=kb_name,
+            description=description,
+            emoji=emoji,
+            embedding_provider_id=embedding_provider_id,
+            rerank_provider_id=rerank_provider_id,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            top_k_dense=top_k_dense,
+            top_k_sparse=top_k_sparse,
+            top_m_final=top_m_final,
+        )
 
         # Build a new helper first. Keep current vec_db alive until new init succeeds.
-        new_helper = KBHelper(
-            kb_db=self.kb_db,
-            kb=kb,
-            provider_manager=self.provider_manager,
-            kb_root_dir=FILES_PATH,
-            chunker=CHUNKER,
-        )
+        new_helper = self._build_kb_helper(kb)
 
         try:
             await new_helper.initialize()
         except Exception as e:
             # Roll back in-memory settings and keep current helper available.
-            kb.kb_name = previous_state["kb_name"]
-            kb.description = previous_state["description"]
-            kb.emoji = previous_state["emoji"]
-            kb.embedding_provider_id = previous_state["embedding_provider_id"]
-            kb.rerank_provider_id = previous_state["rerank_provider_id"]
-            kb.chunk_size = previous_state["chunk_size"]
-            kb.chunk_overlap = previous_state["chunk_overlap"]
-            kb.top_k_dense = previous_state["top_k_dense"]
-            kb.top_k_sparse = previous_state["top_k_sparse"]
-            kb.top_m_final = previous_state["top_m_final"]
+            self._restore_kb_state(kb, previous_state)
             kb_helper.init_error = previous_init_error
             logger.error(
                 f"知识库 {kb.kb_name}({kb.kb_id}) 重新初始化失败，继续使用旧实例: {e}",
@@ -245,11 +291,7 @@ class KnowledgeBaseManager:
             )
             return kb_helper
 
-        async with self.kb_db.get_db() as session:
-            session.add(kb)
-            await session.commit()
-            await session.refresh(kb)
-
+        await self._persist_kb_changes(kb)
         old_helper = kb_helper
         self.kb_insts[kb_id] = new_helper
         await old_helper.terminate()

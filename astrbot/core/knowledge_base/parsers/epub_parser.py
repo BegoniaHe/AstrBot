@@ -69,42 +69,54 @@ def _is_toc_line(s: str) -> bool:
     return bool((m and _is_internal(m.group(2))) or _DOTTED_TOC_RE.match(s))
 
 
-def _strip_head(text: str) -> str:
-    lines = _n(text).split("\n")
-    i = 0
-    while i < len(lines) and not lines[i].strip():
-        i += 1
-    start = i
-    while i < len(lines) and _META_RE.match(lines[i].strip()):
-        i += 1
-    if i - start >= 2:
-        while i < len(lines) and not lines[i].strip():
-            i += 1
-    else:
-        i = start
-    toc0, had_head = i, False
-    if i < len(lines) and _TOC_HEAD_RE.match(lines[i].strip()):
-        had_head = True
-        i += 1
-        while i < len(lines) and not lines[i].strip():
-            i += 1
-    toc = 0
-    while i < len(lines) and i - toc0 < 120:
-        s = lines[i].strip()
-        if not s:
-            if toc and i + 1 < len(lines) and _is_toc_line(lines[i + 1]):
-                i += 1
+def _skip_blank_lines(lines: list[str], index: int) -> int:
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    return index
+
+
+def _skip_metadata_block(lines: list[str], index: int) -> int:
+    start = index
+    while index < len(lines) and _META_RE.match(lines[index].strip()):
+        index += 1
+    if index - start < 2:
+        return start
+    return _skip_blank_lines(lines, index)
+
+
+def _skip_toc_heading(lines: list[str], index: int) -> tuple[int, bool]:
+    if index >= len(lines) or not _TOC_HEAD_RE.match(lines[index].strip()):
+        return index, False
+    return _skip_blank_lines(lines, index + 1), True
+
+
+def _consume_toc_block(lines: list[str], index: int) -> tuple[int, int]:
+    toc_start = index
+    toc_count = 0
+    while index < len(lines) and index - toc_start < 120:
+        current_line = lines[index].strip()
+        if not current_line:
+            if toc_count and index + 1 < len(lines) and _is_toc_line(lines[index + 1]):
+                index += 1
                 continue
             break
-        if not _is_toc_line(s):
+        if not _is_toc_line(current_line):
             break
-        toc += 1
-        i += 1
-    if toc >= 2 and (had_head or toc >= 3):
-        while i < len(lines) and not lines[i].strip():
-            i += 1
-        return "\n".join(lines[i:]).strip()
-    return "\n".join(lines[toc0:]).strip()
+        toc_count += 1
+        index += 1
+    return index, toc_count
+
+
+def _strip_head(text: str) -> str:
+    lines = _n(text).split("\n")
+    index = _skip_blank_lines(lines, 0)
+    index = _skip_metadata_block(lines, index)
+    toc_start = index
+    index, had_heading = _skip_toc_heading(lines, index)
+    index, toc_count = _consume_toc_block(lines, index)
+    if toc_count >= 2 and (had_heading or toc_count >= 3):
+        return "\n".join(lines[_skip_blank_lines(lines, index) :]).strip()
+    return "\n".join(lines[toc_start:]).strip()
 
 
 def _strip_links(text: str) -> str:

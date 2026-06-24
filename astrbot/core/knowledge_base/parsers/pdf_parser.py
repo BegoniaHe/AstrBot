@@ -20,6 +20,70 @@ class PDFParser(BaseParser):
     提取 PDF 中的文本内容和嵌入的图片资源。
     """
 
+    @staticmethod
+    def _extract_text_parts(reader: PdfReader) -> list[str]:
+        text_parts: list[str] = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return text_parts
+
+    @staticmethod
+    def _resolve_image_format(filter_type: str) -> tuple[str, str]:
+        if filter_type == "/DCTDecode":
+            return "jpg", "image/jpeg"
+        return "png", "image/png"
+
+    @staticmethod
+    def _iter_page_xobjects(page) -> list:
+        if "/Resources" not in page:
+            return []
+        resources = page["/Resources"]
+        if not resources or "/XObject" not in resources:  # type: ignore
+            return []
+        xobjects = resources["/XObject"].get_object()  # type: ignore
+        if not xobjects:
+            return []
+        return [xobjects[obj_name] for obj_name in xobjects]
+
+    def _extract_page_media_items(
+        self, page, page_num: int, image_counter: int
+    ) -> tuple[list[MediaItem], int]:
+        media_items: list[MediaItem] = []
+        for obj in self._iter_page_xobjects(page):
+            media_item = self._build_media_item(
+                obj,
+                page_num=page_num,
+                image_counter=image_counter + 1,
+            )
+            if media_item is None:
+                continue
+            image_counter += 1
+            media_items.append(media_item)
+        return media_items, image_counter
+
+    def _build_media_item(
+        self,
+        obj,
+        *,
+        page_num: int,
+        image_counter: int,
+    ) -> MediaItem | None:
+        try:
+            if obj.get("/Subtype") != "/Image":
+                return None
+            image_data = obj.get_data()
+            ext, mime_type = self._resolve_image_format(obj.get("/Filter", ""))
+        except Exception:
+            return None
+        return MediaItem(
+            media_type="image",
+            file_name=f"page_{page_num}_img_{image_counter}.{ext}",
+            content=image_data,
+            mime_type=mime_type,
+        )
+
     async def parse(self, file_content: bytes, file_name: str) -> ParseResult:
         """解析 PDF 文件
 
@@ -33,69 +97,18 @@ class PDFParser(BaseParser):
         """
         pdf_file = io.BytesIO(file_content)
         reader = PdfReader(pdf_file)
-
-        text_parts = []
-        media_items = []
-
-        # 提取文本
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                text_parts.append(text)
-
-        # 提取图片
+        text_parts = self._extract_text_parts(reader)
+        media_items: list[MediaItem] = []
         image_counter = 0
         for page_num, page in enumerate(reader.pages):
             try:
-                # 安全检查 Resources
-                if "/Resources" not in page:
-                    continue
-
-                resources = page["/Resources"]
-                if not resources or "/XObject" not in resources:  # type: ignore
-                    continue
-
-                xobjects = resources["/XObject"].get_object()  # type: ignore
-                if not xobjects:
-                    continue
-
-                for obj_name in xobjects:
-                    try:
-                        obj = xobjects[obj_name]
-
-                        if obj.get("/Subtype") != "/Image":
-                            continue
-
-                        # 提取图片数据
-                        image_data = obj.get_data()
-
-                        # 确定格式
-                        filter_type = obj.get("/Filter", "")
-                        if filter_type == "/DCTDecode":
-                            ext = "jpg"
-                            mime_type = "image/jpeg"
-                        elif filter_type == "/FlateDecode":
-                            ext = "png"
-                            mime_type = "image/png"
-                        else:
-                            ext = "png"
-                            mime_type = "image/png"
-
-                        image_counter += 1
-                        media_items.append(
-                            MediaItem(
-                                media_type="image",
-                                file_name=f"page_{page_num}_img_{image_counter}.{ext}",
-                                content=image_data,
-                                mime_type=mime_type,
-                            ),
-                        )
-                    except Exception:
-                        # 单个图片提取失败不影响整体
-                        continue
+                page_media_items, image_counter = self._extract_page_media_items(
+                    page, page_num, image_counter
+                )
+                media_items.extend(page_media_items)
             except Exception:
                 # 页面处理失败不影响其他页面
-                continue
+                pass
 
         full_text = "\n\n".join(text_parts)
         return ParseResult(text=full_text, media=media_items)

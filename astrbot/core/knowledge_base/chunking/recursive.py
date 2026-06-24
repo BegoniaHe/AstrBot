@@ -62,77 +62,138 @@ class RecursiveCharacterChunker(BaseChunker):
             return [text]
 
         for separator in self.separators:
-            if separator == "":
-                return self._split_by_character(text, chunk_size, overlap)
-
-            if separator in text:
-                splits = text.split(separator)
-                # 重新添加分隔符（除了最后一个片段）
-                splits = [s + separator for s in splits[:-1]] + [splits[-1]]
-                splits = [s for s in splits if s]
-                if len(splits) == 1:
-                    continue
-
-                # 递归合并分割后的文本块
-                final_chunks = []
-                current_chunk = []
-                current_chunk_length = 0
-
-                for split in splits:
-                    split_length = self.length_function(split)
-
-                    # 如果单个分割部分已经超过了chunk_size，需要递归分割
-                    if split_length > chunk_size:
-                        # 先处理当前积累的块
-                        if current_chunk:
-                            combined_text = "".join(current_chunk)
-                            final_chunks.extend(
-                                await self.chunk(
-                                    combined_text,
-                                    chunk_size=chunk_size,
-                                    chunk_overlap=overlap,
-                                ),
-                            )
-                            current_chunk = []
-                            current_chunk_length = 0
-
-                        # 递归分割过大的部分
-                        final_chunks.extend(
-                            await self.chunk(
-                                split,
-                                chunk_size=chunk_size,
-                                chunk_overlap=overlap,
-                            ),
-                        )
-                    # 如果添加这部分会使当前块超过chunk_size
-                    elif current_chunk_length + split_length > chunk_size:
-                        # 合并当前块并添加到结果中
-                        combined_text = "".join(current_chunk)
-                        final_chunks.append(combined_text)
-
-                        # 处理重叠部分
-                        overlap_start = max(0, len(combined_text) - overlap)
-                        if overlap_start > 0:
-                            overlap_text = combined_text[overlap_start:]
-                            current_chunk = [overlap_text, split]
-                            current_chunk_length = (
-                                self.length_function(overlap_text) + split_length
-                            )
-                        else:
-                            current_chunk = [split]
-                            current_chunk_length = split_length
-                    else:
-                        # 添加到当前块
-                        current_chunk.append(split)
-                        current_chunk_length += split_length
-
-                # 处理剩余的块
-                if current_chunk:
-                    final_chunks.append("".join(current_chunk))
-
-                return final_chunks
+            chunks = await self._chunk_with_separator(
+                text,
+                separator=separator,
+                chunk_size=chunk_size,
+                overlap=overlap,
+            )
+            if chunks is not None:
+                return chunks
 
         return [text]
+
+    def _split_with_preserved_separator(self, text: str, separator: str) -> list[str]:
+        splits = text.split(separator)
+        return [part + separator for part in splits[:-1]] + [splits[-1]]
+
+    def _build_overlap_state(
+        self,
+        combined_text: str,
+        split: str,
+        overlap: int,
+    ) -> tuple[list[str], int]:
+        overlap_start = max(0, len(combined_text) - overlap)
+        if overlap_start <= 0:
+            return [split], self.length_function(split)
+        overlap_text = combined_text[overlap_start:]
+        return [overlap_text, split], self.length_function(
+            overlap_text
+        ) + self.length_function(split)
+
+    @staticmethod
+    def _reset_chunk_state() -> tuple[list[str], int]:
+        return [], 0
+
+    async def _flush_current_chunk(
+        self,
+        final_chunks: list[str],
+        current_chunk: list[str],
+        *,
+        chunk_size: int,
+        overlap: int,
+    ) -> tuple[list[str], int]:
+        if current_chunk:
+            final_chunks.extend(
+                await self.chunk(
+                    "".join(current_chunk),
+                    chunk_size=chunk_size,
+                    chunk_overlap=overlap,
+                )
+            )
+        return self._reset_chunk_state()
+
+    async def _append_recursive_split(
+        self,
+        final_chunks: list[str],
+        split: str,
+        *,
+        chunk_size: int,
+        overlap: int,
+    ) -> None:
+        final_chunks.extend(
+            await self.chunk(
+                split,
+                chunk_size=chunk_size,
+                chunk_overlap=overlap,
+            )
+        )
+
+    async def _chunk_with_separator(
+        self,
+        text: str,
+        separator: str,
+        chunk_size: int,
+        overlap: int,
+    ) -> list[str] | None:
+        if separator == "":
+            return self._split_by_character(text, chunk_size, overlap)
+        splits = self._get_separator_splits(text, separator, chunk_size, overlap)
+        if splits is None:
+            return None
+        final_chunks: list[str] = []
+        current_chunk: list[str] = []
+        current_chunk_length = 0
+
+        for split in splits:
+            split_length = self.length_function(split)
+            if split_length > chunk_size:
+                current_chunk, current_chunk_length = await self._flush_current_chunk(
+                    final_chunks,
+                    current_chunk,
+                    chunk_size=chunk_size,
+                    overlap=overlap,
+                )
+                await self._append_recursive_split(
+                    final_chunks,
+                    split,
+                    chunk_size=chunk_size,
+                    overlap=overlap,
+                )
+                continue
+            if current_chunk_length + split_length > chunk_size:
+                combined_text = "".join(current_chunk)
+                final_chunks.append(combined_text)
+                current_chunk, current_chunk_length = self._build_overlap_state(
+                    combined_text,
+                    split,
+                    overlap,
+                )
+                continue
+            current_chunk.append(split)
+            current_chunk_length += split_length
+
+        if current_chunk:
+            final_chunks.append("".join(current_chunk))
+        return final_chunks
+
+    def _get_separator_splits(
+        self,
+        text: str,
+        separator: str,
+        chunk_size: int,
+        overlap: int,
+    ) -> list[str] | None:
+        if separator not in text:
+            return None
+        splits = [
+            split
+            for split in self._split_with_preserved_separator(text, separator)
+            if split
+        ]
+        if len(splits) == 1:
+            return None
+        return splits
 
     def _split_by_character(
         self,
@@ -149,16 +210,10 @@ class RecursiveCharacterChunker(BaseChunker):
             分割后的文本块列表
 
         """
-        if chunk_size is None:
-            chunk_size = self.chunk_size
-        if overlap is None:
-            overlap = self.chunk_overlap
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be greater than 0")
-        if overlap < 0:
-            raise ValueError("chunk_overlap must be non-negative")
-        if overlap >= chunk_size:
-            raise ValueError("chunk_overlap must be less than chunk_size")
+        chunk_size, overlap = self._resolve_character_split_params(
+            chunk_size,
+            overlap,
+        )
         result = []
         for i in range(0, len(text), chunk_size - overlap):
             end = min(i + chunk_size, len(text))
@@ -167,3 +222,18 @@ class RecursiveCharacterChunker(BaseChunker):
                 break
 
         return result
+
+    def _resolve_character_split_params(
+        self,
+        chunk_size: int | None,
+        overlap: int | None,
+    ) -> tuple[int, int]:
+        chunk_size = self.chunk_size if chunk_size is None else chunk_size
+        overlap = self.chunk_overlap if overlap is None else overlap
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+        if overlap < 0:
+            raise ValueError("chunk_overlap must be non-negative")
+        if overlap >= chunk_size:
+            raise ValueError("chunk_overlap must be less than chunk_size")
+        return chunk_size, overlap
