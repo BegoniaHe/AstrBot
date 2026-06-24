@@ -69,6 +69,18 @@ async def get_version(
     return await _run(service.get_version())
 
 
+@router.get("/stats/versions")
+async def get_public_versions(
+    request: Request,
+    service: StatService = Depends(get_service),
+):
+    return ok(
+        await service.get_public_versions(
+            getattr(request.app.state, "dashboard_static_folder", None)
+        )
+    )
+
+
 @router.get("/stats/first-notice")
 async def get_first_notice(
     locale: str | None = None,
