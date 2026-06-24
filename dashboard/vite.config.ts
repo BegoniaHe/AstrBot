@@ -55,6 +55,30 @@ function t2iShikiRuntimeAsset(): Plugin {
   };
 }
 
+function resolveVendorChunk(id: string): string | undefined {
+  const normalized = id.replace(/\\/g, '/');
+  if (!normalized.includes('/node_modules/')) {
+    return undefined;
+  }
+
+  if (normalized.includes('/node_modules/vuetify/')) {
+    return 'vendor-vuetify';
+  }
+
+  if (
+    normalized.includes('/node_modules/vue/') ||
+    normalized.includes('/node_modules/@vue/') ||
+    normalized.includes('/node_modules/pinia/') ||
+    normalized.includes('/node_modules/vue-router/') ||
+    normalized.includes('/node_modules/axios/') ||
+    normalized.includes('/node_modules/event-source-polyfill/')
+  ) {
+    return 'vendor-core';
+  }
+
+  return undefined;
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => ({
   plugins: [
@@ -100,7 +124,14 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     sourcemap: false,
-    chunkSizeWarningLimit: 1024 * 1024 // Set the limit to 1 MB
+    chunkSizeWarningLimit: 1024 * 1024, // Set the limit to 1 MB
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          return resolveVendorChunk(id);
+        }
+      }
+    }
   },
   optimizeDeps: {
     exclude: ['vuetify'],

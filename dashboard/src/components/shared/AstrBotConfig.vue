@@ -1,5 +1,6 @@
 <script setup>
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
+import '@/utils/monacoLoader'
 import { ref, computed } from 'vue'
 import ConfigItemRenderer from './ConfigItemRenderer.vue'
 import TemplateListEditor from './TemplateListEditor.vue'

@@ -300,6 +300,7 @@
 
 <script>
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor';
+import '@/utils/monacoLoader';
 import { mcpApi } from '@/api/v1';
 import { useI18n, useModuleI18n } from '@/i18n/composables';
 import OutlinedActionListItem from '@/components/shared/OutlinedActionListItem.vue';

@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+  defineAsyncComponent,
+} from "vue";
 import { useCustomizerStore } from "@/stores/customizer";
 import axios from "axios";
 import Logo from "@/components/shared/Logo.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useCommonStore } from "@/stores/common";
-import { MarkdownRender, enableKatex, enableMermaid } from "markstream-vue";
-import "markstream-vue/index.css";
-import "katex/dist/katex.min.css";
-import "highlight.js/styles/github.css";
 import { useI18n } from "@/i18n/composables";
 import { router } from "@/router";
 import { useRoute } from "vue-router";
@@ -16,12 +19,13 @@ import { useTheme } from "vuetify";
 import StyledMenu from "@/components/shared/StyledMenu.vue";
 import { useLanguageSwitcher } from "@/i18n/composables";
 import type { Locale } from "@/i18n/types";
-import AboutPage from "@/views/AboutPage.vue";
-import { authApi, isLegacyFallbackError, statsApi, updatesApi } from "@/api/v1";
+import { authApi, statsApi, updatesApi } from "@/api/v1";
 import { getDesktopRuntimeInfo } from "@/utils/desktopRuntime";
 
-enableKatex();
-enableMermaid();
+const LazyMarkdownRender = defineAsyncComponent(
+  () => import("@/components/shared/LazyMarkdownRender.vue"),
+);
+const AboutPage = defineAsyncComponent(() => import("@/views/AboutPage.vue"));
 
 const customizer = useCustomizerStore();
 const commonStore = useCommonStore();
@@ -491,10 +495,6 @@ function checkUpdate() {
         : res.data.data.dashboard_has_new_version;
     })
     .catch((err) => {
-      if (isLegacyFallbackError(err)) {
-        console.log(err);
-        return;
-      }
       if (err.response && err.response.status == 401) {
         console.log("401");
         const authStore = useAuthStore();
@@ -1468,7 +1468,7 @@ onMounted(async () => {
                 </v-btn>
               </div>
               <div class="release-message-preview">
-                <MarkdownRender
+                <LazyMarkdownRender
                   :content="releaseMessage"
                   :typewriter="false"
                   class="markdown-content"
@@ -1664,7 +1664,7 @@ onMounted(async () => {
         <v-card-text
           style="font-size: 14px; max-height: 400px; overflow-y: auto"
         >
-          <MarkdownRender
+          <LazyMarkdownRender
             :content="selectedReleaseNotes"
             :typewriter="false"
             class="markdown-content"
