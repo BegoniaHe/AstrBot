@@ -165,7 +165,7 @@ class InternalAgentSubStage(Stage):
 
     async def process(
         self, event: AstrMessageEvent, provider_wake_prefix: str
-    ) -> AsyncGenerator[None, None]:
+    ) -> AsyncGenerator[None]:
         follow_up_capture: FollowUpCapture | None = None
         follow_up_consumed_marked = False
         follow_up_activated = False

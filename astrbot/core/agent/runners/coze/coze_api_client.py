@@ -129,7 +129,7 @@ class CozeAPIClient:
         auto_save_history: bool = True,
         stream: bool = True,
         timeout_seconds: float = 120,
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any]]:
         """发送聊天消息并返回流式响应
 
         Args:

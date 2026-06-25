@@ -33,7 +33,7 @@ class KookConfig:
     """最大连续失败次数"""
 
     @classmethod
-    def from_dict(cls, config_dict: dict) -> "KookConfig":
+    def from_dict(cls, config_dict: dict) -> KookConfig:
         """从字典创建配置对象"""
         return cls(
             # 适配器id 应该是不能改的

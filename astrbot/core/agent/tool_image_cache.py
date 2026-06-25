@@ -35,12 +35,12 @@ class ToolImageCache:
     Images are stored in data/temp/tool_images/ and can be retrieved by file path.
     """
 
-    _instance: ClassVar["ToolImageCache | None"] = None
+    _instance: ClassVar[ToolImageCache | None] = None
     CACHE_DIR_NAME: ClassVar[str] = "tool_images"
     # Cache expiry time in seconds (1 hour)
     CACHE_EXPIRY: ClassVar[int] = 3600
 
-    def __new__(cls) -> "ToolImageCache":
+    def __new__(cls) -> ToolImageCache:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False

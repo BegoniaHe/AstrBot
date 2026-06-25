@@ -447,7 +447,7 @@ class ProviderAnthropic(Provider):
         tools: ToolSet | None,
         *,
         request_max_retries: int | None = None,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         if tools:
             if tool_list := tools.anthropic_schema():
                 payloads["tools"] = tool_list

@@ -126,7 +126,7 @@ class ResultDecorateStage(Stage):
     async def process(
         self,
         event: AstrMessageEvent,
-    ) -> None | AsyncGenerator[None, None]:
+    ) -> None | AsyncGenerator[None]:
         result = event.get_result()
         if result is None or not result.chain:
             return

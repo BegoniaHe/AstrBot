@@ -72,17 +72,17 @@ class _HandleFunctionToolsResult:
     cached_image: T.Any = None
 
     @classmethod
-    def from_message_chain(cls, chain: MessageChain) -> "_HandleFunctionToolsResult":
+    def from_message_chain(cls, chain: MessageChain) -> _HandleFunctionToolsResult:
         return cls(kind="message_chain", message_chain=chain)
 
     @classmethod
     def from_tool_call_result_blocks(
         cls, blocks: list[ToolCallMessageSegment]
-    ) -> "_HandleFunctionToolsResult":
+    ) -> _HandleFunctionToolsResult:
         return cls(kind="tool_call_result_blocks", tool_call_result_blocks=blocks)
 
     @classmethod
-    def from_cached_image(cls, image: T.Any) -> "_HandleFunctionToolsResult":
+    def from_cached_image(cls, image: T.Any) -> _HandleFunctionToolsResult:
         return cls(kind="cached_image", cached_image=image)
 
 
@@ -452,7 +452,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
 
     async def _iter_llm_responses(
         self, *, include_model: bool = True
-    ) -> T.AsyncGenerator[LLMResponse, None]:
+    ) -> T.AsyncGenerator[LLMResponse]:
         """Yields chunks *and* a final LLMResponse."""
         payload = {
             "contexts": self._sanitize_contexts_for_provider(self.run_context.messages),
@@ -474,7 +474,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
 
     async def _iter_llm_responses_with_fallback(
         self,
-    ) -> T.AsyncGenerator[LLMResponse, None]:
+    ) -> T.AsyncGenerator[LLMResponse]:
         """Wrap _iter_llm_responses with provider fallback handling."""
         candidates = [self.provider, *self.fallback_providers]
         total_candidates = len(candidates)
@@ -943,7 +943,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
 
     async def step_until_done(
         self, max_step: int
-    ) -> T.AsyncGenerator[AgentResponse, None]:
+    ) -> T.AsyncGenerator[AgentResponse]:
         """Process steps until the agent is done."""
         step_count = 0
         while not self.done() and step_count < max_step:
@@ -974,7 +974,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
         self,
         req: ProviderRequest,
         llm_response: LLMResponse,
-    ) -> T.AsyncGenerator[_HandleFunctionToolsResult, None]:
+    ) -> T.AsyncGenerator[_HandleFunctionToolsResult]:
         """处理函数工具调用。"""
         tool_call_result_blocks: list[ToolCallMessageSegment] = []
         logger.info(f"Agent 使用工具: {llm_response.tools_call_name}")
@@ -1403,8 +1403,8 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
 
     async def _iter_tool_executor_results(
         self,
-        executor: T.AsyncGenerator[ToolExecutorResultT, None],
-    ) -> T.AsyncGenerator[ToolExecutorResultT, None]:
+        executor: T.AsyncGenerator[ToolExecutorResultT],
+    ) -> T.AsyncGenerator[ToolExecutorResultT]:
         async def _next_executor_result() -> ToolExecutorResultT:
             return await anext(executor)
 

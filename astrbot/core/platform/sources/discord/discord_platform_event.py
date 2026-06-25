@@ -102,7 +102,7 @@ class DiscordPlatformEvent(AstrMessageEvent):
         await super().send(message)
 
     async def send_streaming(
-        self, generator: AsyncGenerator[MessageChain, None], use_fallback: bool = False
+        self, generator: AsyncGenerator[MessageChain], use_fallback: bool = False
     ):
         buffer = None
         async for chain in generator:

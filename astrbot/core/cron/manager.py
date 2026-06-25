@@ -101,7 +101,7 @@ class CronJobManager:
         self._lock = asyncio.Lock()
         self._started = False
 
-    async def start(self, ctx: "Context") -> None:
+    async def start(self, ctx: Context) -> None:
         self.ctx: Context = ctx  # star context
         async with self._lock:
             if self._started:

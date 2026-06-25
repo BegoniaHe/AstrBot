@@ -11,10 +11,10 @@ from astrbot.core.star.star_handler import EventType, star_handlers_registry
 
 async def call_handler(
     event: AstrMessageEvent,
-    handler: T.Callable[..., T.Awaitable[T.Any] | T.AsyncGenerator[T.Any, None]],
+    handler: T.Callable[..., T.Awaitable[T.Any] | T.AsyncGenerator[T.Any]],
     *args,
     **kwargs,
-) -> T.AsyncGenerator[T.Any, None]:
+) -> T.AsyncGenerator[T.Any]:
     """执行事件处理函数并处理其返回结果
 
     该方法负责调用处理函数并处理不同类型的返回值。它支持两种类型的处理函数:

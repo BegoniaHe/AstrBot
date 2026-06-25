@@ -125,7 +125,7 @@ class LLMSummaryCompressor:
 
     def __init__(
         self,
-        provider: "Provider",
+        provider: Provider,
         keep_recent_ratio: float = 0.15,
         instruction_text: str | None = None,
         compression_threshold: float = 0.82,

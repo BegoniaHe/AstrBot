@@ -533,7 +533,7 @@ class ProviderOpenAIOfficial(Provider):
         tools: ToolSet | None,
         *,
         request_max_retries: int | None = None,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         """流式查询API，逐步返回结果"""
         if tools:
             model = payloads.get("model", "").lower()
@@ -1203,7 +1203,7 @@ class ProviderOpenAIOfficial(Provider):
         tool_choice: Literal["auto", "required"] = "auto",
         request_max_retries: int | None = None,
         **kwargs,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         """流式对话，与服务商交互并逐步返回结果"""
         payloads, context_query = await self._prepare_chat_payload(
             prompt,

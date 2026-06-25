@@ -63,6 +63,6 @@ if ! has "$UV_BIN"; then
 fi  
 
 ok "$("$UV_BIN" --version)"
-info "Installing AstrBot with Python 3.12..."
-"$UV_BIN" tool install --python 3.12 astrbot
+info "Installing AstrBot with Python 3.14..."
+"$UV_BIN" tool install --python 3.14 astrbot
 ok "AstrBot has been installed."

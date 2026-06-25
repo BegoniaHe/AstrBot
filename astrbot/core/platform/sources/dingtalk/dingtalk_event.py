@@ -12,7 +12,7 @@ class DingtalkMessageEvent(AstrMessageEvent):
         platform_meta,
         session_id,
         client: Any = None,
-        adapter: "Any" = None,
+        adapter: Any = None,
     ) -> None:
         super().__init__(message_str, message_obj, platform_meta, session_id)
         self.client = client

@@ -142,7 +142,7 @@ class Provider(AbstractProvider):
         tool_choice: Literal["auto", "required"] = "auto",
         request_max_retries: int | None = None,
         **kwargs,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         """获得 LLM 的流式文本对话结果。会使用当前的模型进行对话。在生成的最后会返回一次完整的结果。
 
         Args:
@@ -252,7 +252,7 @@ class TTSProvider(AbstractProvider):
     async def get_audio_stream(
         self,
         text_queue: asyncio.Queue[str | None],
-        audio_queue: "asyncio.Queue[bytes | tuple[str, bytes] | None]",
+        audio_queue: asyncio.Queue[bytes | tuple[str, bytes] | None],
     ) -> None:
         """流式 TTS 处理方法。
 

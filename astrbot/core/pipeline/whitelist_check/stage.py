@@ -31,7 +31,7 @@ class WhitelistCheckStage(Stage):
     async def process(
         self,
         event: AstrMessageEvent,
-    ) -> None | AsyncGenerator[None, None]:
+    ) -> None | AsyncGenerator[None]:
         if not self.enable_whitelist_check:
             # 白名单检查未启用
             return

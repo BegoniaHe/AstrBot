@@ -79,7 +79,7 @@ def _build_source_file(pathname: str | None) -> str:
     )
 
 
-def _patch_record(record: "Record") -> None:
+def _patch_record(record: Record) -> None:
     extra = record["extra"]
     extra.setdefault("plugin_tag", "[Core]")
     extra.setdefault("short_levelname", _get_short_level_name(record["level"].name))

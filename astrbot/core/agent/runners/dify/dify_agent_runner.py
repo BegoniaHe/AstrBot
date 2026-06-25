@@ -93,7 +93,7 @@ class DifyAgentRunner(BaseAgentRunner[TContext]):
     @override
     async def step_until_done(
         self, max_step: int = 30
-    ) -> T.AsyncGenerator[AgentResponse, None]:
+    ) -> T.AsyncGenerator[AgentResponse]:
         while not self.done():
             async for resp in self.step():
                 yield resp

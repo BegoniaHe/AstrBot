@@ -189,7 +189,7 @@ class AstrBotImporter:
     def __init__(
         self,
         main_db: BaseDatabase,
-        kb_manager: "KnowledgeBaseManager | None" = None,
+        kb_manager: KnowledgeBaseManager | None = None,
         config_path: str = CMD_CONFIG_FILE_PATH,
         kb_root_dir: str = KB_PATH,
     ) -> None:

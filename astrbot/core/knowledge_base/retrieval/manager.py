@@ -64,7 +64,7 @@ class RetrievalManager:
     def _build_kb_options(
         self,
         kb_ids: list[str],
-        kb_id_helper_map: dict[str, "KBHelper"],
+        kb_id_helper_map: dict[str, KBHelper],
     ) -> tuple[list[str], dict[str, dict]]:
         kb_options: dict[str, dict] = {}
         available_kb_ids: list[str] = []
@@ -164,7 +164,7 @@ class RetrievalManager:
         self,
         query: str,
         kb_ids: list[str],
-        kb_id_helper_map: dict[str, "KBHelper"],
+        kb_id_helper_map: dict[str, KBHelper],
         top_k_fusion: int = 20,
         top_m_final: int = 5,
     ) -> list[RetrievalResult]:

@@ -81,6 +81,6 @@ if (-not (Test-Command "uv")) {
 }
 
 Ok (& uv --version)
-Info "Installing AstrBot with Python 3.12..."
-uv tool install --python 3.12 astrbot
+Info "Installing AstrBot with Python 3.14..."
+uv tool install --python 3.14 astrbot
 Ok "AstrBot has been installed."

@@ -714,12 +714,12 @@ async def call_local_llm_tool(
     handler: T.Callable[
         ...,
         T.Awaitable[MessageEventResult | mcp.types.CallToolResult | str | None]
-        | T.AsyncGenerator[MessageEventResult | str | None, None],
+        | T.AsyncGenerator[MessageEventResult | str | None],
     ],
     method_name: str,
     *args,
     **kwargs,
-) -> T.AsyncGenerator[T.Any, None]:
+) -> T.AsyncGenerator[T.Any]:
     """执行本地 LLM 工具的处理函数并处理其返回结果"""
     ready_to_call = None  # 一个协程或者异步生成器
 

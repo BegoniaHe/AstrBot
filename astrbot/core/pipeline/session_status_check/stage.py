@@ -19,7 +19,7 @@ class SessionStatusCheckStage(Stage):
     async def process(
         self,
         event: AstrMessageEvent,
-    ) -> None | AsyncGenerator[None, None]:
+    ) -> None | AsyncGenerator[None]:
         # 检查会话是否整体启用
         if not await SessionServiceManager.is_session_enabled(event.unified_msg_origin):
             logger.debug(f"会话 {event.unified_msg_origin} 已被关闭，已终止事件传播。")

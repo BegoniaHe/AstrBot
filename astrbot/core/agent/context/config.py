@@ -27,7 +27,7 @@ class ContextConfig:
     """Instruction prompt for LLM-based compression."""
     llm_compress_keep_recent_ratio: float = 0.15
     """Percent of current context tokens to keep as exact recent context during LLM-based compression."""
-    llm_compress_provider: "Provider | None" = None
+    llm_compress_provider: Provider | None = None
     """LLM provider used for compression tasks. If None, truncation strategy is used."""
     custom_token_counter: TokenCounter | None = None
     """Custom token counting method. If None, the default method is used."""

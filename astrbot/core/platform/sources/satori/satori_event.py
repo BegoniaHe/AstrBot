@@ -27,7 +27,7 @@ class SatoriPlatformEvent(AstrMessageEvent):
         message_obj: AstrBotMessage,
         platform_meta: PlatformMetadata,
         session_id: str,
-        adapter: "SatoriPlatformAdapter",
+        adapter: SatoriPlatformAdapter,
     ) -> None:
         # 更新平台元数据
         if adapter and hasattr(adapter, "logins") and adapter.logins:
@@ -55,7 +55,7 @@ class SatoriPlatformEvent(AstrMessageEvent):
     @classmethod
     async def send_with_adapter(
         cls,
-        adapter: "SatoriPlatformAdapter",
+        adapter: SatoriPlatformAdapter,
         message: MessageChain,
         session_id: str,
     ):

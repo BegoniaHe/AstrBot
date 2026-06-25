@@ -8,7 +8,7 @@ from aiohttp import ClientResponse, ClientSession, FormData
 from astrbot.core import logger
 
 
-async def _stream_sse(resp: ClientResponse) -> AsyncGenerator[dict, None]:
+async def _stream_sse(resp: ClientResponse) -> AsyncGenerator[dict]:
     decoder = codecs.getincrementaldecoder("utf-8")()
     buffer = ""
     async for chunk in resp.content.iter_chunked(8192):
@@ -48,7 +48,7 @@ class DifyAPIClient:
         conversation_id: str = "",
         files: list[dict[str, Any]] | None = None,
         timeout_seconds: float = 60,
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any]]:
         if files is None:
             files = []
         url = f"{self.api_base}/chat-messages"

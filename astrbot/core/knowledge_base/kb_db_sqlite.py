@@ -212,7 +212,7 @@ class KBSQLiteDatabase:
 
         return metadata_map
 
-    async def delete_document_by_id(self, doc_id: str, vec_db: "FaissVecDB") -> None:
+    async def delete_document_by_id(self, doc_id: str, vec_db: FaissVecDB) -> None:
         """删除单个文档及其相关数据"""
         # 在知识库表中删除
         async with self.get_db() as session, session.begin():
@@ -240,7 +240,7 @@ class KBSQLiteDatabase:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def update_kb_stats(self, kb_id: str, vec_db: "FaissVecDB") -> None:
+    async def update_kb_stats(self, kb_id: str, vec_db: FaissVecDB) -> None:
         """更新知识库统计信息"""
         chunk_cnt = await vec_db.count_documents()
 

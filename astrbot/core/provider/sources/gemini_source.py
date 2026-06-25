@@ -685,7 +685,7 @@ class ProviderGoogleGenAI(Provider):
         tools: ToolSet | None,
         *,
         request_max_retries: int | None = None,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         """流式请求 Gemini API"""
         system_instruction = next(
             (msg["content"] for msg in payloads["messages"] if msg["role"] == "system"),
@@ -895,7 +895,7 @@ class ProviderGoogleGenAI(Provider):
         tool_choice: Literal["auto", "required"] = "auto",
         request_max_retries: int | None = None,
         **kwargs,
-    ) -> AsyncGenerator[LLMResponse, None]:
+    ) -> AsyncGenerator[LLMResponse]:
         if contexts is None:
             contexts = []
         new_record = None

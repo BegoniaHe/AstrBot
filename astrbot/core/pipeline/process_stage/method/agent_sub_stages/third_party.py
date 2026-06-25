@@ -60,10 +60,10 @@ RUNNER_NO_RESULT_LOG = "Agent Runner did not return final result."
 
 
 async def run_third_party_agent(
-    runner: "BaseAgentRunner",
+    runner: BaseAgentRunner,
     stream_to_general: bool = False,
     custom_error_message: str | None = None,
-) -> AsyncGenerator[tuple[MessageChain, bool], None]:
+) -> AsyncGenerator[tuple[MessageChain, bool]]:
     """
     运行第三方 agent runner 并转换响应格式
     类似于 run_agent 函数，但专门处理第三方 agent runner
@@ -103,7 +103,7 @@ class _RunnerResultAggregator:
 
     def finalize(
         self,
-        final_resp: "LLMResponse | None",
+        final_resp: LLMResponse | None,
     ) -> tuple[list, bool]:
         if not final_resp or not final_resp.result_chain:
             if self.merged_chain:
@@ -148,7 +148,7 @@ def _start_stream_watchdog(
     return asyncio.create_task(_watchdog())
 
 
-async def _close_runner_if_supported(runner: "BaseAgentRunner") -> None:
+async def _close_runner_if_supported(runner: BaseAgentRunner) -> None:
     close_callable = getattr(runner, "close", None)
     if not callable(close_callable):
         return
@@ -207,15 +207,15 @@ class ThirdPartyAgentSubStage(Stage):
     async def _handle_streaming_response(
         self,
         *,
-        runner: "BaseAgentRunner",
+        runner: BaseAgentRunner,
         event: AstrMessageEvent,
         custom_error_message: str | None,
         close_runner_once: Callable[[], Awaitable[None]],
         mark_stream_consumed: Callable[[], None],
-    ) -> AsyncGenerator[None, None]:
+    ) -> AsyncGenerator[None]:
         aggregator = _RunnerResultAggregator()
 
-        async def _stream_runner_chain() -> AsyncGenerator[MessageChain, None]:
+        async def _stream_runner_chain() -> AsyncGenerator[MessageChain]:
             mark_stream_consumed()
             try:
                 async for chain, is_error in run_third_party_agent(
@@ -254,11 +254,11 @@ class ThirdPartyAgentSubStage(Stage):
     async def _handle_non_streaming_response(
         self,
         *,
-        runner: "BaseAgentRunner",
+        runner: BaseAgentRunner,
         event: AstrMessageEvent,
         stream_to_general: bool,
         custom_error_message: str | None,
-    ) -> AsyncGenerator[None, None]:
+    ) -> AsyncGenerator[None]:
         aggregator = _RunnerResultAggregator()
         async for chain, is_error in run_third_party_agent(
             runner,
@@ -288,7 +288,7 @@ class ThirdPartyAgentSubStage(Stage):
 
     async def process(
         self, event: AstrMessageEvent, provider_wake_prefix: str
-    ) -> AsyncGenerator[None, None]:
+    ) -> AsyncGenerator[None]:
         req: ProviderRequest | None = None
 
         if provider_wake_prefix and not event.message_str.startswith(

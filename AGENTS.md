@@ -7,7 +7,7 @@ This file provides guidance to Agents when working with code in this repository.
 This repository is a **modernized fork of AstrBot**. The guiding principle is to keep the codebase lean and forward-looking rather than infinitely backward-compatible.
 
 - **Do not add or preserve compatibility shims for legacy APIs, old plugin formats, or deprecated knowledge-base layouts.** When you touch code that carries such compatibility layers, prefer removing the legacy path over extending it.
-- Target the current Python and platform baseline only (Python 3.12+). Do not reintroduce 3.10/3.11 fallbacks.
+- Target the current Python and platform baseline only (Python 3.14+). Do not reintroduce 3.10/3.11/3.12/3.13 fallbacks.
 - When a feature has an old and a new code path, build on the new one and delete the old one rather than bridging the two.
 
 If a change would require resurrecting a legacy compatibility layer to work, that is a signal the approach is wrong — find the modern path instead.
@@ -54,7 +54,7 @@ make quality            # scoped pyright + bandit + pip-audit + radon on key mod
 make quality-report     # same checks across the whole astrbot package
 ```
 
-`ruff` is configured in `pyproject.toml` (line-length 88, py312 target, mccabe max-complexity 15). Pre-commit hooks run `ruff-check`, `ruff-format`, and `pyupgrade --py312-plus`:
+`ruff` is configured in `pyproject.toml` (line-length 88, py314 target, mccabe max-complexity 15). Pre-commit hooks run `ruff-check`, `ruff-format`, and `pyupgrade --py314-plus`:
 
 ```bash
 pip install pre-commit && pre-commit install

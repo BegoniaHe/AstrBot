@@ -15,12 +15,12 @@ class RstScene(Enum):
         return self.value[1]
 
     @classmethod
-    def from_index(cls, index: int) -> "RstScene":
+    def from_index(cls, index: int) -> RstScene:
         mapping = {1: cls.GROUP_UNIQUE_ON, 2: cls.GROUP_UNIQUE_OFF, 3: cls.PRIVATE}
         return mapping[index]
 
     @classmethod
-    def get_scene(cls, is_group: bool, is_unique_session: bool) -> "RstScene":
+    def get_scene(cls, is_group: bool, is_unique_session: bool) -> RstScene:
         if is_group:
             return cls.GROUP_UNIQUE_ON if is_unique_session else cls.GROUP_UNIQUE_OFF
         return cls.PRIVATE

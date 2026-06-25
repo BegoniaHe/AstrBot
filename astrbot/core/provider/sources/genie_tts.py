@@ -83,7 +83,7 @@ class GenieTTSProvider(TTSProvider):
     async def get_audio_stream(
         self,
         text_queue: asyncio.Queue[str | None],
-        audio_queue: "asyncio.Queue[bytes | tuple[str, bytes] | None]",
+        audio_queue: asyncio.Queue[bytes | tuple[str, bytes] | None],
     ) -> None:
         loop = asyncio.get_running_loop()
 

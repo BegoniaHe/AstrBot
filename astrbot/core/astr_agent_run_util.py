@@ -121,7 +121,7 @@ async def run_agent(
     stream_to_general: bool = False,
     show_reasoning: bool = False,
     buffer_intermediate_messages: bool = False,
-) -> AsyncGenerator[MessageChain | None, None]:
+) -> AsyncGenerator[MessageChain | None]:
     step_idx = 0
     astr_event = agent_runner.run_context.context.event
     tool_name_by_call_id: dict[str, str] = {}
@@ -356,7 +356,7 @@ async def run_live_agent(
     show_tool_call_result: bool = False,
     show_reasoning: bool = False,
     buffer_intermediate_messages: bool = False,
-) -> AsyncGenerator[MessageChain | None, None]:
+) -> AsyncGenerator[MessageChain | None]:
     """Live Mode 的 Agent 运行器，支持流式 TTS
 
     Args:
@@ -564,7 +564,7 @@ async def _run_agent_feeder(
 async def _safe_tts_stream_wrapper(
     tts_provider: TTSProvider,
     text_queue: asyncio.Queue[str | None],
-    audio_queue: "asyncio.Queue[bytes | tuple[str, bytes] | None]",
+    audio_queue: asyncio.Queue[bytes | tuple[str, bytes] | None],
 ) -> None:
     """包装原生流式 TTS 确保异常处理和队列关闭"""
     try:
@@ -578,7 +578,7 @@ async def _safe_tts_stream_wrapper(
 async def _simulated_stream_tts(
     tts_provider: TTSProvider,
     text_queue: asyncio.Queue[str | None],
-    audio_queue: "asyncio.Queue[bytes | tuple[str, bytes] | None]",
+    audio_queue: asyncio.Queue[bytes | tuple[str, bytes] | None],
     astr_event: Any,
 ) -> None:
     """模拟流式 TTS 分句生成音频.

@@ -29,7 +29,7 @@ class ToolSchema:
     """The parameters of the tool, in JSON Schema format."""
 
     @model_validator(mode="after")
-    def validate_parameters(self) -> "ToolSchema":
+    def validate_parameters(self) -> ToolSchema:
         jsonschema.validate(
             self.parameters, jsonschema.Draft202012Validator.META_SCHEMA
         )
@@ -41,7 +41,7 @@ class FunctionTool[TContext](ToolSchema):
     """A callable tool, for function calling."""
 
     handler: (
-        Callable[..., Awaitable[str | None] | AsyncGenerator[MessageEventResult, None]]
+        Callable[..., Awaitable[str | None] | AsyncGenerator[MessageEventResult]]
         | None
     ) = None
     """a callable that implements the tool's functionality. It should be an async function."""
@@ -117,7 +117,7 @@ class ToolSet:
                 return tool
         return None
 
-    def get_light_tool_set(self) -> "ToolSet":
+    def get_light_tool_set(self) -> ToolSet:
         """Return a light tool set with only name/description."""
         light_tools = []
         for tool in self.tools:
@@ -137,7 +137,7 @@ class ToolSet:
             )
         return ToolSet(light_tools)
 
-    def get_param_only_tool_set(self) -> "ToolSet":
+    def get_param_only_tool_set(self) -> ToolSet:
         """Return a tool set with name/parameters only (no description)."""
         param_tools = []
         for tool in self.tools:
@@ -296,7 +296,7 @@ class ToolSet:
         """获取所有工具的名称列表"""
         return [tool.name for tool in self.tools]
 
-    def merge(self, other: "ToolSet") -> None:
+    def merge(self, other: ToolSet) -> None:
         """Merge another ToolSet into this one."""
         for tool in other.tools:
             self.add_tool(tool)

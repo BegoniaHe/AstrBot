@@ -274,7 +274,7 @@ class AstrMessageEvent(abc.ABC):
 
     async def send_streaming(
         self,
-        generator: AsyncGenerator[MessageChain, None],
+        generator: AsyncGenerator[MessageChain],
         use_fallback: bool = False,
     ) -> None:
         """发送流式消息到消息平台，使用异步生成器。

@@ -129,7 +129,7 @@ class KBHelper:
             return None
         return rp
 
-    async def _ensure_vec_db(self) -> "FaissVecDB":
+    async def _ensure_vec_db(self) -> FaissVecDB:
         if not self.kb.embedding_provider_id:
             raise ValueError(f"知识库 {self.kb.kb_name} 未配置 Embedding Provider")
 

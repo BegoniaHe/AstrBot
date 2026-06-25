@@ -50,8 +50,8 @@ class _version_info:
 
 
 def test_check_env(monkeypatch):
-    version_info_correct = _version_info(3, 10)
-    version_info_wrong = _version_info(3, 9)
+    version_info_correct = _version_info(3, 14)
+    version_info_wrong = _version_info(3, 13)
     monkeypatch.setattr(sys, "version_info", version_info_correct)
     with mock.patch("os.makedirs") as mock_makedirs:
         check_env()
@@ -96,7 +96,7 @@ def test_check_env_appends_user_site_packages_after_runtime_paths(monkeypatch):
     site_packages_path = "/tmp/astrbot-site-packages"
     original_sys_path = list(sys.path)
 
-    monkeypatch.setattr(sys, "version_info", _version_info(3, 12))
+    monkeypatch.setattr(sys, "version_info", _version_info(3, 14))
     monkeypatch.setattr("main.get_astrbot_root", lambda: astrbot_root)
     monkeypatch.setattr(
         "main.get_astrbot_site_packages_path", lambda: site_packages_path
@@ -120,7 +120,7 @@ def test_check_env_does_not_append_duplicate_user_site_packages(monkeypatch):
     site_packages_path = "/tmp/astrbot-site-packages"
     original_sys_path = list(sys.path)
 
-    monkeypatch.setattr(sys, "version_info", _version_info(3, 12))
+    monkeypatch.setattr(sys, "version_info", _version_info(3, 14))
     monkeypatch.setattr("main.get_astrbot_root", lambda: astrbot_root)
     monkeypatch.setattr(
         "main.get_astrbot_site_packages_path", lambda: site_packages_path

@@ -128,7 +128,7 @@ class MisskeyPlatformEvent(AstrMessageEvent):
 
     async def send_streaming(
         self,
-        generator: AsyncGenerator[MessageChain, None],
+        generator: AsyncGenerator[MessageChain],
         use_fallback: bool = False,
     ):
         if not use_fallback:

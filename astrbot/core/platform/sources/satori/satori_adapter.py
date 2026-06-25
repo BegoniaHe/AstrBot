@@ -730,7 +730,7 @@ class SatoriPlatformAdapter(Platform):
             if child.tail and child.tail.strip():
                 elements.append(Plain(text=child.tail))
 
-    def create_event(self, message: AstrBotMessage) -> "SatoriPlatformEvent":
+    def create_event(self, message: AstrBotMessage) -> SatoriPlatformEvent:
         """Creates a Satori message event.
 
         Args:

@@ -1,8 +1,7 @@
-from typing import Any, Generic
+from typing import Any, Generic, TypeVar
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
-from typing_extensions import TypeVar
 
 from .message import Message
 

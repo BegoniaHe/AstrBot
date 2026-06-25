@@ -58,7 +58,7 @@ class BaseDatabase(abc.ABC):
         """初始化数据库连接"""
 
     @asynccontextmanager
-    async def get_db(self) -> T.AsyncGenerator[AsyncSession, None]:
+    async def get_db(self) -> T.AsyncGenerator[AsyncSession]:
         """Get a database session."""
         if not self.inited:
             await self.initialize()

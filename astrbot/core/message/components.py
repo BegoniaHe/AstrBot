@@ -25,15 +25,11 @@ import asyncio
 import base64
 import json
 import os
-import sys
 import uuid
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
-if sys.version_info >= (3, 14):
-    from pydantic import BaseModel
-else:
-    from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 
 from astrbot.core import astrbot_config, file_token_service, logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
@@ -583,7 +579,7 @@ class Reply(BaseMessageComponent):
     type: ComponentType = ComponentType.Reply
     id: str | int
     """所引用的消息 ID"""
-    chain: list["BaseMessageComponent"] | None = []
+    chain: list[BaseMessageComponent] | None = []
     """被引用的消息段列表"""
     sender_id: int | None | str = 0
     """被引用的消息对应的发送者的 ID"""

@@ -31,7 +31,7 @@ class MessageChain:
     type: str | None = None
     """消息链承载的消息的类型。可选，用于让消息平台区分不同业务场景的消息链。"""
 
-    def derive(self, chain: list[BaseMessageComponent] | None = None) -> "MessageChain":
+    def derive(self, chain: list[BaseMessageComponent] | None = None) -> MessageChain:
         """基于当前消息链创建一个新的 MessageChain，继承元数据（use_t2i_、use_markdown_ 等）。
 
         Args:
@@ -230,12 +230,12 @@ class MessageEventResult(MessageChain):
     async_stream: AsyncGenerator | None = None
     """异步流"""
 
-    def stop_event(self) -> "MessageEventResult":
+    def stop_event(self) -> MessageEventResult:
         """终止事件传播。"""
         self.result_type = EventResultType.STOP
         return self
 
-    def continue_event(self) -> "MessageEventResult":
+    def continue_event(self) -> MessageEventResult:
         """继续事件传播。"""
         self.result_type = EventResultType.CONTINUE
         return self
@@ -244,12 +244,12 @@ class MessageEventResult(MessageChain):
         """是否终止事件传播。"""
         return self.result_type == EventResultType.STOP
 
-    def set_async_stream(self, stream: AsyncGenerator) -> "MessageEventResult":
+    def set_async_stream(self, stream: AsyncGenerator) -> MessageEventResult:
         """设置异步流。"""
         self.async_stream = stream
         return self
 
-    def set_result_content_type(self, typ: ResultContentType) -> "MessageEventResult":
+    def set_result_content_type(self, typ: ResultContentType) -> MessageEventResult:
         """设置事件处理的结果类型。
 
         Args:

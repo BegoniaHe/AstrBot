@@ -27,7 +27,7 @@ for handler in logging.root.handlers[:]:
 
 # QQ 机器人官方框架
 class botClient(Client):
-    def set_platform(self, platform: "QQOfficialWebhookPlatformAdapter") -> None:
+    def set_platform(self, platform: QQOfficialWebhookPlatformAdapter) -> None:
         self.platform = platform
 
     # 收到群消息

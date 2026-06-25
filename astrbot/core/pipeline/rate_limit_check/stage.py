@@ -43,7 +43,7 @@ class RateLimitStage(Stage):
     async def process(
         self,
         event: AstrMessageEvent,
-    ) -> None | AsyncGenerator[None, None]:
+    ) -> None | AsyncGenerator[None]:
         """检查并处理限流逻辑。如果触发限流，流水线会 stall 并在窗口期后自动恢复。
 
         Args:

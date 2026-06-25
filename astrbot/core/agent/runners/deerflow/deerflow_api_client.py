@@ -82,7 +82,7 @@ def _parse_sse_block(block: str) -> dict[str, Any] | None:
     return {"event": event_name, "data": _parse_sse_data_lines(data_lines)}
 
 
-async def _stream_sse(resp: ClientResponse) -> AsyncGenerator[dict[str, Any], None]:
+async def _stream_sse(resp: ClientResponse) -> AsyncGenerator[dict[str, Any]]:
     """Parse SSE response blocks into event/data dictionaries."""
     # Use a forgiving decoder at network boundaries so malformed bytes do not abort stream parsing.
     decoder = codecs.getincrementaldecoder("utf-8")("replace")
@@ -155,7 +155,7 @@ class DeerFlowAPIClient:
             self._session = ClientSession(trust_env=True)
         return self._session
 
-    async def __aenter__(self) -> "DeerFlowAPIClient":
+    async def __aenter__(self) -> DeerFlowAPIClient:
         return self
 
     async def __aexit__(
@@ -211,7 +211,7 @@ class DeerFlowAPIClient:
         thread_id: str,
         payload: dict[str, Any],
         timeout_seconds: float = 120,
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any]]:
         session = self._get_session()
         url = f"{self.api_base}/api/langgraph/threads/{thread_id}/runs/stream"
         input_payload = payload.get("input")

@@ -3,7 +3,7 @@
 > [!WARNING]
 > You are deploying this project directly from source code. This tutorial requires you to have some technical background.
 >
-> This tutorial assumes Python is already installed on your device with version `>=3.10`
+> This tutorial assumes Python is already installed on your device with version `>=3.14`
 
 
 ## Download/Clone Repository

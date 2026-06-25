@@ -113,7 +113,7 @@ class DashscopeAgentRunner(BaseAgentRunner[TContext]):
     @override
     async def step_until_done(
         self, max_step: int = 30
-    ) -> T.AsyncGenerator[AgentResponse, None]:
+    ) -> T.AsyncGenerator[AgentResponse]:
         while not self.done():
             async for resp in self.step():
                 yield resp
@@ -274,7 +274,7 @@ class DashscopeAgentRunner(BaseAgentRunner[TContext]):
 
     async def _handle_streaming_response(
         self, response: T.Any, session_id: str
-    ) -> T.AsyncGenerator[AgentResponse, None]:
+    ) -> T.AsyncGenerator[AgentResponse]:
         """处理流式响应
 
         Args:

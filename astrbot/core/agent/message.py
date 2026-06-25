@@ -19,7 +19,7 @@ ContentPartT = TypeVar("ContentPartT", bound="ContentPart")
 class ContentPart(BaseModel):
     """A part of the content in a message."""
 
-    __content_part_registry: ClassVar[dict[str, type["ContentPart"]]] = {}
+    __content_part_registry: ClassVar[dict[str, type[ContentPart]]] = {}
 
     type: Literal["text", "think", "image_url", "audio_url"]
     _no_save: bool = PrivateAttr(default=False)
