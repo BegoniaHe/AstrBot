@@ -4,6 +4,7 @@ This module tests the ComputerClient, Booter implementations (local, shipyard_ne
 filesystem operations, Python execution, shell execution, and security restrictions.
 """
 
+import shlex
 import subprocess
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -37,6 +38,12 @@ class TestLocalBooterInit:
         assert booter.fs is booter._fs
         assert booter.python is booter._python
         assert booter.shell is booter._shell
+
+
+def _shell_command(args: list[str]) -> str:
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(args)
+    return shlex.join(args)
 
 
 class TestLocalBooterLifecycle:
@@ -169,7 +176,7 @@ class TestLocalShellComponent:
             ),
         ):
             # Use python to read file to avoid Windows vs Unix command differences
-            command = subprocess.list2cmdline(
+            command = _shell_command(
                 [sys.executable, "-c", f"print(open(r'{test_file}').read())"]
             )
             result = await shell.exec(
@@ -182,7 +189,7 @@ class TestLocalShellComponent:
     async def test_exec_with_env(self):
         """Test command execution with custom environment variables."""
         shell = LocalShellComponent()
-        command = subprocess.list2cmdline(
+        command = _shell_command(
             [sys.executable, "-c", 'import os; print(os.environ.get("TEST_VAR", ""))']
         )
         result = await shell.exec(

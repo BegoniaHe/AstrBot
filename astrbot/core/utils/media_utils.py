@@ -211,13 +211,15 @@ def file_uri_to_path(file_uri: MediaRefStr) -> str:
 
     parsed = urlparse(file_uri)
     netloc = unquote(parsed.netloc or "")
-    path = parsed.path or ""
+    path = unquote(parsed.path or "")
     if netloc.lower().startswith("localhost") and len(netloc) > len("localhost"):
         netloc = netloc[len("localhost") :]
     if netloc and netloc.lower() != "localhost":
         if len(netloc) == 2 and netloc[1] == ":" and netloc[0].isalpha():
             return str(Path(url2pathname(f"{netloc}{path}")))
-        return str(Path(url2pathname(f"//{netloc}{path}")))
+        if os.name == "nt":
+            return str(Path(url2pathname(f"//{netloc}{path}")))
+        return str(Path(f"//{netloc}{path}"))
 
     path = url2pathname(path)
     if len(path) >= 4 and path[0] == "/" and path[2] == ":" and path[1].isalpha():
