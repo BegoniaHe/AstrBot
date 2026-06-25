@@ -206,6 +206,10 @@ class _StreamingLogWriter(io.TextIOBase):
         self._lines = deque(maxlen=max_lines or _MAX_PIP_OUTPUT_LINES)
         self._buffer = ""
 
+    def _emit(self, line: str) -> None:
+        self._lines.append(line)
+        self._log_func(line)
+
     def write(self, text: str) -> int:
         if not text:
             return 0
@@ -213,17 +217,20 @@ class _StreamingLogWriter(io.TextIOBase):
         self._buffer += text.replace("\r\n", "\n").replace("\r", "\n")
         while "\n" in self._buffer:
             raw_line, self._buffer = self._buffer.split("\n", 1)
-            line = raw_line.rstrip("\r\n")
-            self._log_func(line)
-            self._lines.append(line)
+            self._emit(raw_line.rstrip("\r\n"))
+        # A live-logging handler (e.g. pytest under log_cli) suspends global
+        # capture while emitting, which restores sys.stdout/sys.stderr away from
+        # this writer. Reinstate ourselves so subsequent pip output keeps
+        # streaming here instead of being silently dropped.
+        sys.stdout = self
+        sys.stderr = self
         return len(text)
 
     def flush(self) -> None:
         line = self._buffer.rstrip("\r\n")
-        if line:
-            self._log_func(line)
-            self._lines.append(line)
         self._buffer = ""
+        if line:
+            self._emit(line)
 
     @property
     def lines(self) -> list[str]:
