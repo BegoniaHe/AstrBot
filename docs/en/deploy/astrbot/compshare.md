@@ -60,8 +60,8 @@ AstrBot supports direct access to model APIs provided by Compshare.
 
 1. Find the model you want at [Compshare Model Center](https://console.compshare.cn/light-gpu/model-center).
 2. In AstrBot Dashboard -> Providers, click `+ Add Provider`, then choose Compshare.
-If Compshare is not listed, choose OpenAI-compatible access and set API Base URL to `https://api.modelverse.cn/v1`.
-Enter the model name in model configuration and save.
+   If Compshare is not listed, choose OpenAI-compatible access and set API Base URL to `https://api.modelverse.cn/v1`.
+   Enter the model name in model configuration and save.
 
 ### Test
 

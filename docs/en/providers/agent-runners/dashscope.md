@@ -49,4 +49,3 @@ After setting variables, AstrBot will attach the variables you set in the next r
 Of course, you can use the `/unset` command to cancel the variables you set. For example, `/unset name`
 
 Variables are permanently valid in the current session.
-

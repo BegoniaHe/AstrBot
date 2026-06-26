@@ -2,11 +2,11 @@
 
 LM Studio allows you to deploy models locally on your computer (hardware requirements must be met).
 
-### Download and Install LM Studio
+## Download and Install LM Studio
 
 <https://lmstudio.ai/download>
 
-### Download and Run a Model
+## Download and Run a Model
 
 <https://lmstudio.ai/models>
 
@@ -16,7 +16,7 @@ Follow the LM Studio instructions to download and run your desired model, e.g. `
 lms get deepseek-r1-qwen-7b
 ```
 
-### Configure AstrBot
+## Configure AstrBot
 
 In AstrBot:
 

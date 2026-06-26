@@ -1,4 +1,3 @@
-
 # Text to Image
 
 > [!TIP]

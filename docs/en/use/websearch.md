@@ -1,4 +1,3 @@
-
 # Web Search
 
 The web search feature gives large language models internet retrieval capability for recent information, which can improve response accuracy and reduce hallucinations to some extent.
@@ -20,27 +19,27 @@ AstrBot currently supports 6 web search providers: `Tavily`, `BoCha`, `Baidu AI 
 
 Go to `Configuration`, scroll down to find Web Search, where you can select `Tavily`, `BoCha`, `Baidu AI Search`, `Brave`, `Firecrawl`, or `Exa`.
 
-### Tavily
+## Tavily
 
 Go to [Tavily](https://app.tavily.com/home) to get an API Key, then fill it in the corresponding configuration item.
 
-### BoCha
+## BoCha
 
 Get an API Key from the BoCha platform, then fill it in the corresponding configuration item.
 
-### Baidu AI Search
+## Baidu AI Search
 
 Get an API Key from Baidu Qianfan APP Builder, then fill it in the corresponding configuration item.
 
-### Brave
+## Brave
 
 Get an API Key from Brave Search, then fill it in the corresponding configuration item.
 
-### Firecrawl
+## Firecrawl
 
 Go to [Firecrawl](https://firecrawl.dev) to get an API Key, then fill it in the corresponding configuration item.
 
-### Exa
+## Exa
 
 Go to [Exa](https://dashboard.exa.ai) to get an API Key, then fill it in the corresponding configuration item. Exa is an AI-native search engine that supports keyword and semantic search with category filters, domain restrictions, and date ranges.
 

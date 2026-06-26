@@ -18,10 +18,9 @@ According to the current Dify project, there are three types:
 - agent
 - workflow
 
->[!TIP]
->Please ensure that the APP type you set in AstrBot matches the application type created in Dify.
->![image](https://files.astrbot.app/docs/source/images/dify/image-3.png)
-
+> [!TIP]
+> Please ensure that the APP type you set in AstrBot matches the application type created in Dify.
+> ![image](https://files.astrbot.app/docs/source/images/dify/image-3.png)
 
 ### Chat and Agent Applications
 
@@ -79,4 +78,3 @@ After setting variables, AstrBot will attach the variables you set in the next r
 Of course, you can use the `/unset` command to cancel the variables you set.
 
 Variables are permanently valid in the current session.
-

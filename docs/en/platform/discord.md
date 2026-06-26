@@ -7,6 +7,7 @@ Navigate to the messaging platform, click to add a new adapter, find Discord and
 ![Click to create bot, select discord type](https://files.astrbot.app/docs/source/images/discord/image.png)
 
 ![Options from top to bottom: 1. Bot name 2. Enable 3. Bot token 4. Discord proxy address 5. Auto-register plugin commands as Discord slash commands 6. discord_guild_id_for_debug 7. Discord activity name](https://files.astrbot.app/docs/source/images/discord/image-3.png)
+
 > For this tutorial, you only need to configure items 1, 2, 3, and 5
 
 - Bot Name: Customize this to easily distinguish between different adapters
@@ -34,25 +35,15 @@ Navigate to the messaging platform, click to add a new adapter, find Discord and
 - Message Content Intent: Allows the bot to read message content
 
 4. Click OAuth2 in the left sidebar, and in the OAuth2 URL Generator, select `Bot`
-Like this:
-![OAuth2 URL Generator](https://files.astrbot.app/docs/source/images/discord/image-6.png)
-Then in the Bot Permissions section that appears below, select the allowed permissions. Generally, it's recommended to add the following permissions:
-    - Send Messages
-    - Create Public Threads
-    - Create Private Threads
-    - Send TTS Messages
-    - Manage Messages
-    - Manage Threads
-    - Embed Links
-    - Attach Files
-    - Read Message History
-    - Add Reactions
-If you find this tedious, you can directly use administrator permissions, but it's still recommended to use the permissions configured above (or the permissions you specifically need) in your production environment.
+   Like this:
+   ![OAuth2 URL Generator](https://files.astrbot.app/docs/source/images/discord/image-6.png)
+   Then in the Bot Permissions section that appears below, select the allowed permissions. Generally, it's recommended to add the following permissions: - Send Messages - Create Public Threads - Create Private Threads - Send TTS Messages - Manage Messages - Manage Threads - Embed Links - Attach Files - Read Message History - Add Reactions
+   If you find this tedious, you can directly use administrator permissions, but it's still recommended to use the permissions configured above (or the permissions you specifically need) in your production environment.
 
 > Remember, the higher the permissions, the greater the risk.
 
 5. Copy the Generated URL that appears below. Open this URL to add the bot to your desired server.
-![Generated URL location](https://files.astrbot.app/docs/source/images/discord/image-5.png)
+   ![Generated URL location](https://files.astrbot.app/docs/source/images/discord/image-5.png)
 
 6. Enter your Discord server, your bot should now show as online
 

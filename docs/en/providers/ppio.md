@@ -22,6 +22,7 @@ Fill in the API Key and model name in the dialog form, then click **Save** to co
 
 > [!TIP]
 > If you are using an older version of AstrBot (< 3.5.10), open the AstrBot dashboard → Service Providers page, click **Add Provider**, find `OpenAI`, and click to enter.
+>
 > 1. Set the ID to `ppio` (any name works)
 > 2. Set `API Base URL` to `https://api.ppinfra.com/v3/openai`
 > 3. Fill in the API Key and model name in the dialog form, then click **Save** to complete the setup.
@@ -32,7 +33,7 @@ Send the `/provider` command to the bot to switch to the PPIO Cloud provider you
 
 ## FAQ
 
-#### `400` Error
+### `400` Error
 
 ```log
 Error code: 400 - {'code': 400, 'message': '"auto" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set', 'type': 'BadRequestError'}

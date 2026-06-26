@@ -36,13 +36,11 @@ Tool management (enable/disable) can be done in the WebUI.
 
 Some models may not support function calling and will return errors such as `tool call is not supported`, `function calling is not supported`, `tool use is not supported`, etc. In most cases, AstrBot can detect these errors and automatically remove function calling tools for you. If you find that a model doesn't support function calling, you can also disable all calling tools in the WebUI and try again, or switch to a model that supports function calling.
 
-
 Below are some common tool calling demos:
 
 ![image](https://files.astrbot.app/docs/source/images/function-calling/image.png)
 
 ![image](https://files.astrbot.app/docs/source/images/function-calling/image-1.png)
-
 
 ## MCP
 

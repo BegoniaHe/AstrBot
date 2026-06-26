@@ -10,7 +10,6 @@ AstrBot Documentation: [![wakatime](https://wakatime.com/badge/user/915e5316-99c
 
 ❤️ Contributions to this project are warmly welcomed, including Issues and Pull Requests.
 
-## Next...
+## Next
 
 If you're reading this, it means you have successfully deployed the messaging platform and sent/received your first command. Next, you can configure large language models or add plugins. Please refer to the `Configuration - Integrating LLM Services` section.
-

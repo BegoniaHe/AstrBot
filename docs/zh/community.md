@@ -23,7 +23,7 @@
 
 ### Discord
 
-https://discord.gg/hAVk6tgV36
+<https://discord.gg/hAVk6tgV36>
 
 ### Astrbook
 

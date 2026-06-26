@@ -11,15 +11,15 @@
 
 Before you begin, make sure your Kubernetes cluster meets the following conditions:
 
-1.  **Default StorageClass**: Used to dynamically create `PersistentVolumeClaim` (PVC). You can check this with `kubectl get sc`. If you don't have one, you need to manually create a `PersistentVolume` (PV) or install a corresponding storage plugin (e.g., `nfs-client-provisioner`).
-2.  **Network Access**: Ensure that your cluster nodes can pull images from `docker.io` or your specified image repository.
+1. **Default StorageClass**: Used to dynamically create `PersistentVolumeClaim` (PVC). You can check this with `kubectl get sc`. If you don't have one, you need to manually create a `PersistentVolume` (PV) or install a corresponding storage plugin (e.g., `nfs-client-provisioner`).
+2. **Network Access**: Ensure that your cluster nodes can pull images from `docker.io` or your specified image repository.
 
 ## Deployment Methods
 
 We offer two deployment options:
 
-*   **Integrated Deployment (Sidecar Mode)**: Deploy AstrBot and NapCat in the same Pod. Recommended for personal QQ accounts.
-*   **Standalone Deployment**: Deploy only AstrBot. Suitable for other platforms or if you want to manage NapCat independently.
+- **Integrated Deployment (Sidecar Mode)**: Deploy AstrBot and NapCat in the same Pod. Recommended for personal QQ accounts.
+- **Standalone Deployment**: Deploy only AstrBot. Suitable for other platforms or if you want to manage NapCat independently.
 
 ---
 
@@ -44,50 +44,48 @@ kubectl apply -f k8s/astrbot_with_napcat/02-deployment.yaml
 
 #### 2. Expose Service (Choose one)
 
-*   **Option A: NodePort**
+- **Option A: NodePort**
 
-    ```bash
-    kubectl apply -f k8s/astrbot_with_napcat/03-service-nodeport.yaml
-    ```
+  ```bash
+  kubectl apply -f k8s/astrbot_with_napcat/03-service-nodeport.yaml
+  ```
 
-    The service will be exposed via the node IP and a port automatically assigned by Kubernetes. You can find the port with the following command:
+  The service will be exposed via the node IP and a port automatically assigned by Kubernetes. You can find the port with the following command:
 
-    ```bash
-    kubectl get svc -n astrbot-ns
-    ```
+  ```bash
+  kubectl get svc -n astrbot-ns
+  ```
 
-    In the output, find the `PORT(S)` column for `astrbot-webui-svc` and `napcat-web-svc`. The format is `<internal-port>:<NodePort>/TCP`. For example, if you see `8080:30185/TCP`, the access address is `http://<NodeIP>:30185`.
+  In the output, find the `PORT(S)` column for `astrbot-webui-svc` and `napcat-web-svc`. The format is `<internal-port>:<NodePort>/TCP`. For example, if you see `8080:30185/TCP`, the access address is `http://<NodeIP>:30185`.
 
-*   **Option B: LoadBalancer**
+- **Option B: LoadBalancer**
 
-    If your cluster supports `LoadBalancer` type services (usually provided in K8s services from cloud providers), you can use this method.
+  If your cluster supports `LoadBalancer` type services (usually provided in K8s services from cloud providers), you can use this method.
 
-    ```bash
-    kubectl apply -f k8s/astrbot_with_napcat/04-service-loadbalancer.yaml
-    ```
+  ```bash
+  kubectl apply -f k8s/astrbot_with_napcat/04-service-loadbalancer.yaml
+  ```
 
-    After execution, check the assigned external IP (EXTERNAL-IP) with `kubectl get svc -n astrbot-ns`.
+  After execution, check the assigned external IP (EXTERNAL-IP) with `kubectl get svc -n astrbot-ns`.
 
 #### 3. Configure Connection
 
 Since AstrBot and NapCat are in the same Pod, they can communicate directly via `localhost`.
 
-1.  **Add a message platform in AstrBot:**
-    *   Go to the AstrBot WebUI, select  `Platform` -> `Add`.
-    *   **Select Message Platform Category**: `aiocqhttp`
-    *   **Bot Name**: `napcat` (or custom)
-    *   **Reverse Websocket Host**: `0.0.0.0`
-    *   **Reverse Websocket Port**: `6199`
-    *   Save the configuration.
+1. **Add a message platform in AstrBot:**
+   - Go to the AstrBot WebUI, select `Platform` -> `Add`.
+   - **Select Message Platform Category**: `aiocqhttp`
+   - **Bot Name**: `napcat` (or custom)
+   - **Reverse Websocket Host**: `0.0.0.0`
+   - **Reverse Websocket Port**: `6199`
+   - Save the configuration.
 
-
-2.  **Configure Websocket Client in NapCat:**
-    *   Go to the NapCat WebUI, select `Settings` -> `Reverse WS` -> `Add`.
-    *   **Enable**: On
-    *   **URL**: `ws://localhost:6199/ws`
-    *   **Message Format**: `Array`
-    *   Save the configuration.
-
+2. **Configure Websocket Client in NapCat:**
+   - Go to the NapCat WebUI, select `Settings` -> `Reverse WS` -> `Add`.
+   - **Enable**: On
+   - **URL**: `ws://localhost:6199/ws`
+   - **Message Format**: `Array`
+   - Save the configuration.
 
 ---
 
@@ -110,27 +108,27 @@ kubectl apply -f k8s/astrbot/02-deployment.yaml
 
 #### 2. Expose Service (Choose one)
 
-*   **Option A: NodePort**
+- **Option A: NodePort**
 
-    ```bash
-    kubectl apply -f k8s/astrbot/03-service-nodeport.yaml
-    ```
+  ```bash
+  kubectl apply -f k8s/astrbot/03-service-nodeport.yaml
+  ```
 
-    The service will be exposed via the node IP and a port automatically assigned by Kubernetes. You can find the port with the following command:
+  The service will be exposed via the node IP and a port automatically assigned by Kubernetes. You can find the port with the following command:
 
-    ```bash
-    kubectl get svc -n astrbot-standalone-ns
-    ```
+  ```bash
+  kubectl get svc -n astrbot-standalone-ns
+  ```
 
-    In the output, find the `PORT(S)` column for `astrbot-webui-svc`. The format is `<internal-port>:<NodePort>/TCP`. For example, if you see `8080:30185/TCP`, the access address is `http://<NodeIP>:30185`.
+  In the output, find the `PORT(S)` column for `astrbot-webui-svc`. The format is `<internal-port>:<NodePort>/TCP`. For example, if you see `8080:30185/TCP`, the access address is `http://<NodeIP>:30185`.
 
-*   **Option B: LoadBalancer**
+- **Option B: LoadBalancer**
 
-    ```bash
-    kubectl apply -f k8s/astrbot/04-service-loadbalancer.yaml
-    ```
+  ```bash
+  kubectl apply -f k8s/astrbot/04-service-loadbalancer.yaml
+  ```
 
-    After execution, check the assigned external IP (EXTERNAL-IP) with `kubectl get svc -n astrbot-standalone-ns`.
+  After execution, check the assigned external IP (EXTERNAL-IP) with `kubectl get svc -n astrbot-standalone-ns`.
 
 ---
 
@@ -153,44 +151,44 @@ If you need to use the sandbox code executor, you need to mount the Docker socke
 
 Edit the `02-deployment.yaml` file and add `volumes` and `volumeMounts` under `spec.template.spec`:
 
-1.  **Add the following to the `volumeMounts` list of the `astrbot` container:**
+1. **Add the following to the `volumeMounts` list of the `astrbot` container:**
 
-    ```yaml
-    - name: docker-sock
-      mountPath: /var/run/docker.sock
-    ```
+   ```yaml
+   - name: docker-sock
+     mountPath: /var/run/docker.sock
+   ```
 
-2.  **Add the following to the `spec.template.spec.volumes` list:**
+2. **Add the following to the `spec.template.spec.volumes` list:**
 
-    ```yaml
-    - name: docker-sock
-      hostPath:
-        path: /var/run/docker.sock
-        type: Socket
-    ```
+   ```yaml
+   - name: docker-sock
+     hostPath:
+       path: /var/run/docker.sock
+       type: Socket
+   ```
 
 > [!WARNING]
 > Mounting the Docker socket into a Pod poses a security risk. Please ensure you understand the implications.
 
 ## View Logs
 
-*   **Sidecar Deployment Mode:**
+- **Sidecar Deployment Mode:**
 
-    ```bash
-    # View AstrBot logs
-    kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c astrbot
+  ```bash
+  # View AstrBot logs
+  kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c astrbot
 
-    # View NapCat logs
-    kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c napcat
-    ```
+  # View NapCat logs
+  kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c napcat
+  ```
 
-*   **Standalone Deployment Mode:**
+- **Standalone Deployment Mode:**
 
-    ```bash
-    kubectl logs -f -n astrbot-standalone-ns deployment/astrbot-standalone
-    ```
+  ```bash
+  kubectl logs -f -n astrbot-standalone-ns deployment/astrbot-standalone
+  ```
 
-## 🎉 All Done!
+## 🎉 All Done
 
 After deploying and exposing the service, you can access the AstrBot admin panel through the corresponding IP and port.
 

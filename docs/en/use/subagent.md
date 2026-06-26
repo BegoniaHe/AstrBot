@@ -9,6 +9,7 @@ v4.14.0 introduced this feature, which is currently an **experimental feature** 
 ## Motivation
 
 In traditional architectures, all tools are directly mounted on the Main Agent. When there are many tools, several issues arise:
+
 1. **Prompt Bloat**: The Main Agent must include descriptions for all tools in its System Prompt, consuming excessive context.
 2. **Execution Errors**: With a large number of tools, the LLM may confuse tool purposes or generate incorrect parameters.
 3. **Complexity**: The Main Agent is overburdened with both conversation and the organization/invocation of numerous tools.

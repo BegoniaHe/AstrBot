@@ -2,7 +2,7 @@
 
 ## Satori 协议简介
 
-> 摘录自：https://satori.chat/zh-CN/introduction.html
+> 摘录自：<https://satori.chat/zh-CN/introduction.html>
 
 Satori 是一个通用的聊天协议。Satori 协议希望能够抹平不同聊天平台之间的差异，让开发者以更低的成本开发出跨平台、可扩展、高性能的聊天应用。
 

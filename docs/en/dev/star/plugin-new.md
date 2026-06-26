@@ -125,7 +125,7 @@ The values in `support_platforms` must be keys from `ADAPTER_NAME_2_TYPE`. Curre
 You can add an `astrbot_version` field in `metadata.yaml` to declare the required AstrBot version range for your plugin. The format follows dependency specifiers in `pyproject.toml` (PEP 440), and must not include a `v` prefix.
 
 ```yaml
-astrbot_version: ">=4.16,<5"
+astrbot_version: '>=4.16,<5'
 ```
 
 Examples:

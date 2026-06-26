@@ -10,7 +10,6 @@
 
 如果您要使用此功能，请确保您的机器安装了 `Docker`。因为此功能需要启动专用的 Docker 沙箱环境以执行代码，以防止 LLM 生成恶意代码对您的机器造成损害。
 
-
 ## Linux Docker 启动 AstrBot
 
 如果您使用 Docker 部署了 AstrBot，需要多做一些工作。

@@ -1,4 +1,3 @@
-
 # Plugin Configuration
 
 As plugin functionality grows, you may need to define configurations to allow users to customize plugin behavior.
@@ -66,7 +65,7 @@ When the code editor is enabled, it looks like this:
 
 ![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
 
-The **_special** field is only available after v4.0.0. Common values include `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, and `select_knowledgebase`, allowing users to quickly select model providers, personas, knowledge bases, and other data already configured in the WebUI.
+The **\_special** field is only available after v4.0.0. Common values include `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, and `select_knowledgebase`, allowing users to quickly select model providers, personas, knowledge bases, and other data already configured in the WebUI.
 
 - `select_provider`, `select_provider_tts`, `select_provider_stt`, and `select_persona` return strings.
 - `select_knowledgebase` returns a `list` and supports multiple selection, so the corresponding config item should use `type: list` with a default value of `[]`.
@@ -212,7 +211,6 @@ Templates also support these optional fields:
 - `hide_hint_in_list`: When set to `true`, the WebUI hides the template `hint` in the collapsed list of added template entries. The template selection dropdown still shows the `hint`, and hints for fields inside the expanded entry are not affected.
 
 <img width="1000" alt="image" src="https://github.com/user-attachments/assets/74876d30-11a4-491b-a7a0-8ebe8d603782" />
-
 
 ## Using Configuration in Plugins
 

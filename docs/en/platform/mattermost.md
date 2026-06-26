@@ -18,8 +18,8 @@ Then click save.
 
 If you do not have a Mattermost server yet, use the official Mattermost Docker Compose repository:
 
-- Official docs: https://docs.mattermost.com/deployment-guide/server/containers/install-docker.html
-- Official repository: https://github.com/mattermost/docker
+- Official docs: <https://docs.mattermost.com/deployment-guide/server/containers/install-docker.html>
+- Official repository: <https://github.com/mattermost/docker>
 
 The current quick-start flow recommended by Mattermost is:
 

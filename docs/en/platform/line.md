@@ -5,13 +5,13 @@
 > Version v4.17.0.
 
 | Message Type | Receive Support | Send Support | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | Yes | Yes | |
-| Video | Yes | Yes | |
-| File | Yes | Yes | |
-| Sticker | Yes | No | |
+| ------------ | --------------- | ------------ | ----- |
+| Text         | Yes             | Yes          |       |
+| Image        | Yes             | Yes          |       |
+| Voice        | Yes             | Yes          |       |
+| Video        | Yes             | Yes          |       |
+| File         | Yes             | Yes          |       |
+| Sticker      | Yes             | No           |       |
 
 Proactive message push: Supported.
 

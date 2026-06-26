@@ -7,12 +7,12 @@ AstrBot supports both WeCom Applications and WeCom Customer Service.
 > Version v4.15.0.
 
 | Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | Yes | Yes | |
-| Video | No | Yes | |
-| File | No | Yes | |
+| ------------ | ------- | ---- | ----- |
+| Text         | Yes     | Yes  |       |
+| Image        | Yes     | Yes  |       |
+| Voice        | Yes     | Yes  |       |
+| Video        | No      | Yes  |       |
+| File         | No      | Yes  |       |
 
 Proactive message push: Supported for WeCom Application. Not fully tested for WeCom Customer Service.
 
@@ -28,6 +28,7 @@ A configuration dialog will appear. Keep it open and continue with the steps bel
 ## Method 1: WeCom Customer Service
 
 > [!NOTE]
+>
 > 1. Requires AstrBot >= v3.5.7.
 > 2. This method works directly inside WeChat.
 

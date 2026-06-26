@@ -144,65 +144,65 @@ yay -S astrbot-git
 
 将 AstrBot 连接到你常用的聊天平台。
 
-| 平台 | 维护方 |
-|---------|---------------|
-| **QQ** | 官方维护 |
-| **OneBot v11** | 官方维护 |
-| **Telegram** | 官方维护 |
-| **企微应用 & 企微智能机器人** | 官方维护 |
-| **微信客服 & 微信公众号** | 官方维护 |
-| **飞书** | 官方维护 |
-| **钉钉** | 官方维护 |
-| **Slack** | 官方维护 |
-| **Discord** | 官方维护 |
-| **LINE** | 官方维护 |
-| **Satori** | 官方维护 |
-| **KOOK** | 官方维护 |
-| **Misskey** | 官方维护 |
-| **Mattermost** | 官方维护 |
-| **WhatsApp（将支持）** | 官方维护 |
-| [**Matrix**](https://github.com/stevessr/astrbot_plugin_matrix_adapter) | 社区维护 |
+| 平台                                                                                  | 维护方   |
+| ------------------------------------------------------------------------------------- | -------- |
+| **QQ**                                                                                | 官方维护 |
+| **OneBot v11**                                                                        | 官方维护 |
+| **Telegram**                                                                          | 官方维护 |
+| **企微应用 & 企微智能机器人**                                                         | 官方维护 |
+| **微信客服 & 微信公众号**                                                             | 官方维护 |
+| **飞书**                                                                              | 官方维护 |
+| **钉钉**                                                                              | 官方维护 |
+| **Slack**                                                                             | 官方维护 |
+| **Discord**                                                                           | 官方维护 |
+| **LINE**                                                                              | 官方维护 |
+| **Satori**                                                                            | 官方维护 |
+| **KOOK**                                                                              | 官方维护 |
+| **Misskey**                                                                           | 官方维护 |
+| **Mattermost**                                                                        | 官方维护 |
+| **WhatsApp（将支持）**                                                                | 官方维护 |
+| [**Matrix**](https://github.com/stevessr/astrbot_plugin_matrix_adapter)               | 社区维护 |
 | [**Rocket.Chat**](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | 社区维护 |
-| [**VoceChat**](https://github.com/HikariFroya/astrbot_plugin_vocechat) | 社区维护 |
+| [**VoceChat**](https://github.com/HikariFroya/astrbot_plugin_vocechat)                | 社区维护 |
 
 ## 支持的模型提供商
 
-| 提供商 | 类型 |
-|---------|---------------|
-| 自定义 | 任何 OpenAI API 兼容的服务 |
-| OpenAI | LLM |
-| Anthropic | LLM |
-| Google Gemini | LLM |
-| Moonshot AI | LLM |
-| 智谱 AI | LLM |
-| DeepSeek | LLM |
-| Ollama (本地部署) | LLM |
-| LM Studio (本地部署) | LLM |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH) | LLM (API 网关, 支持所有模型) |
+| 提供商                                                                                            | 类型                         |
+| ------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 自定义                                                                                            | 任何 OpenAI API 兼容的服务   |
+| OpenAI                                                                                            | LLM                          |
+| Anthropic                                                                                         | LLM                          |
+| Google Gemini                                                                                     | LLM                          |
+| Moonshot AI                                                                                       | LLM                          |
+| 智谱 AI                                                                                           | LLM                          |
+| DeepSeek                                                                                          | LLM                          |
+| Ollama (本地部署)                                                                                 | LLM                          |
+| LM Studio (本地部署)                                                                              | LLM                          |
+| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                        | LLM (API 网关, 支持所有模型) |
 | [优云智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | LLM (API 网关, 支持所有模型) |
-| [硅基流动](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot) | LLM (API 网关, 支持所有模型)  |
-| [PPIO 派欧云](https://ppio.com/user/register?invited_by=AIOONE) | LLM (API 网关, 支持所有模型) |
-| [302.AI](https://share.302.ai/rr1M3l) | LLM (API 网关, 支持所有模型)|
-| [小马算力](https://www.tokenpony.cn/3YPyf) | LLM (API 网关, 支持所有模型)|
-| ModelScope | LLM |
-| OneAPI | LLM |
-| Dify | LLMOps 平台 |
-| 阿里云百炼应用 | LLMOps 平台 |
-| Coze | LLMOps 平台 |
-| OpenAI Whisper | 语音转文本 |
-| SenseVoice | 语音转文本 |
-| Xiaomi MiMo Omni | 语音转文本 |
-| OpenAI TTS | 文本转语音 |
-| Gemini TTS | 文本转语音 |
-| GPT-Sovits-Inference | 文本转语音 |
-| GPT-Sovits | 文本转语音 |
-| FishAudio | 文本转语音 |
-| Edge TTS | 文本转语音 |
-| 阿里云百炼 TTS | 文本转语音 |
-| Azure TTS | 文本转语音 |
-| Minimax TTS | 文本转语音 |
-| Xiaomi MiMo TTS | 文本转语音 |
-| 火山引擎 TTS | 文本转语音 |
+| [硅基流动](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                  | LLM (API 网关, 支持所有模型) |
+| [PPIO 派欧云](https://ppio.com/user/register?invited_by=AIOONE)                                   | LLM (API 网关, 支持所有模型) |
+| [302.AI](https://share.302.ai/rr1M3l)                                                             | LLM (API 网关, 支持所有模型) |
+| [小马算力](https://www.tokenpony.cn/3YPyf)                                                        | LLM (API 网关, 支持所有模型) |
+| ModelScope                                                                                        | LLM                          |
+| OneAPI                                                                                            | LLM                          |
+| Dify                                                                                              | LLMOps 平台                  |
+| 阿里云百炼应用                                                                                    | LLMOps 平台                  |
+| Coze                                                                                              | LLMOps 平台                  |
+| OpenAI Whisper                                                                                    | 语音转文本                   |
+| SenseVoice                                                                                        | 语音转文本                   |
+| Xiaomi MiMo Omni                                                                                  | 语音转文本                   |
+| OpenAI TTS                                                                                        | 文本转语音                   |
+| Gemini TTS                                                                                        | 文本转语音                   |
+| GPT-Sovits-Inference                                                                              | 文本转语音                   |
+| GPT-Sovits                                                                                        | 文本转语音                   |
+| FishAudio                                                                                         | 文本转语音                   |
+| Edge TTS                                                                                          | 文本转语音                   |
+| 阿里云百炼 TTS                                                                                    | 文本转语音                   |
+| Azure TTS                                                                                         | 文本转语音                   |
+| Minimax TTS                                                                                       | 文本转语音                   |
+| Xiaomi MiMo TTS                                                                                   | 文本转语音                   |
+| 火山引擎 TTS                                                                                      | 文本转语音                   |
 
 ## ❤️ 贡献
 
@@ -239,7 +239,6 @@ pre-commit install
 - 12 群：916228568 (人满)
 - 13 群：1092185289
 - 14 群：1103419483
-
 
 - 开发者群（偏闲聊吹水）：975206796
 - 开发者群（正式）：1039761811

@@ -23,7 +23,7 @@ class FakeClient():
         self.token = token
         self.username = username
         # ...
-                
+
     async def start_polling(self):
         while True:
             await asyncio.sleep(5)
@@ -35,15 +35,15 @@ class FakeClient():
                 'message_id': 'asdhoashd',
                 'group_id': 'group123',
             })
-            
+
     async def send_text(self, to: str, message: str):
         print('发了消息:', to, message)
-        
+
     async def send_image(self, to: str, image_path: str):
         print('发了消息:', to, image_path)
 ```
 
-我们创建  `fake_platform_adapter.py`：
+我们创建 `fake_platform_adapter.py`：
 
 ```py
 import asyncio
@@ -56,7 +56,7 @@ from astrbot.api.platform import register_platform_adapter
 from astrbot import logger
 from .client import FakeClient
 from .fake_platform_event import FakePlatformEvent
-            
+
 # 注册平台适配器。第一个参数为平台名，第二个为描述。第三个为默认配置。
 @register_platform_adapter("fake", "fake 适配器", default_config_tmpl={
     "token": "your_token",
@@ -68,11 +68,11 @@ class FakePlatformAdapter(Platform):
         super().__init__(event_queue)
         self.config = platform_config # 上面的默认配置，用户填写后会传到这里
         self.settings = platform_settings # platform_settings 平台设置。
-    
+
     async def send_by_session(self, session: MessageSession, message_chain: MessageChain):
         # 必须实现
         await super().send_by_session(session, message_chain)
-    
+
     def meta(self) -> PlatformMetadata:
         # 必须实现，直接像下面一样返回即可。
         return PlatformMetadata(
@@ -87,8 +87,8 @@ class FakePlatformAdapter(Platform):
         async def on_received(data):
             logger.info(data)
             abm = await self.convert_message(data=data) # 转换成 AstrBotMessage
-            await self.handle_msg(abm) 
-        
+            await self.handle_msg(abm)
+
         # 初始化 FakeClient
         self.client = FakeClient(self.config['token'], self.config['username'])
         self.client.on_message_received = on_received
@@ -107,9 +107,9 @@ class FakePlatformAdapter(Platform):
         abm.self_id = data['bot_id']
         abm.session_id = data['userid'] # 会话 ID。重要！
         abm.message_id = data['message_id'] # 消息 ID。
-        
+
         return abm
-    
+
     async def handle_msg(self, message: AstrBotMessage):
         # 处理消息
         message_event = FakePlatformEvent(
@@ -121,7 +121,6 @@ class FakePlatformAdapter(Platform):
         )
         self.commit_event(message_event) # 提交事件到事件队列。不要忘记！
 ```
-
 
 `fake_platform_event.py`：
 
@@ -135,12 +134,12 @@ class FakePlatformEvent(AstrMessageEvent):
     def __init__(self, message_str: str, message_obj: AstrBotMessage, platform_meta: PlatformMetadata, session_id: str, client: FakeClient):
         super().__init__(message_str, message_obj, platform_meta, session_id)
         self.client = client
-        
+
     async def send(self, message: MessageChain):
         for i in message.chain: # 遍历消息链
             if isinstance(i, Plain): # 如果是文字类型的
                 await self.client.send_text(to=self.get_sender_id(), message=i.text)
-            elif isinstance(i, Image): # 如果是图片类型的 
+            elif isinstance(i, Image): # 如果是图片类型的
                 # convert_to_file_path() resolves supported media refs through
                 # the shared media utilities.
                 img_path = await i.convert_to_file_path()
@@ -225,6 +224,5 @@ class MyPlugin(Star):
 启动后，可以看到正常工作：
 
 ![image](https://files.astrbot.app/docs/source/images/plugin-platform-adapter/QQ_1738156166893.png)
-
 
 有任何疑问欢迎加群询问~

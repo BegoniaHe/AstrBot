@@ -52,6 +52,7 @@ Type `PowerShell` in the address bar and press Enter:
 Drag `launcher_astrbot_en.bat` into the PowerShell window and press Enter.
 
 > [!WARNING]
+>
 > - The script is safe. If you see `Windows protected your PC`, click `More info` and then `Run anyway`.
 > - By default, it uses `python`. If you want to specify another interpreter path/command, edit `launcher_astrbot_en.bat`, find `set PYTHON_CMD=python`, and replace `python` with your own command/path.
 

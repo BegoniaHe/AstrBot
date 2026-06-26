@@ -34,6 +34,7 @@
 <a href="https://astrbot.featurebase.app/roadmap">路線圖</a> ｜
 <a href="https://github.com/AstrBotDevs/AstrBot/issues">問題回報</a> ｜
 <a href="mailto:community@astrbot.app">Email</a>
+
 </div>
 
 AstrBot 是一個開源的一站式 Agent 聊天機器人平台，可接入主流即時通訊軟體，為個人、開發者和團隊打造可靠、可擴展的對話式智慧基礎設施。無論是個人 AI 夥伴、智慧客服、自動化助手，還是企業知識庫，AstrBot 都能在您的即時通訊軟體平台的工作流程中快速構建生產可用的 AI 應用程式。
@@ -144,64 +145,64 @@ yay -S astrbot-git
 
 將 AstrBot 連接到你常用的聊天平台。
 
-| 平台 | 維護方 |
-|---------|---------------|
-| QQ | 官方維護 |
-| OneBot v11 協議實作 | 官方維護 |
-| Telegram | 官方維護 |
-| 企微應用 & 企微智慧機器人 | 官方維護 |
-| 微信客服 & 微信公眾號 | 官方維護 |
-| 飛書 | 官方維護 |
-| 釘釘 | 官方維護 |
-| Slack | 官方維護 |
-| Discord | 官方維護 |
-| LINE | 官方維護 |
-| Satori | 官方維護 |
-| KOOK | 官方維護 |
-| Misskey | 官方維護 |
-| Mattermost | 官方維護 |
-| WhatsApp（即將支援） | 官方維護 |
-| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter) | 社群維護 |
+| 平台                                                                              | 維護方   |
+| --------------------------------------------------------------------------------- | -------- |
+| QQ                                                                                | 官方維護 |
+| OneBot v11 協議實作                                                               | 官方維護 |
+| Telegram                                                                          | 官方維護 |
+| 企微應用 & 企微智慧機器人                                                         | 官方維護 |
+| 微信客服 & 微信公眾號                                                             | 官方維護 |
+| 飛書                                                                              | 官方維護 |
+| 釘釘                                                                              | 官方維護 |
+| Slack                                                                             | 官方維護 |
+| Discord                                                                           | 官方維護 |
+| LINE                                                                              | 官方維護 |
+| Satori                                                                            | 官方維護 |
+| KOOK                                                                              | 官方維護 |
+| Misskey                                                                           | 官方維護 |
+| Mattermost                                                                        | 官方維護 |
+| WhatsApp（即將支援）                                                              | 官方維護 |
+| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter)               | 社群維護 |
 | [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | 社群維護 |
-| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat) | 社群維護 |
+| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat)                | 社群維護 |
 
 ## 支援的模型服務
 
-| 服務 | 類型 |
-|---------|---------------|
-| OpenAI 及相容服務 | 大型模型服務 |
-| Anthropic | 大型模型服務 |
-| Google Gemini | 大型模型服務 |
-| Moonshot AI | 大型模型服務 |
-| 智譜 AI | 大型模型服務 |
-| DeepSeek | 大型模型服務 |
-| Ollama（本機部署） | 大型模型服務 |
-| LM Studio（本機部署） | 大型模型服務 |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH) | 大型模型服務（API 閘道，支援所有模型） |
-| [優雲智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | 大型模型服務 |
-| [302.AI](https://share.302.ai/rr1M3l) | 大型模型服務 |
-| [小馬算力](https://www.tokenpony.cn/3YPyf) | 大型模型服務 |
-| [矽基流動](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot) | 大型模型服務 |
-| [PPIO 派歐雲](https://ppio.com/user/register?invited_by=AIOONE) | 大型模型服務 |
-| ModelScope | 大型模型服務 |
-| OneAPI | 大型模型服務 |
-| Dify | LLMOps 平台 |
-| 阿里雲百煉應用 | LLMOps 平台 |
-| Coze | LLMOps 平台 |
-| OpenAI Whisper | 語音轉文字服務 |
-| SenseVoice | 語音轉文字服務 |
-| Xiaomi MiMo Omni | 語音轉文字服務 |
-| OpenAI TTS | 文字轉語音服務 |
-| Gemini TTS | 文字轉語音服務 |
-| GPT-Sovits-Inference | 文字轉語音服務 |
-| GPT-Sovits | 文字轉語音服務 |
-| FishAudio | 文字轉語音服務 |
-| Edge TTS | 文字轉語音服務 |
-| 阿里雲百煉 TTS | 文字轉語音服務 |
-| Azure TTS | 文字轉語音服務 |
-| Minimax TTS | 文字轉語音服務 |
-| Xiaomi MiMo TTS | 文字轉語音服務 |
-| 火山引擎 TTS | 文字轉語音服務 |
+| 服務                                                                                              | 類型                                   |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| OpenAI 及相容服務                                                                                 | 大型模型服務                           |
+| Anthropic                                                                                         | 大型模型服務                           |
+| Google Gemini                                                                                     | 大型模型服務                           |
+| Moonshot AI                                                                                       | 大型模型服務                           |
+| 智譜 AI                                                                                           | 大型模型服務                           |
+| DeepSeek                                                                                          | 大型模型服務                           |
+| Ollama（本機部署）                                                                                | 大型模型服務                           |
+| LM Studio（本機部署）                                                                             | 大型模型服務                           |
+| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                        | 大型模型服務（API 閘道，支援所有模型） |
+| [優雲智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | 大型模型服務                           |
+| [302.AI](https://share.302.ai/rr1M3l)                                                             | 大型模型服務                           |
+| [小馬算力](https://www.tokenpony.cn/3YPyf)                                                        | 大型模型服務                           |
+| [矽基流動](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                  | 大型模型服務                           |
+| [PPIO 派歐雲](https://ppio.com/user/register?invited_by=AIOONE)                                   | 大型模型服務                           |
+| ModelScope                                                                                        | 大型模型服務                           |
+| OneAPI                                                                                            | 大型模型服務                           |
+| Dify                                                                                              | LLMOps 平台                            |
+| 阿里雲百煉應用                                                                                    | LLMOps 平台                            |
+| Coze                                                                                              | LLMOps 平台                            |
+| OpenAI Whisper                                                                                    | 語音轉文字服務                         |
+| SenseVoice                                                                                        | 語音轉文字服務                         |
+| Xiaomi MiMo Omni                                                                                  | 語音轉文字服務                         |
+| OpenAI TTS                                                                                        | 文字轉語音服務                         |
+| Gemini TTS                                                                                        | 文字轉語音服務                         |
+| GPT-Sovits-Inference                                                                              | 文字轉語音服務                         |
+| GPT-Sovits                                                                                        | 文字轉語音服務                         |
+| FishAudio                                                                                         | 文字轉語音服務                         |
+| Edge TTS                                                                                          | 文字轉語音服務                         |
+| 阿里雲百煉 TTS                                                                                    | 文字轉語音服務                         |
+| Azure TTS                                                                                         | 文字轉語音服務                         |
+| Minimax TTS                                                                                       | 文字轉語音服務                         |
+| Xiaomi MiMo TTS                                                                                   | 文字轉語音服務                         |
+| 火山引擎 TTS                                                                                      | 文字轉語音服務                         |
 
 ## ❤️ 貢獻
 

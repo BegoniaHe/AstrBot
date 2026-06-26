@@ -49,14 +49,14 @@ If third-party AstrBot plugins you use require additional permissions, please re
 
 **Permissions Required by Default**
 
-| Permission Name | Description | Purpose |
-|---|---:|---|
-| Read account information | View basic account information | Obtain bot's own user information and account ID |
-| Compose or delete posts | Create, edit, and delete note content | Send message replies and publish content |
-| Compose or delete messages | Create, edit, and delete direct messages | Handle direct message conversations |
-| View notifications | Receive system notifications and reminders | Obtain mention, reply, and other notification information |
-| View messages | Read direct messages and chat history | Receive and process user direct messages |
-| View reactions | View replies and reactions to posts | Handle user responses to bot messages |
+| Permission Name            |                                Description | Purpose                                                   |
+| -------------------------- | -----------------------------------------: | --------------------------------------------------------- |
+| Read account information   |             View basic account information | Obtain bot's own user information and account ID          |
+| Compose or delete posts    |      Create, edit, and delete note content | Send message replies and publish content                  |
+| Compose or delete messages |   Create, edit, and delete direct messages | Handle direct message conversations                       |
+| View notifications         | Receive system notifications and reminders | Obtain mention, reply, and other notification information |
+| View messages              |      Read direct messages and chat history | Receive and process user direct messages                  |
+| View reactions             |        View replies and reactions to posts | Handle user responses to bot messages                     |
 
 5. After completing the permission configuration, click "Done" to view the account access token. Copy the obtained token and paste it into the Access Token input box on the AstrBot configuration page.
 
@@ -66,10 +66,10 @@ If third-party AstrBot plugins you use require additional permissions, please re
 
 Modify the default visibility when the bot posts
 
-| Name | Description |
-|---|---|
-| public | Anyone can see the bot's posts |
-| home | Publish bot posts to the instance home timeline |
+| Name      | Description                                                                  |
+| --------- | ---------------------------------------------------------------------------- |
+| public    | Anyone can see the bot's posts                                               |
+| home      | Publish bot posts to the instance home timeline                              |
 | followers | Only users who follow the bot account can see bot posts in the home timeline |
 
 ## Local Only (Do Not Federate)

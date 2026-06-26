@@ -38,7 +38,7 @@ AstrBot v4.2.1 之后的版本, 支持接入 [Coze](https://www.coze.cn/) 的 Ag
 
 ![智能体开发](https://files.astrbot.app/docs/source/images/coze/image_7.png)
 
-例如示例中链接为: "https://www.coze.cn/space/7553214941005004863/bot/7553248674860826660"
+例如示例中链接为: "<https://www.coze.cn/space/7553214941005004863/bot/7553248674860826660>"
 
 那么 `bot_id` 就是链接中 `bot/` 后面的那一串数字: `7553248674860826660`
 
@@ -56,7 +56,7 @@ AstrBot v4.2.1 之后的版本, 支持接入 [Coze](https://www.coze.cn/) 的 Ag
 
 > 其他配置说明:
 >
-> - API Base URL: 一般不需要修改, 如果你使用的是 Coze 国际版, 这里修改为: "https://api.coze.com"
+> - API Base URL: 一般不需要修改, 如果你使用的是 Coze 国际版, 这里修改为: "<https://api.coze.com>"
 > - 由 Coze 管理对话记录: 如描述所示。
 
 ## 选择 Agent 执行器

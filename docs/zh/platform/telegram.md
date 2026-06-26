@@ -1,4 +1,3 @@
-
 # 接入 Telegram
 
 ## 支持的基本消息类型
@@ -6,13 +5,12 @@
 > 版本 v4.15.0。
 
 | 消息类型 | 是否支持接收 | 是否支持发送 | 备注 |
-| --- | --- | --- | --- |
-| 文本 | 是 | 是 | |
-| 图片 | 是 | 是 | |
-| 语音 | 是 | 是 | |
-| 视频 | 是 | 是 | |
-| 文件 | 是 | 是 | |
-
+| -------- | ------------ | ------------ | ---- |
+| 文本     | 是           | 是           |      |
+| 图片     | 是           | 是           |      |
+| 语音     | 是           | 是           |      |
+| 视频     | 是           | 是           |      |
+| 文件     | 是           | 是           |      |
 
 主动消息推送：支持。
 
@@ -22,13 +20,13 @@
 
 创建成功后，`BotFather` 会给你一个 `token`，请妥善保存。
 
-如果需要在群聊中使用，需要关闭Bot的 [Privacy mode](https://core.telegram.org/bots/features#privacy-mode)，对 `BotFather` 发送  `/setprivacy` 命令，然后选择bot， 再选择 `Disable`。
+如果需要在群聊中使用，需要关闭Bot的 [Privacy mode](https://core.telegram.org/bots/features#privacy-mode)，对 `BotFather` 发送 `/setprivacy` 命令，然后选择bot， 再选择 `Disable`。
 
 ## 2. 配置 AstrBot
 
 1. 进入 AstrBot 的管理面板
 2. 点击左边栏 `机器人`
-3. 然后在右边的界面中，点击 `+ 创建机器人` 
+3. 然后在右边的界面中，点击 `+ 创建机器人`
 4. 选择 `telegram`
 
 弹出的配置项填写：

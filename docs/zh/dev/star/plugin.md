@@ -135,7 +135,7 @@ class AstrBotMessage:
 import astrbot.api.message_components as Comp
 ```
 
-```
+```python
 [Comp.Plain(text="Hello"), Comp.At(qq=123456), Comp.Image(file="https://example.com/image.jpg")]
 ```
 
@@ -293,7 +293,7 @@ support_platforms:
 你可以在 `metadata.yaml` 中新增 `astrbot_version` 字段，声明插件要求的 AstrBot 版本范围。格式与 `pyproject.toml` 依赖版本约束一致（PEP 440），且不要加 `v` 前缀。
 
 ```yaml
-astrbot_version: ">=4.16,<5"
+astrbot_version: '>=4.16,<5'
 ```
 
 可选示例：
@@ -943,7 +943,7 @@ AstrBot 提供了”强大“的配置解析和可视化功能。能够让用户
 
 ![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
 
-**_special** 字段仅 v4.0.0 之后可用。目前支持填写 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`，用于让用户快速选择用户在 WebUI 上已经配置好的模型提供商、人设等数据。结果均为字符串。以 select_provider 为例，将呈现以下效果:
+**\_special** 字段仅 v4.0.0 之后可用。目前支持填写 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`，用于让用户快速选择用户在 WebUI 上已经配置好的模型提供商、人设等数据。结果均为字符串。以 select_provider 为例，将呈现以下效果:
 
 ![image](https://files.astrbot.app/docs/source/images/plugin/image.png)
 
@@ -1478,11 +1478,11 @@ class Conversation:
 
 - **Usage**  
   在当前会话中新建一条对话，并自动切换为该对话。
-- **Arguments**  
-  - `unified_msg_origin: str` – 形如 `platform_name:message_type:session_id`  
-  - `platform_id: str | None` – 平台标识，默认从 `unified_msg_origin` 解析  
-  - `content: list[dict] | None` – 初始历史消息  
-  - `title: str | None` – 对话标题  
+- **Arguments**
+  - `unified_msg_origin: str` – 形如 `platform_name:message_type:session_id`
+  - `platform_id: str | None` – 平台标识，默认从 `unified_msg_origin` 解析
+  - `content: list[dict] | None` – 初始历史消息
+  - `title: str | None` – 对话标题
   - `persona_id: str | None` – 绑定的 persona ID
 - **Returns**  
   `str` – 新生成的 UUID 对话 ID
@@ -1491,8 +1491,8 @@ class Conversation:
 
 - **Usage**  
   将会话切换到指定的对话。
-- **Arguments**  
-  - `unified_msg_origin: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
   - `conversation_id: str`
 - **Returns**  
   `None`
@@ -1501,8 +1501,8 @@ class Conversation:
 
 - **Usage**  
   删除会话中的某条对话；若 `conversation_id` 为 `None`，则删除当前对话。
-- **Arguments**  
-  - `unified_msg_origin: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
   - `conversation_id: str | None`
 - **Returns**  
   `None`
@@ -1511,7 +1511,7 @@ class Conversation:
 
 - **Usage**  
   获取当前会话正在使用的对话 ID。
-- **Arguments**  
+- **Arguments**
   - `unified_msg_origin: str`
 - **Returns**  
   `str | None` – 当前对话 ID，不存在时返回 `None`
@@ -1520,9 +1520,9 @@ class Conversation:
 
 - **Usage**  
   获取指定对话的完整对象；若不存在且 `create_if_not_exists=True` 则自动创建。
-- **Arguments**  
-  - `unified_msg_origin: str`  
-  - `conversation_id: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
+  - `conversation_id: str`
   - `create_if_not_exists: bool = False`
 - **Returns**  
   `Conversation | None`
@@ -1531,8 +1531,8 @@ class Conversation:
 
 - **Usage**  
   拉取用户或平台下的全部对话列表。
-- **Arguments**  
-  - `unified_msg_origin: str | None` – 为 `None` 时不过滤用户  
+- **Arguments**
+  - `unified_msg_origin: str | None` – 为 `None` 时不过滤用户
   - `platform_id: str | None`
 - **Returns**  
   `List[Conversation]`
@@ -1541,11 +1541,11 @@ class Conversation:
 
 - **Usage**  
   分页 + 关键词搜索对话。
-- **Arguments**  
-  - `page: int = 1`  
-  - `page_size: int = 20`  
-  - `platform_ids: list[str] | None`  
-  - `search_query: str = ""`  
+- **Arguments**
+  - `page: int = 1`
+  - `page_size: int = 20`
+  - `platform_ids: list[str] | None`
+  - `search_query: str = ""`
   - `**kwargs` – 透传其他过滤条件
 - **Returns**  
   `tuple[list[Conversation], int]` – 对话列表与总数
@@ -1554,11 +1554,11 @@ class Conversation:
 
 - **Usage**  
   更新对话的标题、历史记录或 persona_id。
-- **Arguments**  
-  - `unified_msg_origin: str`  
-  - `conversation_id: str | None` – 为 `None` 时使用当前对话  
-  - `history: list[dict] | None`  
-  - `title: str | None`  
+- **Arguments**
+  - `unified_msg_origin: str`
+  - `conversation_id: str | None` – 为 `None` 时使用当前对话
+  - `history: list[dict] | None`
+  - `title: str | None`
   - `persona_id: str | None`
 - **Returns**  
   `None`
@@ -1567,10 +1567,10 @@ class Conversation:
 
 - **Usage**  
   生成分页后的人类可读对话上下文，方便展示或调试。
-- **Arguments**  
-  - `unified_msg_origin: str`  
-  - `conversation_id: str`  
-  - `page: int = 1`  
+- **Arguments**
+  - `unified_msg_origin: str`
+  - `conversation_id: str`
+  - `page: int = 1`
   - `page_size: int = 10`
 - **Returns**  
   `tuple[list[str], int]` – 当前页文本列表与总页数
@@ -1612,10 +1612,10 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   新建人格并立即写入数据库，成功后自动刷新本地缓存。
-- **Arguments**  
-  - `persona_id: str` – 新人格 ID（唯一）  
-  - `system_prompt: str` – 系统提示词  
-  - `begin_dialogs: list[str]` – 可选，开场对话（偶数条，user/assistant 交替）  
+- **Arguments**
+  - `persona_id: str` – 新人格 ID（唯一）
+  - `system_prompt: str` – 系统提示词
+  - `begin_dialogs: list[str]` – 可选，开场对话（偶数条，user/assistant 交替）
   - `tools: list[str]` – 可选，允许使用的工具列表；`None`=全部工具，`[]`=禁用全部
 - **Returns**  
   `Persona` – 新建后的人格对象
@@ -1626,10 +1626,10 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   更新现有人格的任意字段，并同步到数据库与缓存。
-- **Arguments**  
-  - `persona_id: str` – 待更新的人格 ID  
-  - `system_prompt: str` – 可选，新的系统提示词  
-  - `begin_dialogs: list[str]` – 可选，新的开场对话  
+- **Arguments**
+  - `persona_id: str` – 待更新的人格 ID
+  - `system_prompt: str` – 可选，新的系统提示词
+  - `begin_dialogs: list[str]` – 可选，新的开场对话
   - `tools: list[str]` – 可选，新的工具列表；语义同 `create_persona`
 - **Returns**  
   `Persona` – 更新后的人格对象
@@ -1640,7 +1640,7 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   删除指定人格，同时清理数据库与缓存。
-- **Arguments**  
+- **Arguments**
   - `persona_id: str` – 待删除的人格 ID
 - **Raises**  
   `ValueError` – 若 `persona_id` 不存在
@@ -1650,7 +1650,7 @@ persona_mgr = self.context.persona_manager
 - **Usage**  
   根据当前会话配置，获取应使用的默认人格（v3 格式）。  
   若配置未指定或指定的人格不存在，则回退到 `DEFAULT_PERSONALITY`。
-- **Arguments**  
+- **Arguments**
   - `umo: str | MessageSession | None` – 会话标识，用于读取用户级配置
 - **Returns**  
   `Personality` – v3 格式的默认人格对象

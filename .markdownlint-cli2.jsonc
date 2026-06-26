@@ -2,12 +2,27 @@
   "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
   "config": {
     "default": true,
+    // Prettier owns line wrapping.
     "MD013": false,
+    // Docs and READMEs embed inline HTML (badges, layout) by design.
     "MD033": false,
+    // Many docs lead with frontmatter / banner HTML instead of an H1.
     "MD041": false,
+    // Localized READMEs and VitePress pages legitimately repeat section
+    // names (e.g. "Usage") and use emphasis, bare anchors, and blockquote
+    // spacing as authoring conventions. Enforcing these would mean
+    // rewriting maintainer-authored prose across dozens of translations,
+    // so the prose-level rules below are relaxed; structural rules
+    // (heading increment MD001, code-fence language MD040, etc.) stay on.
+    "MD025": false, // multiple H1 — VitePress pages use H1 per section
+    "MD028": false, // blank line in blockquote — intentional spacing
+    "MD029": false, // ordered-list prefix — broken by ::: containers
+    "MD036": false, // emphasis-as-heading — localized README convention
+    "MD045": false, // image alt text — decorative badges/banners
+    "MD051": false, // link fragments — non-ASCII anchors mis-slugified
+    "MD059": false, // descriptive link text — intentional inline prose
     "MD024": { "siblings_only": true },
     "MD007": { "indent": 2 },
-    "MD029": { "style": "ordered" },
   },
   "globs": ["**/*.md"],
   "ignores": [

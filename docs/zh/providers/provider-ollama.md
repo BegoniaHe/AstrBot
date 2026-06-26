@@ -8,7 +8,7 @@
 
 ## 选择想要使用的模型
 
-在 https://ollama.com/search 上选择想要使用的模型。
+在 <https://ollama.com/search> 上选择想要使用的模型。
 
 在终端上 (Windows 上是 Powershell) 输入 `ollama pull <model_name>` 下载模型。
 
@@ -35,11 +35,11 @@ model_name 格式：`<model_name>:<model_version>`。如 `deepseek-r1:8b`。
 
 :::
 
-
 ## FAQ
 
 报错：
-```
+
+```text
 AstrBot 请求失败。
 错误类型: NotFoundError
 错误信息: Error code: 404 - {'error': {'message': 'model "llama3.1-8b" not found, try pulling it first', 'type': 'api_error', 'param': None, 'code': None}}

@@ -5,6 +5,7 @@ AstrBot commands are registered through the plugin system. To keep the core ligh
 Use `/help` to view currently enabled commands.
 
 > [!NOTE]
+>
 > 1. `/help`, `/set`, and `/unset` are not shown in the `/help` command list by default, but they are still available.
 > 2. If you change the wake prefix and remove the default `/`, commands must use the new wake prefix as well. For example, after changing the wake prefix to `!`, use `!help` and `!reset` instead of `/help` and `/reset`.
 

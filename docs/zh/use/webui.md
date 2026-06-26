@@ -9,6 +9,7 @@ AstrBot 管理面板具有管理插件、查看日志、可视化配置、查看
 当启动 AstrBot 之后，你可以通过浏览器访问 `http://localhost:6185` 来访问管理面板。
 
 > [!TIP]
+>
 > - 如果你正在云服务器上部署 AstrBot，需要将 `localhost` 替换为你的服务器 IP 地址。
 
 ## 登录
@@ -110,7 +111,7 @@ ChatUI 支持以下常用能力：
 
 使用 `/dashboard_update` 命令可以手动更新管理面板（管理员指令）。
 
-管理面板文件在 data/dist 目录下。如果需要手动替换，请在 https://github.com/AstrBotDevs/AstrBot/releases/ 下载 `dist.zip` 然后解压到 data 目录下。
+管理面板文件在 data/dist 目录下。如果需要手动替换，请在 <https://github.com/AstrBotDevs/AstrBot/releases/> 下载 `dist.zip` 然后解压到 data 目录下。
 
 ## 自定义 WebUI 端口
 

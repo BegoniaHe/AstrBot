@@ -47,6 +47,7 @@ For `URL`:
 
 > [!NOTE]
 > WeChat Official Account callback supports only ports 80 or 443. You usually need a domain and reverse proxy:
+>
 > - Unified mode enabled: forward to AstrBot port `6185`
 > - Unified mode disabled: forward to adapter port `6194`
 

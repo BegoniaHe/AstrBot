@@ -13,7 +13,7 @@ There are currently two compression strategies:
 1. Truncate by conversation rounds. This strategy simply removes the earliest conversation content until the context length meets the requirements. You can specify the number of conversation rounds to discard at once, with a default of 1 round. This is the **default strategy**.
 2. LLM-based context compression. This strategy calls the model itself to summarize and compress the conversation content, thereby retaining more key information. You can specify the conversation model to use for compression; if not selected, it will automatically fall back to the "truncate by conversation rounds" strategy. You can set the number of recent conversation rounds to retain during compression, with a default of 4. You can also customize the prompt used during compression. The default prompt is:
 
-```
+```text
 Based on our full conversation history, produce a concise summary of key takeaways and/or project progress.
 1. Systematically cover all core topics discussed and the final conclusion/outcome for each; clearly highlight the latest primary focus.
 2. If any tools were used, summarize tool usage (total call count) and extract the most valuable insights from tool outputs.

@@ -11,13 +11,13 @@ AstrBot supports connecting a personal WeChat account through the `Personal WeCh
 
 ## Supported Message Types
 
-| Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | Downloaded and decrypted into the local temp directory on receive |
-| Voice | Yes* | No | *WeChat cloud-side transcription is used, so no local transcription is required |
-| Video | Yes | Yes | Downloaded and decrypted into the local temp directory on receive |
-| File | Yes | Yes | Downloaded and decrypted into the local temp directory on receive |
+| Message Type | Receive | Send | Notes                                                                            |
+| ------------ | ------- | ---- | -------------------------------------------------------------------------------- |
+| Text         | Yes     | Yes  |                                                                                  |
+| Image        | Yes     | Yes  | Downloaded and decrypted into the local temp directory on receive                |
+| Voice        | Yes\*   | No   | \*WeChat cloud-side transcription is used, so no local transcription is required |
+| Video        | Yes     | Yes  | Downloaded and decrypted into the local temp directory on receive                |
+| File         | Yes     | Yes  | Downloaded and decrypted into the local temp directory on receive                |
 
 ## Create the Bot
 

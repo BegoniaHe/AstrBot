@@ -24,7 +24,7 @@ sudo docker compose up -d
 
 > [!TIP]
 > If your network environment is in mainland China, the above command will not pull properly. You may need to modify the compose.yml file and replace `image: soulter/astrbot:latest` with `image: m.daocloud.io/docker.io/soulter/astrbot:latest`.
-:::
+> :::
 
 ::: details Deploy with Agent Sandbox Environment
 
@@ -40,7 +40,6 @@ docker compose up -d
 
 For configuration and usage details, see the [Agent Sandbox Environment](/en/use/astrbot-agent-sandbox.md) documentation.
 :::
-
 
 ## Deploy with Docker
 
@@ -62,7 +61,7 @@ sudo docker run -itd -p 6185:6185 -p 6199:6199 -v $PWD/data:/AstrBot/data -v /et
 > No need to add sudo on Windows, same below
 > Sync Host Time on Windows (requires WSL2)
 
-```
+```text
 -v \\wsl.localhost\(your-wsl-os)\etc\timezone:/etc/timezone:ro
 -v \\wsl.localhost\(your-wsl-os)\etc\localtime:/etc/localtime:ro
 ```

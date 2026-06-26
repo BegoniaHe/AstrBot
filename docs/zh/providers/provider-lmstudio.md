@@ -2,13 +2,13 @@
 
 LMStudio 允许在本地电脑上部署模型（需要电脑硬件配置符合要求）
 
-### 下载并安装 LMStudio
+## 下载并安装 LMStudio
 
-https://lmstudio.ai/download
+<https://lmstudio.ai/download>
 
-### 下载并运行模型
+## 下载并运行模型
 
-https://lmstudio.ai/models
+<https://lmstudio.ai/models>
 
 跟随 LMStudio 下载并运行想要的模型，如 deepseek-r1-qwen-7b:
 
@@ -16,7 +16,7 @@ https://lmstudio.ai/models
 lms get deepseek-r1-qwen-7b
 ```
 
-### 配置 AstrBot
+## 配置 AstrBot
 
 在 AstrBot 上：
 

@@ -61,13 +61,8 @@ npx -v
 
 ```json
 {
-    "command": "uv",
-    "args": [
-        "tool",
-        "run",
-        "arxiv-mcp-server",
-        "--storage-path", "data/arxiv"
-    ]
+  "command": "uv",
+  "args": ["tool", "run", "arxiv-mcp-server", "--storage-path", "data/arxiv"]
 }
 ```
 
@@ -75,17 +70,18 @@ npx -v
 
 ```json
 {
-    "command": "env",
-    "args": [
-        "XXX_RESOURCE_FROM=local",
-        "XXX_API_URL=https://xxx.com",
-        "XXX_API_TOKEN=sk-xxxxx",
-        "uv",
-        "tool",
-        "run",
-        "xxx-mcp-server",
-        "--storage-path", "data/res"
-    ]
+  "command": "env",
+  "args": [
+    "XXX_RESOURCE_FROM=local",
+    "XXX_API_URL=https://xxx.com",
+    "XXX_API_TOKEN=sk-xxxxx",
+    "uv",
+    "tool",
+    "run",
+    "xxx-mcp-server",
+    "--storage-path",
+    "data/res"
+  ]
 }
 ```
 

@@ -21,7 +21,6 @@ provider_id = await self.context.get_current_chat_provider_id(umo=umo)
 > [!TIP]
 > Added in v4.5.7
 
-
 ```py
 llm_resp = await self.context.llm_generate(
     chat_provider_id=provider_id, # Chat model ID
@@ -117,7 +116,6 @@ Supported types: `string`, `number`, `object`, `boolean`, `array`. Since v4.5.7,
 > [!TIP]
 > Added in v4.5.7
 
-
 An Agent can be defined as a combination of system_prompt + tools + llm, enabling more sophisticated intelligent behavior.
 
 After defining the Tool above, you can invoke an Agent as follows:
@@ -140,7 +138,6 @@ llm_resp = await self.context.tool_loop_agent(
 
 > [!TIP]
 > Added in v4.5.7
-
 
 Multi-Agent systems decompose complex applications into multiple specialized agents that collaborate to solve problems. Unlike relying on a single agent to handle every step, multi-agent architectures allow smaller, more focused agents to be composed into coordinated workflows. We implement multi-agent systems using the `agent-as-tool` pattern.
 
@@ -369,11 +366,11 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Create a new conversation in the current session and automatically switch to it.
-- **Arguments**  
-  - `unified_msg_origin: str` – In the format `platform_name:message_type:session_id`  
-  - `platform_id: str | None` – Platform identifier, defaults to parsing from `unified_msg_origin`  
-  - `content: list[dict] | None` – Initial message history  
-  - `title: str | None` – Conversation title  
+- **Arguments**
+  - `unified_msg_origin: str` – In the format `platform_name:message_type:session_id`
+  - `platform_id: str | None` – Platform identifier, defaults to parsing from `unified_msg_origin`
+  - `content: list[dict] | None` – Initial message history
+  - `title: str | None` – Conversation title
   - `persona_id: str | None` – Associated persona ID
 - **Returns**  
   `str` – Newly generated UUID conversation ID
@@ -382,8 +379,8 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Switch the session to a specified conversation.
-- **Arguments**  
-  - `unified_msg_origin: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
   - `conversation_id: str`
 - **Returns**  
   `None`
@@ -392,8 +389,8 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Delete a conversation from the session; if `conversation_id` is `None`, deletes the current conversation.
-- **Arguments**  
-  - `unified_msg_origin: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
   - `conversation_id: str | None`
 - **Returns**  
   `None`
@@ -402,7 +399,7 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Get the conversation ID currently in use by the session.
-- **Arguments**  
+- **Arguments**
   - `unified_msg_origin: str`
 - **Returns**  
   `str | None` – Current conversation ID, returns `None` if it doesn't exist
@@ -411,9 +408,9 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Get the complete object for a specified conversation; automatically creates it if it doesn't exist and `create_if_not_exists=True`.
-- **Arguments**  
-  - `unified_msg_origin: str`  
-  - `conversation_id: str`  
+- **Arguments**
+  - `unified_msg_origin: str`
+  - `conversation_id: str`
   - `create_if_not_exists: bool = False`
 - **Returns**  
   `Conversation | None`
@@ -422,8 +419,8 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Retrieve the complete list of conversations for a user or platform.
-- **Arguments**  
-  - `unified_msg_origin: str | None` – When `None`, does not filter by user  
+- **Arguments**
+  - `unified_msg_origin: str | None` – When `None`, does not filter by user
   - `platform_id: str | None`
 - **Returns**  
   `List[Conversation]`
@@ -432,11 +429,11 @@ await conv_mgr.add_message_pair(
 
 - **Usage**  
   Update the title, history, or persona_id of a conversation.
-- **Arguments**  
-  - `unified_msg_origin: str`  
-  - `conversation_id: str | None` – Uses the current conversation when `None`  
-  - `history: list[dict] | None`  
-  - `title: str | None`  
+- **Arguments**
+  - `unified_msg_origin: str`
+  - `conversation_id: str | None` – Uses the current conversation when `None`
+  - `history: list[dict] | None`
+  - `title: str | None`
   - `persona_id: str | None`
 - **Returns**  
   `None`
@@ -474,10 +471,10 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   Create a new persona and immediately write it to the database; automatically refreshes the local cache upon success.
-- **Arguments**  
-  - `persona_id: str` – New persona ID (unique)  
-  - `system_prompt: str` – System prompt  
-  - `begin_dialogs: list[str]` – Optional, opening dialogs (even number of entries, alternating user/assistant)  
+- **Arguments**
+  - `persona_id: str` – New persona ID (unique)
+  - `system_prompt: str` – System prompt
+  - `begin_dialogs: list[str]` – Optional, opening dialogs (even number of entries, alternating user/assistant)
   - `tools: list[str]` – Optional, list of allowed tools; `None`=all tools, `[]`=disable all
 - **Returns**  
   `Persona` – Newly created persona object
@@ -488,10 +485,10 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   Update any fields of an existing persona and synchronize to database and cache.
-- **Arguments**  
-  - `persona_id: str` – Persona ID to update  
-  - `system_prompt: str` – Optional, new system prompt  
-  - `begin_dialogs: list[str]` – Optional, new opening dialogs  
+- **Arguments**
+  - `persona_id: str` – Persona ID to update
+  - `system_prompt: str` – Optional, new system prompt
+  - `begin_dialogs: list[str]` – Optional, new opening dialogs
   - `tools: list[str]` – Optional, new tool list; semantics same as `create_persona`
 - **Returns**  
   `Persona` – Updated persona object
@@ -502,7 +499,7 @@ persona_mgr = self.context.persona_manager
 
 - **Usage**  
   Delete the specified persona and clean up both database and cache.
-- **Arguments**  
+- **Arguments**
   - `persona_id: str` – Persona ID to delete
 - **Raises**  
   `ValueError` – If `persona_id` doesn't exist
@@ -512,7 +509,7 @@ persona_mgr = self.context.persona_manager
 - **Usage**  
   Get the default persona (v3 format) to use based on the current session configuration.  
   Falls back to `DEFAULT_PERSONALITY` if configuration doesn't specify one or the specified persona doesn't exist.
-- **Arguments**  
+- **Arguments**
   - `umo: str | MessageSession | None` – Session identifier, used to read user-level configuration
 - **Returns**  
   `Personality` – Default persona object in v3 format

@@ -14,10 +14,10 @@ Please refer to [Matrix Server](https://matrix.org/ecosystem/servers/) to view a
 | Message Type | Receive | Send | Notes |
 | ------------ | ------- | ---- | ----- |
 | Text         | Yes     | Yes  |       |
-| Image*       | Yes     | Yes  |       |
-| Audio*       | Yes     | Yes  |       |
-| Video*       | Yes     | Yes  |       |
-| File*        | Yes     | Yes  |       |
+| Image\*      | Yes     | Yes  |       |
+| Audio\*      | Yes     | Yes  |       |
+| Video\*      | Yes     | Yes  |       |
+| File\*       | Yes     | Yes  |       |
 | Poll         | Yes     | No   |       |
 
 \*: Will be persisted locally. The plugin will clean up according to configuration. Files will be uploaded before sending; uploads exceeding the server's size limit will fail.

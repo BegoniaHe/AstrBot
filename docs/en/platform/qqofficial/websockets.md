@@ -5,12 +5,12 @@
 > Version v4.19.6.
 
 | Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | Yes | Yes | |
-| Video | Yes | Yes | |
-| File | Yes | Yes | |
+| ------------ | ------- | ---- | ----- |
+| Text         | Yes     | Yes  |       |
+| Image        | Yes     | Yes  |       |
+| Voice        | Yes     | Yes  |       |
+| Video        | Yes     | Yes  |       |
+| File         | Yes     | Yes  |       |
 
 Proactive message push: Supported.
 
@@ -43,6 +43,7 @@ With this configuration, the bot can receive full group messages and proactively
 ### Apply for a Bot
 
 > [!WARNING]
+>
 > 1. QQ Official Bot currently requires an IP whitelist.
 > 2. It supports group chat, private chat, channel chat, and channel private chat.
 

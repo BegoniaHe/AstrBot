@@ -183,7 +183,7 @@ docker compose up -d
 
 server:
   # Bay API 监听地址
-  host: "0.0.0.0"
+  host: '0.0.0.0'
   # Bay API 监听端口
   port: 8114
 
@@ -191,7 +191,7 @@ database:
   # 单机部署默认使用 SQLite。
   # 如果要做多实例 / 高可用，可改用 PostgreSQL，例如：
   # url: "postgresql+asyncpg://user:pass@db-host:5432/bay"
-  url: "sqlite+aiosqlite:///./data/bay.db"
+  url: 'sqlite+aiosqlite:///./data/bay.db'
   echo: false
 
 driver:
@@ -204,14 +204,14 @@ driver:
 
   docker:
     # Docker Socket 地址
-    socket: "unix:///var/run/docker.sock"
+    socket: 'unix:///var/run/docker.sock'
 
     # Bay 在容器内运行，Ship/Gull 也在容器内运行时，
     # 推荐使用 container_network 通过容器网络直接通信。
     connect_mode: container_network
 
     # 共享网络名，必须与 docker-compose.yaml 中的网络一致
-    network: "bay-network"
+    network: 'bay-network'
 
     # 是否将 sandbox 容器端口暴露到宿主机。
     # 生产环境建议关闭，以减少攻击面。
@@ -220,15 +220,15 @@ driver:
 
 cargo:
   # Cargo 在 Bay 侧的存储根路径
-  root_path: "/var/lib/bay/cargos"
+  root_path: '/var/lib/bay/cargos'
   # 默认工作区大小限制（MB）
   default_size_limit_mb: 1024
   # Cargo 挂载到 sandbox 内的路径。AstrBot/Neo 的工作区根目录就是这里。
-  mount_path: "/workspace"
+  mount_path: '/workspace'
 
 security:
   # 必改项：设置一个强随机密钥，例如 openssl rand -hex 32
-  api_key: "CHANGE-ME"
+  api_key: 'CHANGE-ME'
   # 是否允许匿名访问。生产环境建议 false。
   allow_anonymous: false
 
@@ -249,7 +249,7 @@ warm_pool:
   # 预热队列最大长度
   warmup_queue_max_size: 256
   # 队列满时的丢弃策略
-  warmup_queue_drop_policy: "drop_newest"
+  warmup_queue_drop_policy: 'drop_newest'
   # 超过这个阈值时便于运维告警
   warmup_queue_drop_alert_threshold: 50
   # 预热池维护扫描周期（秒）
@@ -260,15 +260,15 @@ warm_pool:
 profiles:
   # ── 标准 Python 沙箱 ────────────────────────
   - id: python-default
-    description: "Standard Python sandbox with filesystem and shell access"
-    image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+    description: 'Standard Python sandbox with filesystem and shell access'
+    image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
     runtime_type: ship
     runtime_port: 8123
     resources:
       cpus: 1.0
-      memory: "1g"
+      memory: '1g'
     capabilities:
-      - filesystem  # 包含 upload/download
+      - filesystem # 包含 upload/download
       - shell
       - python
     # 空闲超时（秒）
@@ -282,15 +282,15 @@ profiles:
 
   # ── 数据科学沙箱（更多资源） ──────────
   - id: python-data
-    description: "Data science sandbox with extra CPU and memory"
-    image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+    description: 'Data science sandbox with extra CPU and memory'
+    image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
     runtime_type: ship
     runtime_port: 8123
     resources:
       cpus: 2.0
-      memory: "4g"
+      memory: '4g'
     capabilities:
-      - filesystem  # 包含 upload/download
+      - filesystem # 包含 upload/download
       - shell
       - python
     idle_timeout: 1800
@@ -299,19 +299,19 @@ profiles:
 
   # ── 浏览器 + Python 多容器沙箱 ───────
   - id: browser-python
-    description: "Browser automation with Python backend"
+    description: 'Browser automation with Python backend'
     containers:
       - name: ship
-        image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+        image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
         runtime_type: ship
         runtime_port: 8123
         resources:
           cpus: 1.0
-          memory: "1g"
+          memory: '1g'
         capabilities:
           - python
           - shell
-          - filesystem  # 包含 upload/download
+          - filesystem # 包含 upload/download
         # 这些能力优先由 ship 容器提供
         primary_for:
           - filesystem
@@ -319,12 +319,12 @@ profiles:
           - shell
         env: {}
       - name: browser
-        image: "ghcr.io/astrbotdevs/shipyard-neo-gull:latest"
+        image: 'ghcr.io/astrbotdevs/shipyard-neo-gull:latest'
         runtime_type: gull
         runtime_port: 8115
         resources:
           cpus: 1.0
-          memory: "2g"
+          memory: '2g'
         capabilities:
           - browser
         env: {}
@@ -339,7 +339,7 @@ gc:
   interval_seconds: 300
 
   # 多实例部署时必须保证唯一
-  instance_id: "bay-prod"
+  instance_id: 'bay-prod'
 
   idle_session:
     enabled: true

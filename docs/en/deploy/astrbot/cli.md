@@ -5,7 +5,6 @@
 >
 > This tutorial assumes Python is already installed on your device with version `>=3.14`
 
-
 ## Download/Clone Repository
 
 If you have `git` installed on your computer, you can download the source code with the following command:
@@ -30,6 +29,7 @@ Alternatively, download the source code directly from GitHub and extract it:
 > If `uv` is not installed, please refer to [Installing uv](https://docs.astral.sh/uv/getting-started/installation/) for installation.
 
 2. Execute in terminal (in the AstrBot directory)
+
 ```bash
 uv sync
 uv run main.py
@@ -40,6 +40,7 @@ If you have installed some plugins, it is recommended to add the `--no-sync` par
 ```bash
 uv run --no-sync main.py
 ```
+
 :::
 
 ::: details Install Dependencies with Python Built-in venv
@@ -54,7 +55,7 @@ python3 -m venv ./venv
 ```
 
 > It might be `python` instead of `python3`
- 
+
 The above steps will create and activate a virtual environment (to avoid disrupting your local Python environment).
 
 Next, install the dependencies with the following command, which may take some time:
@@ -74,10 +75,10 @@ venv\Scripts\activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 python main.py
 ```
+
 :::
 
-
-## 🎉 All Done!
+## 🎉 All Done
 
 If everything goes well, you will see logs printed by AstrBot.
 
@@ -87,6 +88,5 @@ If there are no errors, you will see a log message similar to `🌈 Dashboard st
 > If you are deploying AstrBot on a server, you need to replace `localhost` with your server's IP address.
 >
 > New users must use the random password printed in the startup logs to log in for the first time. Use the username shown in the logs (usually `astrbot`) and change it after first login.
-
 
 Next, you need to deploy any messaging platform to use AstrBot on that platform.

@@ -38,15 +38,15 @@ astrbot run
 
 ## Top-Level Commands
 
-| Command | Purpose |
-| --- | --- |
-| `astrbot init` | Initialize the current directory as an AstrBot working directory. |
-| `astrbot run` | Start AstrBot in the foreground. |
-| `astrbot conf` | Read or update common config values. |
-| `astrbot password` | Change the WebUI login password interactively. |
-| `astrbot plug` | Create, install, update, remove, or search plugins. |
-| `astrbot help` | Show CLI help. |
-| `astrbot --version` | Show the AstrBot CLI version. |
+| Command             | Purpose                                                           |
+| ------------------- | ----------------------------------------------------------------- |
+| `astrbot init`      | Initialize the current directory as an AstrBot working directory. |
+| `astrbot run`       | Start AstrBot in the foreground.                                  |
+| `astrbot conf`      | Read or update common config values.                              |
+| `astrbot password`  | Change the WebUI login password interactively.                    |
+| `astrbot plug`      | Create, install, update, remove, or search plugins.               |
+| `astrbot help`      | Show CLI help.                                                    |
+| `astrbot --version` | Show the AstrBot CLI version.                                     |
 
 ## Start AstrBot
 
@@ -56,11 +56,11 @@ astrbot run
 
 Common options:
 
-| Option | Purpose |
-| --- | --- |
-| `-p, --port <PORT>` | Set the WebUI port. |
-| `-r, --reload` | Enable plugin auto-reload for plugin development. |
-| `--reset-password` | Reset the WebUI initial password on startup and print the new password in startup logs. |
+| Option              | Purpose                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `-p, --port <PORT>` | Set the WebUI port.                                                                     |
+| `-r, --reload`      | Enable plugin auto-reload for plugin development.                                       |
+| `--reset-password`  | Reset the WebUI initial password on startup and print the new password in startup logs. |
 
 Examples:
 
@@ -96,14 +96,14 @@ astrbot conf set dashboard.port 6185
 
 Supported keys:
 
-| Key | Description |
-| --- | --- |
-| `timezone` | Time zone, for example `Asia/Shanghai`. |
-| `log_level` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
-| `dashboard.port` | WebUI port. |
-| `dashboard.username` | WebUI username. |
-| `dashboard.password` | WebUI password. |
-| `callback_api_base` | Callback API base URL. Must start with `http://` or `https://`. |
+| Key                  | Description                                                     |
+| -------------------- | --------------------------------------------------------------- |
+| `timezone`           | Time zone, for example `Asia/Shanghai`.                         |
+| `log_level`          | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.  |
+| `dashboard.port`     | WebUI port.                                                     |
+| `dashboard.username` | WebUI username.                                                 |
+| `dashboard.password` | WebUI password.                                                 |
+| `callback_api_base`  | Callback API base URL. Must start with `http://` or `https://`. |
 
 Changing the dashboard password writes the current password hashes automatically:
 
@@ -122,15 +122,15 @@ astrbot password --username admin
 
 `astrbot plug` manages plugins under `data/plugins`.
 
-| Command | Purpose |
-| --- | --- |
-| `astrbot plug list` | List installed plugins. |
-| `astrbot plug list --all` | Also show uninstalled plugins. |
-| `astrbot plug search <QUERY>` | Search plugins. |
-| `astrbot plug install <NAME>` | Install a plugin. |
-| `astrbot plug update [NAME]` | Update one plugin, or all updatable plugins if no name is given. |
-| `astrbot plug remove <NAME>` | Remove an installed plugin. |
-| `astrbot plug new <NAME>` | Create a new plugin from the template. |
+| Command                       | Purpose                                                          |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `astrbot plug list`           | List installed plugins.                                          |
+| `astrbot plug list --all`     | Also show uninstalled plugins.                                   |
+| `astrbot plug search <QUERY>` | Search plugins.                                                  |
+| `astrbot plug install <NAME>` | Install a plugin.                                                |
+| `astrbot plug update [NAME]`  | Update one plugin, or all updatable plugins if no name is given. |
+| `astrbot plug remove <NAME>`  | Remove an installed plugin.                                      |
+| `astrbot plug new <NAME>`     | Create a new plugin from the template.                           |
 
 Use a GitHub proxy when installing or updating plugins:
 

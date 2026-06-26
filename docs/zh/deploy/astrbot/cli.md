@@ -29,6 +29,7 @@ cd AstrBot
 > 如果没安装 `uv`，请参考 [Installing uv](https://docs.astral.sh/uv/getting-started/installation/) 安装。
 
 2. 在终端执行(AstrBot 目录下)
+
 ```bash
 uv sync
 uv run main.py
@@ -39,6 +40,7 @@ uv run main.py
 ```bash
 uv run --no-sync main.py
 ```
+
 :::
 
 ::: details Python 内置 venv 安装依赖
@@ -53,7 +55,7 @@ python3 -m venv ./venv
 ```
 
 > 也可能是 `python` 而不是 `python3`
- 
+
 以上步骤会创建一个虚拟环境并激活（以免打乱您设备本地的 Python 环境）。
 
 接下来，通过以下命令安装依赖文件，这可能需要花费一些时间：
@@ -73,10 +75,10 @@ venv\Scripts\activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 python main.py
 ```
+
 :::
 
-
-## 🎉 大功告成！
+## 🎉 大功告成
 
 如果一切顺利，你会看到 AstrBot 打印出的日志。
 
@@ -86,6 +88,5 @@ python main.py
 > 如果你正在服务器上部署 AstrBot，需要将 `localhost` 替换为你的服务器 IP 地址。
 >
 > 首次登录请使用启动日志中打印的随机初始密码（用户名通常为 `astrbot`）。登录后请立即修改密码。
-
 
 接下来，你需要部署任何一个消息平台，才能够实现在消息平台上使用 AstrBot。

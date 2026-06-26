@@ -127,7 +127,7 @@ support_platforms:
 你可以在 `metadata.yaml` 中新增 `astrbot_version` 字段，声明插件要求的 AstrBot 版本范围。格式与 `pyproject.toml` 依赖版本约束一致（PEP 440），且不要加 `v` 前缀。
 
 ```yaml
-astrbot_version: ">=4.16,<5"
+astrbot_version: '>=4.16,<5'
 ```
 
 可选示例：

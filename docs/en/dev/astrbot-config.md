@@ -203,7 +203,7 @@ Whether to quote the user's message when replying. Default is `false`.
 
 #### `platform_settings.path_mapping`
 
-*This configuration item has been deprecated since v4.0.0.*
+_This configuration item has been deprecated since v4.0.0._
 
 List of path mappings. Used to replace file paths in messages. Each mapping item contains `from` and `to` fields, indicating that `from` in the message path is replaced with `to`.
 
@@ -274,7 +274,7 @@ Prompt template for image captioning. Default is `"Please describe the image usi
 
 #### `provider_settings.provider_pool`
 
-*This configuration item is not yet in actual use.*
+_This configuration item is not yet in actual use._
 
 #### `provider_settings.wake_prefix`
 
@@ -336,7 +336,7 @@ ID of the default personality to use. Configure personalities in the WebUI.
 
 #### `provider_settings.persona_pool`
 
-*This configuration item is not yet in actual use.*
+_This configuration item is not yet in actual use._
 
 #### `provider_settings.prompt_prefix`
 

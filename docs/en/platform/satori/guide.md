@@ -2,7 +2,7 @@
 
 ## Satori protocol overview
 
-> Excerpt from: https://satori.chat/introduction.html
+> Excerpt from: <https://satori.chat/introduction.html>
 
 Satori is a unified chat protocol. It aims to reduce differences between chat platforms and let developers build cross-platform, extensible, high-performance chat applications with lower cost.
 

@@ -1,4 +1,3 @@
-
 # Session Control
 
 > v3.4.36 and above

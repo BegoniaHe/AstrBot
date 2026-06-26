@@ -24,7 +24,7 @@ sudo docker compose up -d
 
 > [!TIP]
 > 如果您的网络环境在中国大陆境内，上述命令将无法正常拉取。您可能需要修改 compose.yml 文件，将其中的 `image: soulter/astrbot:latest` 替换为 `image: m.daocloud.io/docker.io/soulter/astrbot:latest`。
-:::
+> :::
 
 ::: details 带 Agent 沙盒环境的部署
 
@@ -54,7 +54,6 @@ sudo docker compose -f astrbot.yml up -d
 
 :::
 
-
 ## 通过 Docker 部署
 
 ```bash
@@ -71,12 +70,12 @@ sudo docker run -itd -p 6185:6185 -p 6199:6199 -v $PWD/data:/AstrBot/data -v /et
 > ```
 >
 > (感谢 DaoCloud ❤️)
-> 
+>
 > Windows 下不需要加 sudo，下同
 >
-Windows 同步 Host Time（需要WSL2）
+> Windows 同步 Host Time（需要WSL2）
 
-```
+```text
 -v \\wsl.localhost\(your-wsl-os)\etc\timezone:/etc/timezone:ro
 -v \\wsl.localhost\(your-wsl-os)\etc\localtime:/etc/localtime:ro
 ```

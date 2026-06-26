@@ -81,7 +81,7 @@ If you want to customize the deployment parameters of `Shipyard Neo`, you can re
 
 server:
   # Bay API listen address
-  host: "0.0.0.0"
+  host: '0.0.0.0'
   # Bay API listen port
   port: 8114
 
@@ -89,7 +89,7 @@ database:
   # SQLite is the default for single-node deployment.
   # For multi-instance / HA deployments, you can switch to PostgreSQL, for example:
   # url: "postgresql+asyncpg://user:pass@db-host:5432/bay"
-  url: "sqlite+aiosqlite:///./data/bay.db"
+  url: 'sqlite+aiosqlite:///./data/bay.db'
   echo: false
 
 driver:
@@ -102,14 +102,14 @@ driver:
 
   docker:
     # Docker Socket endpoint
-    socket: "unix:///var/run/docker.sock"
+    socket: 'unix:///var/run/docker.sock'
 
     # When Bay, Ship, and Gull all run in containers,
     # container_network is recommended for direct container-network communication.
     connect_mode: container_network
 
     # Shared network name; must match the network in docker-compose.yaml
-    network: "bay-network"
+    network: 'bay-network'
 
     # Whether to expose sandbox container ports to the host.
     # Disabling this is generally recommended in production.
@@ -118,15 +118,15 @@ driver:
 
 cargo:
   # Cargo storage root path on the Bay side
-  root_path: "/var/lib/bay/cargos"
+  root_path: '/var/lib/bay/cargos'
   # Default workspace size limit (MB)
   default_size_limit_mb: 1024
   # Path mounted inside the sandbox. This is AstrBot/Neo's workspace root.
-  mount_path: "/workspace"
+  mount_path: '/workspace'
 
 security:
   # Required: set a strong random secret, for example openssl rand -hex 32
-  api_key: "CHANGE-ME"
+  api_key: 'CHANGE-ME'
   # Whether anonymous access is allowed. false is recommended for production.
   allow_anonymous: false
 
@@ -147,7 +147,7 @@ warm_pool:
   # Maximum warmup queue size
   warmup_queue_max_size: 256
   # Policy when the queue is full
-  warmup_queue_drop_policy: "drop_newest"
+  warmup_queue_drop_policy: 'drop_newest'
   # Useful threshold for operational alerts
   warmup_queue_drop_alert_threshold: 50
   # Warm pool maintenance interval (seconds)
@@ -158,15 +158,15 @@ warm_pool:
 profiles:
   # ── Standard Python sandbox ────────────────────────
   - id: python-default
-    description: "Standard Python sandbox with filesystem and shell access"
-    image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+    description: 'Standard Python sandbox with filesystem and shell access'
+    image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
     runtime_type: ship
     runtime_port: 8123
     resources:
       cpus: 1.0
-      memory: "1g"
+      memory: '1g'
     capabilities:
-      - filesystem  # includes upload/download
+      - filesystem # includes upload/download
       - shell
       - python
     # Idle timeout (seconds)
@@ -180,15 +180,15 @@ profiles:
 
   # ── Data-science sandbox (more resources) ──────────
   - id: python-data
-    description: "Data science sandbox with extra CPU and memory"
-    image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+    description: 'Data science sandbox with extra CPU and memory'
+    image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
     runtime_type: ship
     runtime_port: 8123
     resources:
       cpus: 2.0
-      memory: "4g"
+      memory: '4g'
     capabilities:
-      - filesystem  # includes upload/download
+      - filesystem # includes upload/download
       - shell
       - python
     idle_timeout: 1800
@@ -197,19 +197,19 @@ profiles:
 
   # ── Browser + Python multi-container sandbox ───────
   - id: browser-python
-    description: "Browser automation with Python backend"
+    description: 'Browser automation with Python backend'
     containers:
       - name: ship
-        image: "ghcr.io/astrbotdevs/shipyard-neo-ship:latest"
+        image: 'ghcr.io/astrbotdevs/shipyard-neo-ship:latest'
         runtime_type: ship
         runtime_port: 8123
         resources:
           cpus: 1.0
-          memory: "1g"
+          memory: '1g'
         capabilities:
           - python
           - shell
-          - filesystem  # includes upload/download
+          - filesystem # includes upload/download
         # These capabilities are primarily handled by the ship container
         primary_for:
           - filesystem
@@ -217,12 +217,12 @@ profiles:
           - shell
         env: {}
       - name: browser
-        image: "ghcr.io/astrbotdevs/shipyard-neo-gull:latest"
+        image: 'ghcr.io/astrbotdevs/shipyard-neo-gull:latest'
         runtime_type: gull
         runtime_port: 8115
         resources:
           cpus: 1.0
-          memory: "2g"
+          memory: '2g'
         capabilities:
           - browser
         env: {}
@@ -237,7 +237,7 @@ gc:
   interval_seconds: 300
 
   # Must be unique in multi-instance deployments
-  instance_id: "bay-prod"
+  instance_id: 'bay-prod'
 
   idle_session:
     enabled: true

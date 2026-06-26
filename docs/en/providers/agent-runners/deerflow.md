@@ -13,6 +13,7 @@ If you have not deployed DeerFlow yet, please complete installation and startup 
 Make sure DeerFlow is running properly and that AstrBot can reach the DeerFlow gateway. By default, the DeerFlow gateway address is `http://127.0.0.1:2026`.
 
 > [!TIP]
+>
 > - `API Base URL` must start with `http://` or `https://`.
 > - If AstrBot and DeerFlow run in different containers or on different hosts, replace `127.0.0.1` with the actual reachable LAN address, hostname, or domain of your DeerFlow service.
 
@@ -36,6 +37,7 @@ Fill in the following fields:
 After filling in the configuration, click Save.
 
 > [!TIP]
+>
 > - If DeerFlow already has a default model configured on its side, you can leave `Model name override` empty.
 > - Only enable `plan mode` or `subagent` related options when the corresponding DeerFlow capabilities are already configured on the DeerFlow side.
 

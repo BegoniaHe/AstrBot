@@ -8,6 +8,7 @@
 # Preparation
 
 ## What is AUR?
+
 AUR (Arch User Repository) allows users to install software from community-maintained software repositories. AUR packages are typically maintained by community members rather than official maintainers.
 Common AUR helpers include `yay` and `paru`.
 The following tutorial uses `paru` as an example; `yay` works similarly, just replace `paru` with `yay`.
@@ -15,6 +16,7 @@ The following tutorial uses `paru` as an example; `yay` works similarly, just re
 # Installation Process
 
 ## AUR
+
 ```bash
 paru -S astrbot-git
 # Note:
@@ -23,7 +25,8 @@ paru -S astrbot-git
 ```
 
 # Starting
->[!TIP]
+
+> [!TIP]
 > You can directly use `astrbot init` (for the first run) to initialize.
 > Use `astrbot run` to run the bot.
 > However, it is highly recommended to use `systemctl` for starting, as it provides features like automatic restart and log rotation.
@@ -33,6 +36,7 @@ systemctl --user start astrbot.service
 ```
 
 # Auto-start on Boot
+
 ```bash
 # For security reasons, it is designed to run as a user.
 systemctl --user enable astrbot.service

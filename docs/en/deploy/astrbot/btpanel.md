@@ -37,12 +37,11 @@ Visit `http://IP:6185` to access the AstrBot dashboard.
 >
 > For specific messaging platform port mappings, refer to the table below:
 >
->| Port    | Description | Type
->| -------- | ------- | ------- |
->| 6185 |  AstrBot WebUI `default` port  | Required |
->| 6195 | WeCom `default` port    | Optional |
->| 6199 | QQ Personal Account(aiocqhttp) `default` port    | Optional |
->| 6196    | QQ Official API(Webhook) `default` port   | Optional |
+> | Port | Description                                   | Type     |
+> | ---- | --------------------------------------------- | -------- |
+> | 6185 | AstrBot WebUI `default` port                  | Required |
+> | 6195 | WeCom `default` port                          | Optional |
+> | 6199 | QQ Personal Account(aiocqhttp) `default` port | Optional |
+> | 6196 | QQ Official API(Webhook) `default` port       | Optional |
 >
 > Platforms not listed do not require additional port opening.
-

@@ -34,6 +34,7 @@
 <a href="https://astrbot.featurebase.app/roadmap">ロードマップ</a> ｜
 <a href="https://github.com/AstrBotDevs/AstrBot/issues">Issue</a>
 <a href="mailto:community@astrbot.app">Email Support</a>
+
 </div>
 
 AstrBot は、主要なインスタントメッセージングアプリと統合できるオープンソースのオールインワン Agent チャットボットプラットフォームです。個人、開発者、チームに信頼性が高くスケーラブルな会話型 AI インフラストラクチャを提供します。パーソナル AI コンパニオン、インテリジェントカスタマーサービス、オートメーションアシスタント、エンタープライズナレッジベースなど、AstrBot を使用すると、IM プラットフォームのワークフロー内で本番環境対応の AI アプリケーションを迅速に構築できます。
@@ -47,7 +48,7 @@ AstrBot は、主要なインスタントメッセージングアプリと統合
 3. 🤖 Dify、Alibaba Cloud Bailian（百煉）、Coze などのAgentプラットフォームへの接続をサポート。
 4. 🌐 マルチプラットフォーム：QQ、企業微信（WeCom）、飛書（Lark）、釘釘（DingTalk）、WeChat公式アカウント、Telegram、Slack、[その他](#サポートされているメッセージプラットフォーム)に対応。
 5. 📦 プラグイン拡張：1000を超える既存プラグインをワンクリックでインストール可能。
-6. 🛡️  隔離環境[Agent Sandbox](https://docs.astrbot.app/use/astrbot-agent-sandbox.html)：コードの安全な実行、Shell呼び出し、セッションレベルのリソース再利用。
+6. 🛡️ 隔離環境[Agent Sandbox](https://docs.astrbot.app/use/astrbot-agent-sandbox.html)：コードの安全な実行、Shell呼び出し、セッションレベルのリソース再利用。
 7. 💻 WebUI 対応。
 8. 🌈 Web ChatUI 対応：ChatUI内にAgent Sandboxやウェブ検索などを内蔵。
 9. 🌐 多言語対応（i18n）。
@@ -144,65 +145,64 @@ yay -S astrbot-git
 
 AstrBot をよく使うチャットプラットフォームに接続できます。
 
-| プラットフォーム | 保守 |
-|---------|---------------|
-| QQ | 公式 |
-| OneBot v11 プロトコル実装 | 公式 |
-| Telegram | 公式 |
-| WeChat Work アプリケーション & WeChat Work インテリジェントボット | 公式 |
-| WeChat カスタマーサービス & WeChat 公式アカウント | 公式 |
-| Feishu (Lark) | 公式 |
-| DingTalk | 公式 |
-| Slack | 公式 |
-| Discord | 公式 |
-| LINE | 公式 |
-| Satori | 公式 |
-| KOOK | 公式 |
-| Misskey | 公式 |
-| Mattermost | 公式 |
-| WhatsApp (近日対応予定) | 公式 |
-| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter) | コミュニティ |
+| プラットフォーム                                                                  | 保守         |
+| --------------------------------------------------------------------------------- | ------------ |
+| QQ                                                                                | 公式         |
+| OneBot v11 プロトコル実装                                                         | 公式         |
+| Telegram                                                                          | 公式         |
+| WeChat Work アプリケーション & WeChat Work インテリジェントボット                 | 公式         |
+| WeChat カスタマーサービス & WeChat 公式アカウント                                 | 公式         |
+| Feishu (Lark)                                                                     | 公式         |
+| DingTalk                                                                          | 公式         |
+| Slack                                                                             | 公式         |
+| Discord                                                                           | 公式         |
+| LINE                                                                              | 公式         |
+| Satori                                                                            | 公式         |
+| KOOK                                                                              | 公式         |
+| Misskey                                                                           | 公式         |
+| Mattermost                                                                        | 公式         |
+| WhatsApp (近日対応予定)                                                           | 公式         |
+| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter)               | コミュニティ |
 | [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | コミュニティ |
-| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat) | コミュニティ |
-
+| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat)                | コミュニティ |
 
 ## サポートされているモデルサービス
 
-| サービス | 種類 |
-|---------|---------------|
-| OpenAI および互換サービス | 大規模言語モデルサービス |
-| Anthropic | 大規模言語モデルサービス |
-| Google Gemini | 大規模言語モデルサービス |
-| Moonshot AI | 大規模言語モデルサービス |
-| 智谱 AI | 大規模言語モデルサービス |
-| DeepSeek | 大規模言語モデルサービス |
-| Ollama (セルフホスト) | 大規模言語モデルサービス |
-| LM Studio (セルフホスト) | 大規模言語モデルサービス |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH) | 大規模言語モデルサービス（APIゲートウェイ、全モデル対応） |
-| [優云智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | 大規模言語モデルサービス |
-| [302.AI](https://share.302.ai/rr1M3l) | 大規模言語モデルサービス |
-| [小馬算力](https://www.tokenpony.cn/3YPyf) | 大規模言語モデルサービス |
-| [硅基流動](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot) | 大規模言語モデルサービス |
-| [PPIO 派欧云](https://ppio.com/user/register?invited_by=AIOONE) | 大規模言語モデルサービス |
-| ModelScope | 大規模言語モデルサービス |
-| OneAPI | 大規模言語モデルサービス |
-| Dify | LLMOps プラットフォーム |
-| Alibaba Cloud 百炼アプリケーション | LLMOps プラットフォーム |
-| Coze | LLMOps プラットフォーム |
-| OpenAI Whisper | 音声認識サービス |
-| SenseVoice | 音声認識サービス |
-| Xiaomi MiMo Omni | 音声認識サービス |
-| OpenAI TTS | 音声合成サービス |
-| Gemini TTS | 音声合成サービス |
-| GPT-Sovits-Inference | 音声合成サービス |
-| GPT-Sovits | 音声合成サービス |
-| FishAudio | 音声合成サービス |
-| Edge TTS | 音声合成サービス |
-| Alibaba Cloud 百炼 TTS | 音声合成サービス |
-| Azure TTS | 音声合成サービス |
-| Minimax TTS | 音声合成サービス |
-| Xiaomi MiMo TTS | 音声合成サービス |
-| Volcano Engine TTS | 音声合成サービス |
+| サービス                                                                                          | 種類                                                      |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| OpenAI および互換サービス                                                                         | 大規模言語モデルサービス                                  |
+| Anthropic                                                                                         | 大規模言語モデルサービス                                  |
+| Google Gemini                                                                                     | 大規模言語モデルサービス                                  |
+| Moonshot AI                                                                                       | 大規模言語モデルサービス                                  |
+| 智谱 AI                                                                                           | 大規模言語モデルサービス                                  |
+| DeepSeek                                                                                          | 大規模言語モデルサービス                                  |
+| Ollama (セルフホスト)                                                                             | 大規模言語モデルサービス                                  |
+| LM Studio (セルフホスト)                                                                          | 大規模言語モデルサービス                                  |
+| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                        | 大規模言語モデルサービス（APIゲートウェイ、全モデル対応） |
+| [優云智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | 大規模言語モデルサービス                                  |
+| [302.AI](https://share.302.ai/rr1M3l)                                                             | 大規模言語モデルサービス                                  |
+| [小馬算力](https://www.tokenpony.cn/3YPyf)                                                        | 大規模言語モデルサービス                                  |
+| [硅基流動](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                  | 大規模言語モデルサービス                                  |
+| [PPIO 派欧云](https://ppio.com/user/register?invited_by=AIOONE)                                   | 大規模言語モデルサービス                                  |
+| ModelScope                                                                                        | 大規模言語モデルサービス                                  |
+| OneAPI                                                                                            | 大規模言語モデルサービス                                  |
+| Dify                                                                                              | LLMOps プラットフォーム                                   |
+| Alibaba Cloud 百炼アプリケーション                                                                | LLMOps プラットフォーム                                   |
+| Coze                                                                                              | LLMOps プラットフォーム                                   |
+| OpenAI Whisper                                                                                    | 音声認識サービス                                          |
+| SenseVoice                                                                                        | 音声認識サービス                                          |
+| Xiaomi MiMo Omni                                                                                  | 音声認識サービス                                          |
+| OpenAI TTS                                                                                        | 音声合成サービス                                          |
+| Gemini TTS                                                                                        | 音声合成サービス                                          |
+| GPT-Sovits-Inference                                                                              | 音声合成サービス                                          |
+| GPT-Sovits                                                                                        | 音声合成サービス                                          |
+| FishAudio                                                                                         | 音声合成サービス                                          |
+| Edge TTS                                                                                          | 音声合成サービス                                          |
+| Alibaba Cloud 百炼 TTS                                                                            | 音声合成サービス                                          |
+| Azure TTS                                                                                         | 音声合成サービス                                          |
+| Minimax TTS                                                                                       | 音声合成サービス                                          |
+| Xiaomi MiMo TTS                                                                                   | 音声合成サービス                                          |
+| Volcano Engine TTS                                                                                | 音声合成サービス                                          |
 
 ## ❤️ コントリビューション
 

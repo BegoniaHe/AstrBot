@@ -1,6 +1,5 @@
 ![astrbot-github-banner-v2-light-0405_副本](https://github.com/user-attachments/assets/36fb04e4-cc75-4454-bd8b-049d11aa86f9)
 
-
 <div align="center">
 
 <a href="https://github.com/AstrBotDevs/AstrBot/blob/master/README_zh.md">简体中文</a> ｜
@@ -35,6 +34,7 @@
 <a href="https://astrbot.featurebase.app/roadmap">Roadmap</a> ｜
 <a href="https://github.com/AstrBotDevs/AstrBot/issues">Issue Tracker</a> ｜
 <a href="mailto:community@astrbot.app">Email Support</a>
+
 </div>
 
 AstrBot is an open-source all-in-one Agent chatbot platform that integrates with mainstream instant messaging apps. It provides reliable and scalable conversational AI infrastructure for individuals, developers, and teams. Whether you're building a personal AI companion, intelligent customer service, automation assistant, or enterprise knowledge base, AstrBot enables you to quickly build production-ready AI applications within your IM platform workflows.
@@ -145,71 +145,70 @@ If you need panel-based management or deeper customization, see [BT-Panel Deploy
 
 Connect AstrBot to your favorite chat platform.
 
-| Platform | Maintainer |
-|---------|---------------|
-| QQ | Official |
-| OneBot v11 protocol implementation | Official |
-| Telegram | Official |
-| Wecom & Wecom AI Bot | Official |
-| WeChat Official Accounts | Official |
-| Feishu (Lark) | Official |
-| DingTalk | Official |
-| Slack | Official |
-| Discord | Official |
-| LINE | Official |
-| Satori | Official |
-| KOOK | Official |
-| Misskey | Official |
-| Mattermost | Official |
-| WhatsApp (Coming Soon) | Official |
-| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter) | Community |
-| [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | Community |
-| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat) | Community |
+| Platform                                                                          | Maintainer |
+| --------------------------------------------------------------------------------- | ---------- |
+| QQ                                                                                | Official   |
+| OneBot v11 protocol implementation                                                | Official   |
+| Telegram                                                                          | Official   |
+| Wecom & Wecom AI Bot                                                              | Official   |
+| WeChat Official Accounts                                                          | Official   |
+| Feishu (Lark)                                                                     | Official   |
+| DingTalk                                                                          | Official   |
+| Slack                                                                             | Official   |
+| Discord                                                                           | Official   |
+| LINE                                                                              | Official   |
+| Satori                                                                            | Official   |
+| KOOK                                                                              | Official   |
+| Misskey                                                                           | Official   |
+| Mattermost                                                                        | Official   |
+| WhatsApp (Coming Soon)                                                            | Official   |
+| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter)               | Community  |
+| [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | Community  |
+| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat)                | Community  |
 
 ## Supported Model Services
 
-| Service | Type |
-|---------|---------------|
-| OpenAI and Compatible Services | LLM Services |
-| Anthropic | LLM Services |
-| Google Gemini | LLM Services |
-| Moonshot AI | LLM Services |
-| Zhipu AI | LLM Services |
-| DeepSeek | LLM Services |
-| Ollama (Self-hosted) | LLM Services |
-| LM Studio (Self-hosted) | LLM Services |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH) | LLM Services (API Gateway, supports all models) |
-| [CompShare](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | LLM Services |
-| [302.AI](https://share.302.ai/rr1M3l) | LLM Services |
-| [TokenPony](https://www.tokenpony.cn/3YPyf) | LLM Services |
-| [SiliconFlow](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot) | LLM Services |
-| [PPIO Cloud](https://ppio.com/user/register?invited_by=AIOONE) | LLM Services |
-| ModelScope | LLM Services |
-| OneAPI | LLM Services |
-| Dify | LLMOps Platforms |
-| Alibaba Cloud Bailian Applications | LLMOps Platforms |
-| Coze | LLMOps Platforms |
-| OpenAI Whisper | Speech-to-Text Services |
-| SenseVoice | Speech-to-Text Services |
-| Xiaomi MiMo Omni | Speech-to-Text Services |
-| OpenAI TTS | Text-to-Speech Services |
-| Gemini TTS | Text-to-Speech Services |
-| GPT-Sovits-Inference | Text-to-Speech Services |
-| GPT-Sovits | Text-to-Speech Services |
-| FishAudio | Text-to-Speech Services |
-| Edge TTS | Text-to-Speech Services |
-| Alibaba Cloud Bailian TTS | Text-to-Speech Services |
-| Azure TTS | Text-to-Speech Services |
-| Minimax TTS | Text-to-Speech Services |
-| Xiaomi MiMo TTS | Text-to-Speech Services |
-| Volcano Engine TTS | Text-to-Speech Services |
+| Service                                                                                            | Type                                            |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| OpenAI and Compatible Services                                                                     | LLM Services                                    |
+| Anthropic                                                                                          | LLM Services                                    |
+| Google Gemini                                                                                      | LLM Services                                    |
+| Moonshot AI                                                                                        | LLM Services                                    |
+| Zhipu AI                                                                                           | LLM Services                                    |
+| DeepSeek                                                                                           | LLM Services                                    |
+| Ollama (Self-hosted)                                                                               | LLM Services                                    |
+| LM Studio (Self-hosted)                                                                            | LLM Services                                    |
+| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                         | LLM Services (API Gateway, supports all models) |
+| [CompShare](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | LLM Services                                    |
+| [302.AI](https://share.302.ai/rr1M3l)                                                              | LLM Services                                    |
+| [TokenPony](https://www.tokenpony.cn/3YPyf)                                                        | LLM Services                                    |
+| [SiliconFlow](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                | LLM Services                                    |
+| [PPIO Cloud](https://ppio.com/user/register?invited_by=AIOONE)                                     | LLM Services                                    |
+| ModelScope                                                                                         | LLM Services                                    |
+| OneAPI                                                                                             | LLM Services                                    |
+| Dify                                                                                               | LLMOps Platforms                                |
+| Alibaba Cloud Bailian Applications                                                                 | LLMOps Platforms                                |
+| Coze                                                                                               | LLMOps Platforms                                |
+| OpenAI Whisper                                                                                     | Speech-to-Text Services                         |
+| SenseVoice                                                                                         | Speech-to-Text Services                         |
+| Xiaomi MiMo Omni                                                                                   | Speech-to-Text Services                         |
+| OpenAI TTS                                                                                         | Text-to-Speech Services                         |
+| Gemini TTS                                                                                         | Text-to-Speech Services                         |
+| GPT-Sovits-Inference                                                                               | Text-to-Speech Services                         |
+| GPT-Sovits                                                                                         | Text-to-Speech Services                         |
+| FishAudio                                                                                          | Text-to-Speech Services                         |
+| Edge TTS                                                                                           | Text-to-Speech Services                         |
+| Alibaba Cloud Bailian TTS                                                                          | Text-to-Speech Services                         |
+| Azure TTS                                                                                          | Text-to-Speech Services                         |
+| Minimax TTS                                                                                        | Text-to-Speech Services                         |
+| Xiaomi MiMo TTS                                                                                    | Text-to-Speech Services                         |
+| Volcano Engine TTS                                                                                 | Text-to-Speech Services                         |
 
 ## ❤️ Sponsors
 
 <p align="center">
   <img alt="sponsors" src="https://sponsors.astrbot.app/?v=1">
 </p>
-
 
 ## ❤️ Contributing
 
@@ -228,7 +227,6 @@ git clone https://github.com/AstrBotDevs/AstrBot
 pip install pre-commit
 pre-commit install
 ```
-
 
 ## 🌍 Community
 

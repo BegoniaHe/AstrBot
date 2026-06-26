@@ -45,7 +45,7 @@ sudo ./AstrbotScript.sh
 > [!note]
 > `sudo ./AstrbotScript.sh --no-color (可选禁用彩色输出)`
 
-__仓库地址：[railgun19457/AstrbotScript](https://github.com/railgun19457/AstrbotScript)__
+**仓库地址：[railgun19457/AstrbotScript](https://github.com/railgun19457/AstrbotScript)**
 
 ## AstrBot Android 部署
 

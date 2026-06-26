@@ -1,4 +1,3 @@
-
 # MCP
 
 MCP (Model Context Protocol) is a new open standard protocol for establishing secure bidirectional connections between large language models and data sources. Simply put, it extracts function tools as independent services, allowing AstrBot to remotely invoke these function tools via the MCP protocol, which then return results to AstrBot.
@@ -62,13 +61,8 @@ We extract the necessary information:
 
 ```json
 {
-    "command": "uv",
-    "args": [
-        "tool",
-        "run",
-        "arxiv-mcp-server",
-        "--storage-path", "data/arxiv"
-    ]
+  "command": "uv",
+  "args": ["tool", "run", "arxiv-mcp-server", "--storage-path", "data/arxiv"]
 }
 ```
 
@@ -76,17 +70,18 @@ If the MCP server you need requires environment variables to configure something
 
 ```json
 {
-    "command": "env",
-    "args": [
-        "XXX_RESOURCE_FROM=local",
-        "XXX_API_URL=https://xxx.com",
-        "XXX_API_TOKEN=sk-xxxxx",
-        "uv",
-        "tool",
-        "run",
-        "xxx-mcp-server",
-        "--storage-path", "data/res"
-    ]
+  "command": "env",
+  "args": [
+    "XXX_RESOURCE_FROM=local",
+    "XXX_API_URL=https://xxx.com",
+    "XXX_API_TOKEN=sk-xxxxx",
+    "uv",
+    "tool",
+    "run",
+    "xxx-mcp-server",
+    "--storage-path",
+    "data/res"
+  ]
 }
 ```
 

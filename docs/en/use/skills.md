@@ -20,7 +20,7 @@ You can upload Skills with the following requirements:
 
 1. The upload must be a `.zip` archive.
 2. After extraction, it can contain one or more Skill folders. Each folder name is used as the Skill identifier in AstrBot. Use English letters, numbers, dots, underscores, or hyphens.
-3. Each Skill folder must include a file named exactly `SKILL.md`. The filename is case-sensitive. Its contents should preferably follow the Anthropic Skills specification. You can refer to Anthropic's documentation: https://code.claude.com/docs/en/skills
+3. Each Skill folder must include a file named exactly `SKILL.md`. The filename is case-sensitive. Its contents should preferably follow the Anthropic Skills specification. You can refer to Anthropic's documentation: <https://code.claude.com/docs/en/skills>
 
 ## Skill Sources and Priority
 

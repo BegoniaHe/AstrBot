@@ -5,12 +5,12 @@
 > Version v4.15.0.
 
 | Message Type | Receive Support | Send Support | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | No | Yes | |
-| Video | No | Yes | |
-| File | No | Yes | |
+| ------------ | --------------- | ------------ | ----- |
+| Text         | Yes             | Yes          |       |
+| Image        | Yes             | Yes          |       |
+| Voice        | No              | Yes          |       |
+| Video        | No              | Yes          |       |
+| File         | No              | Yes          |       |
 
 Proactive message push: Supported.
 
@@ -144,7 +144,7 @@ Search for the bot you just created. For example, if you created the `AstrBot` b
 
 ![Add Bot](https://files.astrbot.app/docs/source/images/lark/image-9.png)
 
-## 🎉 All Done!
+## 🎉 All Done
 
 Send a `/help` command in the group, and the bot will respond.
 

@@ -9,6 +9,7 @@ The AstrBot admin panel features plugin management, log viewing, visual configur
 After starting AstrBot, you can access the admin panel by visiting `http://localhost:6185` in your browser.
 
 > [!TIP]
+>
 > - If you're deploying AstrBot on a cloud server, replace `localhost` with your server's IP address.
 
 ## Login
@@ -110,7 +111,7 @@ When AstrBot starts, it automatically checks if the admin panel needs updating. 
 
 Use the `/dashboard_update` command to manually update the admin panel (admin command).
 
-Admin panel files are located in the data/dist directory. If you need to manually replace them, download `dist.zip` from https://github.com/AstrBotDevs/AstrBot/releases/ and extract it to the data directory.
+Admin panel files are located in the data/dist directory. If you need to manually replace them, download `dist.zip` from <https://github.com/AstrBotDevs/AstrBot/releases/> and extract it to the data directory.
 
 ## Customizing WebUI Port
 

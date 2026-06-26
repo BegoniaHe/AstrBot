@@ -6,13 +6,13 @@ AstrBot supports this platform since v4.3.5.
 
 ## Supported Basic Message Types
 
-| Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | Requires message push Webhook URL to be configured. |
-| Voice | No | Yes | Requires message push Webhook URL to be configured. |
-| Video | No | Yes | Requires message push Webhook URL to be configured. |
-| File | No | Yes | Requires message push Webhook URL to be configured. |
+| Message Type | Receive | Send | Notes                                               |
+| ------------ | ------- | ---- | --------------------------------------------------- |
+| Text         | Yes     | Yes  |                                                     |
+| Image        | Yes     | Yes  | Requires message push Webhook URL to be configured. |
+| Voice        | No      | Yes  | Requires message push Webhook URL to be configured. |
+| Video        | No      | Yes  | Requires message push Webhook URL to be configured. |
+| File         | No      | Yes  | Requires message push Webhook URL to be configured. |
 
 Proactive message push: Supported, but requires a message push Webhook URL.
 
@@ -24,7 +24,7 @@ Proactive message push: Supported, but requires a message push Webhook URL.
 ![Management Tools - AI Bot](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-1.png)
 
 3. On the create page, choose `Create via API Mode`. Fill bot name/avatar and other basic info.
-Generate `Token` and `EncodingAESKey` using random generation, but do not click Create yet.
+   Generate `Token` and `EncodingAESKey` using random generation, but do not click Create yet.
 
 ![Create AI Bot Account](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image.png)
 
@@ -54,15 +54,15 @@ Keep `Unified Webhook Mode (unified_webhook_mode)` enabled and click `Save`.
 > It is recommended to use a domain + reverse proxy + HTTPS. You can also use [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/).
 
 4. Click `Create`. If successful, you will enter bot details page.
-If you see `Service did not respond correctly`, re-check AstrBot config and firewall rules.
+   If you see `Service did not respond correctly`, re-check AstrBot config and firewall rules.
 
 ![Bot Details](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-3.png)
 
 5. Optional (recommended): Configure WeCom message push Webhook URL.
-By default, WeCom AI Bot replies only when users send messages first. Configuring message push enables proactive notifications.
+   By default, WeCom AI Bot replies only when users send messages first. Configuring message push enables proactive notifications.
 
 6. Optional (recommended): Enable `Send messages via Webhook only` for richer multi-message output and to bypass single-bubble reply limits.
-This option requires the message push Webhook URL from step 5.
+   This option requires the message push Webhook URL from step 5.
 
 ## Use the Bot
 

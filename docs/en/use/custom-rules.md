@@ -14,4 +14,3 @@ For example, if a messaging platform originally uses the "default" configuration
 3. Whether to enable TTS for messages from this unified message origin. If disabled, TTS capabilities will not be used.
 4. Configure specific chat models, speech recognition models (STT), and text-to-speech models (TTS) for this unified message origin.
 5. Configure a specific persona for this unified message origin.
-

@@ -6,7 +6,6 @@
 
 在 [release](https://github.com/AstrBotDevs/AstrBot/releases) 页面下载 `AstrBot-vxxxxx-dashboard.zip`，解压拖到 `AstrBot/data` 下。还不行请重启电脑（来自群里的反馈）
 
-
 ### 首次登录的默认账号和随机密码
 
 首次启动时，WebUI 的默认账号为 `astrbot`，默认密码会随机生成，不会写死为固定值。请在启动日志中查找以下内容并使用日志中的随机初始密码登录：
@@ -54,7 +53,6 @@ Set dashboard.host in data/cmd_config.json to enable remote access.
 ```
 
 删除 `username`, `password`, `pbkdf2_password`, `password_storage_upgraded`, `password_change_required`, `jwt_secret` 六个字段（连同值一起），然后保存。上述片段修改类似如下：
-
 
 ```json
   "dashboard": {
@@ -163,7 +161,6 @@ Set dashboard.host in data/cmd_config.json to enable remote access.
 
 如果发现插件作者没有填写 `requirements.txt` 文件，请在插件仓库提交 Issue，提醒作者补充。
 
-
 ## OneBot v11 实现端 NapCat 连接相关
 
 ### 我明明按照文档的步骤做了，为什么 NapCat 连不上 Astrbot？
@@ -171,8 +168,8 @@ Set dashboard.host in data/cmd_config.json to enable remote access.
 1. 如果你两个**全都**是使用 Docker 部署，请尝试在终端运行：
 
 ```bash
-sudo docker network create newnet           # 创建新网络 
-sudo docker network connect newnet astrbot  
+sudo docker network create newnet           # 创建新网络
+sudo docker network connect newnet astrbot
 sudo docker network connect newnet napcat   # 让两个容器连到一起
 sudo docker restart astrbot
 sudo docker restart napcat                  # 重启容器

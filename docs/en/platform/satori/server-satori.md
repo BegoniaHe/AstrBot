@@ -38,6 +38,7 @@ Fill in:
 - Satori token (`satori_token`): usually empty unless configured in Koishi
 
 > [!NOTE]
+>
 > - Koishi default port is `5140`.
 > - `server-satori` default path is `/satori`.
 > - So the full API base is `http://localhost:5140/satori/v1`.

@@ -9,5 +9,4 @@
 
 ![image](https://files.astrbot.app/docs/source/images/llm/image-1.png)
 
-
 > 相应的配置保存在 `data/cmd_config.json` 的 `provider` 字段中。

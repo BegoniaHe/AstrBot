@@ -31,7 +31,7 @@
 #### PR 描述
 
 - 请使用英文描述您的 PR。
-- 标题请使用 `fix: `, `feat: `, `docs: `, `style: `, `refactor: `, `test: `, `chore: ` 等语义化前缀，并简要描述更改内容。如：`fix: correct login page typo`。
+- 标题请使用 `fix:`, `feat:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:` 等语义化前缀，并简要描述更改内容。如：`fix: correct login page typo`。
 
 #### 代码规范
 
@@ -55,6 +55,7 @@ make pr-test-neo
 ```
 
 该命令会执行：
+
 - `uv sync --group dev`
 - `ruff format --check .` 与 `ruff check .`
 - Neo 相关关键测试
@@ -72,7 +73,6 @@ make pr-test-full
 make pr-test-full-fast
 ```
 
-
 ## Contributing Guide
 
 First off, thanks for taking the time to contribute! ❤️
@@ -87,6 +87,7 @@ All types of contributions are encouraged and valued. See the [Table of Contents
 ### Reporting Issues
 
 If you encounter any issues while using AstrBot, please follow these steps to report them:
+
 1. **Check Existing Issues**: Before submitting a new issue, please check if a similar issue already exists in the [Issues](https://github.com/AstrBotDevs/AstrBot/issues) section of the repository.
 2. **Create a New Issue**: If no similar issue exists, please create a new issue. Make sure to provide the following information:
    - A brief description of the issue
@@ -101,8 +102,9 @@ If you encounter any issues while using AstrBot, please follow these steps to re
 We use the `fix/` prefix for bug fixes and the `feat/` prefix for new features. For `fix/` branches, please use a short description or directly use the Issue number, e.g., `fix/1234` or `fix/1234-login-typo`. For `feat/` branches, please use a short description, e.g., `feat/add-user-profile`.
 
 #### PR Description
+
 - Please use English to describe your PR.
-- Use semantic prefixes like `fix: `, `feat: `, `docs: `, `style: `, `refactor: `, `test: `, `chore: ` in the title, followed by a brief description of the changes, e.g., `fix: correct login page typo`.
+- Use semantic prefixes like `fix:`, `feat:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:` in the title, followed by a brief description of the changes, e.g., `fix: correct login page typo`.
 
 #### Code Style
 
@@ -124,6 +126,7 @@ make pr-test-neo
 ```
 
 This command runs:
+
 - `uv sync --group dev`
 - `ruff format --check .` and `ruff check .`
 - Neo-related critical tests

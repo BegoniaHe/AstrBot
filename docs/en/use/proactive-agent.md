@@ -22,6 +22,7 @@ The Main Agent can now manage a global **Cron Job List**, setting tasks for its 
 > First, ensure that "Proactive Capabilities" is enabled in the configuration.
 
 The Main Agent has the ability to manage scheduled tasks. You can tell it:
+
 - "Remind me to have a meeting at 8 AM tomorrow."
 - "Summarize this week's work log every Friday at 5 PM."
 - "Set a timer for 10 minutes."
@@ -35,6 +36,7 @@ You can view and manage all future tasks by clicking **Future Tasks** in the lef
 ### Supported Platforms
 
 Scheduling tasks is supported on all platforms. However, due to some platforms not providing APIs for proactive message pushing, only the following platforms support AstrBot proactively pushing results to users:
+
 - Telegram
 - OneBot (QQ)
 - Slack
@@ -48,5 +50,6 @@ Scheduling tasks is supported on all platforms. However, due to some platforms n
 To make it easier for Agents to send images, audio, video, and other files directly to users, AstrBot provides a `send_message_to_user` tool by default.
 
 ### Features
+
 - **Direct Sending**: Agents can send generated or retrieved multimedia files directly to users without complex text conversions.
 - **Multiple Formats**: Supports images, files, audio, video, etc.

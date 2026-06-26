@@ -1,6 +1,7 @@
 # Connect QQ via QQ Official Bot (Webhook)
 
 > [!WARNING]
+>
 > 1. QQ Official Bot currently requires an IP whitelist.
 > 2. Webhook mode requires a server with a public IP, a domain, and HTTPS access.
 > 3. It supports group chat, private chat, channel chat, and channel private chat.
@@ -10,12 +11,12 @@
 > Version v4.19.6.
 
 | Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | Yes | Yes | |
-| Video | Yes | Yes | |
-| File | Yes | Yes | |
+| ------------ | ------- | ---- | ----- |
+| Text         | Yes     | Yes  |       |
+| Image        | Yes     | Yes  |       |
+| Voice        | Yes     | Yes  |       |
+| Video        | Yes     | Yes  |       |
+| File         | Yes     | Yes  |       |
 
 Proactive message push: Supported.
 

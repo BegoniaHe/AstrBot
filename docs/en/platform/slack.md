@@ -57,7 +57,6 @@ If you're using Webhook mode, please keep `Unified Webhook Mode (unified_webhook
 > Before v4.8.0, there is no `Unified Webhook Mode`. You need to fill in the following configuration items:
 > Slack Webhook Host, Slack Webhook Port, and Slack Webhook Path
 
-
 ## Enable Event Subscriptions
 
 After successfully creating the platform adapter, return to the Slack settings. In the Event Subscriptions page on the left sidebar, click Enable Events to enable event reception.

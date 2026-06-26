@@ -32,18 +32,18 @@ X-API-Key: abk_xxx
 
 创建 API Key 时可配置 `scopes`。每个 scope 控制可访问的接口范围：
 
-| Scope | 作用 | 可访问接口 |
-| --- | --- | --- |
-| `bot` | 管理机器人/平台配置 | `GET /api/v1/bot-types`、`GET/POST /api/v1/bots`、`PATCH /api/v1/bots/enabled` |
-| `provider` | 管理模型提供商和提供商源 | `GET/POST /api/v1/providers`、`GET/PUT/DELETE /api/v1/provider-sources/by-id` |
-| `persona` | 管理人格和人格文件夹 | `GET/POST /api/v1/personas`、`GET/POST /api/v1/persona-folders` |
-| `im` | 主动发 IM 消息、查询 bot/platform 列表 | `POST /api/v1/im/messages`、`GET /api/v1/im/bots` |
-| `config` | 管理配置文件、系统配置和通用配置。该 scope 同时包含 `bot` 和 `provider` 访问权限。 | `GET /api/v1/configs`、`GET/PUT /api/v1/system-config`、`GET/POST /api/v1/config-profiles` |
-| `chat` | 调用对话能力、查询对话会话 | `POST /api/v1/chat`、`GET /api/v1/chat/sessions` |
-| `file` | 上传和下载对话附件 | `POST /api/v1/file`、`GET /api/v1/file`、`POST /api/v1/files` |
-| `plugin` | 管理插件、插件配置、插件源和插件市场 | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/config`、`POST /api/v1/plugins/install/url` |
-| `mcp` | 管理 MCP 服务器配置和服务端同步 | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
-| `skill` | 管理 Skills、Skill 压缩包、Skill 文件和 Shipyard Neo Skill 流程 | `GET/POST /api/v1/skills`、`PUT /api/v1/skills/{skill_name}/files/{file_path}`、`POST /api/v1/skills/neo/sync` |
+| Scope      | 作用                                                                               | 可访问接口                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `bot`      | 管理机器人/平台配置                                                                | `GET /api/v1/bot-types`、`GET/POST /api/v1/bots`、`PATCH /api/v1/bots/enabled`                                                  |
+| `provider` | 管理模型提供商和提供商源                                                           | `GET/POST /api/v1/providers`、`GET/PUT/DELETE /api/v1/provider-sources/by-id`                                                   |
+| `persona`  | 管理人格和人格文件夹                                                               | `GET/POST /api/v1/personas`、`GET/POST /api/v1/persona-folders`                                                                 |
+| `im`       | 主动发 IM 消息、查询 bot/platform 列表                                             | `POST /api/v1/im/messages`、`GET /api/v1/im/bots`                                                                               |
+| `config`   | 管理配置文件、系统配置和通用配置。该 scope 同时包含 `bot` 和 `provider` 访问权限。 | `GET /api/v1/configs`、`GET/PUT /api/v1/system-config`、`GET/POST /api/v1/config-profiles`                                      |
+| `chat`     | 调用对话能力、查询对话会话                                                         | `POST /api/v1/chat`、`GET /api/v1/chat/sessions`                                                                                |
+| `file`     | 上传和下载对话附件                                                                 | `POST /api/v1/file`、`GET /api/v1/file`、`POST /api/v1/files`                                                                   |
+| `plugin`   | 管理插件、插件配置、插件源和插件市场                                               | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/config`、`POST /api/v1/plugins/install/url`                                     |
+| `mcp`      | 管理 MCP 服务器配置和服务端同步                                                    | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
+| `skill`    | 管理 Skills、Skill 压缩包、Skill 文件和 Shipyard Neo Skill 流程                    | `GET/POST /api/v1/skills`、`PUT /api/v1/skills/{skill_name}/files/{file_path}`、`POST /api/v1/skills/neo/sync`                  |
 
 如果 API Key 未包含目标接口所需 scope，请求会返回 `403 Insufficient API key scope`。
 
@@ -109,17 +109,16 @@ X-API-Key: abk_xxx
 
 支持的 `type`：
 
-| type | 必填字段 | 可选字段 | 说明 |
-| --- | --- | --- | --- |
-| `plain` | `text` | - | 文本段 |
-| `reply` | `message_id` | `selected_text` | 引用回复某条消息 |
-| `image` | `attachment_id` | - | 图片附件段 |
-| `record` | `attachment_id` | - | 音频附件段 |
-| `file` | `attachment_id` | - | 通用文件段 |
-| `video` | `attachment_id` | - | 视频附件段 |
+| type     | 必填字段        | 可选字段        | 说明             |
+| -------- | --------------- | --------------- | ---------------- |
+| `plain`  | `text`          | -               | 文本段           |
+| `reply`  | `message_id`    | `selected_text` | 引用回复某条消息 |
+| `image`  | `attachment_id` | -               | 图片附件段       |
+| `record` | `attachment_id` | -               | 音频附件段       |
+| `file`   | `attachment_id` | -               | 通用文件段       |
+| `video`  | `attachment_id` | -               | 视频附件段       |
 
-* reply 消息段目前仅适配 `/api/v1/chat`，不适用于 `POST /api/v1/im/messages`。
-
+- reply 消息段目前仅适配 `/api/v1/chat`，不适用于 `POST /api/v1/im/messages`。
 
 说明：
 
@@ -172,4 +171,4 @@ curl -N 'http://localhost:6185/api/v1/chat' \
 
 交互式 API 文档请查看：
 
-- https://docs.astrbot.app/scalar.html
+- <https://docs.astrbot.app/scalar.html>

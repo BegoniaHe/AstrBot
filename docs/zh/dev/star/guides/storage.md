@@ -17,7 +17,6 @@ class Main(star.Star):
         await self.delete_kv_data("greeted")
 ```
 
-
 ## 存储大文件规范
 
 为了规范插件存储大文件的行为，请将大文件存储于 `data/plugin_data/{plugin_name}/` 目录下。

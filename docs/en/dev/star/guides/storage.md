@@ -17,7 +17,6 @@ class Main(star.Star):
         await self.delete_kv_data("greeted")
 ```
 
-
 ## Large File Storage Convention
 
 To keep large file handling consistent, store large files under `data/plugin_data/{plugin_name}/`.

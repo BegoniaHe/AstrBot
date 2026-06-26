@@ -34,13 +34,11 @@ outline: deep
 
 某些模型可能不支持函数调用，会返回诸如 `tool call is not supported`, `function calling is not supported`, `tool use is not supported` 等错误。在大多数情况下，AstrBot 能够检测到这种错误并自动帮您去除函数调用工具。如果你发现某个模型不支持函数调用，也可在 WebUI 中关闭所有调用工具，然后再次尝试。或者更换为支持函数调用的模型。
 
-
 下面是一些常见的工具调用 Demo：
 
 ![image](https://files.astrbot.app/docs/source/images/function-calling/image.png)
 
 ![image](https://files.astrbot.app/docs/source/images/function-calling/image-1.png)
-
 
 ## MCP
 

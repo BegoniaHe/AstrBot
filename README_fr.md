@@ -34,6 +34,7 @@
 <a href="https://astrbot.featurebase.app/roadmap">Feuille de route</a> ｜
 <a href="https://github.com/AstrBotDevs/AstrBot/issues">Signaler un problème</a>
 <a href="mailto:community@astrbot.app">Email Support</a>
+
 </div>
 
 AstrBot est une plateforme de chatbot Agent tout-en-un open source qui s'intègre aux principales applications de messagerie instantanée. Elle fournit une infrastructure d'IA conversationnelle fiable et évolutive pour les particuliers, les développeurs et les équipes. Que vous construisiez un compagnon IA personnel, un service client intelligent, un assistant d'automatisation ou une base de connaissances d'entreprise, AstrBot vous permet de créer rapidement des applications d'IA prêtes pour la production dans les flux de travail de votre plateforme de messagerie.
@@ -47,7 +48,7 @@ AstrBot est une plateforme de chatbot Agent tout-en-un open source qui s'intègr
 3. 🤖 Prise en charge de l'accès aux plateformes d'Agents telles que Dify, Alibaba Cloud Bailian, Coze, etc.
 4. 🌐 Multiplateforme : supporte QQ, WeChat Enterprise, Feishu, DingTalk, Comptes officiels WeChat, Telegram, Slack et [plus encore](#plateformes-de-messagerie-prises-en-charge).
 5. 📦 Extension par plugins, avec plus de 1000 plugins déjà disponibles pour une installation en un clic.
-6. 🛡️  Environnement isolé [Agent Sandbox](https://docs.astrbot.app/use/astrbot-agent-sandbox.html) : exécution sécurisée de code, appels Shell et réutilisation des ressources au niveau de la session.
+6. 🛡️ Environnement isolé [Agent Sandbox](https://docs.astrbot.app/use/astrbot-agent-sandbox.html) : exécution sécurisée de code, appels Shell et réutilisation des ressources au niveau de la session.
 7. 💻 Support WebUI.
 8. 🌈 Support Web ChatUI, avec sandbox d'agent intégrée, recherche web, etc.
 9. 🌐 Support de l'internationalisation (i18n).
@@ -144,64 +145,64 @@ Si vous avez besoin d'une gestion par panneau ou d'une personnalisation plus pou
 
 Connectez AstrBot à vos plateformes de chat préférées.
 
-| Plateforme | Maintenance |
-|---------|---------------|
-| QQ | Officielle |
-| Implémentation du protocole OneBot v11 | Officielle |
-| Telegram | Officielle |
-| Application WeChat Work & Bot intelligent WeChat Work | Officielle |
-| Service client WeChat & Comptes officiels WeChat | Officielle |
-| Feishu (Lark) | Officielle |
-| DingTalk | Officielle |
-| Slack | Officielle |
-| Discord | Officielle |
-| LINE | Officielle |
-| Satori | Officielle |
-| KOOK | Officielle |
-| Misskey | Officielle |
-| Mattermost | Officielle |
-| WhatsApp (Bientôt disponible) | Officielle |
-| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter) | Communauté |
-| [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | Communauté |
-| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat) | Communauté |
+| Plateforme                                                                        | Maintenance |
+| --------------------------------------------------------------------------------- | ----------- |
+| QQ                                                                                | Officielle  |
+| Implémentation du protocole OneBot v11                                            | Officielle  |
+| Telegram                                                                          | Officielle  |
+| Application WeChat Work & Bot intelligent WeChat Work                             | Officielle  |
+| Service client WeChat & Comptes officiels WeChat                                  | Officielle  |
+| Feishu (Lark)                                                                     | Officielle  |
+| DingTalk                                                                          | Officielle  |
+| Slack                                                                             | Officielle  |
+| Discord                                                                           | Officielle  |
+| LINE                                                                              | Officielle  |
+| Satori                                                                            | Officielle  |
+| KOOK                                                                              | Officielle  |
+| Misskey                                                                           | Officielle  |
+| Mattermost                                                                        | Officielle  |
+| WhatsApp (Bientôt disponible)                                                     | Officielle  |
+| [Matrix](https://github.com/stevessr/astrbot_plugin_matrix_adapter)               | Communauté  |
+| [Rocket.Chat](https://github.com/NET-Homeless/astrbot_plugin_rocket_chat_adapter) | Communauté  |
+| [VoceChat](https://github.com/HikariFroya/astrbot_plugin_vocechat)                | Communauté  |
 
 ## Services de modèles pris en charge
 
-| Service | Type |
-|---------|---------------|
-| OpenAI et services compatibles | Services LLM |
-| Anthropic | Services LLM |
-| Google Gemini | Services LLM |
-| Moonshot AI | Services LLM |
-| Zhipu AI | Services LLM |
-| DeepSeek | Services LLM |
-| Ollama (Auto-hébergé) | Services LLM |
-| LM Studio (Auto-hébergé) | Services LLM |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH) | Services LLM (Passerelle API, prend en charge tous les modèles) |
-| [CompShare](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | Services LLM |
-| [302.AI](https://share.302.ai/rr1M3l) | Services LLM |
-| [TokenPony](https://www.tokenpony.cn/3YPyf) | Services LLM |
-| [SiliconFlow](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot) | Services LLM |
-| [PPIO Cloud](https://ppio.com/user/register?invited_by=AIOONE) | Services LLM |
-| ModelScope | Services LLM |
-| OneAPI | Services LLM |
-| Dify | Plateformes LLMOps |
-| Applications Alibaba Cloud Bailian | Plateformes LLMOps |
-| Coze | Plateformes LLMOps |
-| OpenAI Whisper | Services de reconnaissance vocale |
-| SenseVoice | Services de reconnaissance vocale |
-| Xiaomi MiMo Omni | Services de reconnaissance vocale |
-| OpenAI TTS | Services de synthèse vocale |
-| Gemini TTS | Services de synthèse vocale |
-| GPT-Sovits-Inference | Services de synthèse vocale |
-| GPT-Sovits | Services de synthèse vocale |
-| FishAudio | Services de synthèse vocale |
-| Edge TTS | Services de synthèse vocale |
-| Alibaba Cloud Bailian TTS | Services de synthèse vocale |
-| Azure TTS | Services de synthèse vocale |
-| Minimax TTS | Services de synthèse vocale |
-| Xiaomi MiMo TTS | Services de synthèse vocale |
-| Volcano Engine TTS | Services de synthèse vocale |
+| Service                                                                                            | Type                                                            |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| OpenAI et services compatibles                                                                     | Services LLM                                                    |
+| Anthropic                                                                                          | Services LLM                                                    |
+| Google Gemini                                                                                      | Services LLM                                                    |
+| Moonshot AI                                                                                        | Services LLM                                                    |
+| Zhipu AI                                                                                           | Services LLM                                                    |
+| DeepSeek                                                                                           | Services LLM                                                    |
+| Ollama (Auto-hébergé)                                                                              | Services LLM                                                    |
+| LM Studio (Auto-hébergé)                                                                           | Services LLM                                                    |
+| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                         | Services LLM (Passerelle API, prend en charge tous les modèles) |
+| [CompShare](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | Services LLM                                                    |
+| [302.AI](https://share.302.ai/rr1M3l)                                                              | Services LLM                                                    |
+| [TokenPony](https://www.tokenpony.cn/3YPyf)                                                        | Services LLM                                                    |
+| [SiliconFlow](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                | Services LLM                                                    |
+| [PPIO Cloud](https://ppio.com/user/register?invited_by=AIOONE)                                     | Services LLM                                                    |
+| ModelScope                                                                                         | Services LLM                                                    |
+| OneAPI                                                                                             | Services LLM                                                    |
+| Dify                                                                                               | Plateformes LLMOps                                              |
+| Applications Alibaba Cloud Bailian                                                                 | Plateformes LLMOps                                              |
+| Coze                                                                                               | Plateformes LLMOps                                              |
+| OpenAI Whisper                                                                                     | Services de reconnaissance vocale                               |
+| SenseVoice                                                                                         | Services de reconnaissance vocale                               |
+| Xiaomi MiMo Omni                                                                                   | Services de reconnaissance vocale                               |
+| OpenAI TTS                                                                                         | Services de synthèse vocale                                     |
+| Gemini TTS                                                                                         | Services de synthèse vocale                                     |
+| GPT-Sovits-Inference                                                                               | Services de synthèse vocale                                     |
+| GPT-Sovits                                                                                         | Services de synthèse vocale                                     |
+| FishAudio                                                                                          | Services de synthèse vocale                                     |
+| Edge TTS                                                                                           | Services de synthèse vocale                                     |
+| Alibaba Cloud Bailian TTS                                                                          | Services de synthèse vocale                                     |
+| Azure TTS                                                                                          | Services de synthèse vocale                                     |
+| Minimax TTS                                                                                        | Services de synthèse vocale                                     |
+| Xiaomi MiMo TTS                                                                                    | Services de synthèse vocale                                     |
+| Volcano Engine TTS                                                                                 | Services de synthèse vocale                                     |
 
 ## ❤️ Contribuer
 

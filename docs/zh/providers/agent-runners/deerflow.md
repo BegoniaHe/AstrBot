@@ -15,6 +15,7 @@
 请确认 DeerFlow 已正常启动，并且 AstrBot 可以访问 DeerFlow 的网关地址。默认情况下，DeerFlow 网关地址为 `http://127.0.0.1:2026`。
 
 > [!TIP]
+>
 > - `API Base URL` 必须以 `http://` 或 `https://` 开头。
 > - 如果 AstrBot 与 DeerFlow 运行在不同容器或主机上，请将 `127.0.0.1` 替换为 DeerFlow 实际可访问的内网地址、主机名或域名。
 
@@ -38,6 +39,7 @@
 填写完成后点击「保存」。
 
 > [!TIP]
+>
 > - 如果 DeerFlow 侧已经配置了默认模型，可以将 `模型名称覆盖` 留空。
 > - 只有在 DeerFlow 侧已经启用了相应能力时，才建议开启 `计划模式` 或 `子智能体` 相关选项。
 > - AstrBot 会同时发送 DeerFlow 2.0 推荐的 `config.configurable` 运行时参数，并保留兼容字段，便于对接上游近期版本。

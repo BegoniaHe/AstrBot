@@ -45,7 +45,7 @@ sudo ./AstrbotScript.sh
 > [!note]
 > `sudo ./AstrbotScript.sh --no-color (Optional: disable color output)`
 
-__Repository Address: [railgun19457/AstrbotScript](https://github.com/railgun19457/AstrbotScript)__
+**Repository Address: [railgun19457/AstrbotScript](https://github.com/railgun19457/AstrbotScript)**
 
 ## AstrBot Android Deployment
 

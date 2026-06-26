@@ -38,7 +38,7 @@ Next, note the URL on the agent development page:
 
 ![Agent Development](https://files.astrbot.app/docs/source/images/coze/image_7.png)
 
-For example, if the URL in the example is: "https://www.coze.cn/space/7553214941005004863/bot/7553248674860826660"
+For example, if the URL in the example is: "<https://www.coze.cn/space/7553214941005004863/bot/7553248674860826660>"
 
 Then the `bot_id` is the string of numbers after `bot/` in the URL: `7553248674860826660`
 
@@ -56,10 +56,9 @@ Fill in the API Key and bot_id you just created, then click Save.
 
 > Other configuration notes:
 >
-> - API Base URL: Generally no modification is needed. If you are using the international version of Coze, change this to: "https://api.coze.com"
+> - API Base URL: Generally no modification is needed. If you are using the international version of Coze, change this to: "<https://api.coze.com>"
 > - Let Coze manage conversation history: As described.
 
 ## Select Agent Runner
 
 Go to the Configuration page in the left sidebar, click "Agent Execution Method", select "Coze", then select the ID of the Coze Agent Runner you just created in the new configuration options that appear below, and click "Save" in the bottom right corner to complete the configuration.
-

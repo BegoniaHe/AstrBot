@@ -26,7 +26,7 @@ For example, you may choose to connect model services provided by (but not limit
 
 Using DeepSeek as an example, assuming you have registered and logged in to a DeepSeek account, the steps to connect are:
 
-1. Go to the DeepSeek Console (https://platform.deepseek.com/).
+1. Go to the DeepSeek Console (<https://platform.deepseek.com/>).
 2. Click the "API Keys" menu in the left sidebar, create a new API Key, and copy the key.
 3. Click the "API Documentation" link near the bottom of the left sidebar to open the API documentation page.
 4. On the API documentation page, find the section about the "OpenAI-compatible interface" and note the API Base URL, for example `https://api.deepseek.com/v1`. (If there is no `/v1`, please add `/v1`.)

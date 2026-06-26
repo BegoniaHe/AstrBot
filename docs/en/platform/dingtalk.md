@@ -5,12 +5,12 @@
 > Version v4.15.0.
 
 | Message Type | Receive | Send | Notes |
-| --- | --- | --- | --- |
-| Text | Yes | Yes | |
-| Image | Yes | Yes | |
-| Voice | No | Yes | |
-| Video | No | Yes | |
-| File | No | Yes | |
+| ------------ | ------- | ---- | ----- |
+| Text         | Yes     | Yes  |       |
+| Image        | Yes     | Yes  |       |
+| Voice        | No      | Yes  |       |
+| Video        | No      | Yes  |       |
+| File         | No      | Yes  |       |
 
 Proactive message push: Supported.
 

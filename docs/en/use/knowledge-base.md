@@ -1,4 +1,3 @@
-
 # AstrBot Knowledge Base
 
 > [!TIP]

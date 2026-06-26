@@ -10,8 +10,8 @@ AstrBot 在优云智算发布了 Ollama + AstrBot 一键自部署镜像，并且
 
 1. 通过 [此链接](https://passport.compshare.cn/register?referral_code=FV7DcGowN4hB5UuXKgpE74) 注册优云智算账户。
 1. 打开 [AstrBot 镜像链接](https://www.compshare.cn/images/0oX7xoGrzfre)，点击创建实例。
-2. 部署成功后，在[控制台](https://console.compshare.cn/light-gpu/console/resources)中打开「JupyterLab」
-3. 进入JupyterLab后，新建一个终端 Terminal，在终端中粘贴以下指令
+1. 部署成功后，在[控制台](https://console.compshare.cn/light-gpu/console/resources)中打开「JupyterLab」
+1. 进入JupyterLab后，新建一个终端 Terminal，在终端中粘贴以下指令
 
 ```bash
 cd
@@ -35,7 +35,6 @@ Both services started in the background.
 ![WebUI 界面](https://www-s.ucloud.cn/2025/07/7e9fc6edc1dfa916abc069f4cecc24cf_1753940381771.png)
 
 首次登录时请使用启动日志内的随机初始密码（用户名通常是 astrbot），登录后请立即修改密码。
-
 
 登录成功后，可以重新设置密码，并进入 AstrBot 的页面。
 
@@ -68,7 +67,6 @@ AstrBot 支持接入优云智算提供的模型 API。
 您可以直接聊天来测试模型是否正常。
 
 ![image](https://files.astrbot.app/docs/source/images/compshare/image-2.png)
-
 
 ## 接入到消息平台
 

@@ -1,4 +1,3 @@
-
 # 插件配置
 
 随着插件功能的增加，可能需要定义一些配置以让用户自定义插件的行为。
@@ -66,7 +65,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 
 ![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
 
-**_special** 字段仅 v4.0.0 之后可用。常用可填写值包括 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, `select_knowledgebase`，用于让用户快速选择在 WebUI 上已经配置好的模型提供商、人设、知识库等数据。
+**\_special** 字段仅 v4.0.0 之后可用。常用可填写值包括 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, `select_knowledgebase`，用于让用户快速选择在 WebUI 上已经配置好的模型提供商、人设、知识库等数据。
 
 - `select_provider`、`select_provider_tts`、`select_provider_stt`、`select_persona` 的结果为字符串。
 - `select_knowledgebase` 的结果为 `list` 类型，支持多选，建议将对应配置项的 `type` 设为 `list`，默认值设为 `[]`。
@@ -136,7 +135,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 > [!NOTE]
 > v4.10.4 引入。更多信息请查看：[#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208)
 
-插件开发者可以在_conf_schema中按照以下格式添加模板配置项（有点类似于原有的嵌套配置）
+插件开发者可以在\_conf_schema中按照以下格式添加模板配置项（有点类似于原有的嵌套配置）
 
 ```json
  "field_id": {
