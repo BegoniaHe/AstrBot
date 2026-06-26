@@ -3,15 +3,15 @@ name: Release AstrBot
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to build (branch/tag/SHA)"
+        description: 'Git ref to build (branch/tag/SHA)'
         required: false
-        default: "master"
+        default: 'master'
       tag:
-        description: "Release tag to publish assets to (for example: v4.14.6)"
+        description: 'Release tag to publish assets to (for example: v4.14.6)'
         required: false
 
 permissions:
@@ -59,7 +59,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.13.0'
-          cache: "pnpm"
+          cache: 'pnpm'
           cache-dependency-path: dashboard/pnpm-lock.yaml
 
       - name: Build dashboard dist
@@ -90,9 +90,9 @@ jobs:
       - name: Upload release packages to Cloudflare R2
         if: ${{ env.R2_ACCOUNT_ID != '' && env.R2_ACCESS_KEY_ID != '' && env.R2_SECRET_ACCESS_KEY != '' }}
         env:
-          R2_BUCKET_NAME: "astrbot"
-          DASHBOARD_LATEST_OBJECT_NAME: "astrbot-webui-latest.zip"
-          CORE_LATEST_OBJECT_NAME: "astrbot-core-latest.zip"
+          R2_BUCKET_NAME: 'astrbot'
+          DASHBOARD_LATEST_OBJECT_NAME: 'astrbot-webui-latest.zip'
+          CORE_LATEST_OBJECT_NAME: 'astrbot-core-latest.zip'
           VERSION_TAG: ${{ steps.tag.outputs.tag }}
         shell: bash
         run: |
@@ -155,7 +155,6 @@ jobs:
         with:
           name: Dashboard-${{ steps.tag.outputs.tag }}
           path: release-assets
-
 
       - name: Resolve release notes
         id: notes
@@ -246,7 +245,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: '3.14'
 
       - name: Install uv
         shell: bash

@@ -23,7 +23,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: TZ
-              value: "Asia/Shanghai"
+              value: 'Asia/Shanghai'
           ports:
             - containerPort: 6185
               name: webui

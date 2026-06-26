@@ -61,12 +61,12 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "401":
-          $ref: "#/components/responses/Error"
+        '200':
+          $ref: '#/components/responses/Ok'
+        '401':
+          $ref: '#/components/responses/Error'
 
   /api/v1/auth/logout:
     post:
@@ -74,8 +74,8 @@ paths:
       summary: Logout from the dashboard API
       operationId: logout
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/auth/setup-status:
     get:
@@ -84,8 +84,8 @@ paths:
       operationId: getAuthSetupStatus
       security: []
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/auth/setup:
     post:
@@ -98,10 +98,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SetupAuthRequest"
+              $ref: '#/components/schemas/SetupAuthRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/auth/totp/setup:
     post:
@@ -113,10 +113,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TotpSetupRequest"
+              $ref: '#/components/schemas/TotpSetupRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/auth/totp/recovery:
     post:
@@ -124,8 +124,8 @@ paths:
       summary: Generate or rotate TOTP recovery codes
       operationId: recoverTotp
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/auth/account:
     patch:
@@ -137,10 +137,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateAccountRequest"
+              $ref: '#/components/schemas/UpdateAccountRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/api-keys:
     get:
@@ -148,8 +148,8 @@ paths:
       summary: List OpenAPI keys
       operationId: listApiKeys
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [API Keys]
       summary: Create an OpenAPI key
@@ -159,10 +159,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateApiKeyRequest"
+              $ref: '#/components/schemas/CreateApiKeyRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/api-keys/{key_id}/revoke:
     post:
@@ -170,10 +170,10 @@ paths:
       summary: Revoke an OpenAPI key
       operationId: revokeApiKey
       parameters:
-        - $ref: "#/components/parameters/KeyId"
+        - $ref: '#/components/parameters/KeyId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/api-keys/{key_id}:
     delete:
@@ -181,10 +181,10 @@ paths:
       summary: Delete an OpenAPI key
       operationId: deleteApiKey
       parameters:
-        - $ref: "#/components/parameters/KeyId"
+        - $ref: '#/components/parameters/KeyId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/system-config/schema:
     get:
@@ -193,8 +193,8 @@ paths:
       operationId: getSystemConfigSchema
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/system-config:
     get:
@@ -203,8 +203,8 @@ paths:
       operationId: getSystemConfig
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [System Config]
       summary: Replace the system configuration
@@ -215,10 +215,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/system-config/runtime:
     get:
@@ -227,8 +227,8 @@ paths:
       operationId: getSystemConfigRuntime
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/config-profiles/schema:
     get:
@@ -237,8 +237,8 @@ paths:
       operationId: getConfigProfileSchema
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/config-profiles:
     get:
@@ -247,8 +247,8 @@ paths:
       operationId: listConfigProfiles
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Config Profiles]
       summary: Create a configuration profile
@@ -259,10 +259,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateConfigProfileRequest"
+              $ref: '#/components/schemas/CreateConfigProfileRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/config-profiles/{config_id}:
     get:
@@ -271,52 +271,52 @@ paths:
       operationId: getConfigProfile
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/ConfigId"
+        - $ref: '#/components/parameters/ConfigId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Config Profiles]
       summary: Replace a configuration profile
       operationId: updateConfigProfileContent
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/ConfigId"
+        - $ref: '#/components/parameters/ConfigId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     patch:
       tags: [Config Profiles]
       summary: Rename a configuration profile
       operationId: renameConfigProfile
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/ConfigId"
+        - $ref: '#/components/parameters/ConfigId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRequest"
+              $ref: '#/components/schemas/RenameRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Config Profiles]
       summary: Delete a configuration profile
       operationId: deleteConfigProfile
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/ConfigId"
+        - $ref: '#/components/parameters/ConfigId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/config-routes:
     get:
@@ -325,8 +325,8 @@ paths:
       operationId: listConfigRoutes
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Bot Config Routes]
       summary: Replace all UMO to configuration profile bindings
@@ -337,10 +337,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConfigRoutesReplaceRequest"
+              $ref: '#/components/schemas/ConfigRoutesReplaceRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/config-routes/{umo}:
     put:
@@ -349,26 +349,26 @@ paths:
       operationId: upsertConfigRoute
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/Umo"
+        - $ref: '#/components/parameters/Umo'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConfigRouteUpsertRequest"
+              $ref: '#/components/schemas/ConfigRouteUpsertRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Bot Config Routes]
       summary: Remove a UMO configuration profile binding
       operationId: deleteConfigRoute
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/Umo"
+        - $ref: '#/components/parameters/Umo'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bot-types:
     get:
@@ -377,8 +377,8 @@ paths:
       operationId: listBotTypes
       x-astrbot-scope: bot
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bot-types/{bot_type}/registration:
     post:
@@ -397,10 +397,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BotRegistrationRequest"
+              $ref: '#/components/schemas/BotRegistrationRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots:
     get:
@@ -418,8 +418,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Bots]
       summary: Create a bot from configuration
@@ -430,10 +430,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BotConfigRequest"
+              $ref: '#/components/schemas/BotConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/stats:
     get:
@@ -442,8 +442,8 @@ paths:
       operationId: listBotStats
       x-astrbot-scope: bot
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/by-id:
     get:
@@ -458,8 +458,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Bots]
       summary: Replace a bot configuration by body ID
@@ -476,11 +476,11 @@ paths:
                 bot_id:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Bots]
       summary: Delete a bot by query ID
@@ -493,8 +493,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/enabled:
     patch:
@@ -516,8 +516,8 @@ paths:
                   type: boolean
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/test:
     post:
@@ -537,8 +537,8 @@ paths:
                   type: string
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/{bot_id}:
     get:
@@ -547,36 +547,36 @@ paths:
       operationId: getBot
       x-astrbot-scope: bot
       parameters:
-        - $ref: "#/components/parameters/BotId"
+        - $ref: '#/components/parameters/BotId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Bots]
       summary: Replace a bot configuration
       operationId: updateBot
       x-astrbot-scope: bot
       parameters:
-        - $ref: "#/components/parameters/BotId"
+        - $ref: '#/components/parameters/BotId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BotConfigRequest"
+              $ref: '#/components/schemas/BotConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Bots]
       summary: Delete a bot
       operationId: deleteBot
       x-astrbot-scope: bot
       parameters:
-        - $ref: "#/components/parameters/BotId"
+        - $ref: '#/components/parameters/BotId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/{bot_id}/enabled:
     patch:
@@ -585,16 +585,16 @@ paths:
       operationId: setBotEnabled
       x-astrbot-scope: bot
       parameters:
-        - $ref: "#/components/parameters/BotId"
+        - $ref: '#/components/parameters/BotId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EnabledPatch"
+              $ref: '#/components/schemas/EnabledPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/bots/{bot_id}/test:
     post:
@@ -603,10 +603,10 @@ paths:
       operationId: testBot
       x-astrbot-scope: bot
       parameters:
-        - $ref: "#/components/parameters/BotId"
+        - $ref: '#/components/parameters/BotId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/schema:
     get:
@@ -615,8 +615,8 @@ paths:
       operationId: getProviderSchema
       x-astrbot-scope: provider
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources:
     get:
@@ -625,8 +625,8 @@ paths:
       operationId: listProviderSources
       x-astrbot-scope: provider
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Provider Sources]
       summary: Create a provider source
@@ -637,10 +637,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProviderSourceConfigRequest"
+              $ref: '#/components/schemas/ProviderSourceConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/by-id:
     get:
@@ -655,8 +655,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Provider Sources]
       summary: Update a provider source by body ID
@@ -673,11 +673,11 @@ paths:
                 source_id:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Provider Sources]
       summary: Delete a provider source by query ID
@@ -690,8 +690,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/models:
     get:
@@ -708,10 +708,10 @@ paths:
         - name: capability
           in: query
           schema:
-            $ref: "#/components/schemas/ProviderCapability"
+            $ref: '#/components/schemas/ProviderCapability'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/providers:
     get:
@@ -728,10 +728,10 @@ paths:
         - name: capability
           in: query
           schema:
-            $ref: "#/components/schemas/ProviderCapability"
+            $ref: '#/components/schemas/ProviderCapability'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Providers]
       summary: Create a provider under a provider source by body ID
@@ -748,11 +748,11 @@ paths:
                 source_id:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/{source_id}:
     get:
@@ -761,36 +761,36 @@ paths:
       operationId: getProviderSource
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Provider Sources]
       summary: Update a provider source or create it if missing
       operationId: upsertProviderSource
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProviderSourceConfigRequest"
+              $ref: '#/components/schemas/ProviderSourceConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Provider Sources]
       summary: Delete a provider source and providers that reference it
       operationId: deleteProviderSource
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/{source_id}/models:
     get:
@@ -799,14 +799,14 @@ paths:
       operationId: listProviderSourceModels
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
         - name: capability
           in: query
           schema:
-            $ref: "#/components/schemas/ProviderCapability"
+            $ref: '#/components/schemas/ProviderCapability'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/provider-sources/{source_id}/providers:
     get:
@@ -815,30 +815,30 @@ paths:
       operationId: listProvidersBySource
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
         - name: capability
           in: query
           schema:
-            $ref: "#/components/schemas/ProviderCapability"
+            $ref: '#/components/schemas/ProviderCapability'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Providers]
       summary: Create a provider under a provider source
       operationId: createProviderInSource
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProviderConfigRequest"
+              $ref: '#/components/schemas/ProviderConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers:
     get:
@@ -850,7 +850,7 @@ paths:
         - name: capability
           in: query
           schema:
-            $ref: "#/components/schemas/ProviderCapability"
+            $ref: '#/components/schemas/ProviderCapability'
         - name: source_id
           in: query
           schema:
@@ -860,8 +860,8 @@ paths:
           schema:
             type: boolean
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Providers]
       summary: Create a standalone provider
@@ -872,10 +872,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProviderConfigRequest"
+              $ref: '#/components/schemas/ProviderConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/by-id:
     get:
@@ -895,8 +895,8 @@ paths:
             type: boolean
             default: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Providers]
       summary: Replace a provider configuration by body ID
@@ -913,11 +913,11 @@ paths:
                 provider_id:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Providers]
       summary: Delete a provider by query ID
@@ -930,8 +930,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/enabled:
     patch:
@@ -953,8 +953,8 @@ paths:
                   type: boolean
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/test:
     post:
@@ -974,8 +974,8 @@ paths:
                   type: string
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/embedding-dimension:
     post:
@@ -994,11 +994,11 @@ paths:
                 provider_id:
                   type: string
                 provider_config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/{provider_id}:
     get:
@@ -1007,47 +1007,47 @@ paths:
       operationId: getProvider
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
         - name: merged
           in: query
           schema:
             type: boolean
             default: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Providers]
       summary: Replace a provider configuration
       operationId: updateProvider
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProviderConfigRequest"
+              $ref: '#/components/schemas/ProviderConfigRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Providers]
       summary: Delete a provider
       operationId: deleteProvider
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/{provider_id}/enabled:
     patch:
@@ -1056,16 +1056,16 @@ paths:
       operationId: setProviderEnabled
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EnabledPatch"
+              $ref: '#/components/schemas/EnabledPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/{provider_id}/test:
     post:
@@ -1074,10 +1074,10 @@ paths:
       operationId: testProvider
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/providers/{provider_id}/embedding-dimension:
     post:
@@ -1086,16 +1086,16 @@ paths:
       operationId: getProviderEmbeddingDimension
       x-astrbot-scope: provider
       parameters:
-        - $ref: "#/components/parameters/ProviderId"
+        - $ref: '#/components/parameters/ProviderId'
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat:
     post:
@@ -1108,10 +1108,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatRequest"
+              $ref: '#/components/schemas/ChatRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/ws:
     get:
@@ -1130,7 +1130,7 @@ paths:
           schema:
             type: string
       responses:
-        "101":
+        '101':
           description: WebSocket upgrade accepted
 
   /api/v1/live-chat/ws:
@@ -1147,7 +1147,7 @@ paths:
           schema:
             type: string
       responses:
-        "101":
+        '101':
           description: WebSocket upgrade accepted
 
   /api/v1/unified-chat/ws:
@@ -1164,7 +1164,7 @@ paths:
           schema:
             type: string
       responses:
-        "101":
+        '101':
           description: WebSocket upgrade accepted
 
   /api/v1/chat/sessions:
@@ -1174,15 +1174,15 @@ paths:
       operationId: listChatSessions
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: username
           in: query
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/new:
     get:
@@ -1197,8 +1197,8 @@ paths:
             type: string
             default: webchat
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/batch-delete:
     post:
@@ -1211,10 +1211,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatSessionBatchDeleteRequest"
+              $ref: '#/components/schemas/ChatSessionBatchDeleteRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/{session_id}:
     get:
@@ -1223,36 +1223,36 @@ paths:
       operationId: getChatSession
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     patch:
       tags: [Chat]
       summary: Update a webchat session
       operationId: updateChatSession
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatSessionPatchRequest"
+              $ref: '#/components/schemas/ChatSessionPatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Chat]
       summary: Delete a webchat session
       operationId: deleteChatSession
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/{session_id}/stop:
     post:
@@ -1261,10 +1261,10 @@ paths:
       operationId: stopChatSession
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/{session_id}/messages/{message_id}:
     patch:
@@ -1273,7 +1273,7 @@ paths:
       operationId: updateChatMessage
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
         - name: message_id
           in: path
           required: true
@@ -1284,10 +1284,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatMessagePatchRequest"
+              $ref: '#/components/schemas/ChatMessagePatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate:
     post:
@@ -1296,7 +1296,7 @@ paths:
       operationId: regenerateChatMessage
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
         - name: message_id
           in: path
           required: true
@@ -1307,9 +1307,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatMessageRegenerateRequest"
+              $ref: '#/components/schemas/ChatMessageRegenerateRequest'
       responses:
-        "200":
+        '200':
           description: Server-sent chat stream or an error envelope
 
   /api/v1/chat/configs:
@@ -1319,8 +1319,8 @@ paths:
       operationId: listChatConfigs
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/threads:
     post:
@@ -1333,10 +1333,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatThreadCreateRequest"
+              $ref: '#/components/schemas/ChatThreadCreateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/threads/{thread_id}:
     get:
@@ -1351,8 +1351,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Chat]
       summary: Delete a webchat side thread
@@ -1365,8 +1365,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/threads/{thread_id}/messages:
     post:
@@ -1385,9 +1385,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatThreadMessageRequest"
+              $ref: '#/components/schemas/ChatThreadMessageRequest'
       responses:
-        "200":
+        '200':
           description: Server-sent chat stream or an error envelope
 
   /api/v1/chat/projects:
@@ -1397,8 +1397,8 @@ paths:
       operationId: listChatProjects
       x-astrbot-scope: chat
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Chat]
       summary: Create a ChatUI project
@@ -1409,10 +1409,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatProjectRequest"
+              $ref: '#/components/schemas/ChatProjectRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/projects/{project_id}:
     get:
@@ -1427,8 +1427,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     patch:
       tags: [Chat]
       summary: Update a ChatUI project
@@ -1445,10 +1445,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatProjectRequest"
+              $ref: '#/components/schemas/ChatProjectRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Chat]
       summary: Delete a ChatUI project
@@ -1461,8 +1461,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/projects/{project_id}/sessions:
     get:
@@ -1477,8 +1477,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/projects/{project_id}/sessions/{session_id}:
     post:
@@ -1492,10 +1492,10 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/chat/projects/sessions/{session_id}:
     delete:
@@ -1504,10 +1504,10 @@ paths:
       operationId: removeChatProjectSession
       x-astrbot-scope: chat
       parameters:
-        - $ref: "#/components/parameters/SessionId"
+        - $ref: '#/components/parameters/SessionId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/im/messages:
     post:
@@ -1520,10 +1520,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ImMessageRequest"
+              $ref: '#/components/schemas/ImMessageRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/im/bots:
     get:
@@ -1532,8 +1532,8 @@ paths:
       operationId: listImBots
       x-astrbot-scope: im
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/files:
     post:
@@ -1546,10 +1546,10 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/FileUploadRequest"
+              $ref: '#/components/schemas/FileUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/file:
     post:
@@ -1562,19 +1562,19 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/FileUploadRequest"
+              $ref: '#/components/schemas/FileUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     get:
       tags: [Open API]
       summary: Download an uploaded file by attachment ID
       operationId: downloadOpenApiFile
       x-astrbot-scope: file
       parameters:
-        - $ref: "#/components/parameters/AttachmentIdQuery"
+        - $ref: '#/components/parameters/AttachmentIdQuery'
       responses:
-        "200":
+        '200':
           description: File content or an error envelope
           content:
             application/octet-stream:
@@ -1595,7 +1595,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: File bytes or an error envelope
           content:
             application/octet-stream:
@@ -1616,7 +1616,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Tokenized file bytes or an error envelope
           content:
             application/octet-stream:
@@ -1631,20 +1631,20 @@ paths:
       operationId: getAttachment
       x-astrbot-scope: file
       parameters:
-        - $ref: "#/components/parameters/AttachmentId"
+        - $ref: '#/components/parameters/AttachmentId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Files]
       summary: Delete an attachment
       operationId: deleteAttachment
       x-astrbot-scope: file
       parameters:
-        - $ref: "#/components/parameters/AttachmentId"
+        - $ref: '#/components/parameters/AttachmentId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/files/{attachment_id}/content:
     get:
@@ -1653,9 +1653,9 @@ paths:
       operationId: downloadAttachment
       x-astrbot-scope: file
       parameters:
-        - $ref: "#/components/parameters/AttachmentId"
+        - $ref: '#/components/parameters/AttachmentId'
       responses:
-        "200":
+        '200':
           description: File content
           content:
             application/octet-stream:
@@ -1680,8 +1680,8 @@ paths:
           schema:
             type: boolean
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/by-id:
     get:
@@ -1696,8 +1696,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Plugins]
       summary: Uninstall a plugin by query ID
@@ -1722,8 +1722,8 @@ paths:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/config:
     get:
@@ -1738,8 +1738,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Plugins]
       summary: Save plugin configuration by body ID
@@ -1756,11 +1756,11 @@ paths:
                 plugin_id:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/config/schema:
     get:
@@ -1775,8 +1775,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/config-files:
     get:
@@ -1796,8 +1796,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Plugins]
       summary: Upload files for a plugin file configuration item by query ID
@@ -1822,8 +1822,8 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Plugins]
       summary: Delete a plugin file configuration upload by query ID
@@ -1840,10 +1840,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginConfigFileDeleteRequest"
+              $ref: '#/components/schemas/PluginConfigFileDeleteRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/readme:
     get:
@@ -1858,8 +1858,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
 
   /api/v1/plugins/changelog:
     get:
@@ -1874,8 +1874,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
 
   /api/v1/plugins/reload:
     post:
@@ -1895,8 +1895,8 @@ paths:
                   type: string
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/enabled:
     patch:
@@ -1918,8 +1918,8 @@ paths:
                   type: boolean
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}:
     get:
@@ -1928,7 +1928,7 @@ paths:
       operationId: getPlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: false
         content:
@@ -1942,15 +1942,15 @@ paths:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Plugins]
       summary: Uninstall a plugin
       operationId: uninstallPlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: false
         content:
@@ -1964,8 +1964,8 @@ paths:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/config:
     get:
@@ -1974,26 +1974,26 @@ paths:
       operationId: getPluginConfig
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Plugins]
       summary: Save plugin configuration
       operationId: updatePluginConfig
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/config/schema:
     get:
@@ -2002,10 +2002,10 @@ paths:
       operationId: getPluginConfigSchema
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/config-files/{config_key}:
     get:
@@ -2014,7 +2014,7 @@ paths:
       operationId: listPluginConfigFiles
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
         - name: config_key
           in: path
           required: true
@@ -2022,15 +2022,15 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Plugins]
       summary: Upload files for a plugin file configuration item
       operationId: uploadPluginConfigFiles
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
         - name: config_key
           in: path
           required: true
@@ -2045,8 +2045,8 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/config-files:
     delete:
@@ -2055,16 +2055,16 @@ paths:
       operationId: deletePluginConfigFile
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginConfigFileDeleteRequest"
+              $ref: '#/components/schemas/PluginConfigFileDeleteRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/readme:
     get:
@@ -2073,10 +2073,10 @@ paths:
       operationId: getPluginReadme
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
 
   /api/v1/plugins/{plugin_id}/changelog:
     get:
@@ -2085,10 +2085,10 @@ paths:
       operationId: getPluginChangelog
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
 
   /api/v1/plugins/{plugin_id}/reload:
     post:
@@ -2097,10 +2097,10 @@ paths:
       operationId: reloadPlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/enabled:
     patch:
@@ -2109,16 +2109,16 @@ paths:
       operationId: setPluginEnabled
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EnabledPatch"
+              $ref: '#/components/schemas/EnabledPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/{plugin_id}/update:
     post:
@@ -2127,16 +2127,16 @@ paths:
       operationId: updatePlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginUpdateRequest"
+              $ref: '#/components/schemas/PluginUpdateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/update:
     post:
@@ -2149,10 +2149,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginBatchUpdateRequest"
+              $ref: '#/components/schemas/PluginBatchUpdateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/version-support/check:
     post:
@@ -2165,10 +2165,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginVersionSupportRequest"
+              $ref: '#/components/schemas/PluginVersionSupportRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/failed:
     get:
@@ -2177,8 +2177,8 @@ paths:
       operationId: listFailedPlugins
       x-astrbot-scope: plugin
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/failed/{plugin_id}:
     delete:
@@ -2187,7 +2187,7 @@ paths:
       operationId: uninstallFailedPlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       requestBody:
         required: false
         content:
@@ -2201,8 +2201,8 @@ paths:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/failed/{plugin_id}/reload:
     post:
@@ -2211,10 +2211,10 @@ paths:
       operationId: reloadFailedPlugin
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/PluginId"
+        - $ref: '#/components/parameters/PluginId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/install/github:
     post:
@@ -2227,10 +2227,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginGithubInstallRequest"
+              $ref: '#/components/schemas/PluginGithubInstallRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
   /api/v1/plugins/install/url:
     post:
       tags: [Plugins]
@@ -2242,10 +2242,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginUrlInstallRequest"
+              $ref: '#/components/schemas/PluginUrlInstallRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/install/upload:
     post:
@@ -2258,10 +2258,10 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/PluginUploadInstallRequest"
+              $ref: '#/components/schemas/PluginUploadInstallRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/market:
     get:
@@ -2270,8 +2270,8 @@ paths:
       operationId: listPluginMarket
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: category
           in: query
           schema:
@@ -2294,8 +2294,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugins/market/categories:
     get:
@@ -2304,8 +2304,8 @@ paths:
       operationId: listPluginMarketCategories
       x-astrbot-scope: plugin
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugin-sources:
     get:
@@ -2314,8 +2314,8 @@ paths:
       operationId: listPluginSources
       x-astrbot-scope: plugin
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Plugin Sources]
       summary: Add a plugin source
@@ -2326,10 +2326,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PluginSourceRequest"
+              $ref: '#/components/schemas/PluginSourceRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Plugin Sources]
       summary: Replace plugin sources
@@ -2346,10 +2346,10 @@ paths:
                 sources:
                   type: array
                   items:
-                    $ref: "#/components/schemas/PluginSourceRequest"
+                    $ref: '#/components/schemas/PluginSourceRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugin-sources/{source_id}:
     delete:
@@ -2358,10 +2358,10 @@ paths:
       operationId: deletePluginSource
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/SourceId"
+        - $ref: '#/components/parameters/SourceId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/plugin-sources/by-id:
     delete:
@@ -2376,8 +2376,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/commands:
     get:
@@ -2391,8 +2391,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/commands/{command_id}:
     patch:
@@ -2401,16 +2401,16 @@ paths:
       operationId: updateCommand
       x-astrbot-scope: plugin
       parameters:
-        - $ref: "#/components/parameters/CommandId"
+        - $ref: '#/components/parameters/CommandId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CommandPatchRequest"
+              $ref: '#/components/schemas/CommandPatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/commands/conflicts:
     get:
@@ -2419,8 +2419,8 @@ paths:
       operationId: listCommandConflicts
       x-astrbot-scope: plugin
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/tools:
     get:
@@ -2439,8 +2439,8 @@ paths:
           schema:
             type: boolean
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/tools/{tool_id}/enabled:
     patch:
@@ -2449,16 +2449,16 @@ paths:
       operationId: setToolEnabled
       x-astrbot-scope: tool
       parameters:
-        - $ref: "#/components/parameters/ToolId"
+        - $ref: '#/components/parameters/ToolId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EnabledPatch"
+              $ref: '#/components/schemas/EnabledPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/tools/{tool_id}/permission:
     patch:
@@ -2467,16 +2467,16 @@ paths:
       operationId: setToolPermission
       x-astrbot-scope: tool
       parameters:
-        - $ref: "#/components/parameters/ToolId"
+        - $ref: '#/components/parameters/ToolId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ToolPermissionPatch"
+              $ref: '#/components/schemas/ToolPermissionPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers:
     get:
@@ -2485,8 +2485,8 @@ paths:
       operationId: listMcpServers
       x-astrbot-scope: mcp
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [MCP]
       summary: Add an MCP server
@@ -2497,10 +2497,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/McpServerConfig"
+              $ref: '#/components/schemas/McpServerConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/by-name:
     put:
@@ -2519,13 +2519,13 @@ paths:
                 server_name:
                   type: string
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
                 enabled:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [MCP]
       summary: Delete an MCP server by query name
@@ -2538,8 +2538,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/enabled:
     patch:
@@ -2561,8 +2561,8 @@ paths:
                   type: boolean
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/test:
     post:
@@ -2581,13 +2581,13 @@ paths:
                 server_name:
                   type: string
                 mcp_server_config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
                 config:
-                  $ref: "#/components/schemas/DynamicConfig"
+                  $ref: '#/components/schemas/DynamicConfig'
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/{server_name}:
     put:
@@ -2596,26 +2596,26 @@ paths:
       operationId: updateMcpServer
       x-astrbot-scope: mcp
       parameters:
-        - $ref: "#/components/parameters/ServerName"
+        - $ref: '#/components/parameters/ServerName'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/McpServerConfig"
+              $ref: '#/components/schemas/McpServerConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [MCP]
       summary: Delete an MCP server
       operationId: deleteMcpServer
       x-astrbot-scope: mcp
       parameters:
-        - $ref: "#/components/parameters/ServerName"
+        - $ref: '#/components/parameters/ServerName'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/{server_name}/enabled:
     patch:
@@ -2624,16 +2624,16 @@ paths:
       operationId: setMcpServerEnabled
       x-astrbot-scope: mcp
       parameters:
-        - $ref: "#/components/parameters/ServerName"
+        - $ref: '#/components/parameters/ServerName'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EnabledPatch"
+              $ref: '#/components/schemas/EnabledPatch'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/servers/{server_name}/test:
     post:
@@ -2642,7 +2642,7 @@ paths:
       operationId: testMcpServer
       x-astrbot-scope: mcp
       parameters:
-        - $ref: "#/components/parameters/ServerName"
+        - $ref: '#/components/parameters/ServerName'
       requestBody:
         required: false
         content:
@@ -2655,8 +2655,8 @@ paths:
                   additionalProperties: true
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/mcp/providers/modelscope/sync:
     post:
@@ -2669,10 +2669,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ModelScopeSyncRequest"
+              $ref: '#/components/schemas/ModelScopeSyncRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills:
     get:
@@ -2690,8 +2690,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Skills]
       summary: Upload or import a skill archive
@@ -2702,10 +2702,10 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/SkillUploadRequest"
+              $ref: '#/components/schemas/SkillUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/batch:
     post:
@@ -2727,8 +2727,8 @@ paths:
                     type: string
                     format: binary
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/by-name:
     patch:
@@ -2752,8 +2752,8 @@ paths:
                   type: boolean
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Skills]
       summary: Delete a skill by query name
@@ -2766,8 +2766,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/archive:
     get:
@@ -2782,7 +2782,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Skill archive
           content:
             application/zip:
@@ -2807,8 +2807,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/file:
     get:
@@ -2828,8 +2828,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
     put:
       tags: [Skills]
       summary: Update skill file content by body name and path
@@ -2851,8 +2851,8 @@ paths:
                   type: string
               additionalProperties: false
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/{skill_name}:
     patch:
@@ -2861,26 +2861,26 @@ paths:
       operationId: updateSkill
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
+        - $ref: '#/components/parameters/SkillName'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SkillPatchRequest"
+              $ref: '#/components/schemas/SkillPatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Skills]
       summary: Delete a skill
       operationId: deleteSkill
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
+        - $ref: '#/components/parameters/SkillName'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/{skill_name}/archive:
     get:
@@ -2889,9 +2889,9 @@ paths:
       operationId: downloadSkill
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
+        - $ref: '#/components/parameters/SkillName'
       responses:
-        "200":
+        '200':
           description: Skill archive
           content:
             application/zip:
@@ -2906,14 +2906,14 @@ paths:
       operationId: listSkillFiles
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
+        - $ref: '#/components/parameters/SkillName'
         - name: path
           in: query
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/{skill_name}/files/{file_path}:
     get:
@@ -2922,19 +2922,19 @@ paths:
       operationId: getSkillFile
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
-        - $ref: "#/components/parameters/FilePath"
+        - $ref: '#/components/parameters/SkillName'
+        - $ref: '#/components/parameters/FilePath'
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
     put:
       tags: [Skills]
       summary: Update skill file content
       operationId: updateSkillFile
       x-astrbot-scope: skill
       parameters:
-        - $ref: "#/components/parameters/SkillName"
-        - $ref: "#/components/parameters/FilePath"
+        - $ref: '#/components/parameters/SkillName'
+        - $ref: '#/components/parameters/FilePath'
       requestBody:
         required: true
         content:
@@ -2942,8 +2942,8 @@ paths:
             schema:
               type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/candidates:
     get:
@@ -2961,8 +2961,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/releases:
     get:
@@ -2980,8 +2980,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/payload:
     get:
@@ -2996,8 +2996,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/evaluate:
     post:
@@ -3010,10 +3010,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoCandidateActionRequest"
+              $ref: '#/components/schemas/NeoCandidateActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/promote:
     post:
@@ -3026,10 +3026,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoCandidateActionRequest"
+              $ref: '#/components/schemas/NeoCandidateActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/rollback:
     post:
@@ -3042,10 +3042,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoReleaseActionRequest"
+              $ref: '#/components/schemas/NeoReleaseActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/sync:
     post:
@@ -3058,10 +3058,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoReleaseActionRequest"
+              $ref: '#/components/schemas/NeoReleaseActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/candidates/delete:
     post:
@@ -3074,10 +3074,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoCandidateActionRequest"
+              $ref: '#/components/schemas/NeoCandidateActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/skills/neo/releases/delete:
     post:
@@ -3090,10 +3090,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NeoReleaseActionRequest"
+              $ref: '#/components/schemas/NeoReleaseActionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases:
     get:
@@ -3102,15 +3102,15 @@ paths:
       operationId: listKnowledgeBases
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: refresh_stats
           in: query
           schema:
             type: boolean
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Knowledge Base]
       summary: Create a knowledge base
@@ -3121,10 +3121,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KnowledgeBaseRequest"
+              $ref: '#/components/schemas/KnowledgeBaseRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}:
     get:
@@ -3133,36 +3133,36 @@ paths:
       operationId: getKnowledgeBase
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Knowledge Base]
       summary: Update a knowledge base
       operationId: updateKnowledgeBase
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KnowledgeBaseRequest"
+              $ref: '#/components/schemas/KnowledgeBaseRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Knowledge Base]
       summary: Delete a knowledge base
       operationId: deleteKnowledgeBase
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/stats:
     get:
@@ -3171,10 +3171,10 @@ paths:
       operationId: getKnowledgeBaseStats
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/documents:
     get:
@@ -3183,28 +3183,28 @@ paths:
       operationId: listKnowledgeDocuments
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/KbId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Knowledge Base]
       summary: Upload a document to a knowledge base
       operationId: uploadKnowledgeDocument
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/KnowledgeDocumentUploadRequest"
+              $ref: '#/components/schemas/KnowledgeDocumentUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/documents/import:
     post:
@@ -3213,16 +3213,16 @@ paths:
       operationId: importKnowledgeDocuments
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KnowledgeDocumentImportRequest"
+              $ref: '#/components/schemas/KnowledgeDocumentImportRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/documents/import-url:
     post:
@@ -3231,16 +3231,16 @@ paths:
       operationId: importKnowledgeDocumentFromUrl
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KnowledgeDocumentUrlImportRequest"
+              $ref: '#/components/schemas/KnowledgeDocumentUrlImportRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/documents/{document_id}:
     get:
@@ -3249,22 +3249,22 @@ paths:
       operationId: getKnowledgeDocument
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
-        - $ref: "#/components/parameters/DocumentId"
+        - $ref: '#/components/parameters/KbId'
+        - $ref: '#/components/parameters/DocumentId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Knowledge Base]
       summary: Delete a knowledge base document
       operationId: deleteKnowledgeDocument
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
-        - $ref: "#/components/parameters/DocumentId"
+        - $ref: '#/components/parameters/KbId'
+        - $ref: '#/components/parameters/DocumentId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/chunks:
     get:
@@ -3273,16 +3273,16 @@ paths:
       operationId: listKnowledgeChunks
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
         - name: document_id
           in: query
           schema:
             type: string
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/chunks/{chunk_id}:
     delete:
@@ -3291,16 +3291,16 @@ paths:
       operationId: deleteKnowledgeChunk
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
-        - $ref: "#/components/parameters/ChunkId"
+        - $ref: '#/components/parameters/KbId'
+        - $ref: '#/components/parameters/ChunkId'
         - name: document_id
           in: query
           required: true
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/{kb_id}/retrieve:
     post:
@@ -3309,16 +3309,16 @@ paths:
       operationId: retrieveKnowledgeBase
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/KbId"
+        - $ref: '#/components/parameters/KbId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/KnowledgeRetrieveRequest"
+              $ref: '#/components/schemas/KnowledgeRetrieveRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/knowledge-bases/tasks/{task_id}:
     get:
@@ -3327,10 +3327,10 @@ paths:
       operationId: getKnowledgeTask
       x-astrbot-scope: kb
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+        - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas/tree:
     get:
@@ -3339,8 +3339,8 @@ paths:
       operationId: getPersonaTree
       x-astrbot-scope: persona
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas:
     get:
@@ -3354,8 +3354,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Personas]
       summary: Create a persona
@@ -3366,10 +3366,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonaRequest"
+              $ref: '#/components/schemas/PersonaRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas/by-id:
     get:
@@ -3384,8 +3384,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Personas]
       summary: Update a persona by body ID
@@ -3403,8 +3403,8 @@ paths:
                   type: string
               additionalProperties: true
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Personas]
       summary: Delete a persona by query ID
@@ -3417,8 +3417,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas/{persona_id}:
     get:
@@ -3427,36 +3427,36 @@ paths:
       operationId: getPersona
       x-astrbot-scope: persona
       parameters:
-        - $ref: "#/components/parameters/PersonaId"
+        - $ref: '#/components/parameters/PersonaId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Personas]
       summary: Update a persona
       operationId: updatePersona
       x-astrbot-scope: persona
       parameters:
-        - $ref: "#/components/parameters/PersonaId"
+        - $ref: '#/components/parameters/PersonaId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonaRequest"
+              $ref: '#/components/schemas/PersonaRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Personas]
       summary: Delete a persona
       operationId: deletePersona
       x-astrbot-scope: persona
       parameters:
-        - $ref: "#/components/parameters/PersonaId"
+        - $ref: '#/components/parameters/PersonaId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/persona-folders:
     get:
@@ -3470,8 +3470,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Personas]
       summary: Create a persona folder
@@ -3482,10 +3482,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonaFolderRequest"
+              $ref: '#/components/schemas/PersonaFolderRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/persona-folders/{folder_id}:
     put:
@@ -3494,26 +3494,26 @@ paths:
       operationId: updatePersonaFolder
       x-astrbot-scope: persona
       parameters:
-        - $ref: "#/components/parameters/FolderId"
+        - $ref: '#/components/parameters/FolderId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonaFolderRequest"
+              $ref: '#/components/schemas/PersonaFolderRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Personas]
       summary: Delete a persona folder
       operationId: deletePersonaFolder
       x-astrbot-scope: persona
       parameters:
-        - $ref: "#/components/parameters/FolderId"
+        - $ref: '#/components/parameters/FolderId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas/move:
     post:
@@ -3526,10 +3526,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PersonaMoveRequest"
+              $ref: '#/components/schemas/PersonaMoveRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/personas/reorder:
     post:
@@ -3542,10 +3542,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReorderRequest"
+              $ref: '#/components/schemas/ReorderRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions:
     get:
@@ -3554,8 +3554,8 @@ paths:
       operationId: listSessions
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: search
           in: query
           schema:
@@ -3570,8 +3570,8 @@ paths:
             type: string
             enum: [all, group, private]
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions/active-umos:
     get:
@@ -3580,8 +3580,8 @@ paths:
       operationId: listActiveUmos
       x-astrbot-scope: data
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions/rules:
     get:
@@ -3590,15 +3590,15 @@ paths:
       operationId: listSessionRules
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: search
           in: query
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Sessions]
       summary: Update or create a session rule
@@ -3609,10 +3609,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SessionRuleRequest"
+              $ref: '#/components/schemas/SessionRuleRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions/rules/delete:
     post:
@@ -3625,10 +3625,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UmoListRequest"
+              $ref: '#/components/schemas/UmoListRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions/provider:
     patch:
@@ -3641,10 +3641,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BatchSessionProviderRequest"
+              $ref: '#/components/schemas/BatchSessionProviderRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/sessions/service:
     patch:
@@ -3657,10 +3657,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BatchSessionServiceRequest"
+              $ref: '#/components/schemas/BatchSessionServiceRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/session-groups:
     get:
@@ -3669,8 +3669,8 @@ paths:
       operationId: listSessionGroups
       x-astrbot-scope: data
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Sessions]
       summary: Create a session group
@@ -3681,10 +3681,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SessionGroupRequest"
+              $ref: '#/components/schemas/SessionGroupRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/session-groups/{group_id}:
     put:
@@ -3693,26 +3693,26 @@ paths:
       operationId: updateSessionGroup
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/GroupId"
+        - $ref: '#/components/parameters/GroupId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SessionGroupRequest"
+              $ref: '#/components/schemas/SessionGroupRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Sessions]
       summary: Delete a session group
       operationId: deleteSessionGroup
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/GroupId"
+        - $ref: '#/components/parameters/GroupId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/conversations:
     get:
@@ -3721,8 +3721,8 @@ paths:
       operationId: listConversations
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - name: platform_id
           in: query
           schema:
@@ -3756,8 +3756,8 @@ paths:
             type: string
           description: Comma-separated platforms to exclude.
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/conversations/batch-delete:
     post:
@@ -3770,10 +3770,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConversationBatchDeleteRequest"
+              $ref: '#/components/schemas/ConversationBatchDeleteRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/conversations/{conversation_id}:
     get:
@@ -3782,22 +3782,22 @@ paths:
       operationId: getConversation
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/ConversationId"
+        - $ref: '#/components/parameters/ConversationId'
         - name: user_id
           in: query
           required: true
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     patch:
       tags: [Conversations]
       summary: Update conversation metadata
       operationId: updateConversation
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/ConversationId"
+        - $ref: '#/components/parameters/ConversationId'
         - name: user_id
           in: query
           required: true
@@ -3808,25 +3808,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConversationPatchRequest"
+              $ref: '#/components/schemas/ConversationPatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Conversations]
       summary: Delete a conversation
       operationId: deleteConversation
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/ConversationId"
+        - $ref: '#/components/parameters/ConversationId'
         - name: user_id
           in: query
           required: true
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/conversations/{conversation_id}/messages:
     put:
@@ -3835,7 +3835,7 @@ paths:
       operationId: replaceConversationMessages
       x-astrbot-scope: data
       parameters:
-        - $ref: "#/components/parameters/ConversationId"
+        - $ref: '#/components/parameters/ConversationId'
         - name: user_id
           in: query
           required: true
@@ -3846,10 +3846,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConversationMessagesReplaceRequest"
+              $ref: '#/components/schemas/ConversationMessagesReplaceRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/conversations/export:
     post:
@@ -3862,9 +3862,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConversationExportRequest"
+              $ref: '#/components/schemas/ConversationExportRequest'
       responses:
-        "200":
+        '200':
           description: Exported conversation data
 
   /api/v1/stats:
@@ -3880,8 +3880,8 @@ paths:
             type: integer
             default: 86400
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/provider-tokens:
     get:
@@ -3896,8 +3896,8 @@ paths:
             type: integer
             minimum: 1
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/version:
     get:
@@ -3906,8 +3906,8 @@ paths:
       operationId: getVersion
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/versions:
     get:
@@ -3916,8 +3916,8 @@ paths:
       operationId: getPublicVersions
       security: []
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/first-notice:
     get:
@@ -3931,8 +3931,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/ghproxy/test:
     post:
@@ -3945,10 +3945,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GhproxyTestRequest"
+              $ref: '#/components/schemas/GhproxyTestRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/changelogs:
     get:
@@ -3957,8 +3957,8 @@ paths:
       operationId: listChangelogVersions
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/changelogs/{version}:
     get:
@@ -3973,10 +3973,10 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "404":
-          $ref: "#/components/responses/Error"
+        '200':
+          $ref: '#/components/responses/Ok'
+        '404':
+          $ref: '#/components/responses/Error'
 
   /api/v1/stats/start-time:
     get:
@@ -3985,8 +3985,8 @@ paths:
       operationId: getStartTime
       security: []
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/storage:
     get:
@@ -3995,8 +3995,8 @@ paths:
       operationId: getStorageStatus
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/stats/storage/cleanup:
     post:
@@ -4009,10 +4009,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/system/restart:
     post:
@@ -4021,8 +4021,8 @@ paths:
       operationId: restartCore
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups:
     get:
@@ -4031,11 +4031,11 @@ paths:
       operationId: listBackups
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Backups]
       summary: Export a backup
@@ -4046,10 +4046,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupExportRequest"
+              $ref: '#/components/schemas/BackupExportRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/upload:
     post:
@@ -4062,10 +4062,10 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/BackupUploadRequest"
+              $ref: '#/components/schemas/BackupUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/upload/init:
     post:
@@ -4078,10 +4078,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupUploadInitRequest"
+              $ref: '#/components/schemas/BackupUploadInitRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/upload/chunk:
     post:
@@ -4094,10 +4094,10 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/BackupChunkUploadRequest"
+              $ref: '#/components/schemas/BackupChunkUploadRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/upload/complete:
     post:
@@ -4110,10 +4110,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupUploadSessionRequest"
+              $ref: '#/components/schemas/BackupUploadSessionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/upload/abort:
     post:
@@ -4126,10 +4126,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupUploadSessionRequest"
+              $ref: '#/components/schemas/BackupUploadSessionRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/tasks/{task_id}:
     get:
@@ -4144,8 +4144,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/{filename}:
     get:
@@ -4154,9 +4154,9 @@ paths:
       operationId: downloadBackup
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Filename"
+        - $ref: '#/components/parameters/Filename'
       responses:
-        "200":
+        '200':
           description: Backup archive
     patch:
       tags: [Backups]
@@ -4164,26 +4164,26 @@ paths:
       operationId: renameBackup
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Filename"
+        - $ref: '#/components/parameters/Filename'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupRenameRequest"
+              $ref: '#/components/schemas/BackupRenameRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Backups]
       summary: Delete a backup
       operationId: deleteBackup
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Filename"
+        - $ref: '#/components/parameters/Filename'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/{filename}/check:
     post:
@@ -4192,10 +4192,10 @@ paths:
       operationId: checkBackup
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Filename"
+        - $ref: '#/components/parameters/Filename'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/backups/{filename}/import:
     post:
@@ -4204,16 +4204,16 @@ paths:
       operationId: importBackup
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/Filename"
+        - $ref: '#/components/parameters/Filename'
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BackupImportRequest"
+              $ref: '#/components/schemas/BackupImportRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/updates/check:
     get:
@@ -4222,8 +4222,8 @@ paths:
       operationId: checkUpdate
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/updates/releases:
     get:
@@ -4238,8 +4238,8 @@ paths:
             type: string
             enum: [core, dashboard]
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/updates/core:
     post:
@@ -4252,10 +4252,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateRequest"
+              $ref: '#/components/schemas/UpdateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/updates/dashboard:
     post:
@@ -4268,10 +4268,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateRequest"
+              $ref: '#/components/schemas/UpdateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/updates/progress/{task_id}:
     get:
@@ -4280,10 +4280,10 @@ paths:
       operationId: getUpdateProgress
       x-astrbot-scope: system
       parameters:
-        - $ref: "#/components/parameters/TaskId"
+        - $ref: '#/components/parameters/TaskId'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/pip/install:
     post:
@@ -4296,10 +4296,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PipInstallRequest"
+              $ref: '#/components/schemas/PipInstallRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/cron/jobs:
     get:
@@ -4313,8 +4313,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [Cron]
       summary: Create a cron job
@@ -4325,10 +4325,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CronJobRequest"
+              $ref: '#/components/schemas/CronJobRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/cron/jobs/{job_id}:
     patch:
@@ -4347,10 +4347,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CronJobPatchRequest"
+              $ref: '#/components/schemas/CronJobPatchRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [Cron]
       summary: Delete a cron job
@@ -4363,8 +4363,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/cron/jobs/{job_id}/run:
     post:
@@ -4379,8 +4379,8 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/logs/live:
     get:
@@ -4389,7 +4389,7 @@ paths:
       operationId: streamLiveLogs
       x-astrbot-scope: system
       responses:
-        "200":
+        '200':
           description: Server-sent log stream
           content:
             text/event-stream:
@@ -4403,8 +4403,8 @@ paths:
       operationId: getLogHistory
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Text"
+        '200':
+          $ref: '#/components/responses/Text'
 
   /api/v1/trace/settings:
     get:
@@ -4413,8 +4413,8 @@ paths:
       operationId: getTraceSettings
       x-astrbot-scope: system
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Logs]
       summary: Update trace settings
@@ -4425,10 +4425,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TraceSettingsRequest"
+              $ref: '#/components/schemas/TraceSettingsRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/t2i/templates:
     get:
@@ -4437,8 +4437,8 @@ paths:
       operationId: listT2iTemplates
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     post:
       tags: [T2I]
       summary: Create a text-to-image template
@@ -4449,10 +4449,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/T2iTemplateRequest"
+              $ref: '#/components/schemas/T2iTemplateRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/t2i/templates/active:
     get:
@@ -4461,8 +4461,8 @@ paths:
       operationId: getActiveT2iTemplate
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [T2I]
       summary: Set active text-to-image template
@@ -4473,10 +4473,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NameRequest"
+              $ref: '#/components/schemas/NameRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/t2i/templates/default/reset:
     post:
@@ -4485,8 +4485,8 @@ paths:
       operationId: resetDefaultT2iTemplate
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/t2i/templates/{name}:
     get:
@@ -4495,36 +4495,36 @@ paths:
       operationId: getT2iTemplate
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/Name"
+        - $ref: '#/components/parameters/Name'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [T2I]
       summary: Update a text-to-image template
       operationId: updateT2iTemplate
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/Name"
+        - $ref: '#/components/parameters/Name'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/T2iTemplateContentRequest"
+              $ref: '#/components/schemas/T2iTemplateContentRequest'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     delete:
       tags: [T2I]
       summary: Delete a text-to-image template
       operationId: deleteT2iTemplate
       x-astrbot-scope: config
       parameters:
-        - $ref: "#/components/parameters/Name"
+        - $ref: '#/components/parameters/Name'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/subagents/config:
     get:
@@ -4533,8 +4533,8 @@ paths:
       operationId: getSubagentConfig
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
     put:
       tags: [Subagents]
       summary: Update subagent orchestrator configuration
@@ -4545,10 +4545,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/subagents/available-tools:
     get:
@@ -4557,8 +4557,8 @@ paths:
       operationId: listSubagentAvailableTools
       x-astrbot-scope: config
       responses:
-        "200":
-          $ref: "#/components/responses/Ok"
+        '200':
+          $ref: '#/components/responses/Ok'
 
   /api/v1/webhooks/platforms/{webhook_uuid}:
     get:
@@ -4567,9 +4567,9 @@ paths:
       operationId: verifyPlatformWebhook
       security: []
       parameters:
-        - $ref: "#/components/parameters/WebhookUuid"
+        - $ref: '#/components/parameters/WebhookUuid'
       responses:
-        "200":
+        '200':
           description: Webhook verification response
     post:
       tags: [Webhooks]
@@ -4577,19 +4577,19 @@ paths:
       operationId: receivePlatformWebhook
       security: []
       parameters:
-        - $ref: "#/components/parameters/WebhookUuid"
+        - $ref: '#/components/parameters/WebhookUuid'
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DynamicConfig"
+              $ref: '#/components/schemas/DynamicConfig'
           application/octet-stream:
             schema:
               type: string
               format: binary
       responses:
-        "200":
+        '200':
           description: Webhook accepted
 
 components:
@@ -4609,13 +4609,13 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/SuccessEnvelope"
+            $ref: '#/components/schemas/SuccessEnvelope'
     Error:
       description: Standard AstrBot error response
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
     Text:
       description: Text response
       content:
@@ -4624,7 +4624,7 @@ components:
             type: string
         application/json:
           schema:
-            $ref: "#/components/schemas/SuccessEnvelope"
+            $ref: '#/components/schemas/SuccessEnvelope'
     Html:
       description: HTML response
       content:
@@ -4911,8 +4911,34 @@ components:
           type: array
           items:
             type: string
-            enum: [bot, provider, persona, im, config, chat, data, file, plugin, mcp, skill]
-          example: [bot, provider, persona, im, config, chat, data, file, plugin, mcp, skill]
+            enum:
+              [
+                bot,
+                provider,
+                persona,
+                im,
+                config,
+                chat,
+                data,
+                file,
+                plugin,
+                mcp,
+                skill,
+              ]
+          example:
+            [
+              bot,
+              provider,
+              persona,
+              im,
+              config,
+              chat,
+              data,
+              file,
+              plugin,
+              mcp,
+              skill,
+            ]
         expires_at:
           type: string
           format: date-time
@@ -4927,7 +4953,7 @@ components:
         name:
           type: string
         config:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: false
 
     RenameRequest:
@@ -4980,7 +5006,7 @@ components:
           type: boolean
           default: true
         config:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: false
 
     BotRegistrationRequest:
@@ -4991,7 +5017,7 @@ components:
           type: string
           enum: [start, poll]
         platform_config:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
         registration_code:
           type: string
         device_code:
@@ -5024,7 +5050,7 @@ components:
         id:
           type: string
         config:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: false
 
     ProviderConfigRequest:
@@ -5036,12 +5062,12 @@ components:
         provider_source_id:
           type: string
         capability:
-          $ref: "#/components/schemas/ProviderCapability"
+          $ref: '#/components/schemas/ProviderCapability'
         enabled:
           type: boolean
           default: true
         config:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: false
 
     ChatRequest:
@@ -5058,7 +5084,7 @@ components:
             - type: string
             - type: array
               items:
-                $ref: "#/components/schemas/MessagePart"
+                $ref: '#/components/schemas/MessagePart'
         config_id:
           type: string
         config_name:
@@ -5145,7 +5171,7 @@ components:
             - type: string
             - type: array
               items:
-                $ref: "#/components/schemas/MessagePart"
+                $ref: '#/components/schemas/MessagePart'
         selected_provider:
           type: string
         selected_model:
@@ -5196,7 +5222,7 @@ components:
             - type: string
             - type: array
               items:
-                $ref: "#/components/schemas/MessagePart"
+                $ref: '#/components/schemas/MessagePart'
       additionalProperties: false
 
     FileUploadRequest:
@@ -5405,9 +5431,9 @@ components:
         rerank_provider_id:
           type: string
         chunking:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
         metadata:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: false
 
     KnowledgeDocumentUploadRequest:
@@ -5531,7 +5557,7 @@ components:
         rule_key:
           type: string
         rule_value:
-          $ref: "#/components/schemas/DynamicConfig"
+          $ref: '#/components/schemas/DynamicConfig'
       additionalProperties: true
 
     UmoListRequest:
@@ -5554,7 +5580,7 @@ components:
 
     BatchSessionProviderRequest:
       allOf:
-        - $ref: "#/components/schemas/UmoListRequest"
+        - $ref: '#/components/schemas/UmoListRequest'
         - type: object
           required: [provider_id, provider_type]
           properties:
@@ -5566,7 +5592,7 @@ components:
 
     BatchSessionServiceRequest:
       allOf:
-        - $ref: "#/components/schemas/UmoListRequest"
+        - $ref: '#/components/schemas/UmoListRequest'
         - type: object
           properties:
             session_enabled:
@@ -5638,7 +5664,7 @@ components:
         conversations:
           type: array
           items:
-            $ref: "#/components/schemas/ConversationRef"
+            $ref: '#/components/schemas/ConversationRef'
       additionalProperties: false
 
     ConversationExportRequest:
@@ -5647,7 +5673,7 @@ components:
         conversations:
           type: array
           items:
-            $ref: "#/components/schemas/ConversationRef"
+            $ref: '#/components/schemas/ConversationRef'
         conversation_ids:
           type: array
           items:
@@ -5693,7 +5719,7 @@ components:
 
     CronJobPatchRequest:
       allOf:
-        - $ref: "#/components/schemas/CronJobRequest"
+        - $ref: '#/components/schemas/CronJobRequest'
 
     BackupExportRequest:
       type: object

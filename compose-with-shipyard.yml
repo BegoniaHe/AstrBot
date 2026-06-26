@@ -8,8 +8,8 @@ services:
     container_name: astrbot
     restart: always
     ports: # mappings description: https://github.com/AstrBotDevs/AstrBot/issues/497
-      - "6185:6185" # 必选，AstrBot WebUI 端口
-      - "6199:6199" # 可选, QQ 个人号 WebSocket 端口
+      - '6185:6185' # 必选，AstrBot WebUI 端口
+      - '6199:6199' # 可选, QQ 个人号 WebSocket 端口
     environment:
       - TZ=Asia/Shanghai
     volumes:
@@ -37,7 +37,7 @@ services:
       - DEFAULT_SHIP_MEMORY=512m
     volumes:
       - ${PWD}/data/shipyard/bay_data:/app/data
-      - ${PWD}/data/temp:/AstrBot/data/temp           # Bind the local temp directory to the sandbox so that the uploaded file can be accessed in the sandbox
+      - ${PWD}/data/temp:/AstrBot/data/temp # Bind the local temp directory to the sandbox so that the uploaded file can be accessed in the sandbox
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - astrbot_network

@@ -1,7 +1,7 @@
 name: '🐛 Report Bug / 报告 Bug'
 title: '[Bug]'
 description: Submit bug report to help us improve. / 提交报告帮助我们改进。
-labels: [ 'bug' ]
+labels: ['bug']
 body:
   - type: markdown
     attributes:
@@ -77,4 +77,4 @@ body:
 
   - type: markdown
     attributes:
-      value: "Thank you for filling out our form! / 感谢您填写我们的表单！"
+      value: 'Thank you for filling out our form! / 感谢您填写我们的表单！'

@@ -2,9 +2,9 @@ name: AstrBot Dashboard CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ['master']
   pull_request:
-    branches: [ "master" ]
+    branches: ['master']
 
 jobs:
   build:
@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.13.0'
-          cache: "pnpm"
+          cache: 'pnpm'
           cache-dependency-path: dashboard/pnpm-lock.yaml
 
       - name: Install and Build
@@ -56,6 +56,6 @@ jobs:
           tag: release-${{ github.sha }}
           owner: AstrBotDevs
           repo: astrbot-release-harbour
-          body: "Automated release from commit ${{ github.sha }}"
+          body: 'Automated release from commit ${{ github.sha }}'
           token: ${{ secrets.ASTRBOT_HARBOUR_TOKEN }}
-          artifacts: "dashboard/dist.zip"
+          artifacts: 'dashboard/dist.zip'

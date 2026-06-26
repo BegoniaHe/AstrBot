@@ -10,8 +10,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "6185:6185" # AstrBot WebUI
-      - "6199:6199" # Optional. OneBot v11 Napcat Websocket Port
+      - '6185:6185' # AstrBot WebUI
+      - '6199:6199' # Optional. OneBot v11 Napcat Websocket Port
     environment:
       - TZ=Asia/Shanghai
     volumes:

@@ -2,7 +2,7 @@
 **/node_modules/
 .venv*/
 uv.lock
-dashboard/pnpm-lock.yaml
+**/pnpm-lock.yaml
 package-lock.json
 yarn.lock
 

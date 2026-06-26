@@ -1,7 +1,7 @@
 name: 🥳 发布插件
 description: 提交插件到插件市场
-title: "[Plugin] 插件名"
-labels: ["plugin-publish"]
+title: '[Plugin] 插件名'
+labels: ['plugin-publish']
 assignees: []
 body:
   - type: markdown

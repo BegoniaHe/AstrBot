@@ -3,8 +3,8 @@
 extends: default
 
 yaml-files:
-  - "*.yaml"
-  - "*.yml"
+  - '*.yaml'
+  - '*.yml'
 
 rules:
   # Prettier owns line wrapping; do not double-enforce length.
@@ -13,10 +13,13 @@ rules:
   document-start: disable
   # GitHub Actions and similar use `on:` which yamllint flags as truthy.
   truthy:
-    allowed-values: ["true", "false"]
+    allowed-values: ['true', 'false']
     check-keys: false
   comments:
     min-spaces-from-content: 1
+  # Commented-out k8s/CI config alternatives are indented to where the real
+  # key would sit once uncommented; do not flag that convention.
+  comments-indentation: disable
   braces:
     max-spaces-inside: 1
   brackets:
@@ -26,6 +29,6 @@ ignore: |
   .venv*/
   node_modules/
   dashboard/node_modules/
-  dashboard/pnpm-lock.yaml
+  **/pnpm-lock.yaml
   dashboard/dist/
   data/

@@ -174,7 +174,7 @@ format-toml:
 check-yaml:
 	@echo "==> [yaml] prettier --check + yamllint"
 	$(NPX) prettier --check "**/*.{yml,yaml}"
-	uv run yamllint .
+	uv run yamllint --strict .
 
 format-yaml:
 	@echo "==> [yaml] prettier --write"

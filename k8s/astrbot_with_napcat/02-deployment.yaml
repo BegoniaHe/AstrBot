@@ -22,7 +22,7 @@ spec:
       subdomain: astrbot-stack
       # 优雅关闭时间，给 NapCat 足够时间保存状态
       terminationGracePeriodSeconds: 60
-      
+
       # 初始化容器：首次生成随机 machine-id，后续复用
       initContainers:
         - name: init-machine-id
@@ -42,31 +42,31 @@ spec:
           volumeMounts:
             - name: machine-id-data
               mountPath: /machine-id-data
-      
+
       containers:
         - name: napcat
           image: mlikiowa/napcat-docker:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: NAPCAT_UID
-              value: "1000"
+              value: '1000'
             - name: NAPCAT_GID
-              value: "1000"
+              value: '1000'
             - name: MODE
-              value: "astrbot"
+              value: 'astrbot'
             - name: TZ
-              value: "Asia/Shanghai"
+              value: 'Asia/Shanghai'
           ports:
             - containerPort: 6099
               name: napcat-web
           # 资源限制：确保 Guaranteed QoS，减少被驱逐的可能
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "250m"
+              memory: '512Mi'
+              cpu: '250m'
             limits:
-              memory: "1Gi"
-              cpu: "1000m"
+              memory: '1Gi'
+              cpu: '1000m'
           volumeMounts:
             - name: shared-data
               mountPath: /AstrBot/data
@@ -82,23 +82,23 @@ spec:
             - name: localtime
               mountPath: /etc/localtime
               readOnly: true
-        
+
         - name: astrbot
           image: soulter/astrbot:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: TZ
-              value: "Asia/Shanghai"
+              value: 'Asia/Shanghai'
           ports:
             - containerPort: 6185
               name: astrbot-web
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: '256Mi'
+              cpu: '100m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           volumeMounts:
             - name: shared-data
               mountPath: /AstrBot/data
