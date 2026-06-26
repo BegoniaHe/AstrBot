@@ -7,28 +7,105 @@ on:
     branches: [master]
 
 jobs:
-  format-check:
+  python:
+    name: Python (ruff)
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
-
-      - name: Install UV
+      - name: Install uv
         run: pip install uv
-
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --group dev
+      - name: ruff format + check
+        run: make check-py
 
-      - name: Check code formatting with ruff
-        run: |
-          uv run ruff format --check .
+  web:
+    name: Web (eslint + prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install root toolchain
+        run: npm install
+      - name: Install dashboard deps
+        working-directory: dashboard
+        run: npm exec --yes pnpm@10 -- install --frozen-lockfile
+      - name: typecheck + eslint + prettier
+        run: make check-web
 
-      - name: Check code style with ruff
+  data:
+    name: Data (json/css/html/toml/yaml/markdown)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Install root toolchain
+        run: npm install
+      - name: Check json/css/html
+        run: make check-data
+      - name: Check toml
+        run: make check-toml
+      - name: Check yaml
+        run: make check-yaml
+      - name: Check markdown
+        run: make check-md
+
+  shell:
+    name: Shell (shellcheck + shfmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install shellcheck + shfmt
         run: |
-          uv run ruff check .
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64" \
+            -o /usr/local/bin/shfmt
+          sudo chmod +x /usr/local/bin/shfmt
+      - name: shfmt + shellcheck
+        run: make check-shell
+
+  docker:
+    name: Dockerfile (hadolint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+  powershell:
+    name: PowerShell (PSScriptAnalyzer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+      - name: Invoke-ScriptAnalyzer
+        shell: pwsh
+        run: |
+          $r = git ls-files '*.ps1' | ForEach-Object {
+            Invoke-ScriptAnalyzer -Path $_ -Settings PSScriptAnalyzerSettings.psd1
+          }
+          if ($r) {
+            $r | Format-Table -AutoSize | Out-String | Write-Host
+            exit 1
+          }
+          Write-Host 'ok'

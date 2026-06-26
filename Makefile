@@ -211,5 +211,8 @@ format-ps:
 check-docker:
 	@if command -v hadolint >/dev/null 2>&1; then \
 		echo "==> [docker] hadolint"; \
-		hadolint Dockerfile; \
-	else echo "==> [docker] hadolint not found, skipping (CI enforces)"; fi
+		hadolint --config .hadolint.yaml Dockerfile; \
+	elif command -v docker >/dev/null 2>&1; then \
+		echo "==> [docker] hadolint (via docker)"; \
+		MSYS_NO_PATHCONV=1 docker run --rm -i -v "$$(pwd)/.hadolint.yaml:/config.yaml" hadolint/hadolint hadolint --config //config.yaml - < Dockerfile; \
+	else echo "==> [docker] hadolint/docker not found, skipping (CI enforces)"; fi

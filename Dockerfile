@@ -3,6 +3,9 @@ WORKDIR /AstrBot
 
 COPY . /AstrBot/
 
+# Enable pipefail so failures in the NodeSource curl|bash pipe abort the build.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
@@ -22,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN python -m pip install uv \
+RUN python -m pip install --no-cache-dir uv \
     && echo "3.14" > .python-version \
     && uv lock \
     && uv export --format requirements.txt --output-file requirements.txt --frozen \

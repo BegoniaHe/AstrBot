@@ -1,0 +1,11 @@
+# hadolint configuration.
+# Pinning apt/pip package versions (DL3008/DL3013) is deliberately not
+# enforced: this image tracks the python:3.14-slim base and NodeSource LTS,
+# and hard-pinning every transitive apt package breaks reproducibly on base
+# refreshes for little security gain (the Python deps are already pinned via
+# uv.lock / requirements.txt). All other rules stay on.
+ignored:
+  - DL3008
+  - DL3013
+
+failure-threshold: warning
