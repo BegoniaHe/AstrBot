@@ -159,12 +159,17 @@ format-md:
 
 check-toml:
 	@echo "==> [toml] taplo fmt --check + lint"
-	$(NPX) @taplo/cli fmt --check
-	$(NPX) @taplo/cli lint
+	@for f in $$(git ls-files '*.toml'); do \
+		$(NPX) @taplo/cli fmt --check --stdin-filepath "$$f" - < "$$f" || exit 1; \
+		$(NPX) @taplo/cli lint --stdin-filepath "$$f" - < "$$f" || exit 1; \
+	done
 
 format-toml:
 	@echo "==> [toml] taplo fmt"
-	$(NPX) @taplo/cli fmt
+	@for f in $$(git ls-files '*.toml'); do \
+		tmp=$$(mktemp); \
+		$(NPX) @taplo/cli fmt --stdin-filepath "$$f" - < "$$f" > "$$tmp" && mv "$$tmp" "$$f"; \
+	done
 
 check-yaml:
 	@echo "==> [yaml] prettier --check + yamllint"

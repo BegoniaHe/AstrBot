@@ -72,9 +72,7 @@
   "paths": {
     "/api/v1/system-config/schema": {
       "get": {
-        "tags": [
-          "System Config"
-        ],
+        "tags": ["System Config"],
         "summary": "Get the system configuration schema",
         "operationId": "getSystemConfigSchema",
         "x-astrbot-scope": "config",
@@ -87,9 +85,7 @@
     },
     "/api/v1/system-config": {
       "get": {
-        "tags": [
-          "System Config"
-        ],
+        "tags": ["System Config"],
         "summary": "Get the system configuration",
         "operationId": "getSystemConfig",
         "x-astrbot-scope": "config",
@@ -100,9 +96,7 @@
         }
       },
       "put": {
-        "tags": [
-          "System Config"
-        ],
+        "tags": ["System Config"],
         "summary": "Replace the system configuration",
         "operationId": "updateSystemConfig",
         "x-astrbot-scope": "config",
@@ -125,9 +119,7 @@
     },
     "/api/v1/system-config/runtime": {
       "get": {
-        "tags": [
-          "System Config"
-        ],
+        "tags": ["System Config"],
         "summary": "Get runtime-enriched system configuration metadata",
         "operationId": "getSystemConfigRuntime",
         "x-astrbot-scope": "config",
@@ -140,9 +132,7 @@
     },
     "/api/v1/config-profiles/schema": {
       "get": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Get the configuration profile schema",
         "operationId": "getConfigProfileSchema",
         "x-astrbot-scope": "config",
@@ -155,9 +145,7 @@
     },
     "/api/v1/config-profiles": {
       "get": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "List configuration profiles",
         "operationId": "listConfigProfiles",
         "x-astrbot-scope": "config",
@@ -168,9 +156,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Create a configuration profile",
         "operationId": "createConfigProfile",
         "x-astrbot-scope": "config",
@@ -193,9 +179,7 @@
     },
     "/api/v1/config-profiles/{config_id}": {
       "get": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Get a configuration profile",
         "operationId": "getConfigProfile",
         "x-astrbot-scope": "config",
@@ -211,9 +195,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Replace a configuration profile",
         "operationId": "updateConfigProfileContent",
         "x-astrbot-scope": "config",
@@ -239,9 +221,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Rename a configuration profile",
         "operationId": "renameConfigProfile",
         "x-astrbot-scope": "config",
@@ -267,9 +247,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Config Profiles"
-        ],
+        "tags": ["Config Profiles"],
         "summary": "Delete a configuration profile",
         "operationId": "deleteConfigProfile",
         "x-astrbot-scope": "config",
@@ -287,9 +265,7 @@
     },
     "/api/v1/config-routes": {
       "get": {
-        "tags": [
-          "Bot Config Routes"
-        ],
+        "tags": ["Bot Config Routes"],
         "summary": "List UMO to configuration profile bindings",
         "operationId": "listConfigRoutes",
         "x-astrbot-scope": "config",
@@ -300,9 +276,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Bot Config Routes"
-        ],
+        "tags": ["Bot Config Routes"],
         "summary": "Replace all UMO to configuration profile bindings",
         "operationId": "replaceConfigRoutes",
         "x-astrbot-scope": "config",
@@ -325,9 +299,7 @@
     },
     "/api/v1/config-routes/{umo}": {
       "put": {
-        "tags": [
-          "Bot Config Routes"
-        ],
+        "tags": ["Bot Config Routes"],
         "summary": "Bind a UMO to a configuration profile",
         "operationId": "upsertConfigRoute",
         "x-astrbot-scope": "config",
@@ -353,9 +325,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Bot Config Routes"
-        ],
+        "tags": ["Bot Config Routes"],
         "summary": "Remove a UMO configuration profile binding",
         "operationId": "deleteConfigRoute",
         "x-astrbot-scope": "config",
@@ -373,9 +343,7 @@
     },
     "/api/v1/bot-types": {
       "get": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "List configurable bot types and their schemas",
         "operationId": "listBotTypes",
         "x-astrbot-scope": "bot",
@@ -388,9 +356,7 @@
     },
     "/api/v1/bot-types/{bot_type}/registration": {
       "post": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Run a bot type registration flow action",
         "operationId": "registerBotType",
         "x-astrbot-scope": "bot",
@@ -423,9 +389,7 @@
     },
     "/api/v1/bots": {
       "get": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "List created bots and their configurations",
         "operationId": "listBots",
         "x-astrbot-scope": "bot",
@@ -452,9 +416,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Create a bot from configuration",
         "operationId": "createBot",
         "x-astrbot-scope": "bot",
@@ -477,9 +439,7 @@
     },
     "/api/v1/bots/stats": {
       "get": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "List runtime status for all bots",
         "operationId": "listBotStats",
         "x-astrbot-scope": "bot",
@@ -492,9 +452,7 @@
     },
     "/api/v1/bots/by-id": {
       "get": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Get a bot configuration by query ID",
         "operationId": "getBotById",
         "x-astrbot-scope": "bot",
@@ -515,9 +473,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Replace a bot configuration by body ID",
         "operationId": "updateBotById",
         "x-astrbot-scope": "bot",
@@ -527,10 +483,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "bot_id",
-                  "config"
-                ],
+                "required": ["bot_id", "config"],
                 "properties": {
                   "bot_id": {
                     "type": "string"
@@ -551,9 +504,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Delete a bot by query ID",
         "operationId": "deleteBotById",
         "x-astrbot-scope": "bot",
@@ -576,9 +527,7 @@
     },
     "/api/v1/bots/enabled": {
       "patch": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Enable or disable a bot by body ID",
         "operationId": "setBotEnabledById",
         "x-astrbot-scope": "bot",
@@ -588,10 +537,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "bot_id",
-                  "enabled"
-                ],
+                "required": ["bot_id", "enabled"],
                 "properties": {
                   "bot_id": {
                     "type": "string"
@@ -614,9 +560,7 @@
     },
     "/api/v1/bots/test": {
       "post": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Test a bot registration or connection by body ID",
         "operationId": "testBotById",
         "x-astrbot-scope": "bot",
@@ -626,9 +570,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "bot_id"
-                ],
+                "required": ["bot_id"],
                 "properties": {
                   "bot_id": {
                     "type": "string"
@@ -648,9 +590,7 @@
     },
     "/api/v1/bots/{bot_id}": {
       "get": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Get a bot configuration",
         "operationId": "getBot",
         "x-astrbot-scope": "bot",
@@ -666,9 +606,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Replace a bot configuration",
         "operationId": "updateBot",
         "x-astrbot-scope": "bot",
@@ -694,9 +632,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Delete a bot",
         "operationId": "deleteBot",
         "x-astrbot-scope": "bot",
@@ -714,9 +650,7 @@
     },
     "/api/v1/bots/{bot_id}/enabled": {
       "patch": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Enable or disable a bot",
         "operationId": "setBotEnabled",
         "x-astrbot-scope": "bot",
@@ -744,9 +678,7 @@
     },
     "/api/v1/bots/{bot_id}/test": {
       "post": {
-        "tags": [
-          "Bots"
-        ],
+        "tags": ["Bots"],
         "summary": "Test a bot registration or connection",
         "operationId": "testBot",
         "x-astrbot-scope": "bot",
@@ -764,9 +696,7 @@
     },
     "/api/v1/providers/schema": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Get the overall provider configuration schema",
         "operationId": "getProviderSchema",
         "x-astrbot-scope": "provider",
@@ -779,9 +709,7 @@
     },
     "/api/v1/provider-sources": {
       "get": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "List provider sources",
         "operationId": "listProviderSources",
         "x-astrbot-scope": "provider",
@@ -792,9 +720,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Create a provider source",
         "operationId": "createProviderSource",
         "x-astrbot-scope": "provider",
@@ -817,9 +743,7 @@
     },
     "/api/v1/provider-sources/by-id": {
       "get": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Get a provider source by query ID",
         "operationId": "getProviderSourceById",
         "x-astrbot-scope": "provider",
@@ -840,9 +764,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Update a provider source by body ID",
         "operationId": "upsertProviderSourceById",
         "x-astrbot-scope": "provider",
@@ -852,10 +774,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "source_id",
-                  "config"
-                ],
+                "required": ["source_id", "config"],
                 "properties": {
                   "source_id": {
                     "type": "string"
@@ -876,9 +795,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Delete a provider source by query ID",
         "operationId": "deleteProviderSourceById",
         "x-astrbot-scope": "provider",
@@ -901,9 +818,7 @@
     },
     "/api/v1/provider-sources/models": {
       "get": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "List models available from a provider source by query ID",
         "operationId": "listProviderSourceModelsById",
         "x-astrbot-scope": "provider",
@@ -933,9 +848,7 @@
     },
     "/api/v1/provider-sources/providers": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "List providers under a provider source by query ID",
         "operationId": "listProvidersBySourceId",
         "x-astrbot-scope": "provider",
@@ -963,9 +876,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Create a provider under a provider source by body ID",
         "operationId": "createProviderInSourceById",
         "x-astrbot-scope": "provider",
@@ -975,10 +886,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "source_id",
-                  "config"
-                ],
+                "required": ["source_id", "config"],
                 "properties": {
                   "source_id": {
                     "type": "string"
@@ -1001,9 +909,7 @@
     },
     "/api/v1/provider-sources/{source_id}": {
       "get": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Get a provider source",
         "operationId": "getProviderSource",
         "x-astrbot-scope": "provider",
@@ -1019,9 +925,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Update a provider source or create it if missing",
         "operationId": "upsertProviderSource",
         "x-astrbot-scope": "provider",
@@ -1047,9 +951,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "Delete a provider source and providers that reference it",
         "operationId": "deleteProviderSource",
         "x-astrbot-scope": "provider",
@@ -1067,9 +969,7 @@
     },
     "/api/v1/provider-sources/{source_id}/models": {
       "get": {
-        "tags": [
-          "Provider Sources"
-        ],
+        "tags": ["Provider Sources"],
         "summary": "List models available from a provider source",
         "operationId": "listProviderSourceModels",
         "x-astrbot-scope": "provider",
@@ -1094,9 +994,7 @@
     },
     "/api/v1/provider-sources/{source_id}/providers": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "List providers under a provider source",
         "operationId": "listProvidersBySource",
         "x-astrbot-scope": "provider",
@@ -1119,9 +1017,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Create a provider under a provider source",
         "operationId": "createProviderInSource",
         "x-astrbot-scope": "provider",
@@ -1149,9 +1045,7 @@
     },
     "/api/v1/providers": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "List providers by capability or source",
         "operationId": "listProviders",
         "x-astrbot-scope": "provider",
@@ -1185,9 +1079,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Create a standalone provider",
         "operationId": "createProvider",
         "x-astrbot-scope": "provider",
@@ -1210,9 +1102,7 @@
     },
     "/api/v1/providers/by-id": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Get a provider configuration by query ID",
         "operationId": "getProviderById",
         "x-astrbot-scope": "provider",
@@ -1241,9 +1131,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Replace a provider configuration by body ID",
         "operationId": "updateProviderById",
         "x-astrbot-scope": "provider",
@@ -1253,10 +1141,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "provider_id",
-                  "config"
-                ],
+                "required": ["provider_id", "config"],
                 "properties": {
                   "provider_id": {
                     "type": "string"
@@ -1277,9 +1162,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Delete a provider by query ID",
         "operationId": "deleteProviderById",
         "x-astrbot-scope": "provider",
@@ -1302,9 +1185,7 @@
     },
     "/api/v1/providers/enabled": {
       "patch": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Enable or disable a provider by body ID",
         "operationId": "setProviderEnabledById",
         "x-astrbot-scope": "provider",
@@ -1314,10 +1195,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "provider_id",
-                  "enabled"
-                ],
+                "required": ["provider_id", "enabled"],
                 "properties": {
                   "provider_id": {
                     "type": "string"
@@ -1340,9 +1218,7 @@
     },
     "/api/v1/providers/test": {
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Test a provider by body ID",
         "operationId": "testProviderById",
         "x-astrbot-scope": "provider",
@@ -1352,9 +1228,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "provider_id"
-                ],
+                "required": ["provider_id"],
                 "properties": {
                   "provider_id": {
                     "type": "string"
@@ -1374,9 +1248,7 @@
     },
     "/api/v1/providers/embedding-dimension": {
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Probe embedding dimension for a provider by body ID",
         "operationId": "getProviderEmbeddingDimensionById",
         "x-astrbot-scope": "provider",
@@ -1386,9 +1258,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "provider_id"
-                ],
+                "required": ["provider_id"],
                 "properties": {
                   "provider_id": {
                     "type": "string"
@@ -1411,9 +1281,7 @@
     },
     "/api/v1/providers/{provider_id}": {
       "get": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Get a provider configuration",
         "operationId": "getProvider",
         "x-astrbot-scope": "provider",
@@ -1437,9 +1305,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Replace a provider configuration",
         "operationId": "updateProvider",
         "x-astrbot-scope": "provider",
@@ -1465,9 +1331,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Delete a provider",
         "operationId": "deleteProvider",
         "x-astrbot-scope": "provider",
@@ -1495,9 +1359,7 @@
     },
     "/api/v1/providers/{provider_id}/enabled": {
       "patch": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Enable or disable a provider",
         "operationId": "setProviderEnabled",
         "x-astrbot-scope": "provider",
@@ -1525,9 +1387,7 @@
     },
     "/api/v1/providers/{provider_id}/test": {
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Test a provider",
         "operationId": "testProvider",
         "x-astrbot-scope": "provider",
@@ -1545,9 +1405,7 @@
     },
     "/api/v1/providers/{provider_id}/embedding-dimension": {
       "post": {
-        "tags": [
-          "Providers"
-        ],
+        "tags": ["Providers"],
         "summary": "Probe embedding dimension for a provider",
         "operationId": "getProviderEmbeddingDimension",
         "x-astrbot-scope": "provider",
@@ -1575,9 +1433,7 @@
     },
     "/api/v1/chat": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Send a webchat message",
         "operationId": "sendChatMessage",
         "x-astrbot-scope": "chat",
@@ -1600,9 +1456,7 @@
     },
     "/api/v1/chat/ws": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Open a streaming chat WebSocket",
         "operationId": "openChatWebSocket",
         "x-websocket": true,
@@ -1632,9 +1486,7 @@
     },
     "/api/v1/chat/sessions": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "List webchat sessions",
         "operationId": "listChatSessions",
         "x-astrbot-scope": "chat",
@@ -1662,9 +1514,7 @@
     },
     "/api/v1/chat/sessions/new": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Create a webchat session",
         "operationId": "createChatSession",
         "x-astrbot-scope": "chat",
@@ -1687,9 +1537,7 @@
     },
     "/api/v1/chat/sessions/batch-delete": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Delete multiple webchat sessions",
         "operationId": "batchDeleteChatSessions",
         "x-astrbot-scope": "chat",
@@ -1712,9 +1560,7 @@
     },
     "/api/v1/chat/sessions/{session_id}": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Get a webchat session and its messages",
         "operationId": "getChatSession",
         "x-astrbot-scope": "chat",
@@ -1730,9 +1576,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Update a webchat session",
         "operationId": "updateChatSession",
         "x-astrbot-scope": "chat",
@@ -1758,9 +1602,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Delete a webchat session",
         "operationId": "deleteChatSession",
         "x-astrbot-scope": "chat",
@@ -1778,9 +1620,7 @@
     },
     "/api/v1/chat/sessions/{session_id}/stop": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Stop active webchat work for a session",
         "operationId": "stopChatSession",
         "x-astrbot-scope": "chat",
@@ -1798,9 +1638,7 @@
     },
     "/api/v1/chat/sessions/{session_id}/messages/{message_id}": {
       "patch": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Update the latest user message in a webchat session",
         "operationId": "updateChatMessage",
         "x-astrbot-scope": "chat",
@@ -1836,9 +1674,7 @@
     },
     "/api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Regenerate a bot message in a webchat session",
         "operationId": "regenerateChatMessage",
         "x-astrbot-scope": "chat",
@@ -1874,9 +1710,7 @@
     },
     "/api/v1/chat/configs": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "List chat-selectable configuration profiles",
         "operationId": "listChatConfigs",
         "x-astrbot-scope": "config",
@@ -1889,9 +1723,7 @@
     },
     "/api/v1/chat/threads": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Create or reuse a side thread from a webchat message",
         "operationId": "createChatThread",
         "x-astrbot-scope": "chat",
@@ -1914,9 +1746,7 @@
     },
     "/api/v1/chat/threads/{thread_id}": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Get a webchat side thread",
         "operationId": "getChatThread",
         "x-astrbot-scope": "chat",
@@ -1937,9 +1767,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Delete a webchat side thread",
         "operationId": "deleteChatThread",
         "x-astrbot-scope": "chat",
@@ -1962,9 +1790,7 @@
     },
     "/api/v1/chat/threads/{thread_id}/messages": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Send a message inside a webchat side thread",
         "operationId": "sendChatThreadMessage",
         "x-astrbot-scope": "chat",
@@ -1997,9 +1823,7 @@
     },
     "/api/v1/chat/projects": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "List ChatUI projects",
         "operationId": "listChatProjects",
         "x-astrbot-scope": "chat",
@@ -2010,9 +1834,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Create a ChatUI project",
         "operationId": "createChatProject",
         "x-astrbot-scope": "chat",
@@ -2035,9 +1857,7 @@
     },
     "/api/v1/chat/projects/{project_id}": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Get a ChatUI project",
         "operationId": "getChatProject",
         "x-astrbot-scope": "chat",
@@ -2058,9 +1878,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Update a ChatUI project",
         "operationId": "updateChatProject",
         "x-astrbot-scope": "chat",
@@ -2091,9 +1909,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Delete a ChatUI project",
         "operationId": "deleteChatProject",
         "x-astrbot-scope": "chat",
@@ -2116,9 +1932,7 @@
     },
     "/api/v1/chat/projects/{project_id}/sessions": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "List sessions in a ChatUI project",
         "operationId": "listChatProjectSessions",
         "x-astrbot-scope": "chat",
@@ -2141,9 +1955,7 @@
     },
     "/api/v1/chat/projects/{project_id}/sessions/{session_id}": {
       "post": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Add a session to a ChatUI project",
         "operationId": "addChatProjectSession",
         "x-astrbot-scope": "chat",
@@ -2169,9 +1981,7 @@
     },
     "/api/v1/chat/projects/sessions/{session_id}": {
       "delete": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Remove a session from its ChatUI project",
         "operationId": "removeChatProjectSession",
         "x-astrbot-scope": "chat",
@@ -2189,9 +1999,7 @@
     },
     "/api/v1/im/messages": {
       "post": {
-        "tags": [
-          "IM"
-        ],
+        "tags": ["IM"],
         "summary": "Send a message to a UMO",
         "operationId": "sendImMessage",
         "x-astrbot-scope": "im",
@@ -2214,9 +2022,7 @@
     },
     "/api/v1/im/bots": {
       "get": {
-        "tags": [
-          "IM"
-        ],
+        "tags": ["IM"],
         "summary": "List active IM bot IDs",
         "operationId": "listImBots",
         "x-astrbot-scope": "im",
@@ -2229,9 +2035,7 @@
     },
     "/api/v1/files": {
       "post": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Upload a file",
         "operationId": "uploadFile",
         "x-astrbot-scope": "file",
@@ -2254,9 +2058,7 @@
     },
     "/api/v1/file": {
       "post": {
-        "tags": [
-          "Open API"
-        ],
+        "tags": ["Open API"],
         "summary": "Upload a file",
         "operationId": "uploadOpenApiFile",
         "x-astrbot-scope": "file",
@@ -2277,9 +2079,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Open API"
-        ],
+        "tags": ["Open API"],
         "summary": "Download an uploaded file by attachment ID",
         "operationId": "downloadOpenApiFile",
         "x-astrbot-scope": "file",
@@ -2305,9 +2105,7 @@
     },
     "/api/v1/files/content": {
       "get": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Get an uploaded file by stored filename",
         "operationId": "getFileByName",
         "x-astrbot-scope": "file",
@@ -2338,9 +2136,7 @@
     },
     "/api/v1/files/tokens/{file_token}": {
       "get": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Get a tokenized public file",
         "operationId": "getTokenFile",
         "x-astrbot-scope": "file",
@@ -2371,9 +2167,7 @@
     },
     "/api/v1/files/{attachment_id}": {
       "get": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Get attachment metadata",
         "operationId": "getAttachment",
         "x-astrbot-scope": "file",
@@ -2389,9 +2183,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Delete an attachment",
         "operationId": "deleteAttachment",
         "x-astrbot-scope": "file",
@@ -2409,9 +2201,7 @@
     },
     "/api/v1/files/{attachment_id}/content": {
       "get": {
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "summary": "Download attachment content",
         "operationId": "downloadAttachment",
         "x-astrbot-scope": "file",
@@ -2437,9 +2227,7 @@
     },
     "/api/v1/plugins": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List installed plugins",
         "operationId": "listPlugins",
         "x-astrbot-scope": "plugin",
@@ -2469,9 +2257,7 @@
     },
     "/api/v1/plugins/by-id": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin details by query ID",
         "operationId": "getPluginById",
         "x-astrbot-scope": "plugin",
@@ -2492,9 +2278,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Uninstall a plugin by query ID",
         "operationId": "uninstallPluginById",
         "x-astrbot-scope": "plugin",
@@ -2536,9 +2320,7 @@
     },
     "/api/v1/plugins/config": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin configuration by query ID",
         "operationId": "getPluginConfigById",
         "x-astrbot-scope": "plugin",
@@ -2559,9 +2341,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Save plugin configuration by body ID",
         "operationId": "updatePluginConfigById",
         "x-astrbot-scope": "plugin",
@@ -2571,10 +2351,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "plugin_id",
-                  "config"
-                ],
+                "required": ["plugin_id", "config"],
                 "properties": {
                   "plugin_id": {
                     "type": "string"
@@ -2597,9 +2374,7 @@
     },
     "/api/v1/plugins/config/schema": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin configuration schema by query ID",
         "operationId": "getPluginConfigSchemaById",
         "x-astrbot-scope": "plugin",
@@ -2622,9 +2397,7 @@
     },
     "/api/v1/plugins/config-files": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List uploaded files for a plugin file configuration item by query ID",
         "operationId": "listPluginConfigFilesById",
         "x-astrbot-scope": "plugin",
@@ -2653,9 +2426,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Upload files for a plugin file configuration item by query ID",
         "operationId": "uploadPluginConfigFilesById",
         "x-astrbot-scope": "plugin",
@@ -2695,9 +2466,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Delete a plugin file configuration upload by query ID",
         "operationId": "deletePluginConfigFileById",
         "x-astrbot-scope": "plugin",
@@ -2730,9 +2499,7 @@
     },
     "/api/v1/plugins/readme": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin README content by query ID",
         "operationId": "getPluginReadmeById",
         "x-astrbot-scope": "plugin",
@@ -2755,9 +2522,7 @@
     },
     "/api/v1/plugins/changelog": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin CHANGELOG content by query ID",
         "operationId": "getPluginChangelogById",
         "x-astrbot-scope": "plugin",
@@ -2780,9 +2545,7 @@
     },
     "/api/v1/plugins/reload": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Reload a plugin by body ID",
         "operationId": "reloadPluginById",
         "x-astrbot-scope": "plugin",
@@ -2792,9 +2555,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "plugin_id"
-                ],
+                "required": ["plugin_id"],
                 "properties": {
                   "plugin_id": {
                     "type": "string"
@@ -2814,9 +2575,7 @@
     },
     "/api/v1/plugins/enabled": {
       "patch": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Enable or disable a plugin by body ID",
         "operationId": "setPluginEnabledById",
         "x-astrbot-scope": "plugin",
@@ -2826,10 +2585,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "plugin_id",
-                  "enabled"
-                ],
+                "required": ["plugin_id", "enabled"],
                 "properties": {
                   "plugin_id": {
                     "type": "string"
@@ -2852,9 +2608,7 @@
     },
     "/api/v1/plugins/{plugin_id}": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin details",
         "operationId": "getPlugin",
         "x-astrbot-scope": "plugin",
@@ -2889,9 +2643,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Uninstall a plugin",
         "operationId": "uninstallPlugin",
         "x-astrbot-scope": "plugin",
@@ -2928,9 +2680,7 @@
     },
     "/api/v1/plugins/{plugin_id}/config": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin configuration",
         "operationId": "getPluginConfig",
         "x-astrbot-scope": "plugin",
@@ -2946,9 +2696,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Save plugin configuration",
         "operationId": "updatePluginConfig",
         "x-astrbot-scope": "plugin",
@@ -2976,9 +2724,7 @@
     },
     "/api/v1/plugins/{plugin_id}/config/schema": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin configuration schema",
         "operationId": "getPluginConfigSchema",
         "x-astrbot-scope": "plugin",
@@ -2996,9 +2742,7 @@
     },
     "/api/v1/plugins/{plugin_id}/config-files/{config_key}": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List uploaded files for a plugin file configuration item",
         "operationId": "listPluginConfigFiles",
         "x-astrbot-scope": "plugin",
@@ -3023,9 +2767,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Upload files for a plugin file configuration item",
         "operationId": "uploadPluginConfigFiles",
         "x-astrbot-scope": "plugin",
@@ -3063,9 +2805,7 @@
     },
     "/api/v1/plugins/{plugin_id}/config-files": {
       "delete": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Delete a plugin file configuration upload",
         "operationId": "deletePluginConfigFile",
         "x-astrbot-scope": "plugin",
@@ -3093,9 +2833,7 @@
     },
     "/api/v1/plugins/{plugin_id}/readme": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin README content",
         "operationId": "getPluginReadme",
         "x-astrbot-scope": "plugin",
@@ -3113,9 +2851,7 @@
     },
     "/api/v1/plugins/{plugin_id}/changelog": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Get plugin CHANGELOG content",
         "operationId": "getPluginChangelog",
         "x-astrbot-scope": "plugin",
@@ -3133,9 +2869,7 @@
     },
     "/api/v1/plugins/{plugin_id}/reload": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Reload a plugin",
         "operationId": "reloadPlugin",
         "x-astrbot-scope": "plugin",
@@ -3153,9 +2887,7 @@
     },
     "/api/v1/plugins/{plugin_id}/enabled": {
       "patch": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Enable or disable a plugin",
         "operationId": "setPluginEnabled",
         "x-astrbot-scope": "plugin",
@@ -3183,9 +2915,7 @@
     },
     "/api/v1/plugins/{plugin_id}/update": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Update or reinstall a plugin",
         "operationId": "updatePlugin",
         "x-astrbot-scope": "plugin",
@@ -3213,9 +2943,7 @@
     },
     "/api/v1/plugins/update": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Update multiple plugins",
         "operationId": "updatePlugins",
         "x-astrbot-scope": "plugin",
@@ -3238,9 +2966,7 @@
     },
     "/api/v1/plugins/version-support/check": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Check whether a plugin version constraint is supported",
         "operationId": "checkPluginVersionSupport",
         "x-astrbot-scope": "plugin",
@@ -3263,9 +2989,7 @@
     },
     "/api/v1/plugins/failed": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List failed plugins and errors",
         "operationId": "listFailedPlugins",
         "x-astrbot-scope": "plugin",
@@ -3278,9 +3002,7 @@
     },
     "/api/v1/plugins/failed/{plugin_id}": {
       "delete": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Uninstall a failed plugin",
         "operationId": "uninstallFailedPlugin",
         "x-astrbot-scope": "plugin",
@@ -3317,9 +3039,7 @@
     },
     "/api/v1/plugins/failed/{plugin_id}/reload": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Reload a failed plugin",
         "operationId": "reloadFailedPlugin",
         "x-astrbot-scope": "plugin",
@@ -3337,9 +3057,7 @@
     },
     "/api/v1/plugins/install/github": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Install a plugin from GitHub",
         "operationId": "installPluginFromGithub",
         "x-astrbot-scope": "plugin",
@@ -3362,9 +3080,7 @@
     },
     "/api/v1/plugins/install/url": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Install a plugin from a downloadable ZIP URL",
         "operationId": "installPluginFromUrl",
         "x-astrbot-scope": "plugin",
@@ -3387,9 +3103,7 @@
     },
     "/api/v1/plugins/install/upload": {
       "post": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "Install a plugin from an uploaded ZIP file",
         "operationId": "installPluginFromUpload",
         "x-astrbot-scope": "plugin",
@@ -3412,9 +3126,7 @@
     },
     "/api/v1/plugins/market": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List plugin marketplace entries",
         "operationId": "listPluginMarket",
         "x-astrbot-scope": "plugin",
@@ -3437,12 +3149,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "recommended",
-                "downloads",
-                "updated",
-                "name"
-              ]
+              "enum": ["recommended", "downloads", "updated", "name"]
             }
           },
           {
@@ -3476,9 +3183,7 @@
     },
     "/api/v1/plugins/market/categories": {
       "get": {
-        "tags": [
-          "Plugins"
-        ],
+        "tags": ["Plugins"],
         "summary": "List plugin marketplace categories",
         "operationId": "listPluginMarketCategories",
         "x-astrbot-scope": "plugin",
@@ -3491,9 +3196,7 @@
     },
     "/api/v1/plugin-sources": {
       "get": {
-        "tags": [
-          "Plugin Sources"
-        ],
+        "tags": ["Plugin Sources"],
         "summary": "List plugin sources",
         "operationId": "listPluginSources",
         "x-astrbot-scope": "plugin",
@@ -3504,9 +3207,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Plugin Sources"
-        ],
+        "tags": ["Plugin Sources"],
         "summary": "Add a plugin source",
         "operationId": "createPluginSource",
         "x-astrbot-scope": "plugin",
@@ -3527,9 +3228,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Plugin Sources"
-        ],
+        "tags": ["Plugin Sources"],
         "summary": "Replace plugin sources",
         "operationId": "replacePluginSources",
         "x-astrbot-scope": "plugin",
@@ -3539,9 +3238,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "sources"
-                ],
+                "required": ["sources"],
                 "properties": {
                   "sources": {
                     "type": "array",
@@ -3563,9 +3260,7 @@
     },
     "/api/v1/plugin-sources/{source_id}": {
       "delete": {
-        "tags": [
-          "Plugin Sources"
-        ],
+        "tags": ["Plugin Sources"],
         "summary": "Delete a plugin source",
         "operationId": "deletePluginSource",
         "x-astrbot-scope": "plugin",
@@ -3583,9 +3278,7 @@
     },
     "/api/v1/plugin-sources/by-id": {
       "delete": {
-        "tags": [
-          "Plugin Sources"
-        ],
+        "tags": ["Plugin Sources"],
         "summary": "Delete a plugin source by query ID",
         "operationId": "deletePluginSourceById",
         "x-astrbot-scope": "plugin",
@@ -3608,9 +3301,7 @@
     },
     "/api/v1/mcp/servers": {
       "get": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "List MCP servers",
         "operationId": "listMcpServers",
         "x-astrbot-scope": "mcp",
@@ -3621,9 +3312,7 @@
         }
       },
       "post": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Add an MCP server",
         "operationId": "createMcpServer",
         "x-astrbot-scope": "mcp",
@@ -3646,9 +3335,7 @@
     },
     "/api/v1/mcp/servers/by-name": {
       "put": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Update an MCP server by body name",
         "operationId": "updateMcpServerByName",
         "x-astrbot-scope": "mcp",
@@ -3658,9 +3345,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "server_name"
-                ],
+                "required": ["server_name"],
                 "properties": {
                   "server_name": {
                     "type": "string"
@@ -3684,9 +3369,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Delete an MCP server by query name",
         "operationId": "deleteMcpServerByName",
         "x-astrbot-scope": "mcp",
@@ -3709,9 +3392,7 @@
     },
     "/api/v1/mcp/servers/enabled": {
       "patch": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Enable or disable an MCP server by body name",
         "operationId": "setMcpServerEnabledByName",
         "x-astrbot-scope": "mcp",
@@ -3721,10 +3402,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "server_name",
-                  "enabled"
-                ],
+                "required": ["server_name", "enabled"],
                 "properties": {
                   "server_name": {
                     "type": "string"
@@ -3747,9 +3425,7 @@
     },
     "/api/v1/mcp/servers/test": {
       "post": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Test an MCP server connection by body name",
         "operationId": "testMcpServerByName",
         "x-astrbot-scope": "mcp",
@@ -3759,9 +3435,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "server_name"
-                ],
+                "required": ["server_name"],
                 "properties": {
                   "server_name": {
                     "type": "string"
@@ -3787,9 +3461,7 @@
     },
     "/api/v1/mcp/servers/{server_name}": {
       "put": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Update an MCP server",
         "operationId": "updateMcpServer",
         "x-astrbot-scope": "mcp",
@@ -3815,9 +3487,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Delete an MCP server",
         "operationId": "deleteMcpServer",
         "x-astrbot-scope": "mcp",
@@ -3835,9 +3505,7 @@
     },
     "/api/v1/mcp/servers/{server_name}/enabled": {
       "patch": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Enable or disable an MCP server",
         "operationId": "setMcpServerEnabled",
         "x-astrbot-scope": "mcp",
@@ -3865,9 +3533,7 @@
     },
     "/api/v1/mcp/servers/{server_name}/test": {
       "post": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Test an MCP server connection",
         "operationId": "testMcpServer",
         "x-astrbot-scope": "mcp",
@@ -3902,9 +3568,7 @@
     },
     "/api/v1/mcp/providers/modelscope/sync": {
       "post": {
-        "tags": [
-          "MCP"
-        ],
+        "tags": ["MCP"],
         "summary": "Sync MCP servers from ModelScope",
         "operationId": "syncModelScopeMcpServers",
         "x-astrbot-scope": "mcp",
@@ -3927,9 +3591,7 @@
     },
     "/api/v1/skills": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "List skills",
         "operationId": "listSkills",
         "x-astrbot-scope": "skill",
@@ -3956,9 +3618,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Upload or import a skill archive",
         "operationId": "uploadSkill",
         "x-astrbot-scope": "skill",
@@ -3981,9 +3641,7 @@
     },
     "/api/v1/skills/batch": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Upload multiple skill archives",
         "operationId": "uploadSkillsBatch",
         "x-astrbot-scope": "skill",
@@ -3993,9 +3651,7 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "files"
-                ],
+                "required": ["files"],
                 "properties": {
                   "files": {
                     "type": "array",
@@ -4018,9 +3674,7 @@
     },
     "/api/v1/skills/by-name": {
       "patch": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Update skill metadata or enabled state by body name",
         "operationId": "updateSkillByName",
         "x-astrbot-scope": "skill",
@@ -4030,9 +3684,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "skill_name"
-                ],
+                "required": ["skill_name"],
                 "properties": {
                   "skill_name": {
                     "type": "string"
@@ -4056,9 +3708,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Delete a skill by query name",
         "operationId": "deleteSkillByName",
         "x-astrbot-scope": "skill",
@@ -4081,9 +3731,7 @@
     },
     "/api/v1/skills/archive": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Download a skill archive by query name",
         "operationId": "downloadSkillByName",
         "x-astrbot-scope": "skill",
@@ -4114,9 +3762,7 @@
     },
     "/api/v1/skills/files": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "List files in a skill by query name",
         "operationId": "listSkillFilesByName",
         "x-astrbot-scope": "skill",
@@ -4146,9 +3792,7 @@
     },
     "/api/v1/skills/file": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Get skill file content by query name and path",
         "operationId": "getSkillFileByName",
         "x-astrbot-scope": "skill",
@@ -4177,9 +3821,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Update skill file content by body name and path",
         "operationId": "updateSkillFileByName",
         "x-astrbot-scope": "skill",
@@ -4189,11 +3831,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "skill_name",
-                  "path",
-                  "content"
-                ],
+                "required": ["skill_name", "path", "content"],
                 "properties": {
                   "skill_name": {
                     "type": "string"
@@ -4219,9 +3857,7 @@
     },
     "/api/v1/skills/{skill_name}": {
       "patch": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Update skill metadata or enabled state",
         "operationId": "updateSkill",
         "x-astrbot-scope": "skill",
@@ -4247,9 +3883,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Delete a skill",
         "operationId": "deleteSkill",
         "x-astrbot-scope": "skill",
@@ -4267,9 +3901,7 @@
     },
     "/api/v1/skills/{skill_name}/archive": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Download a skill archive",
         "operationId": "downloadSkill",
         "x-astrbot-scope": "skill",
@@ -4295,9 +3927,7 @@
     },
     "/api/v1/skills/{skill_name}/files": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "List files in a skill",
         "operationId": "listSkillFiles",
         "x-astrbot-scope": "skill",
@@ -4322,9 +3952,7 @@
     },
     "/api/v1/skills/{skill_name}/files/{file_path}": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Get skill file content",
         "operationId": "getSkillFile",
         "x-astrbot-scope": "skill",
@@ -4343,9 +3971,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Update skill file content",
         "operationId": "updateSkillFile",
         "x-astrbot-scope": "skill",
@@ -4376,9 +4002,7 @@
     },
     "/api/v1/skills/neo/candidates": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "List Shipyard Neo skill candidates",
         "operationId": "listNeoSkillCandidates",
         "x-astrbot-scope": "skill",
@@ -4407,9 +4031,7 @@
     },
     "/api/v1/skills/neo/releases": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "List Shipyard Neo skill releases",
         "operationId": "listNeoSkillReleases",
         "x-astrbot-scope": "skill",
@@ -4438,9 +4060,7 @@
     },
     "/api/v1/skills/neo/payload": {
       "get": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Get a Shipyard Neo skill payload",
         "operationId": "getNeoSkillPayload",
         "x-astrbot-scope": "skill",
@@ -4463,9 +4083,7 @@
     },
     "/api/v1/skills/neo/evaluate": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Evaluate a Shipyard Neo skill candidate",
         "operationId": "evaluateNeoSkillCandidate",
         "x-astrbot-scope": "skill",
@@ -4488,9 +4106,7 @@
     },
     "/api/v1/skills/neo/promote": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Promote a Shipyard Neo skill candidate",
         "operationId": "promoteNeoSkillCandidate",
         "x-astrbot-scope": "skill",
@@ -4513,9 +4129,7 @@
     },
     "/api/v1/skills/neo/rollback": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Roll back a Shipyard Neo skill release",
         "operationId": "rollbackNeoSkillRelease",
         "x-astrbot-scope": "skill",
@@ -4538,9 +4152,7 @@
     },
     "/api/v1/skills/neo/sync": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Sync a Shipyard Neo skill release",
         "operationId": "syncNeoSkillRelease",
         "x-astrbot-scope": "skill",
@@ -4563,9 +4175,7 @@
     },
     "/api/v1/skills/neo/candidates/delete": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Delete a Shipyard Neo skill candidate",
         "operationId": "deleteNeoSkillCandidate",
         "x-astrbot-scope": "skill",
@@ -4588,9 +4198,7 @@
     },
     "/api/v1/skills/neo/releases/delete": {
       "post": {
-        "tags": [
-          "Skills"
-        ],
+        "tags": ["Skills"],
         "summary": "Delete a Shipyard Neo skill release",
         "operationId": "deleteNeoSkillRelease",
         "x-astrbot-scope": "skill",
@@ -4613,9 +4221,7 @@
     },
     "/api/v1/personas/tree": {
       "get": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Get persona folder tree",
         "operationId": "getPersonaTree",
         "x-astrbot-scope": "persona",
@@ -4628,9 +4234,7 @@
     },
     "/api/v1/personas": {
       "get": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "List personas",
         "operationId": "listPersonas",
         "x-astrbot-scope": "persona",
@@ -4650,9 +4254,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Create a persona",
         "operationId": "createPersona",
         "x-astrbot-scope": "persona",
@@ -4675,9 +4277,7 @@
     },
     "/api/v1/personas/by-id": {
       "get": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Get a persona by query ID",
         "operationId": "getPersonaById",
         "x-astrbot-scope": "persona",
@@ -4698,9 +4298,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Update a persona by body ID",
         "operationId": "updatePersonaById",
         "x-astrbot-scope": "persona",
@@ -4710,9 +4308,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "persona_id"
-                ],
+                "required": ["persona_id"],
                 "properties": {
                   "persona_id": {
                     "type": "string"
@@ -4730,9 +4326,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Delete a persona by query ID",
         "operationId": "deletePersonaById",
         "x-astrbot-scope": "persona",
@@ -4755,9 +4349,7 @@
     },
     "/api/v1/personas/{persona_id}": {
       "get": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Get a persona",
         "operationId": "getPersona",
         "x-astrbot-scope": "persona",
@@ -4773,9 +4365,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Update a persona",
         "operationId": "updatePersona",
         "x-astrbot-scope": "persona",
@@ -4801,9 +4391,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Delete a persona",
         "operationId": "deletePersona",
         "x-astrbot-scope": "persona",
@@ -4821,9 +4409,7 @@
     },
     "/api/v1/persona-folders": {
       "get": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "List persona folders",
         "operationId": "listPersonaFolders",
         "x-astrbot-scope": "persona",
@@ -4843,9 +4429,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Create a persona folder",
         "operationId": "createPersonaFolder",
         "x-astrbot-scope": "persona",
@@ -4868,9 +4452,7 @@
     },
     "/api/v1/persona-folders/{folder_id}": {
       "put": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Update a persona folder",
         "operationId": "updatePersonaFolder",
         "x-astrbot-scope": "persona",
@@ -4896,9 +4478,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Delete a persona folder",
         "operationId": "deletePersonaFolder",
         "x-astrbot-scope": "persona",
@@ -4916,9 +4496,7 @@
     },
     "/api/v1/personas/move": {
       "post": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Move a persona or folder",
         "operationId": "movePersonaItem",
         "x-astrbot-scope": "persona",
@@ -4941,9 +4519,7 @@
     },
     "/api/v1/personas/reorder": {
       "post": {
-        "tags": [
-          "Personas"
-        ],
+        "tags": ["Personas"],
         "summary": "Reorder personas or folders",
         "operationId": "reorderPersonaItems",
         "x-astrbot-scope": "persona",
@@ -4966,9 +4542,7 @@
     },
     "/api/v1/t2i/templates": {
       "get": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "List text-to-image templates",
         "operationId": "listT2iTemplates",
         "x-astrbot-scope": "config",
@@ -4979,9 +4553,7 @@
         }
       },
       "post": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Create a text-to-image template",
         "operationId": "createT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5004,9 +4576,7 @@
     },
     "/api/v1/t2i/templates/active": {
       "get": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Get active text-to-image template",
         "operationId": "getActiveT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5017,9 +4587,7 @@
         }
       },
       "put": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Set active text-to-image template",
         "operationId": "setActiveT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5042,9 +4610,7 @@
     },
     "/api/v1/t2i/templates/default/reset": {
       "post": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Reset the default text-to-image template",
         "operationId": "resetDefaultT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5057,9 +4623,7 @@
     },
     "/api/v1/t2i/templates/{name}": {
       "get": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Get a text-to-image template",
         "operationId": "getT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5075,9 +4639,7 @@
         }
       },
       "put": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Update a text-to-image template",
         "operationId": "updateT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5103,9 +4665,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "T2I"
-        ],
+        "tags": ["T2I"],
         "summary": "Delete a text-to-image template",
         "operationId": "deleteT2iTemplate",
         "x-astrbot-scope": "config",
@@ -5123,9 +4683,7 @@
     },
     "/api/v1/subagents/config": {
       "get": {
-        "tags": [
-          "Subagents"
-        ],
+        "tags": ["Subagents"],
         "summary": "Get subagent orchestrator configuration",
         "operationId": "getSubagentConfig",
         "x-astrbot-scope": "config",
@@ -5136,9 +4694,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Subagents"
-        ],
+        "tags": ["Subagents"],
         "summary": "Update subagent orchestrator configuration",
         "operationId": "updateSubagentConfig",
         "x-astrbot-scope": "config",
@@ -5161,9 +4717,7 @@
     },
     "/api/v1/subagents/available-tools": {
       "get": {
-        "tags": [
-          "Subagents"
-        ],
+        "tags": ["Subagents"],
         "summary": "List tools available to subagents",
         "operationId": "listSubagentAvailableTools",
         "x-astrbot-scope": "config",
@@ -5361,10 +4915,7 @@
     "schemas": {
       "SuccessEnvelope": {
         "type": "object",
-        "required": [
-          "status",
-          "data"
-        ],
+        "required": ["status", "data"],
         "properties": {
           "status": {
             "type": "string",
@@ -5383,14 +4934,7 @@
       },
       "ProviderCapability": {
         "type": "string",
-        "enum": [
-          "chat",
-          "agent",
-          "stt",
-          "tts",
-          "embedding",
-          "rerank"
-        ]
+        "enum": ["chat", "agent", "stt", "tts", "embedding", "rerank"]
       },
       "CreateConfigProfileRequest": {
         "type": "object",
@@ -5406,9 +4950,7 @@
       },
       "RenameRequest": {
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string"
@@ -5418,9 +4960,7 @@
       },
       "NameRequest": {
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string"
@@ -5430,9 +4970,7 @@
       },
       "ConfigRoutesReplaceRequest": {
         "type": "object",
-        "required": [
-          "routing"
-        ],
+        "required": ["routing"],
         "properties": {
           "routing": {
             "type": "object",
@@ -5445,9 +4983,7 @@
       },
       "ConfigRouteUpsertRequest": {
         "type": "object",
-        "required": [
-          "config_id"
-        ],
+        "required": ["config_id"],
         "properties": {
           "config_id": {
             "type": "string",
@@ -5458,10 +4994,7 @@
       },
       "BotConfigRequest": {
         "type": "object",
-        "required": [
-          "type",
-          "config"
-        ],
+        "required": ["type", "config"],
         "properties": {
           "id": {
             "type": "string"
@@ -5485,16 +5018,11 @@
       },
       "BotRegistrationRequest": {
         "type": "object",
-        "required": [
-          "action"
-        ],
+        "required": ["action"],
         "properties": {
           "action": {
             "type": "string",
-            "enum": [
-              "start",
-              "poll"
-            ]
+            "enum": ["start", "poll"]
           },
           "platform_config": {
             "$ref": "#/components/schemas/DynamicConfig"
@@ -5513,9 +5041,7 @@
       },
       "EnabledPatch": {
         "type": "object",
-        "required": [
-          "enabled"
-        ],
+        "required": ["enabled"],
         "properties": {
           "enabled": {
             "type": "boolean"
@@ -5525,9 +5051,7 @@
       },
       "ProviderSourceConfigRequest": {
         "type": "object",
-        "required": [
-          "config"
-        ],
+        "required": ["config"],
         "properties": {
           "id": {
             "type": "string"
@@ -5540,9 +5064,7 @@
       },
       "ProviderConfigRequest": {
         "type": "object",
-        "required": [
-          "config"
-        ],
+        "required": ["config"],
         "properties": {
           "id": {
             "type": "string"
@@ -5565,9 +5087,7 @@
       },
       "ChatRequest": {
         "type": "object",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "username": {
             "type": "string",
@@ -5626,9 +5146,7 @@
       },
       "ChatSessionBatchDeleteRequest": {
         "type": "object",
-        "required": [
-          "session_ids"
-        ],
+        "required": ["session_ids"],
         "properties": {
           "session_ids": {
             "type": "array",
@@ -5650,9 +5168,7 @@
       },
       "ChatMessagePatchRequest": {
         "type": "object",
-        "required": [
-          "content"
-        ],
+        "required": ["content"],
         "properties": {
           "content": {
             "type": "object",
@@ -5679,11 +5195,7 @@
       },
       "ChatThreadCreateRequest": {
         "type": "object",
-        "required": [
-          "session_id",
-          "parent_message_id",
-          "selected_text"
-        ],
+        "required": ["session_id", "parent_message_id", "selected_text"],
         "properties": {
           "session_id": {
             "type": "string"
@@ -5706,9 +5218,7 @@
       },
       "ChatThreadMessageRequest": {
         "type": "object",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "oneOf": [
@@ -5753,9 +5263,7 @@
       },
       "MessagePart": {
         "type": "object",
-        "required": [
-          "type"
-        ],
+        "required": ["type"],
         "properties": {
           "type": {
             "type": "string",
@@ -5790,10 +5298,7 @@
       },
       "ImMessageRequest": {
         "type": "object",
-        "required": [
-          "umo",
-          "message"
-        ],
+        "required": ["umo", "message"],
         "properties": {
           "umo": {
             "type": "string"
@@ -5816,9 +5321,7 @@
       },
       "FileUploadRequest": {
         "type": "object",
-        "required": [
-          "file"
-        ],
+        "required": ["file"],
         "properties": {
           "file": {
             "type": "string",
@@ -5871,9 +5374,7 @@
       },
       "PluginGithubInstallRequest": {
         "type": "object",
-        "required": [
-          "repository"
-        ],
+        "required": ["repository"],
         "properties": {
           "repository": {
             "type": "string",
@@ -5897,9 +5398,7 @@
       },
       "PluginUrlInstallRequest": {
         "type": "object",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "url": {
             "type": "string",
@@ -5921,9 +5420,7 @@
       },
       "PluginUploadInstallRequest": {
         "type": "object",
-        "required": [
-          "file"
-        ],
+        "required": ["file"],
         "properties": {
           "file": {
             "type": "string",
@@ -5933,9 +5430,7 @@
       },
       "PluginConfigFileDeleteRequest": {
         "type": "object",
-        "required": [
-          "path"
-        ],
+        "required": ["path"],
         "properties": {
           "path": {
             "type": "string"
@@ -5945,9 +5440,7 @@
       },
       "PluginSourceRequest": {
         "type": "object",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "id": {
             "type": "string"
@@ -5964,9 +5457,7 @@
       },
       "McpServerConfig": {
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string"
@@ -5977,11 +5468,7 @@
           },
           "transport": {
             "type": "string",
-            "enum": [
-              "stdio",
-              "sse",
-              "streamable_http"
-            ]
+            "enum": ["stdio", "sse", "streamable_http"]
           },
           "command": {
             "type": "string"
@@ -6018,9 +5505,7 @@
       },
       "SkillUploadRequest": {
         "type": "object",
-        "required": [
-          "file"
-        ],
+        "required": ["file"],
         "properties": {
           "file": {
             "type": "string",
@@ -6049,9 +5534,7 @@
       },
       "NeoCandidateActionRequest": {
         "type": "object",
-        "required": [
-          "candidate_id"
-        ],
+        "required": ["candidate_id"],
         "properties": {
           "candidate_id": {
             "type": "string"
@@ -6061,9 +5544,7 @@
       },
       "NeoReleaseActionRequest": {
         "type": "object",
-        "required": [
-          "release_id"
-        ],
+        "required": ["release_id"],
         "properties": {
           "release_id": {
             "type": "string"
@@ -6073,10 +5554,7 @@
       },
       "PersonaRequest": {
         "type": "object",
-        "required": [
-          "persona_id",
-          "system_prompt"
-        ],
+        "required": ["persona_id", "system_prompt"],
         "properties": {
           "persona_id": {
             "type": "string"
@@ -6128,9 +5606,7 @@
       },
       "PersonaMoveRequest": {
         "type": "object",
-        "required": [
-          "persona_id"
-        ],
+        "required": ["persona_id"],
         "properties": {
           "persona_id": {
             "type": "string"
@@ -6143,29 +5619,20 @@
       },
       "ReorderRequest": {
         "type": "object",
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "properties": {
           "items": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "type",
-                "sort_order"
-              ],
+              "required": ["id", "type", "sort_order"],
               "properties": {
                 "id": {
                   "type": "string"
                 },
                 "type": {
                   "type": "string",
-                  "enum": [
-                    "persona",
-                    "folder"
-                  ]
+                  "enum": ["persona", "folder"]
                 },
                 "sort_order": {
                   "type": "integer"
@@ -6178,10 +5645,7 @@
       },
       "T2iTemplateRequest": {
         "type": "object",
-        "required": [
-          "name",
-          "content"
-        ],
+        "required": ["name", "content"],
         "properties": {
           "name": {
             "type": "string"
@@ -6194,9 +5658,7 @@
       },
       "T2iTemplateContentRequest": {
         "type": "object",
-        "required": [
-          "content"
-        ],
+        "required": ["content"],
         "properties": {
           "content": {
             "type": "string"

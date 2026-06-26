@@ -26,8 +26,8 @@
   },
   "combined_message": {
     "components": [
-      {"type": "at", "user_id": "bot_id"},
-      {"type": "plain", "text": " Hello bot!"}
+      { "type": "at", "user_id": "bot_id" },
+      { "type": "plain", "text": " Hello bot!" }
     ]
   }
 }

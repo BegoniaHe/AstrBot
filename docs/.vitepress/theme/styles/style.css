@@ -290,7 +290,7 @@
   }
 
   .VPLocalNav.has-sidebar::after {
-    content: "";
+    content: '';
     position: absolute;
     left: var(--vp-sidebar-width);
     right: 0;
@@ -302,7 +302,9 @@
 
 @media (min-width: 1440px) {
   .VPLocalNav.has-sidebar::after {
-    left: calc((100vw - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width));
+    left: calc(
+      (100vw - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width)
+    );
   }
 }
 
@@ -316,7 +318,9 @@
   }
 
   .VPSidebar {
-    padding-top: calc(var(--vp-nav-height) + var(--vp-section-tabs-height)) !important;
+    padding-top: calc(
+      var(--vp-nav-height) + var(--vp-section-tabs-height)
+    ) !important;
   }
 
   .Layout.sidebar-scope-intro-deploy .VPSidebar .group,
