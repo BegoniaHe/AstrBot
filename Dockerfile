@@ -3,12 +3,14 @@ WORKDIR /AstrBot
 
 COPY . /AstrBot/
 
-# Enable pipefail so failures in the NodeSource curl|bash pipe abort the build.
+# Enable pipefail so failures in install pipes abort the build.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV UV_INSTALL_DIR=/usr/local/bin \
     CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
+    NVM_DIR=/root/.nvm \
+    BASH_ENV=/root/.bash_env \
     PATH=/usr/local/cargo/bin:${PATH} \
     XDG_BIN_HOME=/usr/local/bin \
     UV_LINK_MODE=copy
@@ -33,7 +35,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     iproute2 \
     iputils-ping \
-    gnupg \
     git \
     gh \
     fzf \
@@ -54,13 +55,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     bat \
     eza \
-    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && corepack enable \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && ln -sf /usr/bin/batcat /usr/local/bin/bat \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN touch "${BASH_ENV}" \
+    && echo '. "${BASH_ENV}"' >> ~/.bashrc \
+    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh | PROFILE="${BASH_ENV}" bash \
+    && source "${BASH_ENV}" \
+    && nvm install node \
+    && nvm alias default node \
+    && npm install -g corepack \
+    && corepack enable \
+    && current_node_dir="$(dirname "$(dirname "$(nvm which current)")")" \
+    && for tool in node npm npx corepack pnpm; do \
+        if [[ -x "${current_node_dir}/bin/${tool}" ]]; then \
+            ln -sf "${current_node_dir}/bin/${tool}" "/usr/local/bin/${tool}"; \
+        fi; \
+    done \
+    && node --version \
+    && npm --version \
+    && corepack --version
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --profile minimal --default-toolchain stable \
@@ -92,6 +108,10 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 RUN mkdir -p /etc/profile.d \
     && cat <<'EOF' >/etc/profile.d/astrbot-dev-tools.sh
 export PATH=/usr/local/cargo/bin:$PATH
+export NVM_DIR=/root/.nvm
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
 alias fd='fdfind'
 alias bat='batcat'
 EOF
