@@ -61,13 +61,20 @@ function Invoke-NativeCommand {
     param(
         [string]$Description,
         [string]$FilePath,
-        [string[]]$ArgumentList = @()
+        [string[]]$ArgumentList = @(),
+        [string]$WorkingDirectory = $repoRoot
     )
 
     Write-Host "==> $Description"
-    & $FilePath @ArgumentList
-    if ($LASTEXITCODE -ne 0) {
-        throw "$FilePath exited with code $LASTEXITCODE."
+    Push-Location $WorkingDirectory
+    try {
+        & $FilePath @ArgumentList
+        if ($LASTEXITCODE -ne 0) {
+            throw "$FilePath exited with code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -217,26 +224,17 @@ if ($runSmoke) {
 }
 
 if ($runDashboard) {
-    Invoke-NativeCommand -Description "Building dashboard dependencies" -FilePath "npm" -ArgumentList @(
-        "exec",
-        "--yes",
-        "pnpm@10",
-        "--",
-        "--dir",
-        "dashboard",
+    $dashboardDir = Join-Path $repoRoot "dashboard"
+    Invoke-NativeCommand -Description "Building dashboard dependencies" -FilePath "corepack" -ArgumentList @(
+        "pnpm",
         "install",
         "--frozen-lockfile"
-    )
-    Invoke-NativeCommand -Description "Building dashboard" -FilePath "npm" -ArgumentList @(
-        "exec",
-        "--yes",
-        "pnpm@10",
-        "--",
-        "--dir",
-        "dashboard",
+    ) -WorkingDirectory $dashboardDir
+    Invoke-NativeCommand -Description "Building dashboard" -FilePath "corepack" -ArgumentList @(
+        "pnpm",
         "run",
         "build"
-    )
+    ) -WorkingDirectory $dashboardDir
 }
 
 Write-Host "==> PR checks completed successfully"

@@ -74,6 +74,18 @@ def git(args: list[str], *, capture_output: bool = False) -> str:
     return run_command(["git", *args], capture_output=capture_output)
 
 
+def run_dashboard_command(args: list[str]) -> None:
+    """Run a dashboard command through the repo-managed pnpm version.
+
+    Args:
+        args: Arguments to pass after `corepack pnpm`.
+
+    Raises:
+        ReleaseError: The dashboard command fails.
+    """
+    run_command(["corepack", "pnpm", *args], cwd=REPO_ROOT / "dashboard")
+
+
 def ensure_clean_worktree() -> None:
     """Ensure the release starts from a clean worktree.
 
@@ -298,15 +310,15 @@ def run_validation(args: argparse.Namespace) -> None:
         ReleaseError: A validation command fails.
     """
     if args.generate_api_client:
-        run_command(["pnpm", "generate:api"], cwd=REPO_ROOT / "dashboard")
+        run_dashboard_command(["run", "generate:api"])
 
     if not args.skip_checks:
         run_command(["uv", "run", "ruff", "format", "--check", "."])
         run_command(["uv", "run", "ruff", "check", "."])
 
     if args.dashboard_build:
-        run_command(["pnpm", "install"], cwd=REPO_ROOT / "dashboard")
-        run_command(["pnpm", "build"], cwd=REPO_ROOT / "dashboard")
+        run_dashboard_command(["install", "--frozen-lockfile"])
+        run_dashboard_command(["run", "build"])
 
 
 def commit_and_maybe_push(

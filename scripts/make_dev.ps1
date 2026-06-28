@@ -206,7 +206,7 @@ switch ($Action) {
         Start-ManagedProcess `
             -PidFile $dashboardPidFile `
             -WorkingDirectory $dashboardDir `
-            -Command "Set-Location '$dashboardDir'; npm exec --yes pnpm@10 -- dev" `
+            -Command "Set-Location '$dashboardDir'; corepack pnpm dev" `
             -StdoutPath $dashboardLog `
             -StderrPath $dashboardErrLog `
             -WarmupSeconds 8

@@ -56,6 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     eza \
     && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
+    && corepack enable \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && ln -sf /usr/bin/batcat /usr/local/bin/bat \
     && apt-get clean \
