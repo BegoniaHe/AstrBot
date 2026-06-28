@@ -1,0 +1,55 @@
+# One-click deployment: AstrBot (built natively from this repo) + the latest official NapCat.
+#
+# Usage (after `git clone` of this repo):
+#   docker compose -f compose-with-napcat.yml up -d --build
+#
+# On Linux, match NapCat's file ownership to your host user to avoid permission issues:
+#   NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose -f compose-with-napcat.yml up -d --build
+#
+# Ports:
+#   6185 -> AstrBot WebUI         (http://localhost:6185)
+#   6099 -> NapCat WebUI          (http://localhost:6099)
+# AstrBot and NapCat reach each other inside `astrbot_network` by container name,
+# so no QQ WebSocket port needs to be published to the host.
+
+services:
+  astrbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: astrbot:local
+    container_name: astrbot
+    restart: always
+    ports:
+      - '6185:6185' # AstrBot WebUI
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/AstrBot/data
+      # - /etc/localtime:/etc/localtime:ro
+    networks:
+      - astrbot_network
+
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: always
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-1000}
+      - NAPCAT_GID=${NAPCAT_GID:-1000}
+      - MODE=astrbot
+    ports:
+      - '6099:6099' # NapCat WebUI
+    volumes:
+      - ./data:/AstrBot/data
+      - ./napcat/config:/app/napcat/config
+      - ./ntqq:/app/.config/QQ
+    depends_on:
+      - astrbot
+    networks:
+      - astrbot_network
+
+networks:
+  astrbot_network:
+    name: astrbot_network
+    driver: bridge
