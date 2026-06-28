@@ -8,7 +8,9 @@ import json
 from typing import Any
 
 import aiohttp
-from Crypto.Cipher import AES
+
+# PyCryptodome is required by the upstream AES protocol implementation here.
+from Crypto.Cipher import AES  # nosec B413
 
 from astrbot import logger
 
@@ -168,7 +170,10 @@ class WecomAIBotAPIClient:
             logger.info(f"开始下载加密图片: {image_url}")
 
             async with aiohttp.ClientSession() as session:
-                async with session.get(image_url, timeout=15) as response:
+                async with session.get(
+                    image_url,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as response:
                     if response.status != 200:
                         error_msg = f"图片下载失败，状态码: {response.status}"
                         logger.error(error_msg)
@@ -262,7 +267,7 @@ class WecomAIBotStreamMessageBuilder:
             JSON 格式的流消息字符串
 
         """
-        image_md5 = hashlib.md5(image_data).hexdigest()
+        image_md5 = hashlib.md5(image_data, usedforsecurity=False).hexdigest()
         image_base64 = base64.b64encode(image_data).decode("utf-8")
 
         plain = {

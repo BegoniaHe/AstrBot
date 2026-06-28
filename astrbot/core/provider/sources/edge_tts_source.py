@@ -1,9 +1,8 @@
 import asyncio
+import importlib
 import os
 import subprocess
 import uuid
-
-import edge_tts
 
 from astrbot.core import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
@@ -46,6 +45,11 @@ class ProviderEdgeTTS(TTSProvider):
         self.set_model("edge_tts")
 
     async def get_audio(self, text: str) -> str:
+        try:
+            edge_tts_module = importlib.import_module("edge_tts")
+        except ImportError as exc:
+            raise RuntimeError("edge_tts is not installed") from exc
+
         temp_dir = get_astrbot_temp_path()
         mp3_path = os.path.join(temp_dir, f"edge_tts_temp_{uuid.uuid4()}.mp3")
         wav_path = os.path.join(temp_dir, f"edge_tts_{uuid.uuid4()}.wav")
@@ -60,13 +64,12 @@ class ProviderEdgeTTS(TTSProvider):
             kwargs["pitch"] = self.pitch
 
         try:
-            communicate = edge_tts.Communicate(proxy=self.proxy, **kwargs)
+            communicate = edge_tts_module.Communicate(proxy=self.proxy, **kwargs)
             await communicate.save(mp3_path)
 
             try:
-                from pyffmpeg import FFmpeg
-
-                ff = FFmpeg()
+                pyffmpeg_module = importlib.import_module("pyffmpeg")
+                ff = pyffmpeg_module.FFmpeg()
                 ff.convert(input_file=mp3_path, output_file=wav_path)
             except Exception as e:
                 logger.debug(f"pyffmpeg 转换失败: {e}, 尝试使用 ffmpeg 命令行进行转换")

@@ -7,7 +7,7 @@ import sys
 from contextlib import AsyncExitStack
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from tenacity import (
@@ -93,14 +93,25 @@ _DENIED_DOCKER_ARGS = frozenset(
 )
 _STDIO_ALLOWLIST_ENV = "ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS"
 
-try:
+if TYPE_CHECKING:
     import anyio
     import mcp
-    from mcp.client.sse import sse_client
+
+try:
+    import anyio as _anyio
+    import mcp as _mcp
+    from mcp.client.sse import sse_client as _sse_client
 except ModuleNotFoundError, ImportError:
+    anyio = cast(Any, None)
+    mcp = cast(Any, None)
+    sse_client = cast(Any, None)
     logger.warning(
         "Warning: Missing 'mcp' dependency, MCP services will be unavailable."
     )
+else:
+    anyio = _anyio
+    mcp = _mcp
+    sse_client = _sse_client
 
 streamable_http_client_legacy = None
 streamable_http_client = None
@@ -392,13 +403,13 @@ def _normalize_mcp_input_schema(schema: dict[str, Any]) -> dict[str, Any]:
 class MCPClient:
     def __init__(self) -> None:
         # Initialize session and client objects
-        self.session: mcp.ClientSession | None = None
+        self.session: Any | None = None
         self.exit_stack = AsyncExitStack()
         self._old_exit_stacks: list[AsyncExitStack] = []  # Track old stacks for cleanup
 
         self.name: str | None = None
         self.active: bool = True
-        self.tools: list[mcp.Tool] = []
+        self.tools: list[Any] = []
         self.server_errlogs: list[str] = []
         self.running_event = asyncio.Event()
 
@@ -426,14 +437,15 @@ class MCPClient:
 
         cfg = _prepare_config(mcp_server_config.copy())
 
-        def logging_callback(
-            msg: str | mcp.types.LoggingMessageNotificationParams,
-        ) -> None:
+        def logging_callback(msg: Any) -> None:
             # Handle MCP service error logs
-            if isinstance(msg, mcp.types.LoggingMessageNotificationParams):
-                if msg.level in ("warning", "error", "critical", "alert", "emergency"):
-                    log_msg = f"[{msg.level.upper()}] {str(msg.data)}"
-                    self.server_errlogs.append(log_msg)
+            if (
+                hasattr(msg, "level")
+                and hasattr(msg, "data")
+                and msg.level in ("warning", "error", "critical", "alert", "emergency")
+            ):
+                log_msg = f"[{str(msg.level).upper()}] {str(msg.data)}"
+                self.server_errlogs.append(log_msg)
 
         if "url" in cfg:
             success, error_msg = await _quick_test_mcp_connection(cfg)
@@ -449,6 +461,8 @@ class MCPClient:
 
             if transport_type != "streamable_http":
                 # SSE transport method
+                if sse_client is None or mcp is None:
+                    raise RuntimeError("MCP SSE transport is unavailable.")
                 self._streams_context = sse_client(
                     url=cfg["url"],
                     headers=cfg.get("headers", {}),
@@ -517,24 +531,24 @@ class MCPClient:
                 )
 
         else:
+            if mcp is None:
+                raise RuntimeError("MCP stdio transport is unavailable.")
             validate_mcp_stdio_config(cfg)
             cfg = _prepare_stdio_env(cfg)
             server_params = mcp.StdioServerParameters(
                 **cfg,
             )
 
-            def callback(msg: str | mcp.types.LoggingMessageNotificationParams) -> None:
+            def callback(msg: Any) -> None:
                 # Handle MCP service error logs
-                if isinstance(msg, mcp.types.LoggingMessageNotificationParams):
-                    if msg.level in (
-                        "warning",
-                        "error",
-                        "critical",
-                        "alert",
-                        "emergency",
-                    ):
-                        log_msg = f"[{msg.level.upper()}] {str(msg.data)}"
-                        self.server_errlogs.append(log_msg)
+                if (
+                    hasattr(msg, "level")
+                    and hasattr(msg, "data")
+                    and msg.level
+                    in ("warning", "error", "critical", "alert", "emergency")
+                ):
+                    log_msg = f"[{str(msg.level).upper()}] {str(msg.data)}"
+                    self.server_errlogs.append(log_msg)
 
             stdio_transport = await self.exit_stack.enter_async_context(
                 mcp.stdio_client(
@@ -552,9 +566,12 @@ class MCPClient:
             self.session = await self.exit_stack.enter_async_context(
                 mcp.ClientSession(*stdio_transport),
             )
-        await self.session.initialize()
+        session = self.session
+        if session is None:
+            raise RuntimeError("MCP session initialization failed.")
+        await session.initialize()
 
-    async def list_tools_and_save(self) -> mcp.ListToolsResult:
+    async def list_tools_and_save(self) -> Any:
         """List all tools from the server and save them to self.tools"""
         if not self.session:
             raise Exception("MCP Client is not initialized")
@@ -617,7 +634,7 @@ class MCPClient:
         tool_name: str,
         arguments: dict,
         read_timeout_seconds: timedelta,
-    ) -> mcp.types.CallToolResult:
+    ) -> Any:
         """Call MCP tool with automatic reconnection on failure, max 2 retries.
 
         Args:
@@ -633,8 +650,10 @@ class MCPClient:
             anyio.ClosedResourceError: raised after reconnection failure
         """
 
+        closed_resource_error = getattr(anyio, "ClosedResourceError", RuntimeError)
+
         @retry(
-            retry=retry_if_exception_type(anyio.ClosedResourceError),
+            retry=retry_if_exception_type(closed_resource_error),
             stop=stop_after_attempt(2),
             wait=wait_exponential(multiplier=1, min=1, max=3),
             before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -650,7 +669,7 @@ class MCPClient:
                     arguments=arguments,
                     read_timeout_seconds=read_timeout_seconds,
                 )
-            except anyio.ClosedResourceError:
+            except closed_resource_error:
                 logger.warning(
                     f"MCP tool {tool_name} call failed (ClosedResourceError), attempting to reconnect..."
                 )
@@ -682,7 +701,7 @@ class MCPTool[TContext](FunctionTool):
     """A function tool that calls an MCP service."""
 
     def __init__(
-        self, mcp_tool: mcp.Tool, mcp_client: MCPClient, mcp_server_name: str, **kwargs
+        self, mcp_tool: Any, mcp_client: MCPClient, mcp_server_name: str, **kwargs
     ) -> None:
         super().__init__(
             name=mcp_tool.name,
@@ -693,9 +712,7 @@ class MCPTool[TContext](FunctionTool):
         self.mcp_client = mcp_client
         self.mcp_server_name = mcp_server_name
 
-    async def call(
-        self, context: ContextWrapper[TContext], **kwargs
-    ) -> mcp.types.CallToolResult:
+    async def call(self, context: ContextWrapper[TContext], **kwargs) -> Any:
         return await self.mcp_client.call_tool_with_reconnect(
             tool_name=self.mcp_tool.name,
             arguments=kwargs,

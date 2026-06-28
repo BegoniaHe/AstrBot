@@ -1,8 +1,7 @@
 import asyncio
+import importlib
 from functools import partial
-from typing import cast
-
-import whisper
+from typing import Any, cast
 
 from astrbot.core import logger
 from astrbot.core.utils.media_utils import MediaResolver
@@ -26,11 +25,17 @@ class ProviderOpenAIWhisperSelfHost(STTProvider):
         super().__init__(provider_config, provider_settings)
         self.set_model(provider_config["model"])
         self.device = str(provider_config.get("whisper_device", "cpu")).strip().lower()
-        self.model = None
+        self.model: Any | None = None
 
     def _resolve_device(self) -> str:
         if self.device == "mps":
-            import torch  # torch is a dependency of openai-whisper
+            try:
+                torch = importlib.import_module("torch")
+            except ImportError:
+                logger.warning(
+                    "Whisper 配置为使用 MPS，但 torch 未安装，将回退到 CPU。"
+                )
+                return "cpu"
 
             mps_backend = getattr(torch.backends, "mps", None)
             if mps_backend and mps_backend.is_available():
@@ -48,9 +53,13 @@ class ProviderOpenAIWhisperSelfHost(STTProvider):
         loop = asyncio.get_running_loop()
         device = self._resolve_device()
         logger.info("下载或者加载 Whisper 模型中，这可能需要一些时间 ...")
+        try:
+            whisper_module = importlib.import_module("whisper")
+        except ImportError as exc:
+            raise RuntimeError("openai-whisper is not installed") from exc
         self.model = await loop.run_in_executor(
             None,
-            partial(whisper.load_model, self.model_name, device=device),
+            partial(whisper_module.load_model, self.model_name, device=device),
         )
         logger.info("Whisper 模型加载完成。device=%s", device)
 

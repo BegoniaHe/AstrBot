@@ -51,7 +51,10 @@ def hash_md5_dashboard_password(raw_password: str) -> str:
     """Return the MD5 dashboard password hash kept for stored config fallback."""
     if not isinstance(raw_password, str) or raw_password == "":
         raise ValueError("Password cannot be empty")
-    return hashlib.md5(raw_password.encode("utf-8")).hexdigest()
+    return hashlib.md5(
+        raw_password.encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def validate_dashboard_password(raw_password: str) -> None:
@@ -91,7 +94,10 @@ def verify_dashboard_password(stored_hash: str, candidate_password: str) -> bool
     if _is_md5_hash(stored_hash):
         # Support existing MD5-based deployments while requiring the real
         # plaintext password, not the stored MD5 value itself.
-        candidate_md5 = hashlib.md5(candidate_password.encode("utf-8")).hexdigest()
+        candidate_md5 = hashlib.md5(
+            candidate_password.encode("utf-8"),
+            usedforsecurity=False,
+        ).hexdigest()
         return hmac.compare_digest(stored_hash.lower(), candidate_md5.lower())
 
     if _is_pbkdf2_hash(stored_hash):

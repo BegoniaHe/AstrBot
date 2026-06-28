@@ -3,7 +3,7 @@ import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from aiohttp import ClientResponse, ClientSession, FormData
+from aiohttp import ClientResponse, ClientSession, ClientTimeout, FormData
 
 from astrbot.core import logger
 
@@ -60,7 +60,7 @@ class DifyAPIClient:
             url,
             json=payload,
             headers=self.headers,
-            timeout=timeout_seconds,
+            timeout=ClientTimeout(total=timeout_seconds),
         ) as resp:
             if resp.status != 200:
                 text = await resp.text()
@@ -89,7 +89,7 @@ class DifyAPIClient:
             url,
             json=payload,
             headers=self.headers,
-            timeout=timeout_seconds,
+            timeout=ClientTimeout(total=timeout_seconds),
         ) as resp:
             if resp.status != 200:
                 text = await resp.text()

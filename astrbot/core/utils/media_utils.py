@@ -343,14 +343,14 @@ def describe_media_ref(media_ref: object | None) -> str:
 
 
 def detect_image_mime_type(
-    image_bytes: bytes,
+    image_source: bytes | str | os.PathLike[str],
     *,
     default_mime_type: str | None = "image/jpeg",
 ) -> str | None:
     """Detect an image MIME type from bytes.
 
     Args:
-        image_bytes: Encoded image bytes to inspect.
+        image_source: Encoded image bytes or a local image path to inspect.
         default_mime_type: MIME type to return when detection fails.
 
     Returns:
@@ -359,7 +359,11 @@ def detect_image_mime_type(
     """
 
     try:
-        with PILImage.open(io.BytesIO(image_bytes)) as image:
+        if isinstance(image_source, bytes):
+            image_resource = io.BytesIO(image_source)
+        else:
+            image_resource = Path(image_source)
+        with PILImage.open(image_resource) as image:
             image.verify()
             image_format = str(image.format or "").upper()
     except Exception:
@@ -369,7 +373,7 @@ def detect_image_mime_type(
 
 
 async def detect_image_mime_type_async(
-    image_bytes: bytes,
+    image_source: bytes | str | os.PathLike[str],
     *,
     default_mime_type: str | None = "image/jpeg",
 ) -> str | None:
@@ -377,7 +381,7 @@ async def detect_image_mime_type_async(
 
     return await asyncio.to_thread(
         detect_image_mime_type,
-        image_bytes,
+        image_source,
         default_mime_type=default_mime_type,
     )
 
@@ -418,7 +422,8 @@ async def _materialize_media_ref(
 
     if media_ref.startswith(("http://", "https://")):
         parsed = urlparse(media_ref)
-        target_suffix = Path(parsed.path).suffix or suffix
+        source_suffix = Path(parsed.path).suffix
+        target_suffix = source_suffix or suffix
         target_path = _temp_media_path(media_type, target_suffix)
         cleanup_paths.append(target_path)
         try:
@@ -426,9 +431,23 @@ async def _materialize_media_ref(
         except Exception:
             _cleanup_paths(cleanup_paths)
             raise
+        mime_type = _guess_mime_type(target_path)
+        if media_type == "image" and not source_suffix:
+            detected_mime_type = detect_image_mime_type(
+                target_path,
+                default_mime_type=None,
+            )
+            detected_suffix = _extension_from_mime_type(detected_mime_type)
+            if detected_suffix and detected_suffix != target_path.suffix.lower():
+                detected_path = target_path.with_suffix(detected_suffix)
+                target_path.replace(detected_path)
+                cleanup_paths[-1] = detected_path
+                target_path = detected_path
+            if detected_mime_type:
+                mime_type = detected_mime_type
         return _LocalMediaFile(
             path=target_path,
-            mime_type=_guess_mime_type(target_path),
+            mime_type=mime_type,
             cleanup_paths=cleanup_paths,
         )
 
@@ -457,14 +476,23 @@ async def _materialize_media_ref(
             media_ref.removeprefix("base64://"),
             error_message="invalid base64 media payload",
         )
-        target_path = _temp_media_path(media_type, suffix)
+        mime_type = None
+        target_suffix = suffix
+        if media_type == "image":
+            mime_type = detect_image_mime_type(media_bytes, default_mime_type=None)
+            target_suffix = _extension_from_mime_type(mime_type) or suffix
+        target_path = _temp_media_path(media_type, target_suffix)
         cleanup_paths.append(target_path)
         try:
             target_path.write_bytes(media_bytes)
         except Exception:
             _cleanup_paths(cleanup_paths)
             raise
-        return _LocalMediaFile(path=target_path, cleanup_paths=cleanup_paths)
+        return _LocalMediaFile(
+            path=target_path,
+            mime_type=mime_type,
+            cleanup_paths=cleanup_paths,
+        )
 
     path = Path(media_ref)
     path_exists = False
@@ -473,7 +501,10 @@ async def _materialize_media_ref(
     except OSError:
         pass
     if path_exists:
-        return _LocalMediaFile(path=path, mime_type=_guess_mime_type(path))
+        mime_type = _guess_mime_type(path)
+        if media_type == "image" and mime_type is None:
+            mime_type = detect_image_mime_type(path, default_mime_type=None)
+        return _LocalMediaFile(path=path, mime_type=mime_type)
 
     compact_media_ref = "".join(media_ref.split())
     if compact_media_ref:
@@ -1201,8 +1232,17 @@ async def ensure_jpeg(image_path: str, output_path: str | None = None) -> str:
 
     with PILImage.open(source_path) as opened_img:
         image_format = str(opened_img.format or "").upper()
+        has_alpha = opened_img.mode in {"RGBA", "LA"} or (
+            opened_img.mode == "P" and "transparency" in opened_img.info
+        )
+        is_animated = bool(
+            getattr(opened_img, "is_animated", False)
+            or getattr(opened_img, "n_frames", 1) > 1
+        )
 
     if image_format == "JPEG" and source_path.suffix.lower() in {".jpg", ".jpeg"}:
+        return image_path
+    if has_alpha or is_animated:
         return image_path
 
     if output_path is None:
@@ -1371,24 +1411,44 @@ def _compress_image_sync(
     max_size: int,
     quality: int,
     optimize: bool,
-) -> str:
+) -> str | None:
     """Run image compression synchronously via ``asyncio.to_thread``."""
     with PILImage.open(io.BytesIO(data)) as opened_img:
         converted_img: PILImage.Image | None = None
 
         try:
+            is_animated = bool(
+                getattr(opened_img, "is_animated", False)
+                or getattr(opened_img, "n_frames", 1) > 1
+            )
+            if is_animated:
+                return None
+
+            preserve_alpha = opened_img.mode in {"RGBA", "LA"} or (
+                opened_img.mode == "P" and "transparency" in opened_img.info
+            )
+
             working_img = opened_img
-            if opened_img.mode != "RGB":
-                converted_img = opened_img.convert("RGB")
-                working_img = converted_img
+            if preserve_alpha:
+                if opened_img.mode != "RGBA":
+                    converted_img = opened_img.convert("RGBA")
+                    working_img = converted_img
+                save_path = temp_dir / f"compressed_{uuid.uuid4().hex}.png"
+                save_kwargs: dict[str, object] = {"optimize": optimize}
+                save_format = "PNG"
+            else:
+                if opened_img.mode != "RGB":
+                    converted_img = opened_img.convert("RGB")
+                    working_img = converted_img
+                save_path = temp_dir / f"compressed_{uuid.uuid4().hex}.jpg"
+                save_kwargs = {"quality": quality, "optimize": optimize}
+                save_format = "JPEG"
             assert working_img is not None
 
             if max(working_img.size) > max_size:
                 working_img.thumbnail((max_size, max_size), PILImage.Resampling.LANCZOS)
 
-            new_uuid = uuid.uuid4().hex
-            save_path = temp_dir / f"compressed_{new_uuid}.jpg"
-            working_img.save(save_path, "JPEG", quality=quality, optimize=optimize)
+            working_img.save(save_path, save_format, **save_kwargs)
             logger.debug(f"Image compressed successfully: {save_path}")
             return str(save_path)
         finally:
@@ -1455,7 +1515,7 @@ async def compress_image(
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     # Offload the blocking image processing task to a thread.
-    return await asyncio.to_thread(
+    compressed_path = await asyncio.to_thread(
         _compress_image_sync,
         data,
         temp_dir,
@@ -1463,3 +1523,4 @@ async def compress_image(
         quality,
         optimize,
     )
+    return compressed_path or url_or_path

@@ -16,9 +16,9 @@ from .shell_background import build_detached_shell_command
 from .shipyard_search_file_util import search_files_via_shell
 
 try:
-    from shipyard_neo import BayClient
-    from shipyard_neo.sandbox import Sandbox
+    from shipyard_neo import BayClient as _BayClient
 except ImportError:
+    _BayClient = None
     logger.warning(
         "shipyard_neo_sdk is not installed. ShipyardNeoBooter will not work without it."
     )
@@ -47,24 +47,30 @@ def _slice_content_by_lines(
 
 
 class NeoPythonComponent(PythonComponent):
-    def __init__(self, sandbox: Sandbox) -> None:
+    def __init__(self, sandbox: Any) -> None:
         self._sandbox = sandbox
 
-    async def exec(
+    async def exec(  # noqa: ASYNC109
         self,
         code: str,
         kernel_id: str | None = None,
         timeout_seconds: int = 30,
         silent: bool = False,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         _ = kernel_id  # Bay runtime does not expose kernel_id in current SDK.
+        _ = cwd
         result = await self._sandbox.python.exec(code, timeout=timeout_seconds)
         payload = _maybe_model_dump(result)
 
         output_text = payload.get("output", "") or ""
         error_text = payload.get("error", "") or ""
-        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-        rich_output = data.get("output") if isinstance(data.get("output"), dict) else {}
+        data_value: object = payload.get("data")
+        data: dict[str, Any] = data_value if isinstance(data_value, dict) else {}
+        rich_output_value: object = data.get("output")
+        rich_output: dict[str, Any] = (
+            rich_output_value if isinstance(rich_output_value, dict) else {}
+        )
         if not isinstance(rich_output.get("images"), list):
             rich_output["images"] = []
         if "text" not in rich_output:
@@ -88,7 +94,7 @@ class NeoPythonComponent(PythonComponent):
 
 
 class NeoShellComponent(ShellComponent):
-    def __init__(self, sandbox: Sandbox) -> None:
+    def __init__(self, sandbox: Any) -> None:
         self._sandbox = sandbox
 
     async def exec(
@@ -96,6 +102,7 @@ class NeoShellComponent(ShellComponent):
         command: str,
         cwd: str | None = None,
         env: dict[str, str] | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
         timeout_seconds: int | None = 300,
         shell: bool = True,
         background: bool = False,
@@ -118,9 +125,10 @@ class NeoShellComponent(ShellComponent):
         if background:
             run_command = build_detached_shell_command(run_command)
 
+        effective_timeout = timeout_seconds if timeout_seconds is not None else timeout
         result = await self._sandbox.shell.exec(
             run_command,
-            timeout=timeout_seconds or 300,
+            timeout=effective_timeout or 300,
             cwd=cwd,
         )
         payload = _maybe_model_dump(result)
@@ -161,7 +169,7 @@ class NeoShellComponent(ShellComponent):
 
 
 class NeoFileSystemComponent(FileSystemComponent):
-    def __init__(self, sandbox: Sandbox, shell: ShellComponent) -> None:
+    def __init__(self, sandbox: Any, shell: ShellComponent) -> None:
         self._sandbox = sandbox
         self._shell = shell
 
@@ -273,7 +281,7 @@ class NeoFileSystemComponent(FileSystemComponent):
 
 
 class NeoBrowserComponent(BrowserComponent):
-    def __init__(self, sandbox: Sandbox) -> None:
+    def __init__(self, sandbox: Any) -> None:
         self._sandbox = sandbox
 
     async def exec(
@@ -358,8 +366,8 @@ class ShipyardNeoBooter(ComputerBooter):
         self._access_token = access_token
         self._profile = profile.strip() if profile else ""
         self._ttl = ttl
-        self._client: BayClient | None = None
-        self._sandbox: Sandbox | None = None
+        self._client: Any | None = None
+        self._sandbox: Any | None = None
         self._bay_manager: Any = None  # BayContainerManager when auto-started
         self._fs: FileSystemComponent | None = None
         self._python: PythonComponent | None = None
@@ -423,43 +431,48 @@ class ShipyardNeoBooter(ComputerBooter):
                 "or ensure Bay's credentials.json is accessible for auto-discovery."
             )
 
-        self._client = BayClient(
+        bay_client_cls = _BayClient
+        if bay_client_cls is None:
+            raise RuntimeError("shipyard_neo_sdk is not installed.")
+        self._client = bay_client_cls(
             endpoint_url=self._endpoint_url,
             access_token=self._access_token,
         )
-        await self._client.__aenter__()
+        client = self._client
+        await client.__aenter__()
 
         # Resolve profile: user-specified > smart selection > default.
         # An empty profile means auto-select; any non-empty profile must be
         # honoured as an explicit choice, including "python-default".
-        resolved_profile = await self._resolve_profile(self._client)
+        resolved_profile = await self._resolve_profile(client)
 
-        self._sandbox = await self._client.create_sandbox(
+        self._sandbox = await client.create_sandbox(
             profile=resolved_profile,
             ttl=self._ttl,
         )
+        sandbox = self._sandbox
+        if sandbox is None:
+            raise RuntimeError("Shipyard Neo did not return a sandbox instance.")
 
         # --- Readiness gate: wait until sandbox session is READY ---
-        await self._wait_until_ready(self._sandbox)
+        await self._wait_until_ready(sandbox)
 
-        self._shell = NeoShellComponent(self._sandbox)
-        self._fs = NeoFileSystemComponent(self._sandbox, self._shell)
-        self._python = NeoPythonComponent(self._sandbox)
+        self._shell = NeoShellComponent(sandbox)
+        self._fs = NeoFileSystemComponent(sandbox, self._shell)
+        self._python = NeoPythonComponent(sandbox)
 
         caps = self.capabilities or ()
-        self._browser = (
-            NeoBrowserComponent(self._sandbox) if "browser" in caps else None
-        )
+        self._browser = NeoBrowserComponent(sandbox) if "browser" in caps else None
 
         logger.info(
             "Got Shipyard Neo sandbox: %s (profile=%s, capabilities=%s, auto=%s)",
-            self._sandbox.id,
+            sandbox.id,
             resolved_profile,
             list(caps),
             bool(self._bay_manager),
         )
 
-    async def _wait_until_ready(self, sandbox: Sandbox) -> None:
+    async def _wait_until_ready(self, sandbox: Any) -> None:
         """Poll sandbox status until READY, or raise on FAILED / timeout.
 
         Covers both warm-pool hits (near-instant) and cold starts (up to 180s).
@@ -586,7 +599,13 @@ class ShipyardNeoBooter(ComputerBooter):
 
         return chosen
 
-    async def shutdown(self, *, delete_sandbox: bool = False) -> None:
+    async def shutdown(
+        self,
+        *,
+        delete_sandbox: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        _ = kwargs
         if self._client is not None:
             sandbox_id = getattr(self._sandbox, "id", "unknown")
 

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+from typing import Protocol, cast
 
 from astrbot.core import logger
 from astrbot.core.provider.entities import ProviderType
@@ -8,10 +9,40 @@ from astrbot.core.provider.provider import TTSProvider
 from astrbot.core.provider.register import register_provider_adapter
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 
+
+class _GenieModule(Protocol):
+    def load_character(
+        self,
+        *,
+        character_name: str,
+        language: str,
+        onnx_model_dir: str,
+    ) -> None: ...
+
+    def set_reference_audio(
+        self,
+        *,
+        character_name: str,
+        audio_path: str,
+        audio_text: str,
+        language: str,
+    ) -> None: ...
+
+    def tts(
+        self,
+        *,
+        character_name: str,
+        text: str,
+        save_path: str,
+    ) -> None: ...
+
+
 try:
-    import genie_tts as genie  # type: ignore
+    import genie_tts as genie_module
 except ImportError:
-    genie = None
+    genie_module = None
+
+genie = cast(_GenieModule | None, genie_module)
 
 
 @register_provider_adapter(

@@ -130,7 +130,7 @@ class StarTools:
         adapter.commit_event(event)
 
     @classmethod
-    def activate_llm_tool(cls, name: str) -> bool:
+    async def activate_llm_tool(cls, name: str) -> bool:
         """Activates a registered function-calling tool.
 
         Args:
@@ -144,10 +144,10 @@ class StarTools:
         """
         if cls._context is None:
             raise ValueError("StarTools not initialized")
-        return cls._context.activate_llm_tool(name)
+        return await cls._context.activate_llm_tool(name)
 
     @classmethod
-    def deactivate_llm_tool(cls, name: str) -> bool:
+    async def deactivate_llm_tool(cls, name: str) -> bool:
         """Deactivates a registered function-calling tool.
 
         Args:
@@ -161,7 +161,7 @@ class StarTools:
         """
         if cls._context is None:
             raise ValueError("StarTools not initialized")
-        return cls._context.deactivate_llm_tool(name)
+        return await cls._context.deactivate_llm_tool(name)
 
     @classmethod
     def get_data_dir(cls, plugin_name: str | None = None) -> Path:

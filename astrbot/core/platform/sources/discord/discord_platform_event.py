@@ -11,6 +11,7 @@ from astrbot import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import (
     BaseMessageComponent,
+    ComponentType,
     File,
     Image,
     Plain,
@@ -30,7 +31,7 @@ from .components import DiscordEmbed, DiscordView
 
 # 自定义Discord视图组件（兼容旧版本）
 class DiscordViewComponent(BaseMessageComponent):
-    type: str = "discord_view"
+    type: ComponentType = ComponentType.Unknown
 
     def __init__(self, view: discord.ui.View) -> None:
         self.view = view

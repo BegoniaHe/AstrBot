@@ -35,19 +35,40 @@ for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
 
-class PatchedGroupMessage(botpy.message.GroupMessage):
-    class _User:
-        def __init__(self, data: dict[str, Any]) -> None:
-            self.id = data.get("id", None)
-            self.username = data.get("username", None)
-            self.bot = data.get("bot", None)
-            self.avatar = data.get("avatar", None)
-            self.member_openid = data.get("member_openid", None)
-            self.user_openid = data.get("user_openid", None)
-            self.is_you = data.get("is_you", None)
+def _patch_group_message_author(
+    group_message: botpy.message.GroupMessage,
+    message_data: dict[str, Any],
+) -> None:
+    def _patch_user(target: object, user_data: dict[str, Any]) -> None:
+        for field_name in (
+            "id",
+            "username",
+            "bot",
+            "avatar",
+            "member_openid",
+            "user_openid",
+            "is_you",
+        ):
+            setattr(
+                target,
+                field_name,
+                user_data.get(field_name, getattr(target, field_name, None)),
+            )
 
-        def __repr__(self) -> str:
-            return str(self.__dict__)
+    author = getattr(group_message, "author", None)
+    author_data = message_data.get("author")
+    if author is not None and isinstance(author_data, dict):
+        _patch_user(author, author_data)
+
+    mentions = getattr(group_message, "mentions", None)
+    mention_data = message_data.get("mentions")
+    if not isinstance(mentions, list) or not isinstance(mention_data, list):
+        return
+
+    for mention, user_data in zip(mentions, mention_data, strict=False):
+        if not isinstance(user_data, dict):
+            continue
+        _patch_user(mention, user_data)
 
 
 def _ensure_group_message_create_parser() -> None:
@@ -57,11 +78,13 @@ def _ensure_group_message_create_parser() -> None:
         return
 
     def parse_group_message_create(self, payload: dict[str, Any]) -> None:
-        group_message = PatchedGroupMessage(
+        message_data = cast(dict[str, Any], payload.get("d", {}))
+        group_message = botpy.message.GroupMessage(
             self.api,
             payload.get("id", None),
-            payload.get("d", {}),
+            cast(Any, message_data),
         )
+        _patch_group_message_author(group_message, message_data)
         logger.debug("[QQOfficial] Received group message: %s", group_message)
         self._dispatch("group_message_create", group_message)
 
@@ -694,8 +717,8 @@ class QQOfficialPlatformAdapter(Platform):
             abm.self_id = "qq_official"
         return abm
 
-    def run(self):
-        return self.client.start(appid=self.appid, secret=self.secret)
+    async def run(self) -> None:
+        await self.client.start(appid=self.appid, secret=self.secret)
 
     def get_client(self) -> botClient:
         return self.client

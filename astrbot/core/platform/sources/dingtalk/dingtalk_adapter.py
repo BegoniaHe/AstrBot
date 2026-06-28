@@ -10,6 +10,7 @@ from typing import Literal, NoReturn, cast
 import aiohttp
 import dingtalk_stream
 from dingtalk_stream import AckMessage
+from dingtalk_stream.frames import Headers
 
 from astrbot import logger
 from astrbot.api.event import MessageChain
@@ -49,18 +50,6 @@ def _dingtalk_reconnect_delay(retry_count: int) -> int:
     )
 
 
-class MyEventHandler(dingtalk_stream.EventHandler):
-    async def process(self, event: dingtalk_stream.EventMessage):
-        print(
-            "2",
-            event.headers.event_type,
-            event.headers.event_id,
-            event.headers.event_born_time,
-            event.data,
-        )
-        return AckMessage.STATUS_OK, "OK"
-
-
 @register_platform_adapter(
     "dingtalk", "钉钉机器人官方 API 适配器", support_streaming_message=True
 )
@@ -78,23 +67,44 @@ class DingtalkPlatformAdapter(Platform):
 
         outer_self = self
 
-        class AstrCallbackClient(dingtalk_stream.ChatbotHandler):
-            async def process(self, message: dingtalk_stream.CallbackMessage):
+        class AstrCallbackClient:
+            def __init__(self) -> None:
+                self.dingtalk_client: dingtalk_stream.DingTalkStreamClient | None = None
+
+            def pre_start(self) -> None:
+                return
+
+            async def process(
+                self, message: dingtalk_stream.CallbackMessage
+            ) -> tuple[int, str]:
                 logger.debug(f"dingtalk: {message.data}")
                 im = dingtalk_stream.ChatbotMessage.from_dict(message.data)
                 abm = await outer_self.convert_msg(im)
                 await outer_self.handle_msg(abm)
-
                 return AckMessage.STATUS_OK, "OK"
+
+            async def raw_process(
+                self, message: dingtalk_stream.CallbackMessage
+            ) -> AckMessage:
+                code, text = await self.process(message)
+                ack_message = AckMessage()
+                ack_message.code = code
+                ack_message.headers.message_id = message.headers.message_id
+                setattr(
+                    ack_message.headers,
+                    "content_type",
+                    Headers.CONTENT_TYPE_APPLICATION_JSON,
+                )
+                ack_message.data = {"response": text}
+                return ack_message
 
         self.client = AstrCallbackClient()
 
         credential = dingtalk_stream.Credential(self.client_id, self.client_secret)
         client = dingtalk_stream.DingTalkStreamClient(credential, logger=logger)
-        client.register_all_event_handler(MyEventHandler())
         client.register_callback_handler(
             dingtalk_stream.ChatbotMessage.TOPIC,
-            self.client,
+            cast(dingtalk_stream.CallbackHandler, self.client),
         )
         self.client_ = client  # 用于 websockets 的 client
         self._shutdown_event = threading.Event()
@@ -589,7 +599,8 @@ class DingtalkPlatformAdapter(Platform):
                     msg_param={"photoURL": photo_url},
                 )
             elif isinstance(segment, Record):
-                converted_audio = None
+                audio_path = ""
+                converted_audio = False
                 try:
                     audio_path = await segment.convert_to_file_path()
                     (
@@ -616,6 +627,7 @@ class DingtalkPlatformAdapter(Platform):
             elif isinstance(segment, Video):
                 converted_video = False
                 cover_path = None
+                video_path = ""
                 try:
                     source_video_path = await segment.convert_to_file_path()
                     video_path = source_video_path

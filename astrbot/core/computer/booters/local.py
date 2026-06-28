@@ -84,11 +84,12 @@ def _decode_shell_output(output: bytes | None) -> str:
 
 @dataclass
 class LocalShellComponent(ShellComponent):
-    async def exec(
+    async def exec(  # noqa: ASYNC109
         self,
         command: str,
         cwd: str | None = None,
         env: dict[str, str] | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
         timeout_seconds: int | None = 300,
         shell: bool = True,
         background: bool = False,
@@ -107,7 +108,8 @@ class LocalShellComponent(ShellComponent):
                 # Safety relies on `_is_safe_command()` and the allowed-root checks.
                 proc = subprocess.Popen(  # noqa: S602  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                     command,
-                    shell=shell,
+                    # Controlled local computer-use command.
+                    shell=shell,  # nosec B602
                     cwd=working_dir,
                     env=run_env,
                     stdout=subprocess.DEVNULL,
@@ -119,14 +121,16 @@ class LocalShellComponent(ShellComponent):
             # Safety relies on `_is_safe_command()` and the allowed-root checks.
             proc = subprocess.Popen(  # noqa: S602  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                 command,
-                shell=shell,
+                # Controlled local computer-use command.
+                shell=shell,  # nosec B602
                 cwd=working_dir,
                 env=run_env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
+            effective_timeout = timeout if timeout is not None else timeout_seconds
             try:
-                stdout, stderr = proc.communicate(timeout=timeout_seconds or 300)
+                stdout, stderr = proc.communicate(timeout=effective_timeout or 300)
             except subprocess.TimeoutExpired:
                 should_kill_parent = sys.platform != "win32"
                 if sys.platform == "win32":
@@ -427,7 +431,8 @@ class LocalBooter(ComputerBooter):
     async def boot(self, session_id: str) -> None:
         logger.info(f"Local computer booter initialized for session: {session_id}")
 
-    async def shutdown(self) -> None:
+    async def shutdown(self, **kwargs: Any) -> None:
+        _ = kwargs
         logger.info("Local computer booter shutdown complete.")
 
     @property

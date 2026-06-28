@@ -401,11 +401,10 @@ class WeixinOCAdapter(Platform):
             )
         finally:
             state = self._typing_states.get(user_id)
-            if state is None:
-                return
-            async with state.lock:
-                if state.cancel_task is current_task:
-                    state.cancel_task = None
+            if state is not None:
+                async with state.lock:
+                    if state.cancel_task is current_task:
+                        state.cancel_task = None
 
     async def start_typing(self, user_id: str, owner_id: str) -> None:
         state = self._get_typing_state(user_id)
@@ -549,7 +548,7 @@ class WeixinOCAdapter(Platform):
             self._context_tokens = self._normalize_context_tokens(raw_context_tokens)
 
     def _normalize_context_tokens(
-        self, raw_context_tokens: Mapping[object, object]
+        self, raw_context_tokens: Mapping[str, str]
     ) -> dict[str, str]:
         normalized_context_tokens: dict[str, str] = {}
         for user_id, context_token in raw_context_tokens.items():
@@ -643,7 +642,7 @@ class WeixinOCAdapter(Platform):
     ) -> dict[str, Any]:
         raw_bytes = media_path.read_bytes()
         raw_size = len(raw_bytes)
-        raw_md5 = hashlib.md5(raw_bytes).hexdigest()
+        raw_md5 = hashlib.md5(raw_bytes, usedforsecurity=False).hexdigest()
         file_key = uuid.uuid4().hex
         aes_key_hex = uuid.uuid4().bytes.hex()
         ciphertext_size = self.client.aes_padded_size(raw_size)

@@ -15,6 +15,12 @@ from .base import ComputerBooter
 from .shipyard_fs import ShipyardFileSystemWrapper
 
 
+async def _maybe_await(value: Any) -> Any:
+    if asyncio.isfuture(value) or hasattr(value, "__await__"):
+        return await value
+    return value
+
+
 class MockShipyardSandboxClient:
     def __init__(self, sb_url: str) -> None:
         self.sb_url = sb_url.rstrip("/")
@@ -135,7 +141,8 @@ class BoxliteBooter(ComputerBooter):
             f"Booting(Boxlite) for session: {session_id}, this may take a while..."
         )
         random_port = random.randint(20000, 30000)
-        self.box = boxlite.SimpleBox(
+        simple_box_cls = getattr(boxlite, "SimpleBox")
+        self.box = simple_box_cls(
             image="soulter/shipyard-ship",
             memory_mib=512,
             cpus=1,
@@ -156,11 +163,12 @@ class BoxliteBooter(ComputerBooter):
             ship_id=self.box.id,
             session_id=session_id,
         )
-        self._shell = ShipyardShellComponent(
+        shipyard_shell = ShipyardShellComponent(
             client=self.mocked,  # type: ignore
             ship_id=self.box.id,
             session_id=session_id,
         )
+        self._shell = _BoxliteShellComponent(shipyard_shell)
         self._ship_fs = ShipyardFileSystemComponent(
             client=self.mocked,  # type: ignore
             ship_id=self.box.id,
@@ -172,9 +180,10 @@ class BoxliteBooter(ComputerBooter):
 
         await self.mocked.wait_healthy(self.box.id, session_id)
 
-    async def shutdown(self) -> None:
+    async def shutdown(self, **kwargs: Any) -> None:
+        _ = kwargs
         logger.info(f"Shutting down Boxlite booter for ship: {self.box.id}")
-        self.box.shutdown()
+        await _maybe_await(self.box.shutdown())
         logger.info(f"Boxlite booter for ship: {self.box.id} stopped")
 
     @property
@@ -183,7 +192,7 @@ class BoxliteBooter(ComputerBooter):
 
     @property
     def python(self) -> PythonComponent:
-        return self._python
+        return _BoxlitePythonComponent(self._python)
 
     @property
     def shell(self) -> ShellComponent:
@@ -192,3 +201,48 @@ class BoxliteBooter(ComputerBooter):
     async def upload_file(self, path: str, file_name: str) -> dict:
         """Upload file to sandbox"""
         return await self.mocked.upload_file(path, file_name)
+
+
+class _BoxlitePythonComponent(PythonComponent):
+    def __init__(self, component: ShipyardPythonComponent) -> None:
+        self._component = component
+
+    async def exec(  # noqa: ASYNC109
+        self,
+        code: str,
+        kernel_id: str | None = None,
+        timeout_seconds: int = 30,
+        silent: bool = False,
+        cwd: str | None = None,
+    ) -> dict[str, Any]:
+        del kernel_id, cwd
+        return await self._component.exec(
+            code,
+            timeout=timeout_seconds,
+            silent=silent,
+        )
+
+
+class _BoxliteShellComponent(ShellComponent):
+    def __init__(self, component: ShipyardShellComponent) -> None:
+        self._component = component
+
+    async def exec(
+        self,
+        command: str,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
+        timeout_seconds: int | None = 300,
+        shell: bool = True,
+        background: bool = False,
+    ) -> dict[str, Any]:
+        effective_timeout = timeout_seconds if timeout_seconds is not None else timeout
+        return await self._component.exec(
+            command,
+            cwd=cwd,
+            env=env,
+            timeout=effective_timeout,
+            shell=shell,
+            background=background,
+        )

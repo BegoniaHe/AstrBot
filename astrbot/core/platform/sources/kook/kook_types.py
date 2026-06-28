@@ -182,18 +182,18 @@ class KookCardModelBase(KookBaseSendDataClass):
 
 class PlainTextElement(KookCardModelBase):
     content: str
-    type: Literal[KookModuleType.PLAIN_TEXT] = KookModuleType.PLAIN_TEXT
+    type: str = KookModuleType.PLAIN_TEXT
     emoji: bool = True
 
 
 class KmarkdownElement(KookCardModelBase):
     content: str
-    type: Literal[KookModuleType.KMARKDOWN] = KookModuleType.KMARKDOWN
+    type: str = KookModuleType.KMARKDOWN
 
 
 class ImageElement(KookCardModelBase):
     src: str
-    type: Literal[KookModuleType.IMAGE] = KookModuleType.IMAGE
+    type: str = KookModuleType.IMAGE
     alt: str = ""
     size: SizeType = "lg"
     circle: bool = False
@@ -202,7 +202,7 @@ class ImageElement(KookCardModelBase):
 
 class ButtonElement(KookCardModelBase):
     text: str
-    type: Literal[KookModuleType.BUTTON] = KookModuleType.BUTTON
+    type: str = KookModuleType.BUTTON
     theme: ThemeType = "primary"
     value: str = ""
     """当为 link 时，会跳转到 value 代表的链接;
@@ -216,19 +216,19 @@ AnyElement = PlainTextElement | KmarkdownElement | ImageElement | ButtonElement 
 
 class ParagraphStructure(KookCardModelBase):
     fields: list[PlainTextElement | KmarkdownElement]
-    type: Literal["paragraph"] = "paragraph"
+    type: str = "paragraph"
     cols: int = 1
     """范围是 1-3 , 移动端忽略此参数"""
 
 
 class HeaderModule(KookCardModelBase):
     text: PlainTextElement
-    type: Literal[KookModuleType.HEADER] = KookModuleType.HEADER
+    type: str = KookModuleType.HEADER
 
 
 class SectionModule(KookCardModelBase):
     text: PlainTextElement | KmarkdownElement | ParagraphStructure
-    type: Literal[KookModuleType.SECTION] = KookModuleType.SECTION
+    type: str = KookModuleType.SECTION
     mode: SectionMode = "left"
     accessory: ImageElement | ButtonElement | None = None
 
@@ -237,41 +237,39 @@ class ImageGroupModule(KookCardModelBase):
     """1 到多张图片的组合"""
 
     elements: list[ImageElement]
-    type: Literal[KookModuleType.IMAGE_GROUP] = KookModuleType.IMAGE_GROUP
+    type: str = KookModuleType.IMAGE_GROUP
 
 
 class ContainerModule(KookCardModelBase):
     """1 到多张图片的组合，与图片组模块(ImageGroupModule)不同，图片并不会裁切为正方形。多张图片会纵向排列。"""
 
     elements: list[ImageElement]
-    type: Literal[KookModuleType.CONTAINER] = KookModuleType.CONTAINER
+    type: str = KookModuleType.CONTAINER
 
 
 class ActionGroupModule(KookCardModelBase):
     """用来放按钮的模块"""
 
     elements: list[ButtonElement]
-    type: Literal[KookModuleType.ACTION_GROUP] = KookModuleType.ACTION_GROUP
+    type: str = KookModuleType.ACTION_GROUP
 
 
 class ContextModule(KookCardModelBase):
     elements: list[PlainTextElement | KmarkdownElement | ImageElement]
     """最多包含10个元素"""
-    type: Literal[KookModuleType.CONTEXT] = KookModuleType.CONTEXT
+    type: str = KookModuleType.CONTEXT
 
 
 class DividerModule(KookCardModelBase):
     """展示分割线用的"""
 
-    type: Literal[KookModuleType.DIVIDER] = KookModuleType.DIVIDER
+    type: str = KookModuleType.DIVIDER
 
 
 class FileModule(KookCardModelBase):
     src: str
     title: str = ""
-    type: Literal[KookModuleType.FILE, KookModuleType.AUDIO, KookModuleType.VIDEO] = (
-        KookModuleType.FILE
-    )
+    type: str = KookModuleType.FILE
     cover: str | None = None
     """cover 仅音频有效, 是音频的封面图"""
 
@@ -281,7 +279,7 @@ class CountdownModule(KookCardModelBase):
 
     endTime: int
     """毫秒时间戳"""
-    type: Literal[KookModuleType.COUNTDOWN] = KookModuleType.COUNTDOWN
+    type: str = KookModuleType.COUNTDOWN
     startTime: int | None = None
     """毫秒时间戳, 仅当mode为second才有这个字段"""
     mode: CountdownMode = "day"
@@ -291,11 +289,11 @@ class CountdownModule(KookCardModelBase):
 class InviteModule(KookCardModelBase):
     code: str
     """邀请链接或者邀请码"""
-    type: Literal[KookModuleType.INVITE] = KookModuleType.INVITE
+    type: str = KookModuleType.INVITE
 
 
 # 所有模块的联合类型
-AnyModule = Annotated[
+AnyModule = (
     HeaderModule
     | SectionModule
     | ImageGroupModule
@@ -305,9 +303,8 @@ AnyModule = Annotated[
     | DividerModule
     | FileModule
     | CountdownModule
-    | InviteModule,
-    Field(discriminator="type"),
-]
+    | InviteModule
+)
 
 
 class KookCardMessage(KookBaseSendDataClass):
@@ -681,7 +678,6 @@ class KookUserTag(KookBaseReceiveDataClass):
 class KookApiResponseBase(KookBaseReceiveDataClass):
     code: int
     message: str
-    data: dict  # 就算请求失败了也是空dict
 
     def success(self) -> bool:
         return self.code == 0

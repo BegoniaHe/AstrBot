@@ -60,10 +60,22 @@ class AstrBotMessage:
     message_str: str  # 最直观的纯文本消息字符串
     raw_message: object
     timestamp: int  # 消息时间戳
+    is_reply: bool
+    ref_msg: dict[str, object] | None
+    reply_kind: str | None
+    quoted_item_type: int | None
+    quoted_text: str | None
+    reply_to: dict[str, object]
 
     def __init__(self) -> None:
         self.timestamp = int(time.time())
         self.group = None
+        self.is_reply = False
+        self.ref_msg = None
+        self.reply_kind = None
+        self.quoted_item_type = None
+        self.quoted_text = None
+        self.reply_to = {"matched": False}
 
     def __str__(self) -> str:
         return str(self.__dict__)

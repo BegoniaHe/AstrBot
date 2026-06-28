@@ -335,7 +335,9 @@ class CozeAgentRunner(BaseAgentRunner[TContext]):
         import hashlib
 
         # 计算哈希实现缓存
-        cache_key = hashlib.md5(image_url.encode("utf-8")).hexdigest()
+        cache_key = hashlib.md5(
+            image_url.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
         if session_id:
             if session_id not in self.file_id_cache:

@@ -75,7 +75,10 @@ class OTTSProvider:
             secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(10)
         )
         path = re.sub(r"^https?://[^/]+", "", self.api_url) or "/"
-        return f"{timestamp}-{nonce}-0-{hashlib.md5(f'{path}-{timestamp}-{nonce}-0-{self.skey}'.encode()).hexdigest()}"
+        return (
+            f"{timestamp}-{nonce}-0-"
+            f"{hashlib.md5(f'{path}-{timestamp}-{nonce}-0-{self.skey}'.encode(), usedforsecurity=False).hexdigest()}"
+        )
 
     async def get_audio(self, text: str, voice_params: dict) -> str:
         file_path = TEMP_DIR / f"otts-{uuid.uuid4()}.wav"

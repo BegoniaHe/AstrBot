@@ -352,7 +352,10 @@ class DeerFlowAgentRunner(BaseAgentRunner[TContext]):
             raw = json.dumps(message, sort_keys=True, ensure_ascii=False, default=str)
         except TypeError, ValueError:
             raw = repr(message)
-        return hashlib.sha1(raw.encode("utf-8", errors="ignore")).hexdigest()
+        return hashlib.sha1(
+            raw.encode("utf-8", errors="ignore"),
+            usedforsecurity=False,
+        ).hexdigest()
 
     def _remember_seen_message_id(self, state: _StreamState, msg_id: str) -> None:
         if not msg_id or msg_id in state.seen_message_ids:

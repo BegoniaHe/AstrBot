@@ -36,19 +36,21 @@ def coerce_int_config(
                     default,
                 )
             parsed = default
-    else:
+    elif isinstance(value, float):
         try:
             parsed = int(value)
-        except TypeError, ValueError:
-            if warn:
-                logger.warning(
-                    "%s %s has unsupported type %s. Fallback to %s.",
-                    source,
-                    label,
-                    type(value).__name__,
-                    default,
-                )
+        except ValueError:
             parsed = default
+    else:
+        if warn:
+            logger.warning(
+                "%s %s has unsupported type %s. Fallback to %s.",
+                source,
+                label,
+                type(value).__name__,
+                default,
+            )
+        parsed = default
 
     if min_value is not None and parsed < min_value:
         if warn:

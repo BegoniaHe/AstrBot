@@ -127,6 +127,7 @@ class AiocqhttpAdapter(Platform):
 
     async def convert_message(self, event: Event) -> AstrBotMessage | None:
         logger.debug(f"[aiocqhttp] RawMessage {event}")
+        abm: AstrBotMessage | None = None
 
         if event["post_type"] == "message":
             abm = await self._convert_handle_message_event(event)
@@ -137,7 +138,6 @@ class AiocqhttpAdapter(Platform):
             abm = await self._convert_handle_notice_event(event)
         elif event["post_type"] == "request":
             abm = await self._convert_handle_request_event(event)
-
         return abm
 
     async def _convert_handle_request_event(self, event: Event) -> AstrBotMessage:
@@ -424,7 +424,7 @@ class AiocqhttpAdapter(Platform):
 
         return abm
 
-    def run(self) -> Awaitable[Any]:
+    async def run(self) -> None:
         if not self.host or not self.port:
             logger.warning(
                 "aiocqhttp: 未配置 ws_reverse_host 或 ws_reverse_port，将使用默认值：http://0.0.0.0:6199",
@@ -442,7 +442,7 @@ class AiocqhttpAdapter(Platform):
             logging.root.removeHandler(handler)
         logging.getLogger("aiocqhttp").setLevel(logging.ERROR)
         self.shutdown_event = asyncio.Event()
-        return coro
+        await coro
 
     async def terminate(self) -> None:
         if hasattr(self, "shutdown_event"):

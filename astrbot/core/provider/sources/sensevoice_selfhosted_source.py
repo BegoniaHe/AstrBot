@@ -4,11 +4,9 @@ LastEditTime: 2025-02-25 14:06:30
 """
 
 import asyncio
+import importlib
 import re
-from typing import cast
-
-from funasr_onnx import SenseVoiceSmall
-from funasr_onnx.utils.postprocess_utils import rich_transcription_postprocess
+from typing import Any, cast
 
 from astrbot.core import logger
 from astrbot.core.utils.media_utils import MediaResolver
@@ -31,22 +29,35 @@ class ProviderSenseVoiceSTTSelfHost(STTProvider):
     ) -> None:
         super().__init__(provider_config, provider_settings)
         self.set_model(provider_config["stt_model"])
-        self.model = None
+        self.model: Any | None = None
         self.is_emotion = provider_config.get("is_emotion", False)
 
     async def initialize(self) -> None:
         logger.info("下载或者加载 SenseVoice 模型中，这可能需要一些时间 ...")
+        try:
+            funasr_onnx = importlib.import_module("funasr_onnx")
+        except ImportError as exc:
+            raise RuntimeError("funasr_onnx is not installed") from exc
 
         # 将模型加载放到线程池中执行
         self.model = await asyncio.get_running_loop().run_in_executor(
             None,
-            lambda: SenseVoiceSmall(self.model_name, quantize=True, batch_size=16),
+            lambda: funasr_onnx.SenseVoiceSmall(
+                self.model_name,
+                quantize=True,
+                batch_size=16,
+            ),
         )
 
         logger.info("SenseVoice 模型加载完成。")
 
     async def get_text(self, audio_url: str) -> str:
         try:
+            if self.model is None:
+                raise RuntimeError("SenseVoice model is not initialized")
+            postprocess_utils = importlib.import_module(
+                "funasr_onnx.utils.postprocess_utils"
+            )
             # 使用 run_in_executor 来调用模型进行识别
             loop = asyncio.get_running_loop()
             async with MediaResolver(
@@ -56,14 +67,14 @@ class ProviderSenseVoiceSTTSelfHost(STTProvider):
             ).as_path(target_format="wav") as audio:
                 res = await loop.run_in_executor(
                     None,  # 使用默认的线程池
-                    lambda: cast(SenseVoiceSmall, self.model)(
+                    lambda: cast(Any, self.model)(
                         str(audio.path), language="auto", use_itn=True
                     ),
                 )
 
             # res = self.model(audio_url, language="auto", use_itn=True)
             logger.debug(f"SenseVoice识别到的文案：{res}")
-            text = rich_transcription_postprocess(res[0])
+            text = postprocess_utils.rich_transcription_postprocess(res[0])
             if self.is_emotion:
                 # 提取第二个匹配的值
                 matches = re.findall(r"<\|([^|]+)\|>", res[0])

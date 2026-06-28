@@ -611,9 +611,10 @@ class ProviderGoogleGenAI(Provider):
                     modalities,
                     temperature,
                 )
+                client = self._require_client()
                 result = await retry_provider_request(
                     "Gemini",
-                    lambda: self.client.models.generate_content(
+                    lambda: client.models.generate_content(
                         model=model,
                         contents=cast(types.ContentListUnion, conversation),
                         config=config,
@@ -703,9 +704,10 @@ class ProviderGoogleGenAI(Provider):
                     payloads.get("tool_choice", "auto"),
                     system_instruction,
                 )
+                client = self._require_client()
                 result = await retry_provider_request(
                     "Gemini",
-                    lambda: self.client.models.generate_content_stream(
+                    lambda: client.models.generate_content_stream(
                         model=model,
                         contents=cast(types.ContentListUnion, conversation),
                         config=config,
@@ -949,9 +951,10 @@ class ProviderGoogleGenAI(Provider):
 
     async def get_models(self):
         try:
+            client = self._require_client()
             models = await retry_provider_request(
                 "Gemini",
-                lambda: self.client.models.list(),
+                lambda: client.models.list(),
             )
             return [
                 m.name.replace("models/", "")
@@ -1116,3 +1119,8 @@ class ProviderGoogleGenAI(Provider):
         self._stale_http_clients.clear()
         await self._close_httpx_client(self._http_client)
         self._http_client = None
+
+    def _require_client(self):
+        if self.client is None:
+            raise RuntimeError("Gemini client is not initialized.")
+        return self.client

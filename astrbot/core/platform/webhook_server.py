@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -41,7 +41,7 @@ def _response_from_result(result: Any):
             result[1] if len(result) > 1 and isinstance(result[1], int) else 200
         )
         headers = result[2] if len(result) > 2 and isinstance(result[2], dict) else None
-        if isinstance(content, dict | list):
+        if isinstance(content, (dict, list)):
             return JSONResponse(content, status_code=status_code, headers=headers)
         return Response(
             content=content,
@@ -50,7 +50,7 @@ def _response_from_result(result: Any):
             media_type=headers.get("Content-Type") if headers else None,
         )
 
-    if isinstance(result, dict | list):
+    if isinstance(result, (dict, list)):
         return JSONResponse(result)
 
     return result
@@ -68,7 +68,7 @@ class FastAPIWebhookServer:
     ) -> None:
         has_params = bool(inspect.signature(view_func).parameters)
 
-        async def endpoint(request: Request):
+        async def endpoint(request: Request) -> Any:
             if has_params:
                 result = view_func(WebhookRequest(request))
             else:
@@ -101,7 +101,7 @@ class FastAPIWebhookServer:
     ) -> None:
         config = HyperConfig()
         config.bind = [f"{host}:{port}"]
-        await serve(self.app, config, shutdown_trigger=shutdown_trigger)
+        await serve(cast(Any, self.app), config, shutdown_trigger=shutdown_trigger)
 
     async def shutdown(self) -> None:
         return None

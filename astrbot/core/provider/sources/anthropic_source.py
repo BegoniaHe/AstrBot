@@ -3,7 +3,6 @@ import json
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
-import anthropic
 import httpx
 from anthropic import AsyncAnthropic
 from anthropic.types import Message
@@ -466,6 +465,9 @@ class ProviderAnthropic(Provider):
         if tool_choice in ("auto", "any", "none"):
             return {"type": tool_choice}
 
+        if tool_choice == "required":
+            return {"type": "auto"}
+
         if tool_choice == "tool":
             # {"type": "tool"} 必须配合 name 字段指定具体工具
             # 纯字符串 "tool" 无法指定工具名，回退为 auto
@@ -602,7 +604,6 @@ class ProviderAnthropic(Provider):
             lambda: self.client.messages.stream(**payloads, extra_body=extra_body),
             max_attempts=request_max_retries,
         ) as stream:
-            assert isinstance(stream, anthropic.AsyncMessageStream)
             async for event in stream:
                 if event.type == "message_start":
                     # the usage contains input token usage
@@ -738,7 +739,9 @@ class ProviderAnthropic(Provider):
         tool_calls_result=None,
         model=None,
         extra_user_content_parts=None,
-        tool_choice: Literal["auto", "any", "tool", "none"] | dict[str, str] = "auto",
+        tool_choice: (
+            Literal["auto", "required", "any", "tool", "none"] | dict[str, str]
+        ) = "auto",
         request_max_retries: int | None = None,
         **kwargs,
     ) -> LLMResponse:
@@ -811,7 +814,9 @@ class ProviderAnthropic(Provider):
         tool_calls_result=None,
         model=None,
         extra_user_content_parts=None,
-        tool_choice: Literal["auto", "any", "tool", "none"] | dict[str, str] = "auto",
+        tool_choice: (
+            Literal["auto", "required", "any", "tool", "none"] | dict[str, str]
+        ) = "auto",
         request_max_retries: int | None = None,
         **kwargs,
     ):

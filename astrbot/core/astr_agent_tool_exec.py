@@ -4,6 +4,7 @@ import json
 import traceback
 import typing as T
 import uuid
+from collections.abc import AsyncGenerator as AsyncGeneratorABC
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 
@@ -772,10 +773,10 @@ async def call_local_llm_tool(
         trace_ = traceback.format_exc()
         raise Exception(f"Tool execution error: {e}. Traceback: {trace_}") from e
 
-    if not ready_to_call:
+    if ready_to_call is None:
         return
 
-    if inspect.isasyncgen(ready_to_call):
+    if isinstance(ready_to_call, AsyncGeneratorABC):
         _has_yielded = False
         try:
             async for ret in ready_to_call:

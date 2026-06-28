@@ -21,7 +21,7 @@ class ContentPart(BaseModel):
 
     __content_part_registry: ClassVar[dict[str, type[ContentPart]]] = {}
 
-    type: Literal["text", "think", "image_url", "audio_url"]
+    type: str
     _no_save: bool = PrivateAttr(default=False)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -195,13 +195,7 @@ CHECKPOINT_ROLE = "_checkpoint"
 class Message(BaseModel):
     """A message in a conversation."""
 
-    role: Literal[
-        "system",
-        "user",
-        "assistant",
-        "tool",
-        "_checkpoint",
-    ]
+    role: str
 
     content: str | list[ContentPart] | CheckpointData | None = None
     """The content of the message."""
@@ -249,32 +243,32 @@ class Message(BaseModel):
 class AssistantMessageSegment(Message):
     """A message segment from the assistant."""
 
-    role: Literal["assistant"] = "assistant"
+    role: str = "assistant"
 
 
 class ToolCallMessageSegment(Message):
     """A message segment representing a tool call."""
 
-    role: Literal["tool"] = "tool"
+    role: str = "tool"
 
 
 class UserMessageSegment(Message):
     """A message segment from the user."""
 
-    role: Literal["user"] = "user"
+    role: str = "user"
 
 
 class SystemMessageSegment(Message):
     """A message segment from the system."""
 
-    role: Literal["system"] = "system"
+    role: str = "system"
 
 
 class CheckpointMessageSegment(Message):
     """Internal checkpoint segment for persisted conversation history."""
 
-    role: Literal["_checkpoint"] = "_checkpoint"
-    content: CheckpointData | None = None
+    role: str = "_checkpoint"
+    content: str | list[ContentPart] | CheckpointData | None = None
 
 
 def is_checkpoint_message(message: Message | dict) -> bool:

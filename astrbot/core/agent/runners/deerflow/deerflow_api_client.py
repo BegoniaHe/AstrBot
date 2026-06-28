@@ -174,7 +174,7 @@ class DeerFlowAPIClient:
             url,
             json=payload,
             headers=self.headers,
-            timeout=timeout_seconds,
+            timeout=ClientTimeout(total=timeout_seconds),
             proxy=self.proxy,
         ) as resp:
             if resp.status not in (200, 201):
@@ -193,7 +193,7 @@ class DeerFlowAPIClient:
         async with session.delete(
             url,
             headers=self.headers,
-            timeout=timeout_seconds,
+            timeout=ClientTimeout(total=timeout_seconds),
             proxy=self.proxy,
         ) as resp:
             if resp.status not in (200, 202, 204, 404):

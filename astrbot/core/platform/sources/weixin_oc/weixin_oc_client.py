@@ -7,7 +7,9 @@ from typing import Any, cast
 from urllib.parse import quote
 
 import aiohttp
-from Crypto.Cipher import AES
+
+# PyCryptodome is required by the upstream AES protocol implementation here.
+from Crypto.Cipher import AES  # nosec B413
 
 from astrbot import logger
 
@@ -127,7 +129,7 @@ class WeixinOCClient:
             self.adapter_id,
             media_path.name,
             len(raw_data),
-            hashlib.md5(raw_data).hexdigest(),
+            hashlib.md5(raw_data, usedforsecurity=False).hexdigest(),
             file_key,
         )
         cipher = AES.new(bytes.fromhex(aes_key_hex), AES.MODE_ECB)

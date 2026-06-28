@@ -108,6 +108,7 @@ class KookClient:
     async def get_gateway_url(self, resume=False, sn=0, session_id=None) -> str | None:
         """获取网关连接地址"""
         url = KookApiPaths.GATEWAY_INDEX
+        resp: aiohttp.ClientResponse | None = None
 
         # 构建连接参数
         params = {}
@@ -134,7 +135,8 @@ class KookClient:
 
         except pydantic.ValidationError as e:
             logger.error(f"[KOOK] 获取gateway失败, 响应数据格式错误: \n{e}")
-            logger.error(f"[KOOK] 原始响应内容: {await resp.text()}")
+            if resp is not None:
+                logger.error(f"[KOOK] 原始响应内容: {await resp.text()}")
             return None
 
         except Exception as e:
@@ -185,6 +187,7 @@ class KookClient:
 
     async def listen(self):
         """监听WebSocket消息"""
+        msg: str | bytes | None = None
         try:
             while self.running:
                 try:

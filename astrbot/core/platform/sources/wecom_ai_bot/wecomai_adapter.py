@@ -311,7 +311,9 @@ class WecomAIBotAdapter(Platform):
                     for img_b64 in image_base64:
                         # get md5 of image
                         img_data = base64.b64decode(img_b64)
-                        img_md5 = hashlib.md5(img_data).hexdigest()
+                        img_md5 = hashlib.md5(
+                            img_data, usedforsecurity=False
+                        ).hexdigest()
                         msg_items.append(
                             {
                                 "msgtype": WecomAIBotConstants.MSG_TYPE_IMAGE,
@@ -585,7 +587,7 @@ class WecomAIBotAdapter(Platform):
             )
         await super().send_by_session(session, message_chain)
 
-    def run(self) -> Awaitable[Any]:
+    async def run(self) -> None:
         """运行适配器，同时启动HTTP服务器和队列监听器"""
 
         async def run_both() -> None:
@@ -620,7 +622,7 @@ class WecomAIBotAdapter(Platform):
                         self.queue_listener.run(),
                     )
 
-        return run_both()
+        await run_both()
 
     async def webhook_callback(self, request: Any) -> Any:
         """统一 Webhook 回调入口"""

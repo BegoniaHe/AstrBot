@@ -87,7 +87,7 @@ class WecomAIBotWebhookClient:
 
     async def send_image_base64(self, image_base64: str) -> None:
         image_bytes = base64.b64decode(image_base64)
-        md5 = hashlib.md5(image_bytes).hexdigest()
+        md5 = hashlib.md5(image_bytes, usedforsecurity=False).hexdigest()
         await self.send_payload(
             {
                 "msgtype": "image",

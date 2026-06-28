@@ -23,8 +23,9 @@ class BaseAgentRunner[TContext]:
     @abc.abstractmethod
     async def reset(
         self,
-        run_context: ContextWrapper[TContext],
-        agent_hooks: BaseAgentRunHooks[TContext],
+        *args: T.Any,
+        run_context: ContextWrapper[TContext] | None = None,
+        agent_hooks: BaseAgentRunHooks[TContext] | None = None,
         **kwargs: T.Any,
     ) -> None:
         """Reset the agent to its initial state.
@@ -33,12 +34,12 @@ class BaseAgentRunner[TContext]:
         ...
 
     @abc.abstractmethod
-    async def step(self) -> T.AsyncGenerator[AgentResponse]:
+    def step(self) -> T.AsyncGenerator[AgentResponse]:
         """Process a single step of the agent."""
         ...
 
     @abc.abstractmethod
-    async def step_until_done(self, max_step: int) -> T.AsyncGenerator[AgentResponse]:
+    def step_until_done(self, max_step: int) -> T.AsyncGenerator[AgentResponse]:
         """Process steps until the agent is done."""
         ...
 

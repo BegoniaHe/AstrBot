@@ -364,11 +364,11 @@ class WeixinOfficialAccountPlatformAdapter(Platform):
                     future = asyncio.get_running_loop().create_future()
                     self.wexin_event_workers[msg_id] = future
                     await self.convert_message(msg, future)
-                    # I love shield so much!
-                    result = await asyncio.wait_for(
-                        asyncio.shield(future),
-                        180,
-                    )  # wait for 180s
+                # I love shield so much!
+                result = await asyncio.wait_for(
+                    asyncio.shield(future),
+                    180,
+                )  # wait for 180s
                 logger.debug(f"Got future result: {result}")
                 return result
             except TimeoutError:

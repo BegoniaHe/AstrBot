@@ -16,7 +16,7 @@ from astrbot.core.provider.register import provider_cls_map
 from astrbot.core.utils.astrbot_path import get_astrbot_path
 
 type Providers = (
-    "Provider" | "STTProvider" | "TTSProvider" | "EmbeddingProvider" | "RerankProvider"
+    "Provider | STTProvider | TTSProvider | EmbeddingProvider | RerankProvider"
 )
 
 
@@ -139,6 +139,7 @@ class Provider(AbstractProvider):
         system_prompt: str | None = None,
         tool_calls_result: ToolCallsResult | list[ToolCallsResult] | None = None,
         model: str | None = None,
+        extra_user_content_parts: list[ContentPart] | None = None,
         tool_choice: Literal["auto", "required"] = "auto",
         request_max_retries: int | None = None,
         **kwargs,

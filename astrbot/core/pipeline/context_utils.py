@@ -1,6 +1,7 @@
 import inspect
 import traceback
 import typing as T
+from collections.abc import AsyncGenerator as AsyncGeneratorABC
 
 from astrbot import logger
 from astrbot.core.message.message_event_result import MessageEventResult
@@ -38,10 +39,10 @@ async def call_handler(
     except TypeError:
         logger.error("处理函数参数不匹配，请检查 handler 的定义。", exc_info=True)
 
-    if not ready_to_call:
+    if ready_to_call is None:
         return
 
-    if inspect.isasyncgen(ready_to_call):
+    if isinstance(ready_to_call, AsyncGeneratorABC):
         _has_yielded = False
         try:
             async for ret in ready_to_call:

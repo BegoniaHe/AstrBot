@@ -16,7 +16,8 @@ import struct
 import time
 from typing import NoReturn
 
-from Crypto.Cipher import AES
+# PyCryptodome is required by the upstream AES protocol implementation here.
+from Crypto.Cipher import AES  # nosec B413
 
 from . import ierror
 
@@ -54,7 +55,7 @@ class SHA1:
 
             sortlist = [str(token), str(timestamp), str(nonce), str(encrypt)]
             sortlist.sort()
-            sha = hashlib.sha1()
+            sha = hashlib.sha1(usedforsecurity=False)
             sha.update("".join(sortlist).encode("utf-8"))
             return ierror.WXBizMsgCrypt_OK, sha.hexdigest()
 

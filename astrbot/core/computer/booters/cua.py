@@ -295,15 +295,19 @@ class CuaShellComponent(ShellComponent):
         if self._exec_raw is None:
             raise RuntimeError("CUA sandbox shell must provide `.exec` or `.run`.")
 
-    async def exec(
+    async def exec(  # noqa: ASYNC109
         self,
         command: str,
         cwd: str | None = None,
         env: dict[str, str] | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
         timeout_seconds: int | None = 30,
         shell: bool = True,
         background: bool = False,
     ) -> dict[str, Any]:
+        exec_raw = self._exec_raw
+        if exec_raw is None:
+            raise RuntimeError("CUA sandbox shell is not initialized.")
         if not shell:
             return {
                 "stdout": "",
@@ -315,8 +319,9 @@ class CuaShellComponent(ShellComponent):
         kwargs: dict[str, Any] = {}
         if cwd is not None:
             kwargs["cwd"] = cwd
-        if timeout_seconds is not None:
-            kwargs["timeout"] = timeout_seconds
+        effective_timeout = timeout_seconds if timeout_seconds is not None else timeout
+        if effective_timeout is not None:
+            kwargs["timeout"] = effective_timeout
         if env:
             kwargs["env"] = env
         if background:
@@ -329,7 +334,7 @@ class CuaShellComponent(ShellComponent):
                 }
             command = _build_cua_background_command(command)
 
-        result = await _maybe_await(self._exec_raw(command, **kwargs))
+        result = await _maybe_await(exec_raw(command, **kwargs))
         proc = (
             _normalize_with_python3_requirement(result, "background execution")
             if background
@@ -370,8 +375,10 @@ class CuaPythonComponent(PythonComponent):
         kernel_id: str | None = None,
         timeout_seconds: int = 30,
         silent: bool = False,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         _ = kernel_id
+        _ = cwd
         if self._python_exec is not None:
             result = await _maybe_await(
                 self._python_exec(code, timeout=timeout_seconds)
@@ -549,6 +556,17 @@ class _PosixShellFileSystem(FileSystemComponent):
             return None
         return _non_posix_filesystem_result(path, self._os_type)
 
+    async def create_file(
+        self,
+        path: str,
+        content: str = "",
+        mode: int = 0o644,
+    ) -> dict[str, Any]:
+        result = await self.write_file(path, content)
+        if not result.get("success"):
+            return {**result, "mode": mode, "mode_applied": False}
+        return {"success": True, "path": path, "mode": mode, "mode_applied": False}
+
     async def read_file(
         self,
         path: str,
@@ -621,6 +639,35 @@ class _PosixShellFileSystem(FileSystemComponent):
             after_context=after_context,
             before_context=before_context,
         )
+
+    async def edit_file(
+        self,
+        path: str,
+        old_string: str,
+        new_string: str,
+        replace_all: bool = False,
+        encoding: str = "utf-8",
+    ) -> dict[str, Any]:
+        read_result = await self.read_file(path, encoding=encoding)
+        if not read_result.get("success"):
+            return read_result
+        content = str(read_result.get("content", ""))
+        occurrences = content.count(old_string)
+        if occurrences == 0:
+            return {
+                "success": False,
+                "error": "old string not found in file",
+                "replacements": 0,
+            }
+        updated = content.replace(old_string, new_string, -1 if replace_all else 1)
+        write_result = await self.write_file(path, updated, encoding=encoding)
+        if not write_result.get("success"):
+            return write_result
+        return {
+            "success": True,
+            "path": path,
+            "replacements": occurrences if replace_all else 1,
+        }
 
 
 async def _list_dir_via_shell(
@@ -748,16 +795,18 @@ class CuaBooter(ComputerBooter):
     async def boot(self, session_id: str) -> None:
         _ = session_id
         try:
-            from cua import Image, Sandbox
+            import cua as cua_module
         except ImportError as exc:
             raise RuntimeError(
                 "CUA sandbox support requires the optional `cua` package. "
                 "Install it with `pip install cua` in the AstrBot environment."
             ) from exc
 
-        image_obj = self._build_image(Image)
-        ephemeral_kwargs = self._build_ephemeral_kwargs(Sandbox.ephemeral)
-        sandbox_cm = Sandbox.ephemeral(image_obj, **ephemeral_kwargs)
+        image_cls = getattr(cua_module, "Image")
+        sandbox_cls = getattr(cua_module, "Sandbox")
+        image_obj = self._build_image(image_cls)
+        ephemeral_kwargs = self._build_ephemeral_kwargs(sandbox_cls.ephemeral)
+        sandbox_cm = sandbox_cls.ephemeral(image_obj, **ephemeral_kwargs)
         sandbox = await sandbox_cm.__aenter__()
         try:
             self._runtime = _CuaRuntime(
@@ -804,7 +853,8 @@ class CuaBooter(ComputerBooter):
             kwargs["api_key"] = self.api_key
         return kwargs
 
-    async def shutdown(self) -> None:
+    async def shutdown(self, **kwargs: Any) -> None:
+        _ = kwargs
         if self._runtime is not None:
             await self._runtime.sandbox_cm.__aexit__(None, None, None)
             self._runtime = None

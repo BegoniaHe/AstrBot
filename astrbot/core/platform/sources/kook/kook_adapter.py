@@ -367,7 +367,7 @@ class KookPlatformAdapter(Platform):
 
         text_parts: list[str] = []
         images: list[str] = []
-        files: list[tuple[KookModuleType, str, str]] = []
+        files: list[tuple[str, str, str]] = []
 
         for card in card_list:
             for module in card.modules:
@@ -386,7 +386,7 @@ class KookPlatformAdapter(Platform):
 
                     case FileModule():
                         files.append((module.type, module.title, module.src))
-                        text_parts.append(f" [{module.type.value}]")
+                        text_parts.append(f" [{module.type}]")
 
                     case _:
                         logger.debug(f"[KOOK] 跳过或未处理模块: {module.type}")
@@ -418,7 +418,7 @@ class KookPlatformAdapter(Platform):
                 ).to_path(target_format="wav")
                 message.append(Record(file=path_wav, url=path_wav))
             else:
-                logger.warning(f"[KOOK] 跳过未知文件类型: {file_type.name}")
+                logger.warning(f"[KOOK] 跳过未知文件类型: {file_type}")
 
         return message, text
 
