@@ -46,6 +46,8 @@ import type {
   PluginVersionSupportRequest,
   PluginConfigFileDeleteRequest,
   PluginGithubInstallRequest,
+  PluginSourceBindRequest,
+  PluginValidateRepoRequest,
   PluginSourceRequest,
   PluginUrlInstallRequest,
   ProviderConfigRequest,
@@ -1654,6 +1656,17 @@ export const pluginApi = {
   installUrl(body: PluginUrlInstallRequest) {
     return typed<OpenConfig>(openApiV1.installPluginFromUrl({ body }));
   },
+  validateRepo(body: PluginValidateRepoRequest) {
+    return typed<OpenConfig>(openApiV1.validatePluginRepo({ body }));
+  },
+  bindSource(pluginId: string, body: PluginSourceBindRequest) {
+    return typed<OpenConfig>(
+      openApiV1.bindPluginSource({
+        path: { plugin_id: pluginId },
+        body,
+      }),
+    );
+  },
 };
 
 export const knowledgeApi = {
@@ -1689,7 +1702,10 @@ export const knowledgeApi = {
       openApiV1.deleteKnowledgeBase({ path: { kb_id: kbId } }),
     );
   },
-  documents(kbId: string, params?: { page?: number; page_size?: number }) {
+  documents(
+    kbId: string,
+    params?: { page?: number; page_size?: number; search?: string },
+  ) {
     return typed<PagedItemsData<KnowledgeDocumentData>>(
       openApiV1.listKnowledgeDocuments({
         path: { kb_id: kbId },

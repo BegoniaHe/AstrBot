@@ -143,6 +143,10 @@
         },
         "web_search_link": {
           "description": "Display Source Citations"
+        },
+        "websearch_exa_key": {
+          "description": "Exa API Key",
+          "hint": "Multiple keys can be added for rotation. Get a key at https://dashboard.exa.ai"
         }
       }
     },
@@ -1549,14 +1553,6 @@
       "timeout": {
         "description": "Timeout",
         "hint": "Timeout in seconds."
-      },
-      "mimo-stt-system-prompt": {
-        "description": "System prompt",
-        "hint": "System prompt used to guide MiMo STT transcription behavior."
-      },
-      "mimo-stt-user-prompt": {
-        "description": "User prompt",
-        "hint": "Additional user prompt sent to MiMo STT to constrain the returned transcription format."
       },
       "openai-tts-voice": {
         "description": "voice",

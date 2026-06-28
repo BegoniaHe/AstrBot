@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: 952d1bfad7e516df5c5dd4f9e7414b81cb4e5bde
-  synced_at_utc: 2026-06-24T21:54:10.6853477Z
-  sync_method: cherry-pick
-  source_pr: https://github.com/BegoniaHe/AstrBot/pull/1
-  note: Latest upstream commit included by the current sync batch.
+  commit: 89ec07a92bf3b6d5a39cd305761961b28a92524d
+  synced_at_utc: 2026-06-28T07:09:16.4008537Z
+  sync_method: merge
+  source_pr: null
+  note: Merged upstream/master into the fork and resolved conflicts with the fork's no-legacy policy.

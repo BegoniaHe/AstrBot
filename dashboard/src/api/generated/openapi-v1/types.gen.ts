@@ -220,6 +220,12 @@ export type PluginUpdateRequest = {
     reinstall?: boolean;
 };
 
+export type PluginSourceBindRequest = {
+    install_method?: string;
+    registry_url?: string;
+    market_plugin_id?: string;
+};
+
 export type PluginBatchUpdateRequest = {
     /**
      * When set, update this single plugin instead of a batch.
@@ -247,6 +253,9 @@ export type PluginGithubInstallRequest = {
     download_url?: string;
     proxy?: string;
     ignore_version_check?: boolean;
+    install_method?: string;
+    registry_url?: string;
+    market_plugin_id?: string;
 };
 
 export type PluginUrlInstallRequest = {
@@ -257,6 +266,15 @@ export type PluginUrlInstallRequest = {
     download_url?: string;
     proxy?: string;
     ignore_version_check?: boolean;
+    install_method?: string;
+    registry_url?: string;
+    market_plugin_id?: string;
+};
+
+export type PluginValidateRepoRequest = {
+    repository?: string;
+    url?: string;
+    proxy?: string;
 };
 
 export type PluginUploadInstallRequest = {
@@ -2902,6 +2920,24 @@ export type ReloadPluginResponses = {
 
 export type ReloadPluginResponse = ReloadPluginResponses[keyof ReloadPluginResponses];
 
+export type BindPluginSourceData = {
+    body: PluginSourceBindRequest;
+    path: {
+        plugin_id: string;
+    };
+    query?: never;
+    url: '/api/v1/plugins/{plugin_id}/source';
+};
+
+export type BindPluginSourceResponses = {
+    /**
+     * Standard AstrBot success response
+     */
+    200: SuccessEnvelope;
+};
+
+export type BindPluginSourceResponse = BindPluginSourceResponses[keyof BindPluginSourceResponses];
+
 export type SetPluginEnabledData = {
     body: EnabledPatch;
     path: {
@@ -2969,6 +3005,22 @@ export type CheckPluginVersionSupportResponses = {
 };
 
 export type CheckPluginVersionSupportResponse = CheckPluginVersionSupportResponses[keyof CheckPluginVersionSupportResponses];
+
+export type ValidatePluginRepoData = {
+    body: PluginValidateRepoRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/plugins/validate/repo';
+};
+
+export type ValidatePluginRepoResponses = {
+    /**
+     * Standard AstrBot success response
+     */
+    200: SuccessEnvelope;
+};
+
+export type ValidatePluginRepoResponse = ValidatePluginRepoResponses[keyof ValidatePluginRepoResponses];
 
 export type ListFailedPluginsData = {
     body?: never;
@@ -4068,6 +4120,10 @@ export type ListKnowledgeDocumentsData = {
     query?: {
         page?: number;
         page_size?: number;
+        /**
+         * Filter documents by name (case-insensitive partial match).
+         */
+        search?: string;
     };
     url: '/api/v1/knowledge-bases/{kb_id}/documents';
 };

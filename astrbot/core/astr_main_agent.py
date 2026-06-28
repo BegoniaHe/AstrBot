@@ -83,6 +83,8 @@ from astrbot.core.tools.web_search_tools import (
     BaiduWebSearchTool,
     BochaWebSearchTool,
     BraveWebSearchTool,
+    ExaGetContentsTool,
+    ExaWebSearchTool,
     FirecrawlExtractWebPageTool,
     FirecrawlWebSearchTool,
     TavilyExtractWebPageTool,
@@ -1199,6 +1201,9 @@ async def _apply_web_search_tools(
         req.func_tool.add_tool(tool_mgr.get_builtin_tool(FirecrawlExtractWebPageTool))
     elif provider == "baidu_ai_search":
         req.func_tool.add_tool(tool_mgr.get_builtin_tool(BaiduWebSearchTool))
+    elif provider == "exa":
+        req.func_tool.add_tool(tool_mgr.get_builtin_tool(ExaWebSearchTool))
+        req.func_tool.add_tool(tool_mgr.get_builtin_tool(ExaGetContentsTool))
 
 
 def _apply_web_search_citation_prompt(

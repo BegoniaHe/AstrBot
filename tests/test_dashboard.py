@@ -1230,6 +1230,23 @@ async def test_version_endpoints_use_md5_password_hint(
     assert _removed_md5_hint_alias_key() not in data["data"]
 
 
+@pytest.mark.asyncio
+async def test_public_versions_endpoint_does_not_require_auth(app: FastAPIAppAdapter):
+    test_client = app.test_client()
+
+    response = await test_client.get("/api/stat/versions")
+    data = await response.get_json()
+
+    assert response.status_code == 200
+    assert data["status"] == "ok"
+    assert data["data"]["astrbot_version"]
+    assert "webui_version" in data["data"]
+    assert "astrbot_code_version" in data["data"]
+    assert "change_pwd_hint" not in data["data"]
+    assert "md5_pwd_hint" not in data["data"]
+    assert "password_upgrade_required" not in data["data"]
+
+
 def test_password_hash_lookup_falls_back_to_md5_when_pbkdf2_missing(
     core_lifecycle_td: AstrBotCoreLifecycle,
 ):
@@ -1527,7 +1544,390 @@ async def test_plugin_detail_does_not_include_scanned_page_component(
         for component in data["data"]["components"]
         if component["type"] == "page"
     ]
-    assert page_components == []
+    assert page_components == [
+        {
+            "type": "page",
+            "name": PLUGIN_PAGE_DEMO_PAGE_NAME,
+            "title": PLUGIN_PAGE_DEMO_PAGE_NAME,
+            "page_name": PLUGIN_PAGE_DEMO_PAGE_NAME,
+            "i18n_key": f"pages.{PLUGIN_PAGE_DEMO_PAGE_NAME}",
+            "description": "Plugin Page entry",
+            "plugin_name": PLUGIN_PAGE_DEMO_NAME,
+            "plugin_marketplace_name": PLUGIN_PAGE_DEMO_NAME.replace("_", "-"),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_entry_returns_signed_content_path(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    test_client = app.test_client()
+    response = await test_client.get(
+        (
+            f"/api/plugin/page/entry?name={PLUGIN_PAGE_DEMO_NAME}"
+            f"&page={PLUGIN_PAGE_DEMO_PAGE_NAME}"
+        ),
+        headers=authenticated_header,
+    )
+    assert response.status_code == 200
+    data = await response.get_json()
+    assert data["status"] == "ok"
+    assert data["data"]["name"] == PLUGIN_PAGE_DEMO_PAGE_NAME
+    assert data["data"]["title"] == PLUGIN_PAGE_DEMO_PAGE_NAME
+    assert data["data"]["i18n_key"] == f"pages.{PLUGIN_PAGE_DEMO_PAGE_NAME}"
+    assert data["data"]["content_path"].startswith(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+    )
+    assert "asset_token=" in data["data"]["content_path"]
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_content_requires_auth(
+    app: FastAPIAppAdapter,
+    registered_plugin_page: StarMetadata,
+):
+    test_client = app.test_client()
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+    )
+    assert response.status_code == 401
+    data = await response.get_json()
+    assert data["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_content_supports_cookie_auth(
+    app: FastAPIAppAdapter,
+    core_lifecycle_td: AstrBotCoreLifecycle,
+    registered_plugin_page: StarMetadata,
+):
+    test_client = app.test_client()
+    login_response = await test_client.post(
+        "/api/auth/login",
+        json={
+            "username": core_lifecycle_td.astrbot_config["dashboard"]["username"],
+            "password": _resolve_dashboard_password(core_lifecycle_td),
+        },
+    )
+    assert login_response.status_code == 200
+
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+    )
+    assert response.status_code == 200
+    content = (await response.get_data()).decode("utf-8")
+    assert "Single plugin Page with internal navigation" in content
+    assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "frame-ancestors 'self'" in response.headers["Content-Security-Policy"]
+    assert "asset_token=" in content
+
+    asset_url_match = re.search(
+        r'src="([^"]+/app\.js[^"]*)"',
+        content,
+    )
+    assert asset_url_match is not None
+    asset_response = await test_client.get(asset_url_match.group(1))
+    assert asset_response.status_code == 200
+    asset_content = (await asset_response.get_data()).decode("utf-8")
+    assert "renderTabs" in asset_content
+    assert 'from "react"' in asset_content
+    assert (
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/shared/common.js"
+        in asset_content
+    )
+    assert "asset_token=" in asset_content
+
+    bridge_url_match = re.search(
+        r'src="([^"]+/bridge-sdk\.js[^"]*)"',
+        content,
+    )
+    assert bridge_url_match is not None
+    bridge_response = await test_client.get(bridge_url_match.group(1))
+    assert bridge_response.status_code == 200
+    bridge_content = (await bridge_response.get_data()).decode("utf-8")
+    assert "AstrBotPluginPage" in bridge_content
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_content_issues_scoped_asset_token(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    authorized_client = app.test_client()
+    response = await authorized_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/",
+        headers=authenticated_header,
+    )
+    assert response.status_code == 200
+    html_text = (await response.get_data()).decode("utf-8")
+
+    app_js_url = re.search(
+        r'src="([^"]+/app\.js[^"]*)"',
+        html_text,
+    )
+    bridge_sdk_url = re.search(
+        r'src="([^"]+/bridge-sdk\.js[^"]*)"',
+        html_text,
+    )
+    css_url = re.search(
+        r'href="([^"]+/base\.css[^"]*)"',
+        html_text,
+    )
+    assert app_js_url is not None
+    assert bridge_sdk_url is not None
+    assert css_url is not None
+    assert "asset_token=" in app_js_url.group(1)
+    assert "asset_token=" in bridge_sdk_url.group(1)
+    assert "asset_token=" in css_url.group(1)
+
+    query = parse_qs(urlsplit(app_js_url.group(1)).query)
+    asset_token = query.get("asset_token", [""])[0]
+    assert asset_token
+
+    anonymous_client = app.test_client()
+    app_js_response = await anonymous_client.get(app_js_url.group(1))
+    assert app_js_response.status_code == 200
+    bridge_response = await anonymous_client.get(bridge_sdk_url.group(1))
+    assert bridge_response.status_code == 200
+    bridge_js = (await bridge_response.get_data()).decode("utf-8")
+    assert "window.AstrBotPluginPage?.__setInitialContext" in bridge_js
+    assert '"locale": "zh-CN"' in bridge_js
+    assert '"displayName": "插件页面演示"' in bridge_js
+    assert '"pageTitle": "Bridge 演示页"' in bridge_js
+    css_response = await anonymous_client.get(css_url.group(1))
+    assert css_response.status_code == 200
+
+    stale_cookie_response = await anonymous_client.get(
+        app_js_url.group(1),
+        headers={"Cookie": f"{DASHBOARD_JWT_COOKIE_NAME}=stale.dashboard.token"},
+    )
+    assert stale_cookie_response.status_code == 200
+
+    out_of_scope_response = await anonymous_client.get(
+        f"/api/plugin/get?asset_token={asset_token}"
+    )
+    assert out_of_scope_response.status_code == 401
+
+    cross_plugin_response = await anonymous_client.get(
+        f"/api/plugin/page/content/another_plugin/{PLUGIN_PAGE_DEMO_PAGE_NAME}/app.js?asset_token={asset_token}"
+    )
+    assert cross_plugin_response.status_code == 401
+
+    cross_page_response = await anonymous_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/another-page/app.js?asset_token={asset_token}"
+    )
+    assert cross_page_response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_bridge_sdk_includes_is_dark_when_theme_param_provided(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    """Bridge SDK initial context should include isDark based on ?theme= query param."""
+    authorized_client = app.test_client()
+    response = await authorized_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/",
+        headers=authenticated_header,
+    )
+    assert response.status_code == 200
+    html_text = (await response.get_data()).decode("utf-8")
+    bridge_sdk_url = re.search(
+        r'src="([^"]+/bridge-sdk\.js[^"]*)"',
+        html_text,
+    )
+    assert bridge_sdk_url is not None
+
+    anonymous_client = app.test_client()
+
+    # theme=dark → isDark: true
+    dark_response = await anonymous_client.get(bridge_sdk_url.group(1) + "&theme=dark")
+    assert dark_response.status_code == 200
+    dark_js = (await dark_response.get_data()).decode("utf-8")
+    assert '"isDark": true' in dark_js
+
+    # theme=light → isDark: false
+    light_response = await anonymous_client.get(
+        bridge_sdk_url.group(1) + "&theme=light"
+    )
+    assert light_response.status_code == 200
+    light_js = (await light_response.get_data()).decode("utf-8")
+    assert '"isDark": false' in light_js
+
+    # no theme param → isDark: false (default)
+    base_response = await anonymous_client.get(bridge_sdk_url.group(1))
+    assert base_response.status_code == 200
+    base_js = (await base_response.get_data()).decode("utf-8")
+    assert '"isDark": false' in base_js
+
+    # invalid theme value → should NOT be treated as dark
+    invalid_response = await anonymous_client.get(
+        bridge_sdk_url.group(1) + "&theme=invalid"
+    )
+    assert invalid_response.status_code == 200
+    invalid_js = (await invalid_response.get_data()).decode("utf-8")
+    assert '"isDark": false' in invalid_js
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_content_propagates_theme_in_rewritten_urls(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    """Theme query param should be propagated through rewritten asset and bridge URLs."""
+    test_client = app.test_client()
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+        "?asset_token=&theme=dark",
+        headers=authenticated_header,
+    )
+    assert response.status_code == 200
+    html_text = (await response.get_data()).decode("utf-8")
+
+    # Verify theme=dark appears in bridge SDK URL in rewritten HTML
+    bridge_sdk_url_match = re.search(
+        r'src="([^"]+/bridge-sdk\.js[^"]*)"',
+        html_text,
+    )
+    assert bridge_sdk_url_match is not None
+    bridge_query = parse_qs(urlsplit(bridge_sdk_url_match.group(1)).query)
+    assert bridge_query.get("theme") == ["dark"]
+
+    # Verify theme=dark appears in CSS asset URL in rewritten HTML
+    css_url_match = re.search(
+        r'href="([^"]+/base\.css[^"]*)"',
+        html_text,
+    )
+    assert css_url_match is not None
+    css_query = parse_qs(urlsplit(css_url_match.group(1)).query)
+    assert css_query.get("theme") == ["dark"]
+
+    # Verify data-theme is injected on <html> tag to prevent flash
+    assert 'data-theme="dark"' in html_text
+    # Verify color-scheme meta tag is injected for browser-level default styles
+    assert '<meta name="color-scheme" content="dark">' in html_text
+
+    # theme=light → data-theme="light" on <html> and color-scheme meta
+    light_response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+        "?asset_token=&theme=light",
+        headers=authenticated_header,
+    )
+    assert light_response.status_code == 200
+    light_html = (await light_response.get_data()).decode("utf-8")
+    assert 'data-theme="light"' in light_html
+    assert '<meta name="color-scheme" content="light">' in light_html
+
+    # no theme param → no data-theme or color-scheme meta on <html>
+    no_theme_response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+        "?asset_token=",
+        headers=authenticated_header,
+    )
+    assert no_theme_response.status_code == 200
+    no_theme_html = (await no_theme_response.get_data()).decode("utf-8")
+    assert "data-theme=" not in no_theme_html
+    assert "color-scheme" not in no_theme_html
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_assets_require_dashboard_auth(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    authorized_client = app.test_client()
+    response = await authorized_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/",
+        headers=authenticated_header,
+    )
+    assert response.status_code == 200
+    html_text = (await response.get_data()).decode("utf-8")
+
+    app_js_url = re.search(
+        r'src="([^"]+/app\.js[^"]*)"',
+        html_text,
+    )
+    bridge_sdk_url = re.search(
+        r'src="([^"]+/bridge-sdk\.js[^"]*)"',
+        html_text,
+    )
+    assert app_js_url is not None
+    assert bridge_sdk_url is not None
+
+    anonymous_client = app.test_client()
+    app_js_response = await anonymous_client.get(_strip_query(app_js_url.group(1)))
+    assert app_js_response.status_code == 401
+    bridge_response = await anonymous_client.get(_strip_query(bridge_sdk_url.group(1)))
+    assert bridge_response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_plugin_page_content_blocks_path_traversal(
+    app: FastAPIAppAdapter,
+    authenticated_header: dict,
+    registered_plugin_page: StarMetadata,
+):
+    test_client = app.test_client()
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/..%2Fmain.py",
+        headers=authenticated_header,
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_cookie_for_plugin_page(
+    app: FastAPIAppAdapter,
+    core_lifecycle_td: AstrBotCoreLifecycle,
+    registered_plugin_page: StarMetadata,
+):
+    test_client = app.test_client()
+    response = await test_client.post(
+        "/api/auth/login",
+        json={
+            "username": core_lifecycle_td.astrbot_config["dashboard"]["username"],
+            "password": _resolve_dashboard_password(core_lifecycle_td),
+        },
+    )
+    assert response.status_code == 200
+
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+    )
+    assert response.status_code == 200
+    html_text = (await response.get_data()).decode("utf-8")
+    asset_url_match = re.search(r'src="([^"]+/app\.js[^"]*)"', html_text)
+    assert asset_url_match is not None
+
+    logout_response = await test_client.post("/api/auth/logout")
+    assert logout_response.status_code == 200
+    clear_cookie_header = next(
+        (
+            value
+            for value in logout_response.headers.getlist("Set-Cookie")
+            if DASHBOARD_JWT_COOKIE_NAME in value
+        ),
+        "",
+    )
+    assert clear_cookie_header
+    assert f"{DASHBOARD_JWT_COOKIE_NAME}=;" in clear_cookie_header
+    assert "Max-Age=0" in clear_cookie_header
+    _assert_cookie_samesite_strict(clear_cookie_header)
+
+    response = await test_client.get(
+        f"/api/plugin/page/content/{PLUGIN_PAGE_DEMO_NAME}/{PLUGIN_PAGE_DEMO_PAGE_NAME}/"
+    )
+    assert response.status_code == 401
+    asset_response = await test_client.get(_strip_query(asset_url_match.group(1)))
+    assert asset_response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -1828,6 +2228,10 @@ async def test_plugins(
         installed_at = target["installed_at"]
         assert installed_at is not None
         datetime.fromisoformat(installed_at)
+        assert target["install_source"]["install_method"] == "github"
+        assert target["install_source"]["repo"] == test_repo_url
+        assert target["updates_enabled"] is True
+        assert target["update_disabled_reason"] == ""
 
         response = await test_client.get(
             f"/api/v1/plugins/{test_plugin_name}",
@@ -1844,7 +2248,7 @@ async def test_plugins(
         exists = any(md.name == test_plugin_name for md in star_registry)
         assert exists is True, f"插件 {test_plugin_name} 未成功载入"
 
-        # 插件更新
+        # Git URL installs can be explicitly reinstalled from their repository.
         response = await test_client.post(
             f"/api/v1/plugins/{test_plugin_name}/update",
             json={},
@@ -1854,9 +2258,8 @@ async def test_plugins(
         data = await response.get_json()
         assert data["status"] == "ok"
 
-        # 验证更新标记文件
         plugin_dir = builder.get_plugin_path(test_plugin_name)
-        assert (plugin_dir / ".updated").exists()
+        assert (plugin_dir / ".updated").read_text(encoding="utf-8") == "ok"
 
         # 插件卸载
         response = await test_client.delete(

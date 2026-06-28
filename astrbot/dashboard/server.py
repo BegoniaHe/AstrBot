@@ -34,10 +34,14 @@ from astrbot.dashboard.asgi_runtime import (
 from astrbot.dashboard.responses import error
 
 from .api.app import create_dashboard_asgi_app
+from .plugin_page_auth import PluginPageAuth
 from .services.auth_service import DASHBOARD_JWT_COOKIE_NAME
 
 _RATE_LIMITED_ENDPOINTS: frozenset = frozenset(
     {
+        "/api/config/astrbot/update",
+        "/api/auth/totp/setup",
+        "/api/auth/login",
         "/api/v1/auth/totp/setup",
         "/api/v1/auth/login",
     }
@@ -256,7 +260,12 @@ class AstrBotDashboard:
         if path.startswith("/api/v1"):
             return None
 
-        allowed_exact_endpoints = {}
+        allowed_exact_endpoints = {
+            "/api/auth/login",
+            "/api/auth/logout",
+            "/api/auth/setup-status",
+            "/api/auth/setup",
+        }
         allowed_endpoint_prefixes = [
             "/api/v1/files/tokens",
         ]
@@ -264,26 +273,75 @@ class AstrBotDashboard:
             path.startswith(prefix) for prefix in allowed_endpoint_prefixes
         ):
             return None
-        token = self._extract_dashboard_jwt(current_request)
-        if not token:
+        is_plugin_page_path = PluginPageAuth.is_protected_path(path)
+        dashboard_token = self._extract_dashboard_jwt(current_request)
+        asset_token = (
+            PluginPageAuth.extract_asset_token(current_request.query_params)
+            if is_plugin_page_path
+            else None
+        )
+        token_candidates = []
+        if dashboard_token:
+            token_candidates.append(dashboard_token)
+        if asset_token and asset_token != dashboard_token:
+            token_candidates.append(asset_token)
+        if not token_candidates:
             r = JSONResponse(error("未授权"))
             r.status_code = 401
             return r
+
+        token_errors: list[str] = []
+        for token in token_candidates:
+            payload, token_error = self._validate_dashboard_token(token, path)
+            if payload is not None:
+                current_request.state.dashboard_g.username = cast(
+                    str, payload["username"]
+                )
+                return None
+            token_errors.append(token_error)
+
+        error_message = (
+            "Token 过期"
+            if token_errors and all(item == "Token 过期" for item in token_errors)
+            else "Token 无效"
+        )
+        r = JSONResponse(error(error_message))
+        r.status_code = 401
+        return r
+
+    def _validate_dashboard_token(
+        self,
+        token: str,
+        path: str,
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Validate a dashboard JWT or scoped plugin page asset token.
+
+        Args:
+            token: JWT value from the Authorization header, cookie, or query string.
+            path: Current request path used for plugin page asset token scope checks.
+
+        Returns:
+            A tuple of the decoded payload and an error message. The payload is
+            present only when the token is valid for the current request path.
+        """
         try:
             payload = jwt.decode(token, self._jwt_secret, algorithms=["HS256"])
-
-            username = payload.get("username")
-            if not isinstance(username, str) or not username.strip():
-                raise jwt.InvalidTokenError("missing username in token payload")
-            current_request.state.dashboard_g.username = username
         except jwt.ExpiredSignatureError:
-            r = JSONResponse(error("Token 过期"))
-            r.status_code = 401
-            return r
+            return None, "Token 过期"
         except jwt.InvalidTokenError:
-            r = JSONResponse(error("Token 无效"))
-            r.status_code = 401
-            return r
+            return None, "Token 无效"
+
+        if PluginPageAuth.is_asset_token(payload) and not PluginPageAuth.is_scope_valid(
+            payload,
+            path,
+        ):
+            return None, "Token 无效"
+
+        username = payload.get("username")
+        if not isinstance(username, str) or not username.strip():
+            return None, "Token 无效"
+
+        return payload, ""
 
     async def _apply_auth_rate_limit(
         self,
