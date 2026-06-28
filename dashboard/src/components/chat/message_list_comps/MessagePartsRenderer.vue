@@ -18,8 +18,7 @@
       <pre
         v-else-if="part.type === 'plain' && part.text"
         class="plain-content"
-        >{{ part.text }}</pre
-      >
+        >{{ part.text }}</pre>
 
       <div
         v-else-if="part.type === 'image' && imageUrl(part)"

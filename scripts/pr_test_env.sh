@@ -11,6 +11,7 @@ RUN_LINT=true
 RUN_QUALITY=false
 RUN_SMOKE=true
 RUN_DASHBOARD=false
+DASHBOARD_MODE="auto"
 
 usage() {
   cat <<'EOF'
@@ -44,6 +45,7 @@ while (($# > 0)); do
       ;;
     --with-dashboard)
       RUN_DASHBOARD=true
+      DASHBOARD_MODE="force-on"
       shift
       ;;
     --skip-sync)
@@ -64,6 +66,7 @@ while (($# > 0)); do
       ;;
     --no-dashboard)
       RUN_DASHBOARD=false
+      DASHBOARD_MODE="force-off"
       shift
       ;;
     -h | --help)
@@ -78,7 +81,7 @@ while (($# > 0)); do
   esac
 done
 
-if [[ "$PROFILE" == "full" && "$RUN_DASHBOARD" == false ]]; then
+if [[ "$PROFILE" == "full" && "$DASHBOARD_MODE" == "auto" ]]; then
   RUN_DASHBOARD=true
 fi
 

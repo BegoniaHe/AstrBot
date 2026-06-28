@@ -1076,8 +1076,7 @@ const checkTavilyConfig = async () => {
     const response = await configProfileApi.get('default');
     if (response.data.status === 'ok') {
       const payload = response.data.data as
-        | { config?: DashboardConfig }
-        | undefined;
+        { config?: DashboardConfig } | undefined;
       const config = payload?.config || {};
       const tavilyKeys = config.provider_settings?.websearch_tavily_key;
       if (

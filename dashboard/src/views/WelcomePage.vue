@@ -467,8 +467,7 @@ async function loadPlatformConfigBase() {
 async function fetchDefaultConfig(): Promise<DefaultConfigPayload> {
   const res = await configProfileApi.get('default');
   const payload = res.data?.data as
-    | { config?: DefaultConfigPayload }
-    | undefined;
+    { config?: DefaultConfigPayload } | undefined;
   return payload?.config || {};
 }
 

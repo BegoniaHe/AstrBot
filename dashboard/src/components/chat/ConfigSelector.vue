@@ -263,8 +263,7 @@ async function getAgentRunnerType(confId: string): Promise<string> {
   try {
     const res = await configProfileApi.get(confId);
     const payload = res.data.data as
-      | { config?: DashboardConfigProfile }
-      | undefined;
+      { config?: DashboardConfigProfile } | undefined;
     const config = payload?.config || {};
     const type = config?.provider_settings?.agent_runner_type || 'local';
     configCache.value[confId] = type;

@@ -2,6 +2,8 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   vue-demi: true
+minimumReleaseAgeExclude:
+  - prettier@3.9.1
 overrides:
   immutable: 4.3.8
   lodash-es: 4.18.1

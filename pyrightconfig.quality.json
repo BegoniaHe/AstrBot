@@ -4,10 +4,15 @@
   "include": [
     "astrbot/api",
     "astrbot/cli",
+    "astrbot/core/agent",
     "astrbot/core/backup",
+    "astrbot/core/computer",
     "astrbot/core/config",
     "astrbot/core/knowledge_base",
+    "astrbot/core/platform",
+    "astrbot/core/provider",
     "astrbot/core/skills",
+    "astrbot/dashboard/services",
     "astrbot/utils"
   ]
 }

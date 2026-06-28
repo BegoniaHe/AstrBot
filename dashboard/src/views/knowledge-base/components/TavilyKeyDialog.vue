@@ -103,8 +103,7 @@ const saveKey = async () => {
     }
 
     const payload = configResponse.data.data as
-      | { config?: DashboardConfig }
-      | undefined;
+      { config?: DashboardConfig } | undefined;
     const currentConfig: DashboardConfig = payload?.config || {};
 
     // 2. 更新配置

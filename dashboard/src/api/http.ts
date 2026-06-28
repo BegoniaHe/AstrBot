@@ -74,8 +74,7 @@ function normalizeAxiosError(error: AxiosError) {
       Boolean(
         (
           error.response.data as
-            | { data?: { totp_required?: boolean } }
-            | undefined
+            { data?: { totp_required?: boolean } } | undefined
         )?.data?.totp_required,
       );
 

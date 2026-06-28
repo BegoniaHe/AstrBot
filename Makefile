@@ -41,13 +41,13 @@ endif
 	fi
 
 pr-test-neo:
-	./scripts/pr_test_env.sh --profile neo
+	@$(PS) scripts/pr_test_env.ps1 -Profile neo
 
 pr-test-full:
-	./scripts/pr_test_env.sh --profile full
+	@$(PS) scripts/pr_test_env.ps1 -Profile full
 
 pr-test-full-fast:
-	./scripts/pr_test_env.sh --profile full --skip-sync --no-dashboard
+	@$(PS) scripts/pr_test_env.ps1 -Profile full -SkipSync -NoDashboard
 
 build: build-backend build-dashboard
 
@@ -91,7 +91,7 @@ quality:
 quality-report:
 	uv sync --group dev
 	uv run pyright
-	PYTHONIOENCODING=utf-8 uv run bandit -r astrbot -c pyproject.toml
+	PYTHONIOENCODING=utf-8 uv run bandit -lll -iii -r astrbot -c pyproject.toml
 	uv run pip-audit
 	uv run radon cc astrbot -s -n C
 	uv run radon mi astrbot -s

@@ -468,12 +468,7 @@ const editingJobId = ref('');
 const runningJobIds = ref(new Set<string>());
 const NO_DELIVERY_TARGET_FILTER = '__astrbot_no_delivery_target__';
 type ScheduleMode =
-  | 'once'
-  | 'interval'
-  | 'daily'
-  | 'weekly'
-  | 'monthly'
-  | 'cron';
+  'once' | 'interval' | 'daily' | 'weekly' | 'monthly' | 'cron';
 type IntervalUnit = 'minutes' | 'hours' | 'days';
 type UmoInfo = {
   umo: string;

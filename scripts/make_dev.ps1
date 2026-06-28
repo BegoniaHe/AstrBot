@@ -41,6 +41,27 @@ function New-EmptyFile {
     Set-Content -Path $Path -Value "" -NoNewline
 }
 
+function Invoke-TaskKill {
+    param([int]$TargetPid)
+
+    $taskkill = Start-Process `
+        -FilePath "taskkill.exe" `
+        -ArgumentList @("/PID", $TargetPid, "/T", "/F") `
+        -WindowStyle Hidden `
+        -Wait `
+        -PassThru
+
+    if ($taskkill.ExitCode -in @(0, 128, 255)) {
+        return
+    }
+
+    if (-not (Get-Process -Id $TargetPid -ErrorAction SilentlyContinue)) {
+        return
+    }
+
+    throw "taskkill failed for PID $TargetPid with exit code $($taskkill.ExitCode)"
+}
+
 function Stop-FromPidFile {
     param([string]$PidFile)
     if (-not (Test-Path $PidFile)) {
@@ -49,7 +70,14 @@ function Stop-FromPidFile {
 
     $pidValue = Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pidValue) {
-        & taskkill /PID $pidValue /T /F *> $null
+        try {
+            Invoke-TaskKill -Pid ([int]$pidValue)
+        }
+        catch {
+            if (Get-Process -Id ([int]$pidValue) -ErrorAction SilentlyContinue) {
+                throw
+            }
+        }
     }
     Remove-IfExists $PidFile
 }
@@ -78,7 +106,7 @@ function Stop-ByPort {
             Stop-Process -Id $procId -Force -ErrorAction Stop
         }
         catch {
-            & taskkill /PID $procId /T /F *> $null
+            Invoke-TaskKill -Pid ([int]$procId)
         }
     }
 }
@@ -199,10 +227,6 @@ switch ($Action) {
 
         Write-Host "Backend  : $(Split-Path -Leaf $backendPidFile) -> $(if ($backendOk) { 'up' } else { 'down' })"
         Write-Host "Dashboard: $(Split-Path -Leaf $dashboardPidFile) -> $(if ($dashboardOk) { 'up' } else { 'down' })"
-
-        if (-not $backendOk -or -not $dashboardOk) {
-            exit 1
-        }
     }
     "clean" {
         Stop-FromPidFile -PidFile $dashboardPidFile

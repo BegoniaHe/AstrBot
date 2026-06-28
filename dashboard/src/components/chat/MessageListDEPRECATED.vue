@@ -60,8 +60,7 @@
                   white-space: pre-wrap;
                   word-wrap: break-word;
                 "
-                >{{ part.text }}</pre
-              >
+                >{{ part.text }}</pre>
 
               <!-- 图片附件 -->
               <div
