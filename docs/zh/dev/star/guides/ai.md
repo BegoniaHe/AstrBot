@@ -4,12 +4,9 @@ AstrBot 内置了对多种大语言模型（LLM）提供商的支持，并且提
 
 您可以使用 AstrBot 提供的 LLM / Agent 接口来实现自己的智能体。
 
-我们在 `v4.5.7` 版本之后对 LLM 提供商的调用方式进行了较大调整，推荐使用新的调用方式。新的调用方式更加简洁，并且支持更多的功能。当然，您仍然可以使用[旧的调用方式](/dev/star/plugin#ai)。
+这里记录的是当前代码库使用的 LLM 调用方式。旧页面中的历史调用方式不再作为本 fork 的主路径文档继续维护。
 
 ## 获取当前会话使用的聊天模型 ID
-
-> [!TIP]
-> 在 v4.5.7 时加入
 
 ```py
 umo = event.unified_msg_origin
@@ -17,9 +14,6 @@ provider_id = await self.context.get_current_chat_provider_id(umo=umo)
 ```
 
 ## 调用大模型
-
-> [!TIP]
-> 在 v4.5.7 时加入
 
 ```py
 llm_resp = await self.context.llm_generate(
@@ -73,12 +67,7 @@ class BilibiliTool(FunctionTool[AstrAgentContext]):
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        # >= v4.5.1 使用：
         self.context.add_llm_tools(BilibiliTool(), SecondTool(), ...)
-
-        # < v4.5.1 之前使用：
-        tool_mgr = self.context.provider_manager.llm_tools
-        tool_mgr.func_list.append(BilibiliTool())
 ```
 
 > [!WARNING]
@@ -102,7 +91,7 @@ async def get_weather(self, event: AstrMessageEvent, location: str) -> MessageEv
 
 在 `location(string): 地点` 中，`location` 是参数名，`string` 是参数类型，`地点` 是参数描述。
 
-支持的参数类型有 `string`, `number`, `object`, `boolean`, `array`。在 v4.5.7 之后，支持对 `array` 类型参数指定子类型，例如 `array[string]`。
+支持的参数类型有 `string`, `number`, `object`, `boolean`, `array`。也支持为 `array` 类型指定子类型，例如 `array[string]`。
 
 > [!WARNING]
 > **`Args:` 段是必须的，且格式不能写错。**
@@ -112,9 +101,6 @@ async def get_weather(self, event: AstrMessageEvent, location: str) -> MessageEv
 > 此外，装饰器**不支持**通过 `parameters=...` 显式传入参数 schema，该写法会被忽略。如需手动控制 schema，请使用上方的 `@dataclass` + `add_llm_tools()` 方式。
 
 ## 调用 Agent
-
-> [!TIP]
-> 在 v4.5.7 时加入
 
 Agent 可以被定义为 system_prompt + tools + llm 的结合体，可以实现更复杂的智能体行为。
 
@@ -135,9 +121,6 @@ llm_resp = await self.context.tool_loop_agent(
 `tool_loop_agent()` 方法会自动处理工具调用和大模型请求的循环，直到大模型不再调用工具或者达到最大步骤数为止。
 
 ## Multi-Agent
-
-> [!TIP]
-> 在 v4.5.7 时加入
 
 Multi-Agent（多智能体）系统将复杂应用分解为多个专业化智能体，它们协同解决问题。不同于依赖单个智能体处理每一步，多智能体架构允许将更小、更专注的智能体组合成协调的工作流程。我们使用 `agent-as-tool` 模式来实现多智能体系统。
 
@@ -440,8 +423,8 @@ await conv_mgr.add_message_pair(
 
 ## 人格设定管理器
 
-`PersonaManager` 负责统一加载、缓存并提供所有人格（Persona）的增删改查接口，同时兼容 AstrBot 4.x 之前的旧版人格格式（v3）。  
-初始化时会自动从数据库读取全部人格，并生成一份 v3 兼容数据，供旧代码无缝使用。
+`PersonaManager` 负责统一加载、缓存并提供所有人格（Persona）的增删改查接口。  
+初始化时会从数据库读取全部人格，并刷新当前会话逻辑使用的运行时人格列表。
 
 ```py
 persona_mgr = self.context.persona_manager
@@ -550,7 +533,7 @@ class Persona(SQLModel, table=True):
 class Personality(TypedDict):
     """LLM 人格类。
 
-    在 v4.0.0 版本及之后，推荐使用上面的 Persona 类。
+    推荐使用上面的 Persona 类。
     """
 
     prompt: str

@@ -26,6 +26,8 @@ PUBLIC_OPEN_API_TAGS = {
     "MCP",
     "Skills",
     "Personas",
+    "Sessions",
+    "Conversations",
     "T2I",
     "Subagents",
 }

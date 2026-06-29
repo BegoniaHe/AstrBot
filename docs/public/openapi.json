@@ -63,6 +63,12 @@
       "name": "Personas"
     },
     {
+      "name": "Sessions"
+    },
+    {
+      "name": "Conversations"
+    },
+    {
       "name": "T2I"
     },
     {
@@ -450,144 +456,6 @@
         }
       }
     },
-    "/api/v1/bots/by-id": {
-      "get": {
-        "tags": ["Bots"],
-        "summary": "Get a bot configuration by query ID",
-        "operationId": "getBotById",
-        "x-astrbot-scope": "bot",
-        "parameters": [
-          {
-            "name": "bot_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Bots"],
-        "summary": "Replace a bot configuration by body ID",
-        "operationId": "updateBotById",
-        "x-astrbot-scope": "bot",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["bot_id", "config"],
-                "properties": {
-                  "bot_id": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Bots"],
-        "summary": "Delete a bot by query ID",
-        "operationId": "deleteBotById",
-        "x-astrbot-scope": "bot",
-        "parameters": [
-          {
-            "name": "bot_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/bots/enabled": {
-      "patch": {
-        "tags": ["Bots"],
-        "summary": "Enable or disable a bot by body ID",
-        "operationId": "setBotEnabledById",
-        "x-astrbot-scope": "bot",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["bot_id", "enabled"],
-                "properties": {
-                  "bot_id": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/bots/test": {
-      "post": {
-        "tags": ["Bots"],
-        "summary": "Test a bot registration or connection by body ID",
-        "operationId": "testBotById",
-        "x-astrbot-scope": "bot",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["bot_id"],
-                "properties": {
-                  "bot_id": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/bots/{bot_id}": {
       "get": {
         "tags": ["Bots"],
@@ -741,172 +609,6 @@
         }
       }
     },
-    "/api/v1/provider-sources/by-id": {
-      "get": {
-        "tags": ["Provider Sources"],
-        "summary": "Get a provider source by query ID",
-        "operationId": "getProviderSourceById",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Provider Sources"],
-        "summary": "Update a provider source by body ID",
-        "operationId": "upsertProviderSourceById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["source_id", "config"],
-                "properties": {
-                  "source_id": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Provider Sources"],
-        "summary": "Delete a provider source by query ID",
-        "operationId": "deleteProviderSourceById",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/provider-sources/models": {
-      "get": {
-        "tags": ["Provider Sources"],
-        "summary": "List models available from a provider source by query ID",
-        "operationId": "listProviderSourceModelsById",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "capability",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/ProviderCapability"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/provider-sources/providers": {
-      "get": {
-        "tags": ["Providers"],
-        "summary": "List providers under a provider source by query ID",
-        "operationId": "listProvidersBySourceId",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "capability",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/ProviderCapability"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "post": {
-        "tags": ["Providers"],
-        "summary": "Create a provider under a provider source by body ID",
-        "operationId": "createProviderInSourceById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["source_id", "config"],
-                "properties": {
-                  "source_id": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/provider-sources/{source_id}": {
       "get": {
         "tags": ["Provider Sources"],
@@ -976,13 +678,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/SourceId"
-          },
-          {
-            "name": "capability",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/ProviderCapability"
-            }
           }
         ],
         "responses": {
@@ -1003,10 +698,10 @@
             "$ref": "#/components/parameters/SourceId"
           },
           {
-            "name": "capability",
+            "name": "provider_type",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ProviderCapability"
+              "type": "string"
             }
           }
         ],
@@ -1046,19 +741,19 @@
     "/api/v1/providers": {
       "get": {
         "tags": ["Providers"],
-        "summary": "List providers by capability or source",
+        "summary": "List providers by provider type or source",
         "operationId": "listProviders",
         "x-astrbot-scope": "provider",
         "parameters": [
           {
-            "name": "capability",
+            "name": "provider_type",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ProviderCapability"
+              "type": "string"
             }
           },
           {
-            "name": "source_id",
+            "name": "provider_source_id",
             "in": "query",
             "schema": {
               "type": "string"
@@ -1089,185 +784,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProviderConfigRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/providers/by-id": {
-      "get": {
-        "tags": ["Providers"],
-        "summary": "Get a provider configuration by query ID",
-        "operationId": "getProviderById",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "provider_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "merged",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Providers"],
-        "summary": "Replace a provider configuration by body ID",
-        "operationId": "updateProviderById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["provider_id", "config"],
-                "properties": {
-                  "provider_id": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Providers"],
-        "summary": "Delete a provider by query ID",
-        "operationId": "deleteProviderById",
-        "x-astrbot-scope": "provider",
-        "parameters": [
-          {
-            "name": "provider_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/providers/enabled": {
-      "patch": {
-        "tags": ["Providers"],
-        "summary": "Enable or disable a provider by body ID",
-        "operationId": "setProviderEnabledById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["provider_id", "enabled"],
-                "properties": {
-                  "provider_id": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/providers/test": {
-      "post": {
-        "tags": ["Providers"],
-        "summary": "Test a provider by body ID",
-        "operationId": "testProviderById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["provider_id"],
-                "properties": {
-                  "provider_id": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/providers/embedding-dimension": {
-      "post": {
-        "tags": ["Providers"],
-        "summary": "Probe embedding dimension for a provider by body ID",
-        "operationId": "getProviderEmbeddingDimensionById",
-        "x-astrbot-scope": "provider",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["provider_id"],
-                "properties": {
-                  "provider_id": {
-                    "type": "string"
-                  },
-                  "provider_config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
               }
             }
           }
@@ -1345,7 +861,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DynamicConfig"
+                "$ref": "#/components/schemas/ProviderEmbeddingDimensionRequest"
               }
             }
           }
@@ -2255,357 +1771,6 @@
         }
       }
     },
-    "/api/v1/plugins/by-id": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "Get plugin details by query ID",
-        "operationId": "getPluginById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Plugins"],
-        "summary": "Uninstall a plugin by query ID",
-        "operationId": "uninstallPluginById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "delete_config": {
-                    "type": "boolean"
-                  },
-                  "delete_data": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/config": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "Get plugin configuration by query ID",
-        "operationId": "getPluginConfigById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Plugins"],
-        "summary": "Save plugin configuration by body ID",
-        "operationId": "updatePluginConfigById",
-        "x-astrbot-scope": "plugin",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["plugin_id", "config"],
-                "properties": {
-                  "plugin_id": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/config/schema": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "Get plugin configuration schema by query ID",
-        "operationId": "getPluginConfigSchemaById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/config-files": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "List uploaded files for a plugin file configuration item by query ID",
-        "operationId": "listPluginConfigFilesById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "config_key",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "post": {
-        "tags": ["Plugins"],
-        "summary": "Upload files for a plugin file configuration item by query ID",
-        "operationId": "uploadPluginConfigFilesById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "config_key",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Plugins"],
-        "summary": "Delete a plugin file configuration upload by query ID",
-        "operationId": "deletePluginConfigFileById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PluginConfigFileDeleteRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/readme": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "Get plugin README content by query ID",
-        "operationId": "getPluginReadmeById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Text"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/changelog": {
-      "get": {
-        "tags": ["Plugins"],
-        "summary": "Get plugin CHANGELOG content by query ID",
-        "operationId": "getPluginChangelogById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Text"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/reload": {
-      "post": {
-        "tags": ["Plugins"],
-        "summary": "Reload a plugin by body ID",
-        "operationId": "reloadPluginById",
-        "x-astrbot-scope": "plugin",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["plugin_id"],
-                "properties": {
-                  "plugin_id": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/enabled": {
-      "patch": {
-        "tags": ["Plugins"],
-        "summary": "Enable or disable a plugin by body ID",
-        "operationId": "setPluginEnabledById",
-        "x-astrbot-scope": "plugin",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["plugin_id", "enabled"],
-                "properties": {
-                  "plugin_id": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/plugins/{plugin_id}": {
       "get": {
         "tags": ["Plugins"],
@@ -2944,7 +2109,7 @@
     "/api/v1/plugins/{plugin_id}/update": {
       "post": {
         "tags": ["Plugins"],
-        "summary": "Update or reinstall a plugin",
+        "summary": "Update a plugin",
         "operationId": "updatePlugin",
         "x-astrbot-scope": "plugin",
         "parameters": [
@@ -2981,29 +2146,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PluginBatchUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/plugins/version-support/check": {
-      "post": {
-        "tags": ["Plugins"],
-        "summary": "Check whether a plugin version constraint is supported",
-        "operationId": "checkPluginVersionSupport",
-        "x-astrbot-scope": "plugin",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PluginVersionSupportRequest"
               }
             }
           }
@@ -3304,29 +2446,6 @@
         }
       }
     },
-    "/api/v1/plugin-sources/by-id": {
-      "delete": {
-        "tags": ["Plugin Sources"],
-        "summary": "Delete a plugin source by query ID",
-        "operationId": "deletePluginSourceById",
-        "x-astrbot-scope": "plugin",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/mcp/servers": {
       "get": {
         "tags": ["MCP"],
@@ -3350,132 +2469,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/McpServerConfig"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/servers/by-name": {
-      "put": {
-        "tags": ["MCP"],
-        "summary": "Update an MCP server by body name",
-        "operationId": "updateMcpServerByName",
-        "x-astrbot-scope": "mcp",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["server_name"],
-                "properties": {
-                  "server_name": {
-                    "type": "string"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["MCP"],
-        "summary": "Delete an MCP server by query name",
-        "operationId": "deleteMcpServerByName",
-        "x-astrbot-scope": "mcp",
-        "parameters": [
-          {
-            "name": "server_name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/servers/enabled": {
-      "patch": {
-        "tags": ["MCP"],
-        "summary": "Enable or disable an MCP server by body name",
-        "operationId": "setMcpServerEnabledByName",
-        "x-astrbot-scope": "mcp",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["server_name", "enabled"],
-                "properties": {
-                  "server_name": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/servers/test": {
-      "post": {
-        "tags": ["MCP"],
-        "summary": "Test an MCP server connection by body name",
-        "operationId": "testMcpServerByName",
-        "x-astrbot-scope": "mcp",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["server_name"],
-                "properties": {
-                  "server_name": {
-                    "type": "string"
-                  },
-                  "mcp_server_config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  },
-                  "config": {
-                    "$ref": "#/components/schemas/DynamicConfig"
-                  }
-                },
-                "additionalProperties": true
               }
             }
           }
@@ -3577,12 +2570,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "mcp_server_config": {
+                  "config": {
                     "type": "object",
                     "additionalProperties": true
                   }
                 },
-                "additionalProperties": true
+                "additionalProperties": false
               }
             }
           }
@@ -3700,193 +2693,10 @@
         }
       }
     },
-    "/api/v1/skills/by-name": {
-      "patch": {
-        "tags": ["Skills"],
-        "summary": "Update skill metadata or enabled state by body name",
-        "operationId": "updateSkillByName",
-        "x-astrbot-scope": "skill",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["skill_name"],
-                "properties": {
-                  "skill_name": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "active": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Skills"],
-        "summary": "Delete a skill by query name",
-        "operationId": "deleteSkillByName",
-        "x-astrbot-scope": "skill",
-        "parameters": [
-          {
-            "name": "skill_name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/skills/archive": {
-      "get": {
-        "tags": ["Skills"],
-        "summary": "Download a skill archive by query name",
-        "operationId": "downloadSkillByName",
-        "x-astrbot-scope": "skill",
-        "parameters": [
-          {
-            "name": "skill_name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Skill archive",
-            "content": {
-              "application/zip": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/skills/files": {
-      "get": {
-        "tags": ["Skills"],
-        "summary": "List files in a skill by query name",
-        "operationId": "listSkillFilesByName",
-        "x-astrbot-scope": "skill",
-        "parameters": [
-          {
-            "name": "skill_name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
-    "/api/v1/skills/file": {
-      "get": {
-        "tags": ["Skills"],
-        "summary": "Get skill file content by query name and path",
-        "operationId": "getSkillFileByName",
-        "x-astrbot-scope": "skill",
-        "parameters": [
-          {
-            "name": "skill_name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Text"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Skills"],
-        "summary": "Update skill file content by body name and path",
-        "operationId": "updateSkillFileByName",
-        "x-astrbot-scope": "skill",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["skill_name", "path", "content"],
-                "properties": {
-                  "skill_name": {
-                    "type": "string"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "content": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/skills/{skill_name}": {
       "patch": {
         "tags": ["Skills"],
-        "summary": "Update skill metadata or enabled state",
+        "summary": "Update skill active state",
         "operationId": "updateSkill",
         "x-astrbot-scope": "skill",
         "parameters": [
@@ -4303,78 +3113,6 @@
         }
       }
     },
-    "/api/v1/personas/by-id": {
-      "get": {
-        "tags": ["Personas"],
-        "summary": "Get a persona by query ID",
-        "operationId": "getPersonaById",
-        "x-astrbot-scope": "persona",
-        "parameters": [
-          {
-            "name": "persona_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "put": {
-        "tags": ["Personas"],
-        "summary": "Update a persona by body ID",
-        "operationId": "updatePersonaById",
-        "x-astrbot-scope": "persona",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["persona_id"],
-                "properties": {
-                  "persona_id": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Personas"],
-        "summary": "Delete a persona by query ID",
-        "operationId": "deletePersonaById",
-        "x-astrbot-scope": "persona",
-        "parameters": [
-          {
-            "name": "persona_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Ok"
-          }
-        }
-      }
-    },
     "/api/v1/personas/{persona_id}": {
       "get": {
         "tags": ["Personas"],
@@ -4568,6 +3306,498 @@
         }
       }
     },
+    "/api/v1/sessions": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "List active UMOs and session status",
+        "operationId": "listSessions",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "platform",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "message_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["all", "group", "private"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/active-umos": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "List active and known UMOs",
+        "operationId": "listActiveUmos",
+        "x-astrbot-scope": "data",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/rules": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "List session rules",
+        "operationId": "listSessionRules",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Update or create a session rule",
+        "operationId": "upsertSessionRule",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/rules/delete": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Delete one or more session rules",
+        "operationId": "deleteSessionRules",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UmoListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/provider": {
+      "patch": {
+        "tags": ["Sessions"],
+        "summary": "Batch update session provider selection",
+        "operationId": "batchUpdateSessionProvider",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSessionProviderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/service": {
+      "patch": {
+        "tags": ["Sessions"],
+        "summary": "Batch update session service settings",
+        "operationId": "batchUpdateSessionService",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSessionServiceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/session-groups": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "List session groups",
+        "operationId": "listSessionGroups",
+        "x-astrbot-scope": "data",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Create a session group",
+        "operationId": "createSessionGroup",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/session-groups/{group_id}": {
+      "put": {
+        "tags": ["Sessions"],
+        "summary": "Update a session group",
+        "operationId": "updateSessionGroup",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionGroupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Sessions"],
+        "summary": "Delete a session group",
+        "operationId": "deleteSessionGroup",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GroupId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "tags": ["Conversations"],
+        "summary": "List conversation history data",
+        "operationId": "listConversations",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "platform_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "platforms",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated platform IDs."
+          },
+          {
+            "name": "message_types",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated message types."
+          },
+          {
+            "name": "exclude_ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated user IDs to exclude."
+          },
+          {
+            "name": "exclude_platforms",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated platforms to exclude."
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/batch-delete": {
+      "post": {
+        "tags": ["Conversations"],
+        "summary": "Delete multiple conversations",
+        "operationId": "batchDeleteConversations",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationBatchDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}": {
+      "get": {
+        "tags": ["Conversations"],
+        "summary": "Get conversation details and messages",
+        "operationId": "getConversation",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Conversations"],
+        "summary": "Update conversation metadata",
+        "operationId": "updateConversation",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Conversations"],
+        "summary": "Delete a conversation",
+        "operationId": "deleteConversation",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/messages": {
+      "put": {
+        "tags": ["Conversations"],
+        "summary": "Replace conversation message history",
+        "operationId": "replaceConversationMessages",
+        "x-astrbot-scope": "data",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationMessagesReplaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/export": {
+      "post": {
+        "tags": ["Conversations"],
+        "summary": "Export conversations",
+        "operationId": "exportConversations",
+        "x-astrbot-scope": "data",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationExportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exported conversation data"
+          }
+        }
+      }
+    },
     "/api/v1/t2i/templates": {
       "get": {
         "tags": ["T2I"],
@@ -4731,7 +3961,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DynamicConfig"
+                "$ref": "#/components/schemas/SubAgentConfigRequest"
               }
             }
           }
@@ -4830,6 +4060,14 @@
           "type": "string"
         }
       },
+      "ConversationId": {
+        "name": "conversation_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
       "FilePath": {
         "name": "file_path",
         "in": "path",
@@ -4841,6 +4079,14 @@
       },
       "FolderId": {
         "name": "folder_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "GroupId": {
+        "name": "group_id",
         "in": "path",
         "required": true,
         "schema": {
@@ -4960,10 +4206,6 @@
         "type": "object",
         "additionalProperties": true
       },
-      "ProviderCapability": {
-        "type": "string",
-        "enum": ["chat", "agent", "stt", "tts", "embedding", "rerank"]
-      },
       "CreateConfigProfileRequest": {
         "type": "object",
         "properties": {
@@ -5022,22 +4264,8 @@
       },
       "BotConfigRequest": {
         "type": "object",
-        "required": ["type", "config"],
+        "required": ["config"],
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string",
-            "description": "Platform adapter type, such as aiocqhttp, telegram, lark."
-          },
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          },
           "config": {
             "$ref": "#/components/schemas/DynamicConfig"
           }
@@ -5081,9 +4309,6 @@
         "type": "object",
         "required": ["config"],
         "properties": {
-          "id": {
-            "type": "string"
-          },
           "config": {
             "$ref": "#/components/schemas/DynamicConfig"
           }
@@ -5094,19 +4319,15 @@
         "type": "object",
         "required": ["config"],
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "provider_source_id": {
-            "type": "string"
-          },
-          "capability": {
-            "$ref": "#/components/schemas/ProviderCapability"
-          },
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          },
+          "config": {
+            "$ref": "#/components/schemas/DynamicConfig"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProviderEmbeddingDimensionRequest": {
+        "type": "object",
+        "properties": {
           "config": {
             "$ref": "#/components/schemas/DynamicConfig"
           }
@@ -5359,17 +4580,20 @@
       },
       "PluginUpdateRequest": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "reinstall": {
-            "type": "boolean",
-            "default": false
+          "proxy": {
+            "type": "string",
+            "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "PluginSourceBindRequest": {
         "type": "object",
         "properties": {
+          "install_method": {
+            "type": "string"
+          },
           "registry_url": {
             "type": "string",
             "nullable": true
@@ -5382,36 +4606,20 @@
       },
       "PluginBatchUpdateRequest": {
         "type": "object",
+        "required": ["names"],
+        "additionalProperties": false,
         "properties": {
-          "plugin_id": {
-            "type": "string",
-            "description": "When set, update this single plugin instead of a batch."
-          },
-          "plugin_ids": {
+          "names": {
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "reinstall": {
-            "type": "boolean",
-            "default": false
-          },
-          "update_all": {
-            "type": "boolean",
-            "default": false
+          "proxy": {
+            "type": "string",
+            "nullable": true
           }
-        },
-        "additionalProperties": true
-      },
-      "PluginVersionSupportRequest": {
-        "type": "object",
-        "properties": {
-          "astrbot_version": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
+        }
       },
       "PluginGithubInstallRequest": {
         "type": "object",
@@ -5420,9 +4628,6 @@
           "repository": {
             "type": "string",
             "description": "GitHub URL or owner/repository slug."
-          },
-          "ref": {
-            "type": "string"
           },
           "download_url": {
             "type": "string",
@@ -5433,6 +4638,16 @@
           },
           "ignore_version_check": {
             "type": "boolean"
+          },
+          "install_method": {
+            "type": "string"
+          },
+          "registry_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "market_plugin_id": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -5455,6 +4670,16 @@
           },
           "ignore_version_check": {
             "type": "boolean"
+          },
+          "install_method": {
+            "type": "string"
+          },
+          "registry_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "market_plugin_id": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -5503,7 +4728,7 @@
           "name": {
             "type": "string"
           },
-          "enabled": {
+          "active": {
             "type": "boolean",
             "default": true
           },
@@ -5560,15 +4785,10 @@
       },
       "SkillPatchRequest": {
         "type": "object",
+        "required": ["active"],
         "properties": {
-          "enabled": {
+          "active": {
             "type": "boolean"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
           }
         },
         "additionalProperties": false
@@ -5684,6 +4904,199 @@
         },
         "additionalProperties": false
       },
+      "SessionRuleRequest": {
+        "type": "object",
+        "required": ["umo", "rule_key"],
+        "properties": {
+          "umo": {
+            "type": "string"
+          },
+          "rule_key": {
+            "type": "string"
+          },
+          "rule_value": {
+            "$ref": "#/components/schemas/DynamicConfig"
+          }
+        },
+        "additionalProperties": true
+      },
+      "UmoListRequest": {
+        "type": "object",
+        "properties": {
+          "umo": {
+            "type": "string"
+          },
+          "umos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["all", "group", "private", "custom_group"]
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "rule_key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchSessionProviderRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UmoListRequest"
+          },
+          {
+            "type": "object",
+            "required": ["provider_id", "provider_type"],
+            "properties": {
+              "provider_id": {
+                "type": "string"
+              },
+              "provider_type": {
+                "type": "string",
+                "enum": ["chat_completion", "speech_to_text", "text_to_speech"]
+              }
+            }
+          }
+        ]
+      },
+      "BatchSessionServiceRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UmoListRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "session_enabled": {
+                "type": "boolean"
+              },
+              "llm_enabled": {
+                "type": "boolean"
+              },
+              "tts_enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "SessionGroupRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "umos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "add_umos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remove_umos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationPatchRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "persona_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationMessagesReplaceRequest": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationRef": {
+        "type": "object",
+        "required": ["user_id", "cid"],
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "cid": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationBatchDeleteRequest": {
+        "type": "object",
+        "required": ["conversations"],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationRef"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConversationExportRequest": {
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationRef"
+            }
+          },
+          "conversation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "format": {
+            "type": "string",
+            "enum": ["json", "markdown"],
+            "default": "json"
+          }
+        },
+        "additionalProperties": false
+      },
       "T2iTemplateRequest": {
         "type": "object",
         "required": ["name", "content"],
@@ -5706,6 +5119,25 @@
           }
         },
         "additionalProperties": true
+      },
+      "SubAgentConfigRequest": {
+        "type": "object",
+        "properties": {
+          "main_enable": {
+            "type": "boolean"
+          },
+          "remove_main_duplicate_tools": {
+            "type": "boolean"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

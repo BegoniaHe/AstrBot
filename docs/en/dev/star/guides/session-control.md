@@ -1,7 +1,5 @@
 # Session Control
 
-> v3.4.36 and above
-
 Why do we need session control? Consider a Chinese idiom chain game plugin where a user or group needs to have multiple conversations with the bot rather than a one-time command. This is when session control becomes necessary.
 
 ```txt

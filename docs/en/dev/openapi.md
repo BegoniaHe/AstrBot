@@ -4,7 +4,7 @@ outline: deep
 
 # AstrBot HTTP API
 
-Starting from v4.18.0, AstrBot provides API Key based HTTP APIs for programmatic access.
+AstrBot provides API-key-based HTTP APIs for programmatic access.
 
 ## Quick Start
 
@@ -28,6 +28,8 @@ X-API-Key: abk_xxx
 
 The local OpenAPI schema is available at `http://localhost:6185/api/v1/openapi.json`, and the interactive docs are available at `http://localhost:6185/api/v1/docs`.
 
+The local schema contains the full `/api/v1` contract, including dashboard-session routes. The public docs site at `https://docs.astrbot.app/scalar.html` is a filtered developer-facing subset generated from the same source spec.
+
 ## Scope Permissions
 
 When creating an API Key, you can configure `scopes`. Each scope controls the range of accessible endpoints:
@@ -40,6 +42,7 @@ When creating an API Key, you can configure `scopes`. Each scope controls the ra
 | `im`       | Send proactive IM messages and query bot/platform list                                                                 | `POST /api/v1/im/messages`, `GET /api/v1/im/bots`                                                                               |
 | `config`   | Manage config profiles, system config, and shared configuration. This scope also includes `bot` and `provider` access. | `GET /api/v1/configs`, `GET/PUT /api/v1/system-config`, `GET/POST /api/v1/config-profiles`                                      |
 | `chat`     | Access chat capabilities and query sessions                                                                            | `POST /api/v1/chat`, `GET /api/v1/chat/sessions`                                                                                |
+| `data`     | Manage saved sessions, session groups, session rules, and stored conversations                                         | `GET/POST /api/v1/sessions`, `GET/POST /api/v1/session-groups`, `GET/POST /api/v1/conversations`                                |
 | `file`     | Upload and download chat attachments                                                                                   | `POST /api/v1/file`, `GET /api/v1/file`, `POST /api/v1/files`                                                                   |
 | `plugin`   | Manage plugins, plugin config, plugin sources, and marketplace entries                                                 | `GET /api/v1/plugins`, `GET/PUT /api/v1/plugins/config`, `POST /api/v1/plugins/install/url`                                     |
 | `mcp`      | Manage MCP server configurations and provider sync                                                                     | `GET/POST /api/v1/mcp/servers`, `PATCH /api/v1/mcp/servers/{server_name}/enabled`, `POST /api/v1/mcp/providers/modelscope/sync` |
@@ -49,7 +52,11 @@ If the API Key does not include the required scope for the target endpoint, the 
 
 `config` is a broad management scope. When an API key is created with `config`, AstrBot grants the key `config`, `bot`, and `provider` access together. The WebUI mirrors this dependency: selecting `config` selects `bot` and `provider`; deselecting `bot` or `provider` removes `config`.
 
-Developer API keys currently support only the 10 scopes listed above. `tool`, `skills`, `kb`, `data`, and `system` are not valid developer API key scopes. Use the singular `skill` scope for `/api/v1/skills/*` endpoints. The public OpenAPI reference only includes endpoints covered by supported developer API key scopes.
+Developer API keys currently support the 11 scopes listed above. Use the singular `skill` scope for `/api/v1/skills/*` endpoints.
+
+Note: the backend already accepts the `data` scope, but the current WebUI scope picker in Settings does not list `data` yet.
+
+`tool`, `kb`, and `system` routes still exist in the full local `/api/v1/openapi.json` schema, but they are dashboard-session routes today rather than developer API key scopes.
 
 ## Common Endpoints
 
@@ -69,9 +76,11 @@ Interact with AstrBot's built-in Agent. Supports plugin calls, tool calls, and o
 - `GET /api/v1/providers`: list model provider configurations
 - `GET /api/v1/provider-sources`: list provider source configurations
 
-**Personas, Plugins, MCP, and Skills**
+**Personas, Data, Plugins, MCP, and Skills**
 
 - `GET /api/v1/personas`: list personas
+- `GET /api/v1/sessions`: list session state and rules
+- `GET /api/v1/conversations`: list stored conversations
 - `GET /api/v1/plugins`: list plugins
 - `GET /api/v1/mcp/servers`: list MCP servers
 - `GET /api/v1/skills`: list skills

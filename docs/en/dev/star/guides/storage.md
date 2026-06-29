@@ -2,9 +2,7 @@
 
 ## Simple KV Storage
 
-> [!TIP]
-> Requires AstrBot version >= 4.9.2.
-
+Plugins can use AstrBot's simple key-value store to persist configuration or temporary data. The storage is scoped per plugin, so each plugin has its own isolated space.
 Plugins can use AstrBot's simple key-value store to persist configuration or temporary data. The storage is scoped per plugin, so each plugin has its own isolated space.
 
 ```py
@@ -27,5 +25,5 @@ You can fetch the plugin data directory with:
 from pathlib import Path
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / self.name  # self.name is the plugin name; available in v4.9.2 and above. For lower versions, specify the plugin name yourself.
+plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / self.name
 ```

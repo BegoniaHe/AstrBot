@@ -50,7 +50,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 - `items`: 可选。如果配置的类型是 `object`，需要添加 `items` 字段。`items` 的内容是这个配置项的子 Schema。理论上可以无限嵌套，但是不建议过多嵌套。
 - `invisible`: 可选。配置是否隐藏。默认是 `false`。如果设置为 `true`，则不会在管理面板上显示。
 - `options`: 可选。一个列表，如 `"options": ["chat", "agent", "workflow"]`。提供下拉列表可选项。
-- `editor_mode`: 可选。是否启用代码编辑器模式。需要 AstrBot >= `v3.5.10`, 低于这个版本不会报错，但不会生效。默认是 false。
+- `editor_mode`: 可选。是否启用代码编辑器模式。默认是 false。
 - `editor_language`: 可选。代码编辑器的代码语言，默认为 `json`。
 - `editor_theme`: 可选。代码编辑器的主题，可选值有 `vs-light`（默认）， `vs-dark`。
 - `_special`: 可选。用于调用 AstrBot 提供的可视化提供商选取、人格选取、知识库选取等功能，详见下文。
@@ -65,7 +65,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 
 ![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
 
-**\_special** 字段仅 v4.0.0 之后可用。常用可填写值包括 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, `select_knowledgebase`，用于让用户快速选择在 WebUI 上已经配置好的模型提供商、人设、知识库等数据。
+**\_special** 字段可用于 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, `select_knowledgebase` 等值，让用户快速选择在 WebUI 上已经配置好的模型提供商、人设、知识库等数据。
 
 - `select_provider`、`select_provider_tts`、`select_provider_stt`、`select_persona` 的结果为字符串。
 - `select_knowledgebase` 的结果为 `list` 类型，支持多选，建议将对应配置项的 `type` 设为 `list`，默认值设为 `[]`。
@@ -79,7 +79,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 
 ### file 类型的 schema
 
-在 v4.13.0 之后引入，允许插件定义文件上传配置项，引导用户上传插件所需的文件。
+允许插件定义文件上传配置项，引导用户上传插件所需的文件。
 
 ```json
 {
@@ -133,7 +133,7 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 ### template_list 类型的 schema
 
 > [!NOTE]
-> v4.10.4 引入。更多信息请查看：[#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208)
+> 如需了解最初的设计背景，可参考 [#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208)。
 
 插件开发者可以在\_conf_schema中按照以下格式添加模板配置项（有点类似于原有的嵌套配置）
 

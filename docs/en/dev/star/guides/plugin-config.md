@@ -50,7 +50,7 @@ The file content is a `Schema` that represents the configuration. The Schema is 
 - `items`: Optional. If the configuration type is `object`, the `items` field needs to be added. The content of `items` is the sub-Schema of this configuration item. Theoretically, it can be nested infinitely, but excessive nesting is not recommended.
 - `invisible`: Optional. Whether the configuration is hidden. Default is `false`. If set to `true`, it will not be displayed in the management panel.
 - `options`: Optional. A list, such as `"options": ["chat", "agent", "workflow"]`. Provides dropdown list options.
-- `editor_mode`: Optional. Whether to enable code editor mode. Requires AstrBot >= `v3.5.10`. Versions below this won't report errors but won't take effect. Default is false.
+- `editor_mode`: Optional. Whether to enable code editor mode. Default is false.
 - `editor_language`: Optional. The code language for the code editor, defaults to `json`.
 - `editor_theme`: Optional. The theme for the code editor. Options are `vs-light` (default) and `vs-dark`.
 - `_special`: Optional. Used to call AstrBot's visualization features for provider selection, persona selection, knowledge base selection, etc. See details below.
@@ -65,7 +65,7 @@ When the code editor is enabled, it looks like this:
 
 ![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
 
-The **\_special** field is only available after v4.0.0. Common values include `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, and `select_knowledgebase`, allowing users to quickly select model providers, personas, knowledge bases, and other data already configured in the WebUI.
+The **\_special** field can be used with values such as `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, and `select_knowledgebase`, allowing users to quickly select model providers, personas, knowledge bases, and other data already configured in the WebUI.
 
 - `select_provider`, `select_provider_tts`, `select_provider_stt`, and `select_persona` return strings.
 - `select_knowledgebase` returns a `list` and supports multiple selection, so the corresponding config item should use `type: list` with a default value of `[]`.
@@ -79,7 +79,7 @@ Using `select_provider` as an example, it will display as follows:
 
 ### `file` type schema
 
-Introduced in v4.13.0, this allows plugins to define file-upload configuration items to guide users to upload files required by the plugin.
+This allows plugins to define file-upload configuration items to guide users to upload files required by the plugin.
 
 ```json
 {
@@ -133,7 +133,7 @@ Used to visualize editing a Python `dict` type configuration. For example, AstrB
 ### `template_list` type schema
 
 > [!NOTE]
-> Introduced in v4.10.4. For more details see: [#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208)
+> For background on the original design, see [#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208).
 
 Plugin developers can add a template-style configuration to `_conf_schema` in the following format (somewhat similar to nested configs):
 

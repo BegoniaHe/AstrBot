@@ -1,1 +1,1 @@
-本页面已经迁移至 [插件基础开发](/dev/star/plugin)。
+本页面已经迁移至 [插件开发指南 🌠](/dev/star/plugin-new)。

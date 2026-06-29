@@ -4,7 +4,7 @@ outline: deep
 
 # AstrBot HTTP API
 
-从 v4.18.0 开始，AstrBot 提供基于 API Key 的 HTTP API，开发者可以通过标准 HTTP 请求访问核心能力。
+AstrBot 提供基于 API Key 的 HTTP API，开发者可以通过标准 HTTP 请求访问核心能力。
 
 ## 快速开始
 
@@ -28,6 +28,8 @@ X-API-Key: abk_xxx
 
 本地 OpenAPI 描述文件地址为 `http://localhost:6185/api/v1/openapi.json`，交互式文档地址为 `http://localhost:6185/api/v1/docs`。
 
+本地 schema 包含完整的 `/api/v1` 契约，其中也包括依赖 Dashboard 登录态的接口。公开文档站点上的 `https://docs.astrbot.app/scalar.html` 是由同一份规范裁剪出来的开发者子集。
+
 ## Scope 权限说明
 
 创建 API Key 时可配置 `scopes`。每个 scope 控制可访问的接口范围：
@@ -40,6 +42,7 @@ X-API-Key: abk_xxx
 | `im`       | 主动发 IM 消息、查询 bot/platform 列表                                             | `POST /api/v1/im/messages`、`GET /api/v1/im/bots`                                                                               |
 | `config`   | 管理配置文件、系统配置和通用配置。该 scope 同时包含 `bot` 和 `provider` 访问权限。 | `GET /api/v1/configs`、`GET/PUT /api/v1/system-config`、`GET/POST /api/v1/config-profiles`                                      |
 | `chat`     | 调用对话能力、查询对话会话                                                         | `POST /api/v1/chat`、`GET /api/v1/chat/sessions`                                                                                |
+| `data`     | 管理会话状态、会话分组、会话规则和已保存对话                                       | `GET/POST /api/v1/sessions`、`GET/POST /api/v1/session-groups`、`GET/POST /api/v1/conversations`                                |
 | `file`     | 上传和下载对话附件                                                                 | `POST /api/v1/file`、`GET /api/v1/file`、`POST /api/v1/files`                                                                   |
 | `plugin`   | 管理插件、插件配置、插件源和插件市场                                               | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/config`、`POST /api/v1/plugins/install/url`                                     |
 | `mcp`      | 管理 MCP 服务器配置和服务端同步                                                    | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
@@ -49,7 +52,11 @@ X-API-Key: abk_xxx
 
 `config` 是较大的管理 scope。创建 API Key 时如果包含 `config`，AstrBot 会同时授予该 Key `config`、`bot` 和 `provider` 访问权限。WebUI 的勾选逻辑也会体现这个依赖关系：选中 `config` 会同时选中 `bot` 和 `provider`；取消选中 `bot` 或 `provider` 时，会同步取消 `config`。
 
-当前开发者 API Key 仅开放以上 10 个 scope。`tool`、`skills`、`kb`、`data`、`system` 暂不支持作为开发者 API Key scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。公开 OpenAPI 文档只包含这些开发者 API Key scope 覆盖的接口。
+当前开发者 API Key 支持以上 11 个 scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。
+
+注意：后端已经支持 `data` scope，但当前 Settings 页面里的 scope 选择器暂时还没有把 `data` 列出来。
+
+`tool`、`kb`、`system` 等接口仍然会出现在本地完整的 `/api/v1/openapi.json` 规范里，但它们目前属于依赖 Dashboard 登录态的接口，而不是开发者 API Key scope。
 
 ## 常用接口
 
@@ -69,9 +76,11 @@ X-API-Key: abk_xxx
 - `GET /api/v1/providers`：获取模型提供商配置列表
 - `GET /api/v1/provider-sources`：获取提供商源配置列表
 
-**人格、插件、MCP 和 Skills**
+**人格、数据、插件、MCP 和 Skills**
 
 - `GET /api/v1/personas`：获取人格列表
+- `GET /api/v1/sessions`：获取会话状态与规则
+- `GET /api/v1/conversations`：获取已保存对话
 - `GET /api/v1/plugins`：获取插件列表
 - `GET /api/v1/mcp/servers`：获取 MCP 服务器列表
 - `GET /api/v1/skills`：获取 Skills 列表

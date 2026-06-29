@@ -8,7 +8,7 @@ outline: deep
 
 AstrBot's configuration file is a JSON format file. AstrBot reads this file at startup and initializes based on the settings within. Its path is `data/cmd_config.json`.
 
-> Since AstrBot v4.0.0, we introduced the concept of [multiple configuration files](https://blog.astrbot.app/posts/what-is-changed-in-4.0.0/#%E5%A4%9A%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6). `data/cmd_config.json` serves as the default configuration `default`. Other configuration files you create in the WebUI are stored in the `data/config/` directory, starting with `abconf_`.
+> AstrBot supports [multiple configuration files](https://blog.astrbot.app/posts/what-is-changed-in-4.0.0/#%E5%A4%9A%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6). `data/cmd_config.json` serves as the default configuration `default`. Other configuration files you create in the WebUI are stored in the `data/config/` directory, starting with `abconf_`.
 
 The default AstrBot configuration is as follows:
 
@@ -203,7 +203,7 @@ Whether to quote the user's message when replying. Default is `false`.
 
 #### `platform_settings.path_mapping`
 
-_This configuration item has been deprecated since v4.0.0._
+_This configuration item is deprecated._
 
 List of path mappings. Used to replace file paths in messages. Each mapping item contains `from` and `to` fields, indicating that `from` in the message path is replaced with `to`.
 
@@ -367,8 +367,6 @@ Whether platforms that don't support streaming responses should fall back to seg
 Limit on the maximum number of Agent steps. Default is `30`. Each tool call by the model counts as one step.
 
 #### `provider_settings.tool_call_timeout`
-
-Added in `v4.3.5`
 
 Maximum timeout for tool calls (seconds), default is `60` seconds.
 

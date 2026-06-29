@@ -4,12 +4,9 @@ AstrBot provides built-in support for multiple Large Language Model (LLM) provid
 
 You can use the LLM / Agent interfaces provided by AstrBot to implement your own intelligent agents.
 
-Starting from version `v4.5.7`, we've made significant improvements to the way LLM providers are invoked. We recommend using the new approach, which is more concise and supports additional features. The legacy invocation method remains documented in the previous Chinese-only guide.
+This guide documents the current LLM invocation path used by the codebase.
 
 ## Getting the Chat Model ID for the Current Session
-
-> [!TIP]
-> Added in v4.5.7
 
 ```py
 umo = event.unified_msg_origin
@@ -17,9 +14,6 @@ provider_id = await self.context.get_current_chat_provider_id(umo=umo)
 ```
 
 ## Invoking Large Language Models
-
-> [!TIP]
-> Added in v4.5.7
 
 ```py
 llm_resp = await self.context.llm_generate(
@@ -73,12 +67,7 @@ Once a Tool is defined, if you want it to be automatically invoked during user c
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        # >= v4.5.1:
         self.context.add_llm_tools(BilibiliTool(), SecondTool(), ...)
-
-        # < v4.5.1:
-        tool_mgr = self.context.provider_manager.llm_tools
-        tool_mgr.func_list.append(BilibiliTool())
 ```
 
 > [!WARNING]
@@ -102,7 +91,7 @@ async def get_weather(self, event: AstrMessageEvent, location: str) -> MessageEv
 
 In `location(string): The location to query`, `location` is the parameter name, `string` is the type, and the remainder is the description.
 
-Supported types: `string`, `number`, `object`, `boolean`, `array`. Since v4.5.7, array subtypes are supported, e.g. `array[string]`.
+Supported types: `string`, `number`, `object`, `boolean`, `array`. Array subtypes are also supported, for example `array[string]`.
 
 > [!WARNING]
 > **The `Args:` block is required and must be formatted correctly.**
@@ -112,9 +101,6 @@ Supported types: `string`, `number`, `object`, `boolean`, `array`. Since v4.5.7,
 > Additionally, passing `parameters=...` directly to the decorator is **not supported** and will be silently ignored. If you need manual control over the schema, use the `@dataclass` + `add_llm_tools()` approach above.
 
 ## Invoking Agents
-
-> [!TIP]
-> Added in v4.5.7
 
 An Agent can be defined as a combination of system_prompt + tools + llm, enabling more sophisticated intelligent behavior.
 
@@ -135,9 +121,6 @@ llm_resp = await self.context.tool_loop_agent(
 `tool_loop_agent()` method automatically handles the loop of tool invocations and LLM requests until the model stops calling tools or the maximum number of steps is reached.
 
 ## Multi-Agent
-
-> [!TIP]
-> Added in v4.5.7
 
 Multi-Agent systems decompose complex applications into multiple specialized agents that collaborate to solve problems. Unlike relying on a single agent to handle every step, multi-agent architectures allow smaller, more focused agents to be composed into coordinated workflows. We implement multi-agent systems using the `agent-as-tool` pattern.
 
@@ -440,8 +423,8 @@ await conv_mgr.add_message_pair(
 
 ## Persona Manager
 
-`PersonaManager` is responsible for unified loading, caching, and providing CRUD interfaces for all Personas, while maintaining compatibility with the legacy persona format (v3) from before AstrBot 4.x.  
-During initialization, it automatically reads all personas from the database and generates v3-compatible data for seamless use with legacy code.
+`PersonaManager` is responsible for unified loading, caching, and providing CRUD interfaces for all Personas.  
+During initialization, it reads all personas from the database and refreshes the runtime persona list used by the current session logic.
 
 ```py
 persona_mgr = self.context.persona_manager
@@ -550,7 +533,7 @@ class Persona(SQLModel, table=True):
 class Personality(TypedDict):
     """LLM Persona class.
 
-    Starting from v4.0.0 and later, it's recommended to use the Persona class above.
+    Prefer using the Persona class above.
     """
 
     prompt: str
