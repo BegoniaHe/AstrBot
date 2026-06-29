@@ -3,9 +3,11 @@
     v-model="showDialog"
     max-width="800px"
     max-height="90%"
+    scrollable
     @after-enter="prepareData"
   >
     <v-card
+      class="platform-dialog__card"
       :title="
         updatingMode
           ? `${tm('dialog.edit')} ${updatingPlatformConfig.id} ${tm(
@@ -16,8 +18,7 @@
     >
       <v-card-text
         ref="dialogScrollContainer"
-        class="pa-4 ml-2"
-        style="overflow-y: auto"
+        class="pa-4 ml-2 platform-dialog__content"
       >
         <div class="d-flex align-start" style="width: 100%">
           <div>
@@ -40,7 +41,7 @@
                   :label="tm('createDialog.platformTypeLabel')"
                   variant="outlined"
                   rounded="md"
-                  dense
+                  density="comfortable"
                   hide-details
                   class="mt-6"
                   style="max-width: 30%; min-width: 300px"
@@ -263,7 +264,7 @@
                   :label="tm('createDialog.platformTypeLabel')"
                   variant="outlined"
                   rounded="md"
-                  dense
+                  density="comfortable"
                   hide-details
                   class="mt-6"
                   style="max-width: 30%; min-width: 300px"
@@ -349,7 +350,7 @@
                       :label="tm('createDialog.selectConfigLabel')"
                       variant="outlined"
                       rounded="md"
-                      dense
+                      density="comfortable"
                       hide-details
                       style="max-width: 30%; min-width: 200px"
                     >
@@ -379,7 +380,7 @@
                       :label="tm('createDialog.newConfigNameLabel')"
                       variant="outlined"
                       rounded="md"
-                      dense
+                      density="comfortable"
                       hide-details
                       style="max-width: 30%; min-width: 200px"
                       class="ml-10 my-2"
@@ -650,7 +651,7 @@
         </div>
       </v-card-text>
 
-      <v-card-actions>
+      <v-card-actions class="platform-dialog__actions">
         <v-spacer></v-spacer>
         <v-btn text @click="closeDialog">{{ tm('dialog.cancel') }}</v-btn>
         <v-btn
@@ -2003,6 +2004,24 @@ function scrollDialogToBottom() {
   font-size: 12px;
 }
 
+.platform-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.platform-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 20px;
+}
+
+.platform-dialog__actions {
+  flex-shrink: 0;
+}
+
 .config-drawer-overlay {
   align-items: stretch;
   justify-content: flex-end;
@@ -2086,5 +2105,15 @@ function scrollDialogToBottom() {
   align-items: flex-start;
   justify-content: flex-start;
   width: 320px;
+}
+
+@media (max-width: 600px) {
+  .platform-dialog__card {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .platform-dialog__content {
+    padding-right: 16px;
+  }
 }
 </style>

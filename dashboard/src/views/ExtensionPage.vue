@@ -244,7 +244,7 @@ const updateDialogPluginLogo = computed(() => {
           <InstalledPluginsTab :state="pageState" />
 
           <!-- 指令面板标签页内容 -->
-          <v-tab-item v-if="activeTab === 'components'">
+          <div v-if="activeTab === 'components'">
             <div class="mb-4 pt-4 pb-4">
               <div class="d-flex align-center flex-wrap" style="gap: 12px">
                 <h2 class="text-h2 mb-0">{{ tm('tabs.handlersOperation') }}</h2>
@@ -259,10 +259,10 @@ const updateDialogPluginLogo = computed(() => {
                 <ComponentPanel :active="activeTab === 'components'" />
               </v-card-text>
             </v-card>
-          </v-tab-item>
+          </div>
 
           <!-- 已安装的 MCP 服务器标签页内容 -->
-          <v-tab-item v-if="activeTab === 'mcp'">
+          <div v-if="activeTab === 'mcp'">
             <div class="extension-detail-width">
               <div class="mb-4 pt-4 pb-4">
                 <div class="d-flex flex-column" style="gap: 6px">
@@ -284,10 +284,10 @@ const updateDialogPluginLogo = computed(() => {
                 </v-card-text>
               </v-card>
             </div>
-          </v-tab-item>
+          </div>
 
           <!-- Skills 标签页内容 -->
-          <v-tab-item v-if="activeTab === 'skills'">
+          <div v-if="activeTab === 'skills'">
             <div class="extension-detail-width">
               <div class="mb-4 pt-4 pb-4">
                 <div class="d-flex flex-column" style="gap: 6px">
@@ -307,7 +307,7 @@ const updateDialogPluginLogo = computed(() => {
                 </v-card-text>
               </v-card>
             </div>
-          </v-tab-item>
+          </div>
 
           <!-- 插件市场标签页内容 -->
           <MarketPluginsTab :state="pageState" />
@@ -350,13 +350,13 @@ const updateDialogPluginLogo = computed(() => {
   </v-row>
 
   <!-- 配置对话框 -->
-  <v-dialog v-model="configDialog" max-width="900">
-    <v-card>
+  <v-dialog v-model="configDialog" max-width="900" scrollable>
+    <v-card class="extension-config-dialog__card">
       <v-card-title class="text-h2 pa-4 pl-6 pb-0">{{
         tm('dialogs.config.title')
       }}</v-card-title>
-      <v-card-text>
-        <div style="max-height: 60vh; overflow-y: auto; padding-right: 8px">
+      <v-card-text class="extension-config-dialog__content">
+        <div class="extension-config-dialog__panel">
           <AstrBotConfig
             v-if="extension_config.metadata"
             :metadata="extension_config.metadata"
@@ -368,7 +368,7 @@ const updateDialogPluginLogo = computed(() => {
           <p v-else>{{ tm('dialogs.config.noConfig') }}</p>
         </div>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="extension-config-dialog__actions">
         <v-spacer></v-spacer>
         <v-btn color="blue-darken-1" variant="text" @click="updateConfig">{{
           tm('buttons.saveAndClose')
@@ -852,12 +852,12 @@ const updateDialogPluginLogo = computed(() => {
   </v-dialog>
 
   <!-- 插件源管理对话框 -->
-  <v-dialog v-model="showSourceManagerDialog" width="640">
-    <v-card>
+  <v-dialog v-model="showSourceManagerDialog" width="640" scrollable>
+    <v-card class="source-manager-dialog__card">
       <v-card-title class="text-h3 pa-4 pl-6">{{
         tm('market.sourceManagement')
       }}</v-card-title>
-      <v-card-text>
+      <v-card-text class="source-manager-dialog__content">
         <v-select
           :model-value="selectedSource || '__default__'"
           :items="sourceSelectItems"
@@ -941,7 +941,7 @@ const updateDialogPluginLogo = computed(() => {
           </v-list-item>
         </v-list>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="source-manager-dialog__actions">
         <v-spacer></v-spacer>
         <v-btn
           color="primary"
@@ -1207,6 +1207,45 @@ const updateDialogPluginLogo = computed(() => {
 .market-install-source__url {
   overflow-x: auto;
   white-space: nowrap;
+}
+
+.source-manager-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.extension-config-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.extension-config-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.extension-config-dialog__panel {
+  min-height: 0;
+  padding-right: 8px;
+}
+
+.extension-config-dialog__actions {
+  flex-shrink: 0;
+}
+
+.source-manager-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.source-manager-dialog__actions {
+  flex-shrink: 0;
 }
 </style>
 

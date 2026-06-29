@@ -1,7 +1,10 @@
 <template>
-  <v-dialog v-model="showDialog" max-width="1000px">
-    <v-card :title="tm('dialogs.addProvider.title')">
-      <v-card-text style="overflow-y: auto">
+  <v-dialog v-model="showDialog" max-width="1000px" scrollable>
+    <v-card
+      class="add-provider-dialog__card"
+      :title="tm('dialogs.addProvider.title')"
+    >
+      <v-card-text class="add-provider-dialog__content">
         <v-tabs v-model="activeProviderTab" grow>
           <v-tab value="agent_runner" class="font-weight-medium px-3">
             <v-icon start>mdi-cogs</v-icon>
@@ -238,6 +241,19 @@ watch(
   cursor: pointer;
   overflow: hidden;
   position: relative;
+}
+
+.add-provider-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.add-provider-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .provider-card:hover {

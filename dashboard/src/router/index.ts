@@ -23,7 +23,7 @@ interface AuthStore {
   has_token(): boolean;
 }
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, from) => {
   if (from.name && from.path !== to.path) {
     const loadingStore = useRouterLoadingStore();
     loadingStore.start();
@@ -35,19 +35,14 @@ router.beforeEach(async (to, from, next) => {
 
   // 如果用户已登录且试图访问登录页面，则重定向到首页
   if (to.path === '/auth/login' && auth.has_token()) {
-    next('/welcome');
-    return;
+    return '/welcome';
   }
 
   if (to.matched.some((record) => record.meta.requiresAuth)) {
     if (authRequired && !auth.has_token()) {
       auth.returnUrl = to.fullPath;
-      next('/auth/login');
-      return;
+      return '/auth/login';
     }
-    next();
-  } else {
-    next();
   }
 });
 

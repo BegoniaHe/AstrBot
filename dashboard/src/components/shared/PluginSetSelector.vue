@@ -1,134 +1,138 @@
 <template>
-  <div>
-    <!-- 顶部操作区域 -->
-    <div class="d-flex align-center justify-space-between mb-2">
-      <div class="flex-grow-1">
-        <span
-          v-if="!modelValue || modelValue.length === 0"
-          style="color: rgb(var(--v-theme-primaryText))"
-        >
-          {{ tm('pluginSetSelector.notSelected') }}
-        </span>
-        <span
-          v-else-if="isAllPlugins"
-          style="color: rgb(var(--v-theme-primaryText))"
-        >
-          {{ tm('pluginSetSelector.allPlugins') }}
-        </span>
-        <span v-else style="color: rgb(var(--v-theme-primaryText))">
-          {{
-            tm('pluginSetSelector.selectedCount', { count: modelValue.length })
-          }}
-        </span>
-      </div>
-      <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
-        {{ buttonText || tm('pluginSetSelector.buttonText') }}
-      </v-btn>
-    </div>
-  </div>
-
-  <!-- Plugin Set Selection Dialog -->
-  <v-dialog v-model="dialog" max-width="700px">
-    <v-card>
-      <v-card-title class="text-h3 py-4" style="font-weight: normal">
-        {{ tm('pluginSetSelector.dialogTitle') }}
-      </v-card-title>
-
-      <v-card-text class="pa-4">
-        <v-progress-linear
-          v-if="loading"
-          indeterminate
-          color="primary"
-        ></v-progress-linear>
-
-        <div v-if="!loading">
-          <!-- 预设选项 -->
-          <v-radio-group v-model="selectionMode" class="mb-4" hide-details>
-            <v-radio
-              value="all"
-              :label="tm('pluginSetSelector.enableAll')"
-              color="primary"
-            ></v-radio>
-            <v-radio
-              value="none"
-              :label="tm('pluginSetSelector.enableNone')"
-              color="primary"
-            ></v-radio>
-            <v-radio
-              value="custom"
-              :label="tm('pluginSetSelector.customSelect')"
-              color="primary"
-            ></v-radio>
-          </v-radio-group>
-
-          <!-- 自定义选择时显示插件列表 -->
-          <div
-            v-if="selectionMode === 'custom'"
-            style="max-height: 300px; overflow-y: auto"
+  <div class="plugin-set-selector">
+    <div>
+      <!-- 顶部操作区域 -->
+      <div class="d-flex align-center justify-space-between mb-2">
+        <div class="flex-grow-1">
+          <span
+            v-if="!modelValue || modelValue.length === 0"
+            style="color: rgb(var(--v-theme-primaryText))"
           >
-            <v-list v-if="pluginList.length > 0" density="compact">
-              <v-list-item
-                v-for="plugin in pluginList"
-                :key="plugin.name"
-                rounded="md"
-                class="ma-1"
-              >
-                <template #prepend>
-                  <v-checkbox
-                    v-model="selectedPlugins"
-                    :value="plugin.name"
-                    color="primary"
-                    hide-details
-                  ></v-checkbox>
-                </template>
+            {{ tm('pluginSetSelector.notSelected') }}
+          </span>
+          <span
+            v-else-if="isAllPlugins"
+            style="color: rgb(var(--v-theme-primaryText))"
+          >
+            {{ tm('pluginSetSelector.allPlugins') }}
+          </span>
+          <span v-else style="color: rgb(var(--v-theme-primaryText))">
+            {{
+              tm('pluginSetSelector.selectedCount', {
+                count: modelValue.length,
+              })
+            }}
+          </span>
+        </div>
+        <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
+          {{ buttonText || tm('pluginSetSelector.buttonText') }}
+        </v-btn>
+      </div>
+    </div>
 
-                <v-list-item-title>{{
-                  pluginDisplayName(plugin)
-                }}</v-list-item-title>
-                <v-list-item-subtitle>
-                  {{
-                    pluginDescription(plugin) ||
-                    tm('pluginSetSelector.noDescription')
-                  }}
-                  <v-chip
-                    v-if="!plugin.activated"
-                    size="x-small"
-                    color="grey"
-                    class="ml-1"
-                  >
-                    {{ tm('pluginSetSelector.notActivated') }}
-                  </v-chip>
-                </v-list-item-subtitle>
-              </v-list-item>
+    <!-- Plugin Set Selection Dialog -->
+    <v-dialog v-model="dialog" max-width="700px" scrollable>
+      <v-card class="plugin-set-dialog__card">
+        <v-card-title class="text-h3 py-4" style="font-weight: normal">
+          {{ tm('pluginSetSelector.dialogTitle') }}
+        </v-card-title>
 
-              <div class="pl-8 pt-2">
-                <small>{{ tm('pluginSetSelector.note') }}</small>
+        <v-card-text class="pa-4 plugin-set-dialog__content">
+          <v-progress-linear
+            v-if="loading"
+            indeterminate
+            color="primary"
+          ></v-progress-linear>
+
+          <div v-if="!loading">
+            <!-- 预设选项 -->
+            <v-radio-group v-model="selectionMode" class="mb-4" hide-details>
+              <v-radio
+                value="all"
+                :label="tm('pluginSetSelector.enableAll')"
+                color="primary"
+              ></v-radio>
+              <v-radio
+                value="none"
+                :label="tm('pluginSetSelector.enableNone')"
+                color="primary"
+              ></v-radio>
+              <v-radio
+                value="custom"
+                :label="tm('pluginSetSelector.customSelect')"
+                color="primary"
+              ></v-radio>
+            </v-radio-group>
+
+            <!-- 自定义选择时显示插件列表 -->
+            <div
+              v-if="selectionMode === 'custom'"
+              style="max-height: 300px; overflow-y: auto"
+            >
+              <v-list v-if="pluginList.length > 0" density="compact">
+                <v-list-item
+                  v-for="plugin in pluginList"
+                  :key="plugin.name"
+                  rounded="md"
+                  class="ma-1"
+                >
+                  <template #prepend>
+                    <v-checkbox
+                      v-model="selectedPlugins"
+                      :value="plugin.name"
+                      color="primary"
+                      hide-details
+                    ></v-checkbox>
+                  </template>
+
+                  <v-list-item-title>{{
+                    pluginDisplayName(plugin)
+                  }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{
+                      pluginDescription(plugin) ||
+                      tm('pluginSetSelector.noDescription')
+                    }}
+                    <v-chip
+                      v-if="!plugin.activated"
+                      size="x-small"
+                      color="grey"
+                      class="ml-1"
+                    >
+                      {{ tm('pluginSetSelector.notActivated') }}
+                    </v-chip>
+                  </v-list-item-subtitle>
+                </v-list-item>
+
+                <div class="pl-8 pt-2">
+                  <small>{{ tm('pluginSetSelector.note') }}</small>
+                </div>
+              </v-list>
+
+              <div v-else class="text-center py-8">
+                <v-icon size="64" color="grey-lighten-1"
+                  >mdi-puzzle-outline</v-icon
+                >
+                <p class="text-grey mt-4">
+                  {{ tm('pluginSetSelector.noPlugins') }}
+                </p>
               </div>
-            </v-list>
-
-            <div v-else class="text-center py-8">
-              <v-icon size="64" color="grey-lighten-1"
-                >mdi-puzzle-outline</v-icon
-              >
-              <p class="text-grey mt-4">
-                {{ tm('pluginSetSelector.noPlugins') }}
-              </p>
             </div>
           </div>
-        </div>
-      </v-card-text>
+        </v-card-text>
 
-      <v-card-actions class="pa-4">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelSelection">{{
-          tm('pluginSetSelector.cancelSelection')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmSelection">
-          {{ tm('pluginSetSelector.confirmSelection') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <v-card-actions class="pa-4 plugin-set-dialog__actions">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelSelection">{{
+            tm('pluginSetSelector.cancelSelection')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmSelection">
+            {{ tm('pluginSetSelector.confirmSelection') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -259,5 +263,22 @@ function cancelSelection() {
 
 .v-list-item:hover {
   background-color: rgba(var(--v-theme-primary), 0.04);
+}
+
+.plugin-set-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 820px);
+}
+
+.plugin-set-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.plugin-set-dialog__actions {
+  flex-shrink: 0;
 }
 </style>

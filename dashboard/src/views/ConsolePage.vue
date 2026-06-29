@@ -63,17 +63,18 @@ async function pipInstall(): Promise<void> {
           color="primary"
           style="margin-right: 16px"
         ></v-switch>
-        <v-dialog v-model="pipDialog" width="400">
+        <v-dialog v-model="pipDialog" width="400" scrollable>
           <template #activator="{ props: activatorProps }">
             <v-btn variant="plain" v-bind="activatorProps">{{
               tm('pipInstall.button')
             }}</v-btn>
           </template>
-          <v-card>
+          <v-card class="console-pip-dialog">
             <v-card-title>
               <span class="text-h5">{{ tm('pipInstall.dialogTitle') }}</span>
             </v-card-title>
-            <v-card-text>
+            <v-divider />
+            <v-card-text class="console-pip-dialog__content">
               <v-text-field
                 v-model="pipInstallPayload.package"
                 :label="tm('pipInstall.packageLabel')"
@@ -86,7 +87,8 @@ async function pipInstall(): Promise<void> {
               ></v-text-field>
               <small>{{ tm('pipInstall.mirrorHint') }}</small>
             </v-card-text>
-            <v-card-actions>
+            <v-divider />
+            <v-card-actions class="console-pip-dialog__actions">
               <v-spacer></v-spacer>
               <v-btn
                 color="blue-darken-1"
@@ -127,6 +129,23 @@ async function pipInstall(): Promise<void> {
 .console-display {
   height: calc(100vh - 190px);
   width: 100%;
+}
+
+.console-pip-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 420px);
+}
+
+.console-pip-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.console-pip-dialog__actions {
+  flex: 0 0 auto;
 }
 
 @keyframes fadeIn {

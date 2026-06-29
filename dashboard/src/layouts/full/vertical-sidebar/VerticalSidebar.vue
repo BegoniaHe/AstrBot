@@ -105,6 +105,8 @@ onUnmounted(() => {
 
 const showIframe = ref(false);
 const starCount = ref(null);
+const STAR_COUNT_CACHE_KEY = 'astrbot_github_star_count_cache';
+const STAR_COUNT_CACHE_TTL_MS = 30 * 60 * 1000;
 
 // 更新日志对话框
 const changelogDialog = ref(false);
@@ -341,18 +343,69 @@ function formatNumber(num) {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+function readCachedStarCount() {
+  try {
+    const raw = localStorage.getItem(STAR_COUNT_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    const cachedAt = Number(parsed?.cachedAt);
+    const value = Number(parsed?.value);
+    if (
+      !Number.isFinite(cachedAt) ||
+      !Number.isFinite(value) ||
+      Date.now() - cachedAt > STAR_COUNT_CACHE_TTL_MS
+    ) {
+      return null;
+    }
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedStarCount(value) {
+  try {
+    localStorage.setItem(
+      STAR_COUNT_CACHE_KEY,
+      JSON.stringify({
+        cachedAt: Date.now(),
+        value,
+      }),
+    );
+  } catch {
+    // Ignore storage failures and keep the UI non-blocking.
+  }
+}
+
 async function fetchStarCount() {
+  const cachedValue = readCachedStarCount();
+  if (cachedValue !== null) {
+    starCount.value = cachedValue;
+  }
+
   try {
     const response = await fetch(
-      'https://cloud.astrbot.app/api/v1/github/repo-info',
+      'https://api.github.com/repos/AstrBotDevs/AstrBot',
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+        },
+      },
     );
-    const data = await response.json();
-    if (data.data?.stargazers_count) {
-      starCount.value = data.data.stargazers_count;
-      console.debug('Fetched star count:', starCount.value);
+    if (!response.ok) {
+      return;
     }
-  } catch (error) {
-    console.debug('Failed to fetch star count:', error);
+    const data = await response.json();
+    const nextStarCount = Number(data?.stargazers_count);
+    if (Number.isFinite(nextStarCount) && nextStarCount > 0) {
+      starCount.value = nextStarCount;
+      writeCachedStarCount(nextStarCount);
+    }
+  } catch {
+    // Ignore transient network failures. The GitHub button remains usable
+    // without the optional star count badge.
   }
 }
 

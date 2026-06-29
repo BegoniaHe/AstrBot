@@ -14,7 +14,7 @@
       </span>
     </div>
 
-    <v-dialog v-model="dialog" max-width="700">
+    <v-dialog v-model="dialog" max-width="700" scrollable>
       <v-card class="file-dialog-card" variant="flat">
         <v-card-title class="text-h3 pa-4 pb-0 pl-6 d-flex align-center">
           <span>{{ tm('fileUpload.dialogTitle') }}</span>
@@ -397,16 +397,22 @@ watch(
 }
 
 .file-dialog-card {
-  height: 70vh;
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 760px);
   box-shadow: none;
+  overflow: hidden;
 }
 
 .file-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(70vh - 120px);
+  overscroll-behavior: contain;
 }
 
 .file-dialog-actions {
+  flex: 0 0 auto;
   padding: 16px 24px 20px;
 }
 

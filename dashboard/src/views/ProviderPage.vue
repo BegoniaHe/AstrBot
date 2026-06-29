@@ -284,8 +284,9 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="showProviderCfg" width="900" persistent>
+    <v-dialog v-model="showProviderCfg" width="900" persistent scrollable>
       <v-card
+        class="provider-form-dialog__card"
         :title="
           updatingMode
             ? tm('dialogs.config.editTitle')
@@ -294,7 +295,7 @@
               tm('dialogs.config.provider')
         "
       >
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 provider-form-dialog__content">
           <AstrBotConfig
             :iterable="newSelectedProviderConfig"
             :metadata="configSchema"
@@ -305,7 +306,7 @@
 
         <v-divider></v-divider>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 provider-form-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -321,9 +322,12 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="showProviderEditDialog" width="800">
-      <v-card :title="providerEditDialogTitle">
-        <v-card-text class="py-4">
+    <v-dialog v-model="showProviderEditDialog" width="800" scrollable>
+      <v-card
+        class="provider-form-dialog__card"
+        :title="providerEditDialogTitle"
+      >
+        <v-card-text class="py-4 provider-form-dialog__content">
           <AstrBotConfig
             v-if="providerEditData"
             :iterable="providerEditData"
@@ -332,7 +336,7 @@
             :is-editing="true"
           />
         </v-card-text>
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 provider-form-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -702,7 +706,12 @@ function isProviderTesting(providerId) {
 }
 
 function getProviderStatus(providerId) {
-  providerStatuses.value.find((s) => s.id === providerId);
+  for (const entry of providerStatuses.value) {
+    if (entry.id === providerId) {
+      return entry;
+    }
+  }
+  return null;
 }
 
 async function testSingleProvider(provider) {
@@ -891,6 +900,23 @@ function goToConfigPage() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.provider-form-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.provider-form-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.provider-form-dialog__actions {
+  flex-shrink: 0;
 }
 
 .provider-section {

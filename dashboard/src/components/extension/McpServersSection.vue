@@ -29,7 +29,7 @@
 
           <div class="mcp-server-tools text-caption text-medium-emphasis">
             <template v-if="server.tools && server.tools.length > 0">
-              <v-dialog max-width="600px">
+              <v-dialog max-width="600px" scrollable>
                 <template #activator="{ props: listToolsProps }">
                   <button
                     v-bind="listToolsProps"
@@ -47,11 +47,11 @@
                   </button>
                 </template>
                 <template #default="{ isActive }">
-                  <v-card style="padding: 16px">
+                  <v-card class="mcp-dialog__card" style="padding: 16px">
                     <v-card-title class="d-flex align-center">
                       <span>{{ tm('mcpServers.status.availableTools') }}</span>
                     </v-card-title>
-                    <v-card-text>
+                    <v-card-text class="mcp-dialog__content">
                       <ul>
                         <li
                           v-for="(tool, idx) in server.tools"
@@ -62,7 +62,9 @@
                         </li>
                       </ul>
                     </v-card-text>
-                    <v-card-actions class="d-flex justify-end">
+                    <v-card-actions
+                      class="d-flex justify-end mcp-dialog__actions"
+                    >
                       <v-btn
                         variant="text"
                         color="primary"
@@ -162,8 +164,8 @@
     </div>
 
     <!-- 添加/编辑 MCP 服务器对话框 -->
-    <v-dialog v-model="showMcpServerDialog" max-width="750px">
-      <v-card>
+    <v-dialog v-model="showMcpServerDialog" max-width="750px" scrollable>
+      <v-card class="mcp-dialog__card">
         <v-card-title class="pa-4 pl-6">
           <v-icon class="me-2">{{
             isEditMode ? 'mdi-pencil' : 'mdi-plus'
@@ -175,7 +177,7 @@
           }}</span>
         </v-card-title>
 
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 mcp-dialog__content">
           <v-form ref="form" @submit.prevent="saveServer">
             <v-text-field
               v-model="currentServer.name"
@@ -261,7 +263,7 @@
           </div>
         </v-card-text>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 mcp-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn variant="text" :disabled="loading" @click="closeServerDialog">
             {{ tm('dialogs.addServer.buttons.cancel') }}
@@ -286,13 +288,18 @@
     </v-dialog>
 
     <!-- 同步 MCP 服务器对话框 -->
-    <v-dialog v-model="showSyncMcpServerDialog" max-width="500px" persistent>
-      <v-card>
+    <v-dialog
+      v-model="showSyncMcpServerDialog"
+      max-width="500px"
+      persistent
+      scrollable
+    >
+      <v-card class="mcp-dialog__card">
         <v-card-title class="bg-primary text-white py-3">
           <span>同步外部平台 MCP 服务器</span>
         </v-card-title>
 
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 mcp-dialog__content">
           <v-select
             v-model="selectedMcpServerProvider"
             :items="mcpServerProviderList"
@@ -355,7 +362,7 @@
           </div>
         </v-card-text>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 mcp-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -829,6 +836,23 @@ onUnmounted(() => {
 .tools-page {
   padding: 0px;
   padding-top: 8px;
+}
+
+.mcp-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.mcp-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mcp-dialog__actions {
+  flex-shrink: 0;
 }
 
 .mcp-server-list {

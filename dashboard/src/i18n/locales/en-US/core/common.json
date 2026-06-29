@@ -24,6 +24,8 @@
   "enabled": "Enabled",
   "disabled": "Disabled",
   "reload": "Reload",
+  "expand": "Expand",
+  "collapse": "Collapse",
   "configure": "Configure",
   "install": "Install",
   "uninstall": "Uninstall",

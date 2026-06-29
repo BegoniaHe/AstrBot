@@ -1,299 +1,305 @@
 <template>
-  <div class="d-flex align-center justify-space-between">
-    <div>
-      <span
-        v-if="!modelValue || Object.keys(modelValue).length === 0"
-        style="color: rgb(var(--v-theme-primaryText))"
-      >
-        {{ t('core.common.objectEditor.noItems') }}
-      </span>
-      <div v-else class="d-flex flex-wrap ga-2">
-        <v-chip
-          v-for="key in displayKeys"
-          :key="key"
-          size="x-small"
-          label
-          color="primary"
+  <div class="object-editor">
+    <div class="d-flex align-center justify-space-between">
+      <div>
+        <span
+          v-if="!modelValue || Object.keys(modelValue).length === 0"
+          style="color: rgb(var(--v-theme-primaryText))"
         >
-          {{ key.length > 20 ? key.slice(0, 20) + '...' : key }}
-        </v-chip>
-        <v-chip
-          v-if="Object.keys(modelValue).length > maxDisplayItems"
-          size="x-small"
-          label
-          color="grey-lighten-1"
-        >
-          +{{ Object.keys(modelValue).length - maxDisplayItems }}
-        </v-chip>
+          {{ t('core.common.objectEditor.noItems') }}
+        </span>
+        <div v-else class="d-flex flex-wrap ga-2">
+          <v-chip
+            v-for="key in displayKeys"
+            :key="key"
+            size="x-small"
+            label
+            color="primary"
+          >
+            {{ key.length > 20 ? key.slice(0, 20) + '...' : key }}
+          </v-chip>
+          <v-chip
+            v-if="Object.keys(modelValue).length > maxDisplayItems"
+            size="x-small"
+            label
+            color="grey-lighten-1"
+          >
+            +{{ Object.keys(modelValue).length - maxDisplayItems }}
+          </v-chip>
+        </div>
       </div>
+      <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
+        {{ resolveButtonText }}
+      </v-btn>
     </div>
-    <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
-      {{ resolveButtonText }}
-    </v-btn>
-  </div>
 
-  <!-- Key-Value Management Dialog -->
-  <v-dialog v-model="dialog" max-width="600px">
-    <v-card>
-      <v-card-title class="text-h3 py-4" style="font-weight: normal">
-        {{ resolveDialogTitle }}
-      </v-card-title>
+    <!-- Key-Value Management Dialog -->
+    <v-dialog v-model="dialog" max-width="600px" scrollable>
+      <v-card class="object-editor-dialog__card">
+        <v-card-title class="text-h3 py-4" style="font-weight: normal">
+          {{ resolveDialogTitle }}
+        </v-card-title>
 
-      <v-card-text class="pa-4" style="max-height: 400px; overflow-y: auto">
-        <!-- Regular key-value pairs (non-template) -->
-        <div v-if="nonTemplatePairs.length > 0">
-          <div
-            v-for="pair in nonTemplatePairs"
-            :key="pair._id"
-            class="key-value-pair"
-          >
-            <v-row no-gutters align="center" class="mb-2">
-              <v-col cols="4">
-                <v-text-field
-                  v-model="pair.key"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  :placeholder="
-                    t('core.common.objectEditor.placeholders.keyName')
-                  "
-                  @focus="pair._originalKey = pair.key"
-                  @blur="onKeyBlur(pair)"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="7" class="pl-2 d-flex align-center justify-end">
-                <v-text-field
-                  v-if="pair.type === 'string'"
-                  v-model="pair.value"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  :placeholder="
-                    t('core.common.objectEditor.placeholders.stringValue')
-                  "
-                ></v-text-field>
-                <div
-                  v-else-if="
-                    pair.type === 'number' ||
-                    pair.type === 'float' ||
-                    pair.type === 'int'
-                  "
-                  class="d-flex align-center gap-2 flex-grow-1"
-                >
-                  <v-slider
-                    v-if="pair.slider"
-                    :model-value="Number(pair.value) || 0"
-                    :min="pair.slider.min"
-                    :max="pair.slider.max"
-                    :step="pair.slider.step"
-                    color="primary"
-                    density="compact"
-                    hide-details
-                    class="flex-grow-1"
-                    @update:model-value="pair.value = $event"
-                  ></v-slider>
+        <v-card-text class="pa-4 object-editor-dialog__content">
+          <!-- Regular key-value pairs (non-template) -->
+          <div v-if="nonTemplatePairs.length > 0">
+            <div
+              v-for="pair in nonTemplatePairs"
+              :key="pair._id"
+              class="key-value-pair"
+            >
+              <v-row no-gutters align="center" class="mb-2">
+                <v-col cols="4">
                   <v-text-field
-                    v-model.number="pair.value"
-                    type="number"
+                    v-model="pair.key"
                     density="compact"
                     variant="outlined"
                     hide-details
                     :placeholder="
-                      t('core.common.objectEditor.placeholders.numberValue')
+                      t('core.common.objectEditor.placeholders.keyName')
                     "
-                    :style="pair.slider ? 'max-width: 120px;' : ''"
+                    @focus="pair._originalKey = pair.key"
+                    @blur="onKeyBlur(pair)"
                   ></v-text-field>
-                </div>
-                <v-switch
-                  v-else-if="pair.type === 'boolean'"
-                  v-model="pair.value"
-                  density="compact"
-                  hide-details
-                  color="primary"
-                ></v-switch>
-                <v-text-field
-                  v-if="pair.type === 'json'"
-                  v-model="pair.value"
-                  density="compact"
-                  variant="outlined"
-                  hide-details="auto"
-                  :placeholder="
-                    t('core.common.objectEditor.placeholders.jsonValue')
-                  "
-                  :error-messages="pair.jsonError"
-                  @blur="validateJSON(pair)"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="1" class="pl-2">
-                <v-btn
-                  icon
-                  variant="text"
-                  size="small"
-                  color="error"
-                  @click="removeKeyValuePairByKey(pair.key)"
-                >
-                  <v-icon>mdi-delete</v-icon>
-                </v-btn>
-              </v-col>
-            </v-row>
-          </div>
-        </div>
-
-        <!-- Template schema fields -->
-        <div v-if="hasTemplateSchema" class="mt-4">
-          <v-divider class="mb-3"></v-divider>
-          <div class="text-caption text-grey mb-2">
-            {{ t('core.common.objectEditor.presets') }}
-          </div>
-          <div
-            v-for="(template, templateKey) in templateSchema"
-            :key="templateKey"
-            class="template-field"
-            :class="{
-              'template-field-inactive': !isTemplateKeyAdded(templateKey),
-            }"
-          >
-            <v-row no-gutters align="center" class="mb-2">
-              <v-col cols="4">
-                <div class="d-flex flex-column">
-                  <span class="text-caption font-weight-medium">{{
-                    getTemplateTitle(template, templateKey)
-                  }}</span>
-                  <span
-                    v-if="template.hint"
-                    class="text-caption text-grey"
-                    style="font-size: 0.7rem"
-                    >{{
-                      resolveTemplateText(templateKey, 'hint', template.hint)
-                    }}</span
+                </v-col>
+                <v-col cols="7" class="pl-2 d-flex align-center justify-end">
+                  <v-text-field
+                    v-if="pair.type === 'string'"
+                    v-model="pair.value"
+                    density="compact"
+                    variant="outlined"
+                    hide-details
+                    :placeholder="
+                      t('core.common.objectEditor.placeholders.stringValue')
+                    "
+                  ></v-text-field>
+                  <div
+                    v-else-if="
+                      pair.type === 'number' ||
+                      pair.type === 'float' ||
+                      pair.type === 'int'
+                    "
+                    class="d-flex align-center gap-2 flex-grow-1"
                   >
-                </div>
-              </v-col>
-              <v-col cols="7" class="pl-2 d-flex align-center justify-end">
-                <v-text-field
-                  v-if="template.type === 'string'"
-                  :model-value="getTemplateValue(templateKey)"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  :placeholder="
-                    t('core.common.objectEditor.placeholders.stringValue')
-                  "
-                  @update:model-value="updateTemplateValue(templateKey, $event)"
-                ></v-text-field>
-                <div
-                  v-else-if="
-                    template.type === 'number' ||
-                    template.type === 'float' ||
-                    template.type === 'int'
-                  "
-                  class="d-flex align-center ga-4 flex-grow-1"
-                >
-                  <v-slider
-                    v-if="template.slider"
-                    :model-value="Number(getTemplateValue(templateKey)) || 0"
-                    :min="template.slider.min"
-                    :max="template.slider.max"
-                    :step="template.slider.step"
-                    color="primary"
+                    <v-slider
+                      v-if="pair.slider"
+                      :model-value="Number(pair.value) || 0"
+                      :min="pair.slider.min"
+                      :max="pair.slider.max"
+                      :step="pair.slider.step"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      class="flex-grow-1"
+                      @update:model-value="pair.value = $event"
+                    ></v-slider>
+                    <v-text-field
+                      v-model.number="pair.value"
+                      type="number"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      :placeholder="
+                        t('core.common.objectEditor.placeholders.numberValue')
+                      "
+                      :style="pair.slider ? 'max-width: 120px;' : ''"
+                    ></v-text-field>
+                  </div>
+                  <v-switch
+                    v-else-if="pair.type === 'boolean'"
+                    v-model="pair.value"
                     density="compact"
                     hide-details
-                    class="flex-grow-1"
-                    @update:model-value="
-                      updateTemplateValue(templateKey, $event)
-                    "
-                  ></v-slider>
+                    color="primary"
+                  ></v-switch>
                   <v-text-field
+                    v-if="pair.type === 'json'"
+                    v-model="pair.value"
+                    density="compact"
+                    variant="outlined"
+                    hide-details="auto"
+                    :placeholder="
+                      t('core.common.objectEditor.placeholders.jsonValue')
+                    "
+                    :error-messages="pair.jsonError"
+                    @blur="validateJSON(pair)"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="1" class="pl-2">
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    color="error"
+                    @click="removeKeyValuePairByKey(pair.key)"
+                  >
+                    <v-icon>mdi-delete</v-icon>
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </div>
+          </div>
+
+          <!-- Template schema fields -->
+          <div v-if="hasTemplateSchema" class="mt-4">
+            <v-divider class="mb-3"></v-divider>
+            <div class="text-caption text-grey mb-2">
+              {{ t('core.common.objectEditor.presets') }}
+            </div>
+            <div
+              v-for="(template, templateKey) in templateSchema"
+              :key="templateKey"
+              class="template-field"
+              :class="{
+                'template-field-inactive': !isTemplateKeyAdded(templateKey),
+              }"
+            >
+              <v-row no-gutters align="center" class="mb-2">
+                <v-col cols="4">
+                  <div class="d-flex flex-column">
+                    <span class="text-caption font-weight-medium">{{
+                      getTemplateTitle(template, templateKey)
+                    }}</span>
+                    <span
+                      v-if="template.hint"
+                      class="text-caption text-grey"
+                      style="font-size: 0.7rem"
+                      >{{
+                        resolveTemplateText(templateKey, 'hint', template.hint)
+                      }}</span
+                    >
+                  </div>
+                </v-col>
+                <v-col cols="7" class="pl-2 d-flex align-center justify-end">
+                  <v-text-field
+                    v-if="template.type === 'string'"
                     :model-value="getTemplateValue(templateKey)"
-                    type="number"
                     density="compact"
                     variant="outlined"
                     hide-details
                     :placeholder="
-                      t('core.common.objectEditor.placeholders.numberValue')
+                      t('core.common.objectEditor.placeholders.stringValue')
                     "
-                    :style="template.slider ? 'max-width: 120px;' : ''"
                     @update:model-value="
                       updateTemplateValue(templateKey, $event)
                     "
                   ></v-text-field>
-                </div>
-                <v-switch
-                  v-else-if="
-                    template.type === 'boolean' || template.type === 'bool'
-                  "
-                  :model-value="getTemplateValue(templateKey)"
-                  density="compact"
-                  hide-details
-                  color="primary"
-                  @update:model-value="updateTemplateValue(templateKey, $event)"
-                ></v-switch>
-              </v-col>
-              <v-col cols="1" class="pl-2">
-                <v-btn
-                  v-if="isTemplateKeyAdded(templateKey)"
-                  icon
-                  variant="text"
-                  size="small"
-                  color="error"
-                  @click="removeTemplateKey(templateKey)"
-                >
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </v-col>
-            </v-row>
+                  <div
+                    v-else-if="
+                      template.type === 'number' ||
+                      template.type === 'float' ||
+                      template.type === 'int'
+                    "
+                    class="d-flex align-center ga-4 flex-grow-1"
+                  >
+                    <v-slider
+                      v-if="template.slider"
+                      :model-value="Number(getTemplateValue(templateKey)) || 0"
+                      :min="template.slider.min"
+                      :max="template.slider.max"
+                      :step="template.slider.step"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      class="flex-grow-1"
+                      @update:model-value="
+                        updateTemplateValue(templateKey, $event)
+                      "
+                    ></v-slider>
+                    <v-text-field
+                      :model-value="getTemplateValue(templateKey)"
+                      type="number"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      :placeholder="
+                        t('core.common.objectEditor.placeholders.numberValue')
+                      "
+                      :style="template.slider ? 'max-width: 120px;' : ''"
+                      @update:model-value="
+                        updateTemplateValue(templateKey, $event)
+                      "
+                    ></v-text-field>
+                  </div>
+                  <v-switch
+                    v-else-if="
+                      template.type === 'boolean' || template.type === 'bool'
+                    "
+                    :model-value="getTemplateValue(templateKey)"
+                    density="compact"
+                    hide-details
+                    color="primary"
+                    @update:model-value="
+                      updateTemplateValue(templateKey, $event)
+                    "
+                  ></v-switch>
+                </v-col>
+                <v-col cols="1" class="pl-2">
+                  <v-btn
+                    v-if="isTemplateKeyAdded(templateKey)"
+                    icon
+                    variant="text"
+                    size="small"
+                    color="error"
+                    @click="removeTemplateKey(templateKey)"
+                  >
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </div>
           </div>
-        </div>
 
-        <div
-          v-if="localKeyValuePairs.length === 0 && !hasTemplateSchema"
-          class="text-center py-8"
-        >
-          <v-icon size="64" color="grey-lighten-1">mdi-code-json</v-icon>
-          <p class="text-grey mt-4">
-            {{ t('core.common.objectEditor.noParams') }}
-          </p>
-        </div>
-      </v-card-text>
+          <div
+            v-if="localKeyValuePairs.length === 0 && !hasTemplateSchema"
+            class="text-center py-8"
+          >
+            <v-icon size="64" color="grey-lighten-1">mdi-code-json</v-icon>
+            <p class="text-grey mt-4">
+              {{ t('core.common.objectEditor.noParams') }}
+            </p>
+          </div>
+        </v-card-text>
 
-      <!-- Add new key-value pair section -->
-      <v-card-text class="pa-4">
-        <div class="d-flex align-center ga-2">
-          <v-text-field
-            v-model="newKey"
-            :label="t('core.common.objectEditor.newKeyLabel')"
-            density="compact"
-            variant="outlined"
-            hide-details
-            class="flex-grow-1"
-          ></v-text-field>
-          <v-select
-            v-model="newValueType"
-            :items="['string', 'number', 'boolean', 'json']"
-            :label="t('core.common.objectEditor.valueTypeLabel')"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="max-width: 120px"
-          ></v-select>
-          <v-btn variant="tonal" color="primary" @click="addKeyValuePair">
-            <v-icon>mdi-plus</v-icon>
-            {{ t('core.common.add') }}
-          </v-btn>
-        </div>
-      </v-card-text>
+        <!-- Add new key-value pair section -->
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center ga-2">
+            <v-text-field
+              v-model="newKey"
+              :label="t('core.common.objectEditor.newKeyLabel')"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="flex-grow-1"
+            ></v-text-field>
+            <v-select
+              v-model="newValueType"
+              :items="['string', 'number', 'boolean', 'json']"
+              :label="t('core.common.objectEditor.valueTypeLabel')"
+              density="compact"
+              variant="outlined"
+              hide-details
+              style="max-width: 120px"
+            ></v-select>
+            <v-btn variant="tonal" color="primary" @click="addKeyValuePair">
+              <v-icon>mdi-plus</v-icon>
+              {{ t('core.common.add') }}
+            </v-btn>
+          </div>
+        </v-card-text>
 
-      <v-card-actions class="pa-4">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelDialog">{{
-          t('core.common.cancel')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmDialog">{{
-          t('core.common.confirm')
-        }}</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <v-card-actions class="pa-4 object-editor-dialog__actions">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelDialog">{{
+            t('core.common.cancel')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmDialog">{{
+            t('core.common.confirm')
+          }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -667,6 +673,10 @@ function resolveTemplateText(templateKey, attr, fallback) {
 </script>
 
 <style scoped>
+.object-editor {
+  width: 100%;
+}
+
 .key-value-pair {
   width: 100%;
 }
@@ -677,5 +687,23 @@ function resolveTemplateText(templateKey, attr, fallback) {
 
 .template-field-inactive {
   opacity: 0.8;
+}
+
+.object-editor-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 760px);
+}
+
+.object-editor-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.object-editor-dialog__actions {
+  flex-shrink: 0;
 }
 </style>

@@ -1,138 +1,145 @@
 <template>
-  <div class="d-flex align-center justify-space-between" style="gap: 8px">
-    <div style="flex: 1; min-width: 0; overflow: hidden">
-      <span
-        v-if="
-          !modelValue || (Array.isArray(modelValue) && modelValue.length === 0)
-        "
-        style="color: rgb(var(--v-theme-primaryText))"
-      >
-        {{ tm('knowledgeBaseSelector.notSelected') }}
-      </span>
-      <div v-else class="d-flex flex-wrap gap-1">
-        <v-chip
-          v-for="name in modelValue"
-          :key="name"
-          size="small"
-          color="primary"
-          variant="tonal"
-          closable
-          style="max-width: 100%"
-          @click:close="removeKnowledgeBase(name)"
+  <div class="knowledge-base-selector">
+    <div class="d-flex align-center justify-space-between" style="gap: 8px">
+      <div style="flex: 1; min-width: 0; overflow: hidden">
+        <span
+          v-if="
+            !modelValue ||
+            (Array.isArray(modelValue) && modelValue.length === 0)
+          "
+          style="color: rgb(var(--v-theme-primaryText))"
         >
-          <span class="text-truncate" style="max-width: 200px">{{ name }}</span>
-        </v-chip>
-      </div>
-    </div>
-    <v-btn
-      size="small"
-      color="primary"
-      variant="tonal"
-      style="flex-shrink: 0"
-      @click="openDialog"
-    >
-      {{ buttonText || tm('knowledgeBaseSelector.buttonText') }}
-    </v-btn>
-  </div>
-
-  <!-- Knowledge Base Selection Dialog -->
-  <v-dialog v-model="dialog" max-width="600px">
-    <v-card>
-      <v-card-title class="text-h3 py-4" style="font-weight: normal">
-        {{ tm('knowledgeBaseSelector.dialogTitle') }}
-      </v-card-title>
-
-      <v-card-text class="pa-0" style="max-height: 400px; overflow-y: auto">
-        <v-progress-linear
-          v-if="loading"
-          indeterminate
-          color="primary"
-        ></v-progress-linear>
-
-        <!-- 知识库列表 -->
-        <v-list v-if="!loading" density="compact">
-          <!-- 知识库选项 -->
-          <v-list-item
-            v-for="kb in knowledgeBaseList"
-            :key="kb.kb_id"
-            :value="kb.kb_name"
-            :active="isSelected(kb.kb_name)"
-            rounded="md"
-            class="ma-1"
-            @click="selectKnowledgeBase(kb.kb_name)"
+          {{ tm('knowledgeBaseSelector.notSelected') }}
+        </span>
+        <div v-else class="d-flex flex-wrap gap-1">
+          <v-chip
+            v-for="name in modelValue"
+            :key="name"
+            size="small"
+            color="primary"
+            variant="tonal"
+            closable
+            style="max-width: 100%"
+            @click:close="removeKnowledgeBase(name)"
           >
-            <template #prepend>
-              <span class="emoji-icon">{{ kb.emoji || '📚' }}</span>
-            </template>
-            <v-list-item-title>{{ kb.kb_name }}</v-list-item-title>
-            <v-list-item-subtitle>
-              {{ kb.description || tm('knowledgeBaseSelector.noDescription') }}
-              <span v-if="kb.doc_count !== undefined">
-                -
-                {{
-                  tm('knowledgeBaseSelector.documentCount', {
-                    count: kb.doc_count,
-                  })
-                }}</span
-              >
-              <span v-if="kb.chunk_count !== undefined">
-                -
-                {{
-                  tm('knowledgeBaseSelector.chunkCount', {
-                    count: kb.chunk_count,
-                  })
-                }}</span
-              >
-            </v-list-item-subtitle>
-
-            <template #append>
-              <v-icon v-if="isSelected(kb.kb_name)" color="primary">
-                mdi-checkbox-marked
-              </v-icon>
-              <v-icon v-else color="grey-lighten-1">
-                mdi-checkbox-blank-outline
-              </v-icon>
-            </template>
-          </v-list-item>
-
-          <!-- 当没有知识库时显示创建提示 -->
-          <div v-if="knowledgeBaseList.length === 0" class="text-center py-8">
-            <v-icon size="64" color="grey-lighten-1">mdi-database-off</v-icon>
-            <p class="text-grey mt-4 mb-4">
-              {{ tm('knowledgeBaseSelector.noKnowledgeBases') }}
-            </p>
-            <v-btn
-              color="primary"
-              variant="tonal"
-              @click="goToKnowledgeBasePage"
-            >
-              {{ tm('knowledgeBaseSelector.createKnowledgeBase') }}
-            </v-btn>
-          </div>
-        </v-list>
-      </v-card-text>
-
-      <v-card-actions class="pa-4">
-        <div
-          v-if="selectedKnowledgeBases.length > 0"
-          class="text-caption text-grey"
-        >
-          {{
-            tm('knowledgeBaseSelector.selectedCount', {
-              count: selectedKnowledgeBases.length,
-            })
-          }}
+            <span class="text-truncate" style="max-width: 200px">{{
+              name
+            }}</span>
+          </v-chip>
         </div>
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelSelection">{{
-          tm('knowledgeBaseSelector.cancelSelection')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmSelection">
-          {{ tm('knowledgeBaseSelector.confirmSelection') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+      </div>
+      <v-btn
+        size="small"
+        color="primary"
+        variant="tonal"
+        style="flex-shrink: 0"
+        @click="openDialog"
+      >
+        {{ buttonText || tm('knowledgeBaseSelector.buttonText') }}
+      </v-btn>
+    </div>
+
+    <!-- Knowledge Base Selection Dialog -->
+    <v-dialog v-model="dialog" max-width="600px" scrollable>
+      <v-card class="selector-dialog__card">
+        <v-card-title class="text-h3 py-4" style="font-weight: normal">
+          {{ tm('knowledgeBaseSelector.dialogTitle') }}
+        </v-card-title>
+
+        <v-card-text class="pa-0 selector-dialog__content">
+          <v-progress-linear
+            v-if="loading"
+            indeterminate
+            color="primary"
+          ></v-progress-linear>
+
+          <!-- 知识库列表 -->
+          <v-list v-if="!loading" density="compact">
+            <!-- 知识库选项 -->
+            <v-list-item
+              v-for="kb in knowledgeBaseList"
+              :key="kb.kb_id"
+              :value="kb.kb_name"
+              :active="isSelected(kb.kb_name)"
+              rounded="md"
+              class="ma-1"
+              @click="selectKnowledgeBase(kb.kb_name)"
+            >
+              <template #prepend>
+                <span class="emoji-icon">{{ kb.emoji || '📚' }}</span>
+              </template>
+              <v-list-item-title>{{ kb.kb_name }}</v-list-item-title>
+              <v-list-item-subtitle>
+                {{
+                  kb.description || tm('knowledgeBaseSelector.noDescription')
+                }}
+                <span v-if="kb.doc_count !== undefined">
+                  -
+                  {{
+                    tm('knowledgeBaseSelector.documentCount', {
+                      count: kb.doc_count,
+                    })
+                  }}</span
+                >
+                <span v-if="kb.chunk_count !== undefined">
+                  -
+                  {{
+                    tm('knowledgeBaseSelector.chunkCount', {
+                      count: kb.chunk_count,
+                    })
+                  }}</span
+                >
+              </v-list-item-subtitle>
+
+              <template #append>
+                <v-icon v-if="isSelected(kb.kb_name)" color="primary">
+                  mdi-checkbox-marked
+                </v-icon>
+                <v-icon v-else color="grey-lighten-1">
+                  mdi-checkbox-blank-outline
+                </v-icon>
+              </template>
+            </v-list-item>
+
+            <!-- 当没有知识库时显示创建提示 -->
+            <div v-if="knowledgeBaseList.length === 0" class="text-center py-8">
+              <v-icon size="64" color="grey-lighten-1">mdi-database-off</v-icon>
+              <p class="text-grey mt-4 mb-4">
+                {{ tm('knowledgeBaseSelector.noKnowledgeBases') }}
+              </p>
+              <v-btn
+                color="primary"
+                variant="tonal"
+                @click="goToKnowledgeBasePage"
+              >
+                {{ tm('knowledgeBaseSelector.createKnowledgeBase') }}
+              </v-btn>
+            </div>
+          </v-list>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 selector-dialog__actions">
+          <div
+            v-if="selectedKnowledgeBases.length > 0"
+            class="text-caption text-grey"
+          >
+            {{
+              tm('knowledgeBaseSelector.selectedCount', {
+                count: selectedKnowledgeBases.length,
+              })
+            }}
+          </div>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelSelection">{{
+            tm('knowledgeBaseSelector.cancelSelection')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmSelection">
+            {{ tm('knowledgeBaseSelector.confirmSelection') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -276,5 +283,23 @@ function goToKnowledgeBasePage() {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+}
+
+.selector-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 760px);
+}
+
+.selector-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.selector-dialog__actions {
+  flex-shrink: 0;
 }
 </style>

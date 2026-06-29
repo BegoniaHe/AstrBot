@@ -22,38 +22,49 @@
             @update:model-value="selectSourceByValue"
           >
             <template #selection="{ item }">
-              <div class="provider-source-select-value">
-                <v-avatar size="22" rounded="lg" class="provider-source-avatar">
-                  <v-img
-                    v-if="item.raw.source?.provider"
-                    :src="resolveSourceIcon(item.raw.source)"
-                    alt="provider logo"
-                    cover
-                  ></v-img>
-                  <v-icon v-else size="14">mdi-creation</v-icon>
-                </v-avatar>
-                <span>{{ item.raw.title }}</span>
-              </div>
-            </template>
-
-            <template #item="{ props: itemProps, item }">
-              <v-list-item v-bind="itemProps" :subtitle="item.raw.subtitle">
-                <template #prepend>
+              <template v-if="resolveOption(item)">
+                <div class="provider-source-select-value">
                   <v-avatar
-                    size="24"
+                    size="22"
                     rounded="lg"
-                    class="provider-source-avatar me-2"
+                    class="provider-source-avatar"
                   >
                     <v-img
-                      v-if="item.raw.source?.provider"
-                      :src="resolveSourceIcon(item.raw.source)"
+                      v-if="resolveOption(item)?.source?.provider"
+                      :src="resolveSourceIcon(resolveOption(item)?.source)"
                       alt="provider logo"
                       cover
                     ></v-img>
                     <v-icon v-else size="14">mdi-creation</v-icon>
                   </v-avatar>
-                </template>
-              </v-list-item>
+                  <span>{{ resolveOption(item)?.title }}</span>
+                </div>
+              </template>
+            </template>
+
+            <template #item="{ props: itemProps, item }">
+              <template v-if="resolveOption(item)">
+                <v-list-item
+                  v-bind="itemProps"
+                  :subtitle="resolveOption(item)?.subtitle"
+                >
+                  <template #prepend>
+                    <v-avatar
+                      size="24"
+                      rounded="lg"
+                      class="provider-source-avatar me-2"
+                    >
+                      <v-img
+                        v-if="resolveOption(item)?.source?.provider"
+                        :src="resolveSourceIcon(resolveOption(item)?.source)"
+                        alt="provider logo"
+                        cover
+                      ></v-img>
+                      <v-icon v-else size="14">mdi-creation</v-icon>
+                    </v-avatar>
+                  </template>
+                </v-list-item>
+              </template>
             </template>
           </v-select>
         </div>
@@ -240,6 +251,16 @@ const sourceOptions = computed(() =>
     source,
   })),
 );
+
+const resolveOption = (item) => {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+  if (item.raw && typeof item.raw === 'object') {
+    return item.raw;
+  }
+  return item;
+};
 
 const selectedSourceValue = computed(() => {
   if (!props.selectedProviderSource) return null;

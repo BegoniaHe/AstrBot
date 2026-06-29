@@ -14,7 +14,6 @@ import { useCommonStore } from '@/stores/common';
 import { useI18n } from '@/i18n/composables';
 import { router } from '@/router';
 import { useRoute } from 'vue-router';
-import { useTheme } from 'vuetify';
 import StyledMenu from '@/components/shared/StyledMenu.vue';
 import { useLanguageSwitcher } from '@/i18n/composables';
 import type { Locale } from '@/i18n/types';
@@ -30,7 +29,6 @@ const getSelectedGitHubProxy = readSelectedGitHubProxy;
 
 const customizer = useCustomizerStore();
 const commonStore = useCommonStore();
-const theme = useTheme();
 const { t } = useI18n();
 const route = useRoute();
 const LAST_BOT_ROUTE_KEY = 'astrbot:last_bot_route';
@@ -860,7 +858,6 @@ const themeOptions = [
 
 function setThemeMode(mode: 'light' | 'dark' | 'system') {
   customizer.SET_THEME_MODE(mode);
-  theme.global.name.value = customizer.uiTheme;
 }
 
 function openReleaseNotesDialog(body: string, tag: string) {
@@ -1319,8 +1316,9 @@ onMounted(async () => {
       v-model="updateStatusDialog"
       :width="$vuetify.display.smAndDown ? '100%' : '920'"
       :fullscreen="$vuetify.display.xs"
+      scrollable
     >
-      <v-card>
+      <v-card class="update-status-dialog">
         <v-card-title class="mobile-card-title">
           <span class="text-h3 pa-4">{{
             t('core.header.updateDialog.title')
@@ -1333,7 +1331,7 @@ onMounted(async () => {
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="update-status-dialog__content">
           <v-container>
             <div class="update-summary">
               <div>
@@ -1658,7 +1656,7 @@ onMounted(async () => {
             </div>
           </v-container>
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="update-status-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             color="blue-darken-1"
@@ -1672,22 +1670,20 @@ onMounted(async () => {
     </v-dialog>
 
     <!-- Release Notes Modal -->
-    <v-dialog v-model="releaseNotesDialog" max-width="800">
-      <v-card>
+    <v-dialog v-model="releaseNotesDialog" max-width="800" scrollable>
+      <v-card class="release-notes-dialog">
         <v-card-title class="text-h3 pa-4">
           {{ t('core.header.updateDialog.releaseNotes.title') }}:
           {{ selectedReleaseTag }}
         </v-card-title>
-        <v-card-text
-          style="font-size: 14px; max-height: 400px; overflow-y: auto"
-        >
+        <v-card-text class="release-notes-dialog__content">
           <LazyMarkdownRender
             :content="selectedReleaseNotes"
             :typewriter="false"
             class="markdown-content"
           />
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="release-notes-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             color="blue-darken-1"
@@ -2094,6 +2090,43 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.update-status-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(90dvh, 980px);
+  overflow: hidden;
+}
+
+.update-status-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.update-status-dialog__actions {
+  flex: 0 0 auto;
+}
+
+.release-notes-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 760px);
+  overflow: hidden;
+}
+
+.release-notes-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 14px;
+  overscroll-behavior: contain;
+}
+
+.release-notes-dialog__actions {
+  flex: 0 0 auto;
 }
 
 .update-summary {

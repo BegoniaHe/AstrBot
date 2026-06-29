@@ -6,7 +6,7 @@
         <v-card-title class="d-flex align-center py-3 px-4">
           <span class="text-h4">{{ tm('history.title') }}</span>
           <v-chip size="small" class="ml-2">{{ pagination.total || 0 }}</v-chip>
-          <v-row class="me-4 ms-4" dense>
+          <v-row class="me-4 ms-4" density="comfortable">
             <v-col cols="12" sm="6" md="4">
               <v-combobox
                 v-model="platformFilter"
@@ -444,14 +444,14 @@
     </v-dialog>
 
     <!-- 编辑对话框 -->
-    <v-dialog v-model="dialogEdit" max-width="500px">
-      <v-card>
+    <v-dialog v-model="dialogEdit" max-width="500px" scrollable>
+      <v-card class="conversation-modal-card conversation-edit-dialog">
         <v-card-title class="bg-primary text-white py-3">
           <v-icon color="white" class="me-2">mdi-pencil</v-icon>
           <span>{{ tm('dialogs.edit.title') }}</span>
         </v-card-title>
 
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 conversation-modal-body">
           <v-form ref="form" v-model="valid">
             <v-text-field
               v-model="editedItem.title"
@@ -466,7 +466,7 @@
 
         <v-divider></v-divider>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 conversation-modal-actions">
           <v-spacer></v-spacer>
           <v-btn variant="text" :disabled="loading" @click="dialogEdit = false">
             {{ tm('dialogs.edit.cancel') }}
@@ -479,14 +479,14 @@
     </v-dialog>
 
     <!-- 删除确认对话框 -->
-    <v-dialog v-model="dialogDelete" max-width="500px">
-      <v-card>
+    <v-dialog v-model="dialogDelete" max-width="500px" scrollable>
+      <v-card class="conversation-modal-card conversation-delete-dialog">
         <v-card-title class="bg-error text-white py-3">
           <v-icon color="white" class="me-2">mdi-alert</v-icon>
           <span>{{ tm('dialogs.delete.title') }}</span>
         </v-card-title>
 
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 conversation-modal-body">
           <p>
             {{
               tm('dialogs.delete.message', {
@@ -498,7 +498,7 @@
 
         <v-divider></v-divider>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 conversation-modal-actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -515,14 +515,14 @@
     </v-dialog>
 
     <!-- 批量删除确认对话框 -->
-    <v-dialog v-model="dialogBatchDelete" max-width="600px">
-      <v-card>
+    <v-dialog v-model="dialogBatchDelete" max-width="600px" scrollable>
+      <v-card class="conversation-modal-card conversation-batch-delete-dialog">
         <v-card-title class="bg-error text-white py-3">
           <v-icon color="white" class="me-2">mdi-delete</v-icon>
           <span>{{ tm('dialogs.batchDelete.title') }}</span>
         </v-card-title>
 
-        <v-card-text class="py-4">
+        <v-card-text class="py-4 conversation-modal-body">
           <p class="mb-3">
             {{
               tm('dialogs.batchDelete.message', { count: selectedItems.length })
@@ -562,7 +562,7 @@
 
         <v-divider></v-divider>
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 conversation-modal-actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -1707,6 +1707,23 @@ function handleTableOptions(options: TableOptionsLike) {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+}
+
+.conversation-modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(85vh, 560px);
+}
+
+.conversation-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.conversation-modal-actions {
+  flex: 0 0 auto;
 }
 
 .conversation-detail-title {

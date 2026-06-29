@@ -14,7 +14,7 @@
           <v-chip size="small" class="ml-1"
             >{{ totalItems }} {{ tm('customRules.rulesCount') }}</v-chip
           >
-          <v-row class="me-4 ms-4" dense>
+          <v-row class="me-4 ms-4" density="comfortable">
             <v-text-field
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
@@ -194,7 +194,7 @@
           </v-chip>
         </v-card-title>
         <v-card-text>
-          <v-row dense>
+          <v-row density="comfortable">
             <v-col cols="12" md="6" lg="3">
               <v-select
                 v-model="batchScope"
@@ -255,7 +255,7 @@
               </v-select>
             </v-col>
           </v-row>
-          <v-row dense class="mt-3">
+          <v-row class="mt-3" density="comfortable">
             <v-col cols="12" class="d-flex justify-end">
               <v-btn
                 color="primary"
@@ -323,7 +323,7 @@
           </v-btn>
         </v-card-title>
         <v-card-text v-if="groups.length > 0">
-          <v-row dense>
+          <v-row density="comfortable">
             <v-col
               v-for="group in groups"
               :key="group.id"
@@ -375,9 +375,10 @@
       <v-dialog
         v-model="groupDialog"
         max-width="800"
+        scrollable
         @after-enter="loadAvailableUmos"
       >
-        <v-card>
+        <v-card class="session-group-dialog__card">
           <v-card-title class="py-3 px-4">
             {{
               groupDialogMode === 'create'
@@ -385,7 +386,7 @@
                 : tm('groups.edit')
             }}
           </v-card-title>
-          <v-card-text>
+          <v-card-text class="session-group-dialog__content">
             <v-text-field
               v-model="editingGroup.name"
               :label="tm('groups.name')"
@@ -393,7 +394,7 @@
               hide-details
               class="mb-4"
             ></v-text-field>
-            <v-row dense>
+            <v-row density="comfortable">
               <!-- 左侧：可选会话 -->
               <v-col cols="5">
                 <div class="text-subtitle-2 mb-2">
@@ -549,7 +550,7 @@
               </v-col>
             </v-row>
           </v-card-text>
-          <v-card-actions class="px-4 pb-4">
+          <v-card-actions class="px-4 pb-4 session-group-dialog__actions">
             <v-spacer></v-spacer>
             <v-btn variant="text" @click="groupDialog = false">{{
               tm('buttons.cancel')
@@ -673,7 +674,7 @@
                 </h3>
               </div>
 
-              <v-row dense>
+              <v-row density="comfortable">
                 <v-col cols="12">
                   <v-checkbox
                     v-model="serviceConfig.session_enabled"
@@ -730,7 +731,7 @@
                 </h3>
               </div>
 
-              <v-row dense>
+              <v-row density="comfortable">
                 <v-col cols="12">
                   <v-select
                     v-model="providerConfig.chat_completion"
@@ -790,7 +791,7 @@
                 </h3>
               </div>
 
-              <v-row dense>
+              <v-row density="comfortable">
                 <v-col cols="12">
                   <v-select
                     v-model="serviceConfig.persona_id"
@@ -835,7 +836,7 @@
                 </h3>
               </div>
 
-              <v-row dense>
+              <v-row density="comfortable">
                 <v-col cols="12">
                   <v-select
                     v-model="pluginConfig.disabled_plugins"
@@ -883,7 +884,7 @@
                 </h3>
               </div>
 
-              <v-row dense>
+              <v-row density="comfortable">
                 <v-col cols="12">
                   <v-select
                     v-model="kbConfig.kb_ids"
@@ -2745,6 +2746,24 @@ code {
   overflow-y: auto;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 4px;
+  overscroll-behavior: contain;
+}
+
+.session-group-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 900px);
+}
+
+.session-group-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.session-group-dialog__actions {
+  flex-shrink: 0;
 }
 
 .transfer-item {

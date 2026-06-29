@@ -932,7 +932,7 @@ const confirmImport = async () => {
   importProgress.value = { current: 0, total: 100, message: '' };
 
   try {
-    const response = await backupApi.import(uploadedFilename.value, true);
+    const response = await backupApi.importBackup(uploadedFilename.value, true);
 
     if (response.data.status === 'ok') {
       importTaskId.value = response.data.data.task_id;

@@ -242,19 +242,19 @@
       @refresh-config="loadPlatformConfigBase"
     />
     <ProviderConfigDialog v-model="showProviderDialog" />
-    <v-dialog v-model="showComputerAccessHelpDialog" max-width="640">
-      <v-card>
+    <v-dialog v-model="showComputerAccessHelpDialog" max-width="640" scrollable>
+      <v-card class="computer-access-help-dialog">
         <v-card-title class="text-h3 pa-4 pb-0 pl-6">
           {{ tm('onboard.step3HelpTitle') }}
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="computer-access-help-dialog__content">
           <ol class="computer-access-help-list">
             <li>{{ tm('onboard.step3HelpItem1') }}</li>
             <li>{{ tm('onboard.step3HelpItem2') }}</li>
             <li>{{ tm('onboard.step3HelpItem3') }}</li>
           </ol>
         </v-card-text>
-        <v-card-actions class="px-6 pb-4">
+        <v-card-actions class="px-6 pb-4 computer-access-help-dialog__actions">
           <v-spacer />
           <v-btn
             color="primary"
@@ -698,5 +698,22 @@ watch(computerAccessRuntime, async (value, oldValue) => {
 .computer-access-help-list {
   margin: 0;
   padding-left: 1.25rem;
+}
+
+.computer-access-help-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 560px);
+}
+
+.computer-access-help-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.computer-access-help-dialog__actions {
+  flex: 0 0 auto;
 }
 </style>

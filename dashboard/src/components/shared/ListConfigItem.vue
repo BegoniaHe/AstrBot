@@ -1,199 +1,203 @@
 <template>
-  <div class="d-flex align-center justify-space-between ga-2">
-    <div v-if="isSingleItemMode" class="flex-grow-1 d-flex align-center ga-2">
-      <v-text-field
-        v-model="singleItemValue"
-        hide-details
-        variant="outlined"
-        density="compact"
-        class="flex-grow-1"
-      ></v-text-field>
-    </div>
-    <div v-else>
-      <span
-        v-if="!modelValue || modelValue.length === 0"
-        style="color: rgb(var(--v-theme-primaryText))"
-      >
-        {{ t('core.common.list.noItems') }}
-      </span>
-      <div v-else class="d-flex flex-wrap ga-2">
-        <v-chip
-          v-for="item in displayItems"
-          :key="item"
-          size="x-small"
-          label
-          color="primary"
-        >
-          {{ item.length > 20 ? item.slice(0, 20) + '...' : item }}
-        </v-chip>
-        <v-chip
-          v-if="modelValue.length > maxDisplayItems"
-          size="x-small"
-          label
-          color="grey-lighten-1"
-        >
-          +{{ modelValue.length - maxDisplayItems }}
-        </v-chip>
+  <div class="list-config-item">
+    <div class="d-flex align-center justify-space-between ga-2">
+      <div v-if="isSingleItemMode" class="flex-grow-1 d-flex align-center ga-2">
+        <v-text-field
+          v-model="singleItemValue"
+          hide-details
+          variant="outlined"
+          density="compact"
+          class="flex-grow-1"
+        ></v-text-field>
       </div>
-    </div>
-    <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
-      {{
-        preferSingleItem
-          ? t('core.common.list.addMore')
-          : buttonText || t('core.common.list.modifyButton')
-      }}
-    </v-btn>
-  </div>
-
-  <!-- List Management Dialog -->
-  <v-dialog v-model="dialog" max-width="600px">
-    <v-card>
-      <v-card-title class="text-h3 py-4" style="font-weight: normal">
-        {{ dialogTitle || t('core.common.list.editTitle') }}
-      </v-card-title>
-
-      <!-- Add new item section - moved to top -->
-      <v-card-text class="pa-4 pb-2">
-        <div class="d-flex align-center ga-2">
-          <v-text-field
-            v-model="newItem"
-            :label="t('core.common.list.addItemPlaceholder')"
-            clearable
-            hide-details
-            variant="outlined"
-            density="compact"
-            :placeholder="t('core.common.list.inputPlaceholder')"
-            class="flex-grow-1"
-            @keyup.enter="addItem"
-          >
-          </v-text-field>
-          <v-btn
-            variant="tonal"
+      <div v-else>
+        <span
+          v-if="!modelValue || modelValue.length === 0"
+          style="color: rgb(var(--v-theme-primaryText))"
+        >
+          {{ t('core.common.list.noItems') }}
+        </span>
+        <div v-else class="d-flex flex-wrap ga-2">
+          <v-chip
+            v-for="item in displayItems"
+            :key="item"
+            size="x-small"
+            label
             color="primary"
-            size="small"
-            :disabled="!newItem.trim()"
-            @click="addItem"
           >
-            {{ t('core.common.list.addButton') }}
-          </v-btn>
-          <v-btn
-            variant="tonal"
-            color="primary"
-            size="small"
-            @click="showBatchImport = true"
+            {{ item.length > 20 ? item.slice(0, 20) + '...' : item }}
+          </v-chip>
+          <v-chip
+            v-if="modelValue.length > maxDisplayItems"
+            size="x-small"
+            label
+            color="grey-lighten-1"
           >
-            <v-icon size="small">mdi-import</v-icon>
-            {{ t('core.common.list.batchImport') }}
-          </v-btn>
+            +{{ modelValue.length - maxDisplayItems }}
+          </v-chip>
         </div>
-      </v-card-text>
+      </div>
+      <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
+        {{
+          preferSingleItem
+            ? t('core.common.list.addMore')
+            : buttonText || t('core.common.list.modifyButton')
+        }}
+      </v-btn>
+    </div>
 
-      <v-card-text class="pa-0" style="max-height: 400px; overflow-y: auto">
-        <v-list v-if="localItems.length > 0" density="compact">
-          <v-list-item
-            v-for="(item, index) in localItems"
-            :key="index"
-            rounded="md"
-            class="ma-1 list-item-clickable"
-            @click="startEdit(index, item)"
-          >
-            <v-list-item-title v-if="editIndex !== index" class="item-text">
-              {{ item }}
-            </v-list-item-title>
+    <!-- List Management Dialog -->
+    <v-dialog v-model="dialog" max-width="600px" scrollable>
+      <v-card class="list-config-dialog__card">
+        <v-card-title class="text-h3 py-4" style="font-weight: normal">
+          {{ dialogTitle || t('core.common.list.editTitle') }}
+        </v-card-title>
+
+        <!-- Add new item section - moved to top -->
+        <v-card-text class="pa-4 pb-2">
+          <div class="d-flex align-center ga-2">
             <v-text-field
-              v-else
-              v-model="editItem"
+              v-model="newItem"
+              :label="t('core.common.list.addItemPlaceholder')"
+              clearable
               hide-details
               variant="outlined"
               density="compact"
-              autofocus
-              @keyup.enter="saveEdit"
-              @keyup.esc="cancelEdit"
-              @click.stop
-            ></v-text-field>
+              :placeholder="t('core.common.list.inputPlaceholder')"
+              class="flex-grow-1"
+              @keyup.enter="addItem"
+            >
+            </v-text-field>
+            <v-btn
+              variant="tonal"
+              color="primary"
+              size="small"
+              :disabled="!newItem.trim()"
+              @click="addItem"
+            >
+              {{ t('core.common.list.addButton') }}
+            </v-btn>
+            <v-btn
+              variant="tonal"
+              color="primary"
+              size="small"
+              @click="showBatchImport = true"
+            >
+              <v-icon size="small">mdi-import</v-icon>
+              {{ t('core.common.list.batchImport') }}
+            </v-btn>
+          </div>
+        </v-card-text>
 
-            <template #append>
-              <div class="d-flex">
-                <v-btn
-                  v-if="editIndex === index"
-                  variant="plain"
-                  color="success"
-                  icon
-                  size="small"
-                  @click.stop="saveEdit"
-                >
-                  <v-icon>mdi-check</v-icon>
-                </v-btn>
-                <v-btn
-                  variant="plain"
-                  :color="editIndex === index ? 'error' : 'default'"
-                  icon
-                  size="small"
-                  @click.stop="
-                    editIndex === index ? cancelEdit() : removeItem(index)
-                  "
-                >
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </div>
-            </template>
-          </v-list-item>
-        </v-list>
+        <v-card-text class="pa-0 list-config-dialog__content">
+          <v-list v-if="localItems.length > 0" density="compact">
+            <v-list-item
+              v-for="(item, index) in localItems"
+              :key="index"
+              rounded="md"
+              class="ma-1 list-item-clickable"
+              @click="startEdit(index, item)"
+            >
+              <v-list-item-title v-if="editIndex !== index" class="item-text">
+                {{ item }}
+              </v-list-item-title>
+              <v-text-field
+                v-else
+                v-model="editItem"
+                hide-details
+                variant="outlined"
+                density="compact"
+                autofocus
+                @keyup.enter="saveEdit"
+                @keyup.esc="cancelEdit"
+                @click.stop
+              ></v-text-field>
 
-        <div v-else class="text-center py-8">
-          <v-icon size="64" color="grey-lighten-1"
-            >mdi-format-list-bulleted</v-icon
-          >
-          <p class="text-grey mt-4">{{ t('core.common.list.noItemsHint') }}</p>
-        </div>
-      </v-card-text>
+              <template #append>
+                <div class="d-flex">
+                  <v-btn
+                    v-if="editIndex === index"
+                    variant="plain"
+                    color="success"
+                    icon
+                    size="small"
+                    @click.stop="saveEdit"
+                  >
+                    <v-icon>mdi-check</v-icon>
+                  </v-btn>
+                  <v-btn
+                    variant="plain"
+                    :color="editIndex === index ? 'error' : 'default'"
+                    icon
+                    size="small"
+                    @click.stop="
+                      editIndex === index ? cancelEdit() : removeItem(index)
+                    "
+                  >
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </div>
+              </template>
+            </v-list-item>
+          </v-list>
 
-      <v-card-actions class="pa-4">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelDialog">{{
-          t('core.common.cancel')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmDialog">{{
-          t('core.common.confirm')
-        }}</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+          <div v-else class="text-center py-8">
+            <v-icon size="64" color="grey-lighten-1"
+              >mdi-format-list-bulleted</v-icon
+            >
+            <p class="text-grey mt-4">
+              {{ t('core.common.list.noItemsHint') }}
+            </p>
+          </div>
+        </v-card-text>
 
-  <!-- Batch Import Dialog -->
-  <v-dialog v-model="showBatchImport" max-width="600px">
-    <v-card>
-      <v-card-title class="text-h3 py-4" style="font-weight: normal">
-        {{ t('core.common.list.batchImportTitle') }}
-      </v-card-title>
+        <v-card-actions class="pa-4 list-config-dialog__actions">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelDialog">{{
+            t('core.common.cancel')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmDialog">{{
+            t('core.common.confirm')
+          }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
-      <v-card-text>
-        <v-textarea
-          v-model="batchImportText"
-          :label="t('core.common.list.batchImportLabel')"
-          :placeholder="t('core.common.list.batchImportPlaceholder')"
-          rows="10"
-          variant="outlined"
-          :hint="t('core.common.list.batchImportHint')"
-          persistent-hint
-        ></v-textarea>
-      </v-card-text>
+    <!-- Batch Import Dialog -->
+    <v-dialog v-model="showBatchImport" max-width="600px" scrollable>
+      <v-card class="list-config-dialog__card">
+        <v-card-title class="text-h3 py-4" style="font-weight: normal">
+          {{ t('core.common.list.batchImportTitle') }}
+        </v-card-title>
 
-      <v-card-actions class="pa-4">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelBatchImport">{{
-          t('core.common.cancel')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmBatchImport">
-          {{
-            t('core.common.list.batchImportButton', {
-              count: batchImportPreviewCount,
-            })
-          }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <v-card-text class="list-config-dialog__content">
+          <v-textarea
+            v-model="batchImportText"
+            :label="t('core.common.list.batchImportLabel')"
+            :placeholder="t('core.common.list.batchImportPlaceholder')"
+            rows="10"
+            variant="outlined"
+            :hint="t('core.common.list.batchImportHint')"
+            persistent-hint
+          ></v-textarea>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 list-config-dialog__actions">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelBatchImport">{{
+            t('core.common.cancel')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmBatchImport">
+            {{
+              t('core.common.list.batchImportButton', {
+                count: batchImportPreviewCount,
+              })
+            }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
@@ -373,6 +377,10 @@ function cancelBatchImport() {
 </script>
 
 <style scoped>
+.list-config-item {
+  width: 100%;
+}
+
 .v-list-item {
   transition: all 0.2s ease;
 }
@@ -391,5 +399,23 @@ function cancelBatchImport() {
 
 .v-chip {
   margin: 2px;
+}
+
+.list-config-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 760px);
+}
+
+.list-config-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.list-config-dialog__actions {
+  flex-shrink: 0;
 }
 </style>

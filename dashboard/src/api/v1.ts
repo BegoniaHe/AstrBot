@@ -1057,7 +1057,7 @@ export const backupApi = {
   check(filename: string) {
     return typed<OpenConfig>(openApiV1.checkBackup({ path: { filename } }));
   },
-  import(filename: string, confirmed = true) {
+  importBackup(filename: string, confirmed = true) {
     const payload: BackupImportRequest = { confirmed };
     return typed<OpenConfig>(
       openApiV1.importBackup({

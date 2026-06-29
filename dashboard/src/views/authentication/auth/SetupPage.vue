@@ -6,14 +6,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useCustomizerStore } from '@/stores/customizer';
 import { useModuleI18n } from '@/i18n/composables';
-import { useTheme } from 'vuetify';
 import { authApi } from '@/api/v1';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const customizer = useCustomizerStore();
 const { tm: t } = useModuleI18n('features/auth');
-const theme = useTheme();
 
 const themeOptions = [
   {
@@ -27,7 +25,6 @@ const themeOptions = [
 
 function setThemeMode(mode: 'light' | 'dark' | 'system') {
   customizer.SET_THEME_MODE(mode);
-  theme.global.name.value = customizer.uiTheme;
 }
 
 const currentThemeIcon = computed(() => {

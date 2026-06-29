@@ -73,7 +73,7 @@ const openMarketPluginDetail = (plugin) => {
 </script>
 
 <template>
-  <v-tab-item v-show="activeTab === 'market'">
+  <div v-show="activeTab === 'market'">
     <div class="mb-6 pt-4 pb-4">
       <div class="d-flex align-center" style="gap: 12px">
         <div class="d-flex align-center" style="gap: 12px; min-width: 0">
@@ -203,7 +203,7 @@ const openMarketPluginDetail = (plugin) => {
         </div>
       </div>
 
-      <v-row style="min-height: 26rem" dense>
+      <v-row style="min-height: 26rem" density="comfortable">
         <v-col
           v-for="plugin in paginatedPlugins"
           :key="plugin.name"
@@ -251,7 +251,7 @@ const openMarketPluginDetail = (plugin) => {
             </v-btn>
           </div>
 
-          <v-row class="mb-6" dense>
+          <v-row class="mb-6" density="comfortable">
             <v-col
               v-for="plugin in randomPlugins"
               :key="`random-${plugin.name}`"
@@ -272,7 +272,7 @@ const openMarketPluginDetail = (plugin) => {
         </div>
       </v-expand-transition>
     </div>
-  </v-tab-item>
+  </div>
 </template>
 
 <style scoped>

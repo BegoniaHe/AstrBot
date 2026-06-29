@@ -30,7 +30,7 @@ function setupThemeSync(pinia: ReturnType<typeof createPinia>) {
     watch(
       () => customizer.uiTheme,
       (themeName) => {
-        vuetify.theme.global.name.value = themeName;
+        void vuetify.theme.change(themeName);
       },
       { immediate: true },
     );

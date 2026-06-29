@@ -65,13 +65,14 @@ const getPermissionLabel = (permission: string): string => {
   <v-dialog
     :model-value="show"
     max-width="500"
+    scrollable
     @update:model-value="emit('update:show', $event)"
   >
-    <v-card v-if="command">
+    <v-card v-if="command" class="command-details-dialog">
       <v-card-title class="text-h5">{{
         tm('dialogs.details.title')
       }}</v-card-title>
-      <v-card-text>
+      <v-card-text class="command-details-dialog__body">
         <v-list density="compact">
           <v-list-item>
             <v-list-item-title class="font-weight-bold">{{
@@ -191,7 +192,7 @@ const getPermissionLabel = (permission: string): string => {
           </v-list-item>
         </v-list>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="command-details-dialog__actions">
         <v-spacer />
         <v-btn
           color="primary"
@@ -206,6 +207,23 @@ const getPermissionLabel = (permission: string): string => {
 </template>
 
 <style scoped>
+.command-details-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 720px);
+  overflow: hidden;
+}
+
+.command-details-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.command-details-dialog__actions {
+  flex: 0 0 auto;
+}
+
 code {
   background-color: rgba(var(--v-theme-primary), 0.1);
   padding: 2px 6px;

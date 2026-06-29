@@ -137,8 +137,13 @@
     </div>
 
     <!-- 创建/编辑对话框 -->
-    <v-dialog v-model="showCreateDialog" max-width="600px" persistent>
-      <v-card>
+    <v-dialog
+      v-model="showCreateDialog"
+      max-width="600px"
+      persistent
+      scrollable
+    >
+      <v-card class="kb-dialog-card">
         <v-card-title class="d-flex align-center">
           <span class="text-h5">{{
             editingKB ? t('edit.title') : t('create.title')
@@ -149,7 +154,7 @@
 
         <v-divider />
 
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-6 kb-dialog-body">
           <!-- Emoji 选择器 -->
           <div class="text-center mb-6">
             <div class="emoji-display" @click="showEmojiPicker = true">
@@ -238,7 +243,7 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 kb-dialog-actions">
           <v-spacer />
           <v-btn variant="text" @click="closeCreateDialog">
             {{ t('create.cancel') }}
@@ -256,11 +261,11 @@
     </v-dialog>
 
     <!-- Emoji 选择器对话框 -->
-    <v-dialog v-model="showEmojiPicker" max-width="500px">
-      <v-card>
+    <v-dialog v-model="showEmojiPicker" max-width="500px" scrollable>
+      <v-card class="kb-emoji-dialog-card">
         <v-card-title class="pa-4">{{ t('emoji.title') }}</v-card-title>
         <v-divider />
-        <v-card-text class="pa-4">
+        <v-card-text class="pa-4 kb-emoji-dialog-body">
           <div
             v-for="category in emojiCategories"
             :key="category.key"
@@ -282,7 +287,7 @@
           </div>
         </v-card-text>
         <v-divider />
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 kb-dialog-actions">
           <v-spacer />
           <v-btn variant="text" @click="showEmojiPicker = false">
             {{ t('emoji.close') }}
@@ -292,13 +297,18 @@
     </v-dialog>
 
     <!-- 删除确认对话框 -->
-    <v-dialog v-model="showDeleteDialog" max-width="450px" persistent>
-      <v-card>
+    <v-dialog
+      v-model="showDeleteDialog"
+      max-width="450px"
+      persistent
+      scrollable
+    >
+      <v-card class="kb-delete-dialog-card">
         <v-card-title class="pa-4 text-h6">{{
           t('delete.title')
         }}</v-card-title>
         <v-divider />
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-6 kb-delete-dialog-body">
           <p>
             {{ t('delete.confirmText', { name: deleteTarget?.kb_name || '' }) }}
           </p>
@@ -307,7 +317,7 @@
           </v-alert>
         </v-card-text>
         <v-divider />
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 kb-dialog-actions">
           <v-spacer />
           <v-btn variant="text" @click="cancelDelete">
             {{ t('delete.cancel') }}
@@ -800,6 +810,27 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
+}
+
+.kb-dialog-card,
+.kb-emoji-dialog-card,
+.kb-delete-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(85vh, 760px);
+}
+
+.kb-dialog-body,
+.kb-emoji-dialog-body,
+.kb-delete-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.kb-dialog-actions {
+  flex: 0 0 auto;
 }
 
 /* Emoji 显示和选择器 */

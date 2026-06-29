@@ -176,8 +176,8 @@
     />
 
     <!-- 查看 Persona 详情对话框 -->
-    <v-dialog v-model="showViewDialog" max-width="700px">
-      <v-card v-if="viewingPersona">
+    <v-dialog v-model="showViewDialog" max-width="700px" scrollable>
+      <v-card v-if="viewingPersona" class="persona-preview-dialog__card">
         <v-card-title class="d-flex justify-space-between align-center">
           <span class="text-h5">{{ viewingPersona.persona_id }}</span>
           <div class="d-flex align-center ga-1">
@@ -198,7 +198,7 @@
           </div>
         </v-card-title>
 
-        <v-card-text>
+        <v-card-text class="persona-preview-dialog__content">
           <div class="mb-4">
             <h4 class="text-h6 mb-2">{{ tm('form.systemPrompt') }}</h4>
             <pre class="system-prompt-content">{{
@@ -724,6 +724,19 @@ function showError(errorMessage: string) {
 .main-content {
   flex: 1;
   min-width: 0;
+}
+
+.persona-preview-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 860px);
+}
+
+.persona-preview-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .system-prompt-content {

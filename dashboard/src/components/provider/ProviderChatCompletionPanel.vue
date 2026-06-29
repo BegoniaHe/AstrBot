@@ -149,9 +149,12 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="showProviderEditDialog" width="800">
-      <v-card :title="providerEditDialogTitle">
-        <v-card-text class="py-4">
+    <v-dialog v-model="showProviderEditDialog" width="800" scrollable>
+      <v-card
+        class="provider-form-dialog__card"
+        :title="providerEditDialogTitle"
+      >
+        <v-card-text class="py-4 provider-form-dialog__content">
           <AstrBotConfig
             v-if="providerEditData"
             :iterable="providerEditData"
@@ -160,7 +163,7 @@
             :is-editing="true"
           />
         </v-card-text>
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 provider-form-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="text"
@@ -401,6 +404,23 @@ async function confirmManualModel() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.provider-form-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.provider-form-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.provider-form-dialog__actions {
+  flex-shrink: 0;
 }
 
 .provider-section {

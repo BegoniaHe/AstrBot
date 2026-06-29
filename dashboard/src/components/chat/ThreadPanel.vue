@@ -1,57 +1,64 @@
 <template>
-  <transition name="slide-left">
-    <aside v-if="modelValue && thread" class="thread-panel">
-      <div class="thread-panel-header">
-        <div class="thread-panel-title">{{ tm('thread.title') }}</div>
-        <div class="thread-panel-actions">
-          <v-btn
-            icon="mdi-delete-outline"
-            class="thread-delete-button"
-            size="small"
-            variant="text"
-            :title="tm('thread.delete')"
-            :loading="deleting"
-            :disabled="sending || deleting"
-            @click="emit('delete', thread)"
-          />
-          <v-btn icon="mdi-close" size="small" variant="text" @click="close" />
+  <div class="thread-panel-root">
+    <transition name="slide-left">
+      <aside v-if="modelValue && thread" class="thread-panel">
+        <div class="thread-panel-header">
+          <div class="thread-panel-title">{{ tm('thread.title') }}</div>
+          <div class="thread-panel-actions">
+            <v-btn
+              icon="mdi-delete-outline"
+              class="thread-delete-button"
+              size="small"
+              variant="text"
+              :title="tm('thread.delete')"
+              :loading="deleting"
+              :disabled="sending || deleting"
+              @click="emit('delete', thread)"
+            />
+            <v-btn
+              icon="mdi-close"
+              size="small"
+              variant="text"
+              @click="close"
+            />
+          </div>
         </div>
-      </div>
 
-      <blockquote class="thread-selected-text">
-        {{ thread.selected_text }}
-      </blockquote>
+        <blockquote class="thread-selected-text">
+          {{ thread.selected_text }}
+        </blockquote>
 
-      <div ref="messagesEl" class="thread-messages">
-        <ChatMessageList
-          :messages="messages"
-          :is-dark="isDark"
-          :is-streaming="sending"
-          variant="thread"
-        />
-      </div>
+        <div ref="messagesEl" class="thread-messages">
+          <ChatMessageList
+            :messages="messages"
+            :is-dark="isDark"
+            :is-streaming="sending"
+            variant="thread"
+          />
+        </div>
 
-      <form class="thread-composer" @submit.prevent="send">
-        <textarea
-          v-model="draft"
-          class="thread-input"
-          :placeholder="tm('thread.placeholder')"
-          rows="1"
-          :disabled="sending"
-          @keydown.enter.exact.prevent="send"
-        ></textarea>
-        <v-btn
-          class="thread-send-button"
-          variant="text"
-          :loading="sending"
-          :disabled="!draft.trim()"
-          type="submit"
-        >
-          {{ tm('input.send') }}
-        </v-btn>
-      </form>
-    </aside>
-  </transition>
+        <form class="thread-composer" @submit.prevent="send">
+          <textarea
+            v-model="draft"
+            class="thread-input"
+            :placeholder="tm('thread.placeholder')"
+            rows="1"
+            :disabled="sending"
+            @keydown.enter.exact.prevent="send"
+          ></textarea>
+          <v-btn
+            class="thread-send-button"
+            variant="text"
+            :loading="sending"
+            :disabled="!draft.trim()"
+            type="submit"
+          >
+            {{ tm('input.send') }}
+          </v-btn>
+        </form>
+      </aside>
+    </transition>
+  </div>
 </template>
 
 <script setup lang="ts">

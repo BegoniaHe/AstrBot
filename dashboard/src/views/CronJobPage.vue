@@ -186,12 +186,12 @@
           </template>
         </section>
 
-        <v-dialog v-model="platformDialog" max-width="520">
-          <v-card class="dashboard-dialog-card">
+        <v-dialog v-model="platformDialog" max-width="520" scrollable>
+          <v-card class="dashboard-dialog-card platform-dialog__card">
             <v-card-title class="text-h3 pt-5 px-5">
               {{ tm('platformDialog.title') }}
             </v-card-title>
-            <v-card-text class="px-5 pb-2">
+            <v-card-text class="px-5 pb-2 platform-dialog__content">
               <p class="platform-dialog-description">
                 {{ tm('platformDialog.description') }}
               </p>
@@ -211,7 +211,9 @@
                 {{ tm('page.proactive.unsupported') }}
               </div>
             </v-card-text>
-            <v-card-actions class="justify-end px-5 pb-5">
+            <v-card-actions
+              class="justify-end px-5 pb-5 platform-dialog__actions"
+            >
               <v-btn variant="text" @click="platformDialog = false">
                 {{ tm('actions.close') }}
               </v-btn>
@@ -227,12 +229,12 @@
           {{ snackbar.message }}
         </v-snackbar>
 
-        <v-dialog v-model="createDialog" max-width="620">
-          <v-card class="dashboard-dialog-card">
+        <v-dialog v-model="createDialog" max-width="620" scrollable>
+          <v-card class="dashboard-dialog-card cron-dialog__card">
             <v-card-title class="text-h3 pt-5 px-5">{{
               dialogTitle
             }}</v-card-title>
-            <v-card-text class="px-5 pb-2">
+            <v-card-text class="px-5 pb-2 cron-dialog__content">
               <div class="dashboard-form-grid dashboard-form-grid--single">
                 <v-text-field
                   v-model="newJob.name"
@@ -419,7 +421,7 @@
                 </v-autocomplete>
               </div>
             </v-card-text>
-            <v-card-actions class="justify-end px-5 pb-5">
+            <v-card-actions class="justify-end px-5 pb-5 cron-dialog__actions">
               <v-btn variant="text" @click="createDialog = false">{{
                 tm('actions.cancel')
               }}</v-btn>
@@ -1566,6 +1568,9 @@ onMounted(() => {
 .platform-list {
   display: grid;
   gap: 10px;
+  max-height: min(56dvh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .platform-list-item {
@@ -1595,6 +1600,40 @@ onMounted(() => {
 
 .platform-dialog-empty {
   min-height: 120px;
+}
+
+.platform-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 720px);
+}
+
+.platform-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.platform-dialog__actions {
+  flex-shrink: 0;
+}
+
+.cron-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 960px);
+}
+
+.cron-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cron-dialog__actions {
+  flex-shrink: 0;
 }
 
 .schedule-field {

@@ -236,13 +236,16 @@
     </v-dialog>
 
     <!-- 错误详情对话框 -->
-    <v-dialog v-model="showErrorDialog" max-width="700">
-      <v-card>
+    <v-dialog v-model="showErrorDialog" max-width="700" scrollable>
+      <v-card class="platform-error-dialog__card">
         <v-card-title class="text-h3 pa-4 pb-0 pl-6 d-flex align-center">
           <v-icon class="me-2" color="error">mdi-alert-circle</v-icon>
           {{ tm('errorDialog.title') }}
         </v-card-title>
-        <v-card-text v-if="currentErrorPlatform" class="px-4 pb-4">
+        <v-card-text
+          v-if="currentErrorPlatform"
+          class="px-4 pb-4 platform-error-dialog__content"
+        >
           <div class="mb-3">
             <strong>{{ tm('errorDialog.platformId') }}:</strong>
             {{ currentErrorPlatform.id }}
@@ -276,7 +279,7 @@
             </div>
           </div>
         </v-card-text>
-        <v-card-actions class="pa-4 pt-0">
+        <v-card-actions class="pa-4 pt-0 platform-error-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn
             variant="tonal"
@@ -960,6 +963,23 @@ function formatRuntimeErrorTimestamp(
 
 .error-details {
   margin-top: 8px;
+}
+
+.platform-error-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 840px);
+}
+
+.platform-error-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.platform-error-dialog__actions {
+  flex-shrink: 0;
 }
 
 .error-message {

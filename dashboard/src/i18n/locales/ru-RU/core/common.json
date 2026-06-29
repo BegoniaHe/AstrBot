@@ -24,6 +24,8 @@
   "enabled": "Включено",
   "disabled": "Выключено",
   "reload": "Перезагрузить",
+  "expand": "Развернуть",
+  "collapse": "Свернуть",
   "configure": "Настроить",
   "install": "Установить",
   "uninstall": "Удалить",

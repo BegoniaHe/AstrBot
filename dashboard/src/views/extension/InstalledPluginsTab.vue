@@ -99,7 +99,7 @@ const togglePinnedExtension = (extension) => {
 </script>
 
 <template>
-  <v-tab-item v-show="activeTab === 'installed'">
+  <div v-show="activeTab === 'installed'">
     <div class="mb-4 pt-4 pb-4">
       <div class="d-flex align-center flex-wrap" style="gap: 12px">
         <h2 class="text-h2 mb-0">{{ tm('titles.installedAstrBotPlugins') }}</h2>
@@ -287,7 +287,7 @@ const togglePinnedExtension = (extension) => {
         />
       </template>
     </v-tooltip>
-  </v-tab-item>
+  </div>
 </template>
 
 <style scoped>

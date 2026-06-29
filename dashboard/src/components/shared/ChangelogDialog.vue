@@ -168,9 +168,10 @@ void getCurrentVersion();
     :width="$vuetify.display.smAndDown ? '100%' : '800'"
     :fullscreen="$vuetify.display.xs"
     max-width="1000"
+    scrollable
     @update:model-value="dialog = $event"
   >
-    <v-card>
+    <v-card class="changelog-dialog">
       <v-card-title class="d-flex justify-space-between align-center">
         <span class="text-h3">{{
           t('core.navigation.changelogDialog.title')
@@ -179,7 +180,7 @@ void getCurrentVersion();
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
-      <v-card-text class="pb-5">
+      <v-card-text class="changelog-dialog__content pb-5">
         <!-- 版本选择器 -->
         <div class="mb-4">
           <v-select
@@ -209,7 +210,7 @@ void getCurrentVersion();
         <!-- 更新日志内容 -->
         <div
           ref="scrollContainer"
-          style="max-height: 70vh; overflow-y: auto"
+          class="changelog-dialog__scroll"
           @click="handleChangelogClick"
         >
           <div v-if="changelogLoading" class="text-center py-8">
@@ -238,7 +239,7 @@ void getCurrentVersion();
           </div>
         </div>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="changelog-dialog__actions">
         <v-spacer></v-spacer>
         <v-btn color="blue-darken-1" variant="text" @click="dialog = false">
           {{ t('core.common.close') }}
@@ -249,6 +250,32 @@ void getCurrentVersion();
 </template>
 
 <style>
+.changelog-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(86dvh, 900px);
+  overflow: hidden;
+}
+
+.changelog-dialog__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.changelog-dialog__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.changelog-dialog__actions {
+  flex: 0 0 auto;
+}
+
 .changelog-content {
   padding: 8px 0;
 }

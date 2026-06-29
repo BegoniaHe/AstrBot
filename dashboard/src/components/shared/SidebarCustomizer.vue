@@ -10,8 +10,8 @@
       {{ t('features.settings.sidebar.customize.title') }}
     </v-btn>
 
-    <v-dialog v-model="dialog" max-width="700px">
-      <v-card>
+    <v-dialog v-model="dialog" max-width="700px" scrollable>
+      <v-card class="sidebar-customizer-dialog">
         <v-card-title
           class="text-h3 pa-4 pb-0 pl-6 d-flex justify-space-between align-center"
         >
@@ -23,7 +23,7 @@
           ></v-btn>
         </v-card-title>
 
-        <v-card-text>
+        <v-card-text class="sidebar-customizer-dialog__content">
           <p class="text-body-2 mb-4">
             {{ t('features.settings.sidebar.customize.subtitle') }}
           </p>
@@ -109,7 +109,7 @@
           </v-row>
         </v-card-text>
 
-        <v-card-actions>
+        <v-card-actions class="sidebar-customizer-dialog__actions">
           <v-btn color="error" variant="text" @click="resetToDefault">
             {{ t('features.settings.sidebar.customize.reset') }}
           </v-btn>
@@ -253,6 +253,24 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.sidebar-customizer-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(86dvh, 860px);
+  overflow: hidden;
+}
+
+.sidebar-customizer-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebar-customizer-dialog__actions {
+  flex: 0 0 auto;
+}
+
 .draggable-item {
   cursor: move;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
@@ -268,6 +286,8 @@ onMounted(() => {
 
 .custom-list {
   min-height: 200px;
+  max-height: 420px;
+  overflow-y: auto;
   border: 1px dashed rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 4px;
   padding: 8px;

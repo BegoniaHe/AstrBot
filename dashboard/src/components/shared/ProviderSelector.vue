@@ -1,210 +1,216 @@
 <template>
-  <div class="d-flex align-center justify-space-between">
-    <span v-if="!hasSelection" style="color: rgb(var(--v-theme-primaryText))">
-      {{ tm('providerSelector.notSelected') }}
-    </span>
-    <span v-else class="provider-name-text">
-      <template v-if="multiple">
-        {{
-          tm('providerSelector.selectedCount', {
-            count: selectedProviders.length,
-          })
-        }}
-      </template>
-      <template v-else>
-        {{ modelValue }}
-      </template>
-    </span>
-    <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
-      {{ buttonText || tm('providerSelector.buttonText') }}
-    </v-btn>
-  </div>
+  <div class="provider-selector">
+    <div class="d-flex align-center justify-space-between">
+      <span v-if="!hasSelection" style="color: rgb(var(--v-theme-primaryText))">
+        {{ tm('providerSelector.notSelected') }}
+      </span>
+      <span v-else class="provider-name-text">
+        <template v-if="multiple">
+          {{
+            tm('providerSelector.selectedCount', {
+              count: selectedProviders.length,
+            })
+          }}
+        </template>
+        <template v-else>
+          {{ modelValue }}
+        </template>
+      </span>
+      <v-btn size="small" color="primary" variant="tonal" @click="openDialog">
+        {{ buttonText || tm('providerSelector.buttonText') }}
+      </v-btn>
+    </div>
 
-  <div
-    v-if="multiple && selectedProviders.length > 0"
-    class="selected-preview mt-2"
-  >
-    <v-chip
-      v-for="providerId in selectedProviders"
-      :key="`preview-${providerId}`"
-      size="x-small"
-      color="primary"
-      variant="tonal"
-      class="mr-1 mb-1"
-      label
+    <div
+      v-if="multiple && selectedProviders.length > 0"
+      class="selected-preview mt-2"
     >
-      {{ providerId }}
-    </v-chip>
-  </div>
-
-  <!-- Provider Selection Dialog -->
-  <v-dialog v-model="dialog" max-width="600px">
-    <v-card>
-      <v-card-title
-        class="text-h3 py-4 d-flex align-center justify-space-between gap-4 flex-wrap"
-        style="font-weight: normal"
+      <v-chip
+        v-for="providerId in selectedProviders"
+        :key="`preview-${providerId}`"
+        size="x-small"
+        color="primary"
+        variant="tonal"
+        class="mr-1 mb-1"
+        label
       >
-        <span>{{ tm('providerSelector.dialogTitle') }}</span>
-        <v-btn
-          size="small"
-          color="primary"
-          variant="tonal"
-          prepend-icon="mdi-plus"
-          @click="openProviderDrawer"
+        {{ providerId }}
+      </v-chip>
+    </div>
+
+    <!-- Provider Selection Dialog -->
+    <v-dialog v-model="dialog" max-width="600px" scrollable>
+      <v-card class="provider-selector-dialog__card">
+        <v-card-title
+          class="text-h3 py-4 d-flex align-center justify-space-between gap-4 flex-wrap"
+          style="font-weight: normal"
         >
-          {{ tm('providerSelector.createProvider') }}
-        </v-btn>
-      </v-card-title>
+          <span>{{ tm('providerSelector.dialogTitle') }}</span>
+          <v-btn
+            size="small"
+            color="primary"
+            variant="tonal"
+            prepend-icon="mdi-plus"
+            @click="openProviderDrawer"
+          >
+            {{ tm('providerSelector.createProvider') }}
+          </v-btn>
+        </v-card-title>
 
-      <v-card-text class="pa-0" style="max-height: 400px; overflow-y: auto">
-        <v-progress-linear
-          v-if="loading"
-          indeterminate
-          color="primary"
-        ></v-progress-linear>
+        <v-card-text class="pa-0 provider-selector-dialog__content">
+          <v-progress-linear
+            v-if="loading"
+            indeterminate
+            color="primary"
+          ></v-progress-linear>
 
-        <div v-if="multiple && selectedProviders.length > 0" class="pa-3">
-          <div class="text-caption text-medium-emphasis mb-2">
-            {{
-              tm('providerSelector.selectedCount', {
-                count: selectedProviders.length,
-              })
-            }}
+          <div v-if="multiple && selectedProviders.length > 0" class="pa-3">
+            <div class="text-caption text-medium-emphasis mb-2">
+              {{
+                tm('providerSelector.selectedCount', {
+                  count: selectedProviders.length,
+                })
+              }}
+            </div>
+            <v-list density="compact" class="selected-order-list">
+              <v-list-item
+                v-for="(providerId, index) in selectedProviders"
+                :key="`selected-${providerId}-${index}`"
+                rounded="md"
+                class="ma-1"
+              >
+                <v-list-item-title>{{ providerId }}</v-list-item-title>
+                <template #append>
+                  <div class="d-flex ga-1">
+                    <v-btn
+                      icon="mdi-arrow-up"
+                      size="x-small"
+                      variant="text"
+                      :disabled="index === 0"
+                      @click.stop="moveSelected(index, -1)"
+                    />
+                    <v-btn
+                      icon="mdi-arrow-down"
+                      size="x-small"
+                      variant="text"
+                      :disabled="index === selectedProviders.length - 1"
+                      @click.stop="moveSelected(index, 1)"
+                    />
+                    <v-btn
+                      icon="mdi-close"
+                      size="x-small"
+                      variant="text"
+                      @click.stop="removeSelected(providerId)"
+                    />
+                  </div>
+                </template>
+              </v-list-item>
+            </v-list>
+            <v-divider class="ma-1"></v-divider>
           </div>
-          <v-list density="compact" class="selected-order-list">
+
+          <v-list v-if="!loading && providerList.length > 0" density="compact">
+            <!-- 不选择选项 -->
             <v-list-item
-              v-for="(providerId, index) in selectedProviders"
-              :key="`selected-${providerId}-${index}`"
+              v-if="!multiple"
+              key="none"
+              value=""
+              :active="selectedProvider === ''"
               rounded="md"
               class="ma-1"
+              @click="selectProvider({ id: '' })"
             >
-              <v-list-item-title>{{ providerId }}</v-list-item-title>
+              <v-list-item-title>{{
+                tm('providerSelector.clearSelection')
+              }}</v-list-item-title>
+              <v-list-item-subtitle>{{
+                tm('providerSelector.clearSelectionSubtitle')
+              }}</v-list-item-subtitle>
+
               <template #append>
-                <div class="d-flex ga-1">
-                  <v-btn
-                    icon="mdi-arrow-up"
-                    size="x-small"
-                    variant="text"
-                    :disabled="index === 0"
-                    @click.stop="moveSelected(index, -1)"
-                  />
-                  <v-btn
-                    icon="mdi-arrow-down"
-                    size="x-small"
-                    variant="text"
-                    :disabled="index === selectedProviders.length - 1"
-                    @click.stop="moveSelected(index, 1)"
-                  />
-                  <v-btn
-                    icon="mdi-close"
-                    size="x-small"
-                    variant="text"
-                    @click.stop="removeSelected(providerId)"
-                  />
-                </div>
+                <v-icon v-if="selectedProvider === ''" color="primary"
+                  >mdi-check-circle</v-icon
+                >
+              </template>
+            </v-list-item>
+
+            <v-divider class="ma-1"></v-divider>
+
+            <v-list-item
+              v-for="provider in providerList"
+              :key="provider.id"
+              :value="provider.id"
+              :active="isProviderSelected(provider.id)"
+              rounded="md"
+              class="ma-1"
+              @click="selectProvider(provider)"
+            >
+              <v-list-item-title>{{ provider.id }}</v-list-item-title>
+              <v-list-item-subtitle>
+                {{
+                  provider.type ||
+                  provider.provider_type ||
+                  tm('providerSelector.unknownType')
+                }}
+                <span v-if="provider.model">- {{ provider.model }}</span>
+              </v-list-item-subtitle>
+
+              <template #append>
+                <v-icon v-if="isProviderSelected(provider.id)" color="primary"
+                  >mdi-check-circle</v-icon
+                >
               </template>
             </v-list-item>
           </v-list>
-          <v-divider class="ma-1"></v-divider>
-        </div>
 
-        <v-list v-if="!loading && providerList.length > 0" density="compact">
-          <!-- 不选择选项 -->
-          <v-list-item
-            v-if="!multiple"
-            key="none"
-            value=""
-            :active="selectedProvider === ''"
-            rounded="md"
-            class="ma-1"
-            @click="selectProvider({ id: '' })"
+          <div
+            v-else-if="!loading && providerList.length === 0"
+            class="text-center py-8"
           >
-            <v-list-item-title>{{
-              tm('providerSelector.clearSelection')
-            }}</v-list-item-title>
-            <v-list-item-subtitle>{{
-              tm('providerSelector.clearSelectionSubtitle')
-            }}</v-list-item-subtitle>
+            <v-icon size="64" color="grey-lighten-1">mdi-api-off</v-icon>
+            <p class="text-grey mt-4">
+              {{ tm('providerSelector.noProviders') }}
+            </p>
+          </div>
+        </v-card-text>
 
-            <template #append>
-              <v-icon v-if="selectedProvider === ''" color="primary"
-                >mdi-check-circle</v-icon
-              >
-            </template>
-          </v-list-item>
+        <v-divider></v-divider>
 
-          <v-divider class="ma-1"></v-divider>
+        <v-card-actions class="pa-4 provider-selector-dialog__actions">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="cancelSelection">{{
+            tm('providerSelector.cancelSelection')
+          }}</v-btn>
+          <v-btn color="primary" @click="confirmSelection">
+            {{ tm('providerSelector.confirmSelection') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
-          <v-list-item
-            v-for="provider in providerList"
-            :key="provider.id"
-            :value="provider.id"
-            :active="isProviderSelected(provider.id)"
-            rounded="md"
-            class="ma-1"
-            @click="selectProvider(provider)"
-          >
-            <v-list-item-title>{{ provider.id }}</v-list-item-title>
-            <v-list-item-subtitle>
-              {{
-                provider.type ||
-                provider.provider_type ||
-                tm('providerSelector.unknownType')
-              }}
-              <span v-if="provider.model">- {{ provider.model }}</span>
-            </v-list-item-subtitle>
-
-            <template #append>
-              <v-icon v-if="isProviderSelected(provider.id)" color="primary"
-                >mdi-check-circle</v-icon
-              >
-            </template>
-          </v-list-item>
-        </v-list>
-
-        <div
-          v-else-if="!loading && providerList.length === 0"
-          class="text-center py-8"
-        >
-          <v-icon size="64" color="grey-lighten-1">mdi-api-off</v-icon>
-          <p class="text-grey mt-4">{{ tm('providerSelector.noProviders') }}</p>
+    <v-overlay
+      v-model="providerDrawer"
+      class="provider-drawer-overlay"
+      location="right"
+      transition="slide-x-reverse-transition"
+      :scrim="true"
+      @click:outside="closeProviderDrawer"
+    >
+      <v-card class="provider-drawer-card" elevation="12">
+        <div class="provider-drawer-header">
+          <v-btn icon variant="text" @click="closeProviderDrawer">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
         </div>
-      </v-card-text>
-
-      <v-divider></v-divider>
-
-      <v-card-actions class="pa-4">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="cancelSelection">{{
-          tm('providerSelector.cancelSelection')
-        }}</v-btn>
-        <v-btn color="primary" @click="confirmSelection">
-          {{ tm('providerSelector.confirmSelection') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
-
-  <v-overlay
-    v-model="providerDrawer"
-    class="provider-drawer-overlay"
-    location="right"
-    transition="slide-x-reverse-transition"
-    :scrim="true"
-    @click:outside="closeProviderDrawer"
-  >
-    <v-card class="provider-drawer-card" elevation="12">
-      <div class="provider-drawer-header">
-        <v-btn icon variant="text" @click="closeProviderDrawer">
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
-      </div>
-      <div class="provider-drawer-content">
-        <ProviderChatCompletionPanel v-if="defaultTab === 'chat_completion'" />
-        <ProviderPage v-else :default-tab="defaultTab" />
-      </div>
-    </v-card>
-  </v-overlay>
+        <div class="provider-drawer-content">
+          <ProviderChatCompletionPanel
+            v-if="defaultTab === 'chat_completion'"
+          />
+          <ProviderPage v-else :default-tab="defaultTab" />
+        </div>
+      </v-card>
+    </v-overlay>
+  </div>
 </template>
 
 <script setup>
@@ -432,6 +438,24 @@ function closeProviderDrawer() {
 
 .v-list-item.v-list-item--active {
   background-color: rgba(var(--v-theme-primary), 0.08);
+}
+
+.provider-selector-dialog__card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 760px);
+}
+
+.provider-selector-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.provider-selector-dialog__actions {
+  flex-shrink: 0;
 }
 
 .provider-drawer-overlay {

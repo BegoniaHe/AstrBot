@@ -87,7 +87,6 @@ onMounted(() => {
 <template>
   <v-locale-provider>
     <v-app
-      :theme="useCustomizerStore().uiTheme"
       :class="[
         customizer.fontTheme,
         customizer.mini_sidebar ? 'mini-sidebar' : '',

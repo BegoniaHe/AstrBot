@@ -1,24 +1,26 @@
 <template>
-  <transition name="slide-left">
-    <aside v-if="modelValue" class="reasoning-sidebar">
-      <div class="reasoning-sidebar-header">
-        <div class="reasoning-sidebar-title">{{ reasoningTitle }}</div>
-        <v-btn icon="mdi-close" size="small" variant="text" @click="close" />
-      </div>
-
-      <div class="reasoning-sidebar-body">
-        <ReasoningTimeline
-          v-if="parts.length || reasoning"
-          :parts="parts"
-          :reasoning="reasoning"
-          :is-dark="isDark"
-        />
-        <div v-else class="reasoning-sidebar-empty">
-          {{ reasoningTitle }}
+  <div class="reasoning-sidebar-root">
+    <transition name="slide-left">
+      <aside v-if="modelValue" class="reasoning-sidebar">
+        <div class="reasoning-sidebar-header">
+          <div class="reasoning-sidebar-title">{{ reasoningTitle }}</div>
+          <v-btn icon="mdi-close" size="small" variant="text" @click="close" />
         </div>
-      </div>
-    </aside>
-  </transition>
+
+        <div class="reasoning-sidebar-body">
+          <ReasoningTimeline
+            v-if="parts.length || reasoning"
+            :parts="parts"
+            :reasoning="reasoning"
+            :is-dark="isDark"
+          />
+          <div v-else class="reasoning-sidebar-empty">
+            {{ reasoningTitle }}
+          </div>
+        </div>
+      </aside>
+    </transition>
+  </div>
 </template>
 
 <script setup lang="ts">

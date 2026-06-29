@@ -430,15 +430,15 @@ const showActionArea = computed(() => {
 </script>
 
 <template>
-  <v-dialog v-model="_show" width="800">
-    <v-card>
+  <v-dialog v-model="_show" width="800" scrollable>
+    <v-card class="readme-dialog-card">
       <v-card-title class="d-flex justify-space-between align-center">
         <span class="text-h2 pa-2">{{ modeConfig.title }}</span>
         <v-btn icon variant="text" @click="_show = false">
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
-      <v-card-text ref="scrollContainer" style="overflow-y: auto">
+      <v-card-text ref="scrollContainer" class="readme-dialog__body">
         <div v-if="showActionArea" class="d-flex justify-space-between mb-4">
           <v-btn
             v-if="modeConfig.showGithubButton && repoUrl"
@@ -522,6 +522,19 @@ const showActionArea = computed(() => {
 </template>
 
 <style scoped>
+.readme-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 960px);
+}
+
+.readme-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 :deep(.markdown-body) {
   --markdown-border: rgba(128, 128, 128, 0.3);
   font-family:

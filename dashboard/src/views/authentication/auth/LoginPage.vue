@@ -6,7 +6,6 @@ import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useCustomizerStore } from '@/stores/customizer';
 import { useModuleI18n } from '@/i18n/composables';
-import { useTheme } from 'vuetify';
 import { authApi, publicApi, type PublicVersionData } from '@/api/v1';
 
 const cardVisible = ref(false);
@@ -14,7 +13,6 @@ const router = useRouter();
 const authStore = useAuthStore();
 const customizer = useCustomizerStore();
 const { tm: t } = useModuleI18n('features/auth');
-const theme = useTheme();
 const authLoginRef = ref<InstanceType<typeof AuthLogin> | null>(null);
 const publicVersions = ref<PublicVersionData | null>(null);
 const versionDialogVisible = ref(false);
@@ -43,7 +41,6 @@ const themeOptions = [
 
 function setThemeMode(mode: 'light' | 'dark' | 'system') {
   customizer.SET_THEME_MODE(mode);
-  theme.global.name.value = customizer.uiTheme;
 }
 
 const currentThemeIcon = computed(() => {

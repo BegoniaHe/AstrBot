@@ -105,12 +105,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv pip install -r requirements.txt --no-cache-dir --system \
     && uv pip install socksio pilk --no-cache-dir --system
 
-RUN cd /AstrBot/dashboard \
-    && pnpm install --frozen-lockfile \
+WORKDIR /AstrBot/dashboard
+RUN pnpm install --frozen-lockfile \
     && pnpm build \
     && rm -rf /AstrBot/astrbot/dashboard/dist \
     && mkdir -p /AstrBot/astrbot/dashboard \
     && cp -r dist /AstrBot/astrbot/dashboard/
+WORKDIR /AstrBot
 
 RUN mkdir -p /etc/profile.d \
     && cat <<'EOF' >/etc/profile.d/astrbot-dev-tools.sh

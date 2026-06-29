@@ -1,33 +1,35 @@
 <template>
-  <BaseFolderItemSelector
-    :model-value="modelValue"
-    :folder-tree="folderTree"
-    :items="currentPersonas"
-    :tree-loading="treeLoading"
-    :items-loading="itemsLoading"
-    :labels="labels"
-    :show-create-button="true"
-    :show-edit-button="true"
-    :default-item="defaultPersona"
-    item-id-field="persona_id"
-    item-name-field="persona_id"
-    @update:model-value="handleUpdate"
-    item-description-field="system_prompt"
-    :display-value-formatter="formatDisplayValue"
-    @navigate="handleNavigate"
-    @create="openCreatePersona"
-    @edit="openEditPersona"
-  />
+  <div class="persona-selector">
+    <BaseFolderItemSelector
+      :model-value="modelValue"
+      :folder-tree="folderTree"
+      :items="currentPersonas"
+      :tree-loading="treeLoading"
+      :items-loading="itemsLoading"
+      :labels="labels"
+      :show-create-button="true"
+      :show-edit-button="true"
+      :default-item="defaultPersona"
+      item-id-field="persona_id"
+      item-name-field="persona_id"
+      @update:model-value="handleUpdate"
+      item-description-field="system_prompt"
+      :display-value-formatter="formatDisplayValue"
+      @navigate="handleNavigate"
+      @create="openCreatePersona"
+      @edit="openEditPersona"
+    />
 
-  <!-- 创建/编辑人格对话框 -->
-  <PersonaForm
-    v-model="showPersonaDialog"
-    :editing-persona="editingPersona ?? undefined"
-    :current-folder-id="currentFolderId ?? undefined"
-    :current-folder-name="currentFolderName ?? undefined"
-    @saved="handlePersonaSaved"
-    @error="handleError"
-  />
+    <!-- 创建/编辑人格对话框 -->
+    <PersonaForm
+      v-model="showPersonaDialog"
+      :editing-persona="editingPersona ?? undefined"
+      :current-folder-id="currentFolderId ?? undefined"
+      :current-folder-name="currentFolderName ?? undefined"
+      @saved="handlePersonaSaved"
+      @error="handleError"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">

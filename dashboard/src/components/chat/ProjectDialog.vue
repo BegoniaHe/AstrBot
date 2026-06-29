@@ -2,13 +2,14 @@
   <v-dialog
     v-model="isOpen"
     max-width="500"
+    scrollable
     @update:model-value="handleDialogChange"
   >
-    <v-card>
+    <v-card class="project-dialog-card">
       <v-card-title class="dialog-title">
         {{ isEditing ? tm('project.edit') : tm('project.create') }}
       </v-card-title>
-      <v-card-text>
+      <v-card-text class="project-dialog-card__content">
         <v-text-field
           v-model="form.emoji"
           :label="tm('project.emoji')"
@@ -37,7 +38,7 @@
           rounded="lg"
         />
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="project-dialog-card__actions">
         <v-spacer></v-spacer>
         <v-btn variant="text" color="grey-darken-1" @click="handleCancel">{{
           t('core.common.cancel')
@@ -145,6 +146,24 @@ function handleSave() {
 </script>
 
 <style scoped>
+.project-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 720px);
+  overflow: hidden;
+}
+
+.project-dialog-card__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.project-dialog-card__actions {
+  flex: 0 0 auto;
+}
+
 .dialog-title {
   font-size: 22px;
   font-weight: 500;

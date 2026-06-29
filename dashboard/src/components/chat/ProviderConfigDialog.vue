@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="1600">
+  <v-dialog v-model="dialog" max-width="1600" scrollable>
     <v-card class="provider-config-dialog">
       <div class="provider-config-dialog__body">
         <ProviderChatCompletionPanel

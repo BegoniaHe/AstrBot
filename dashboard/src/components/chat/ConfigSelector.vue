@@ -24,15 +24,15 @@
       </template>
     </v-list-item>
 
-    <v-dialog v-model="dialog" max-width="480">
-      <v-card>
+    <v-dialog v-model="dialog" max-width="480" scrollable>
+      <v-card class="config-selector-dialog">
         <v-card-title class="d-flex align-center justify-space-between">
           <span>选择配置文件</span>
           <v-btn icon variant="text" @click="closeDialog">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
-        <v-card-text>
+        <v-card-text class="config-selector-dialog__content">
           <div v-if="loadingConfigs" class="text-center py-6">
             <v-progress-circular
               indeterminate
@@ -67,7 +67,7 @@
             </div>
           </v-list>
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="config-selector-dialog__actions">
           <v-spacer></v-spacer>
           <v-btn variant="text" @click="closeDialog">取消</v-btn>
           <v-btn
@@ -348,8 +348,26 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.config-selector-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 720px);
+  overflow: hidden;
+}
+
+.config-selector-dialog__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.config-selector-dialog__actions {
+  flex: 0 0 auto;
+}
+
 .config-list {
-  max-height: 360px;
+  max-height: min(48dvh, 420px);
   overflow-y: auto;
 }
 </style>

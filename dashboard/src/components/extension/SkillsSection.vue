@@ -374,7 +374,12 @@
       </v-tooltip>
     </div>
 
-    <v-dialog v-model="uploadDialog" max-width="880px" :persistent="uploading">
+    <v-dialog
+      v-model="uploadDialog"
+      max-width="880px"
+      scrollable
+      :persistent="uploading"
+    >
       <v-card class="skills-upload-dialog">
         <v-card-title class="skills-upload-dialog__header px-6 pt-6 pb-2">
           <div class="skills-upload-dialog__heading">
@@ -599,6 +604,7 @@
     <v-dialog
       v-model="editorDialog.show"
       max-width="1180px"
+      scrollable
       :persistent="editorDialog.saving"
     >
       <v-card class="skill-editor-dialog">
@@ -734,13 +740,13 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="payloadDialog.show" max-width="820px">
-      <v-card>
+    <v-dialog v-model="payloadDialog.show" max-width="820px" scrollable>
+      <v-card class="payload-dialog">
         <v-card-title>{{ tm('skills.neoPayloadTitle') }}</v-card-title>
-        <v-card-text>
+        <v-card-text class="payload-dialog__body">
           <pre class="payload-preview">{{ payloadDialog.content }}</pre>
         </v-card-text>
-        <v-card-actions class="d-flex justify-end">
+        <v-card-actions class="payload-dialog__actions d-flex justify-end">
           <v-btn variant="text" @click="payloadDialog.show = false">{{
             tm('skills.cancel')
           }}</v-btn>
@@ -2067,6 +2073,9 @@ onMounted(async () => {
 }
 
 .skill-editor-dialog {
+  display: flex;
+  flex-direction: column;
+  height: min(88vh, 980px);
   max-height: min(88vh, 980px);
   overflow: hidden;
 }
@@ -2080,7 +2089,9 @@ onMounted(async () => {
 }
 
 .skill-editor-dialog__body {
+  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   padding: 16px 22px;
 }
 
@@ -2093,6 +2104,7 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 16px;
+  height: 100%;
   min-height: 560px;
 }
 
@@ -2468,13 +2480,31 @@ onMounted(async () => {
 }
 
 .payload-preview {
-  max-height: 480px;
+  margin: 0;
+  min-height: 0;
   overflow: auto;
   background: #111;
   color: #ececec;
   padding: 12px;
   border-radius: 8px;
   font-size: 12px;
+}
+
+.payload-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 760px);
+  overflow: hidden;
+}
+
+.payload-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.payload-dialog__actions {
+  flex: 0 0 auto;
 }
 
 .neo-filter-card {
@@ -2500,6 +2530,15 @@ onMounted(async () => {
 }
 
 @media (max-width: 860px) {
+  .skill-editor {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .skill-editor__files {
+    max-height: 240px;
+  }
+
   .skills-upload-capabilities {
     grid-template-columns: 1fr;
   }
