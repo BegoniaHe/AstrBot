@@ -129,9 +129,11 @@ format-py:
 	uv run ruff check --fix .
 
 check-web:
-	@echo "==> [web] typecheck + eslint + prettier"
+	@echo "==> [web] typecheck + eslint + smoke tests + build + prettier"
 	cd $(DASHBOARD_DIR) && $(PNPM) run typecheck
 	cd $(DASHBOARD_DIR) && $(PNPM) exec eslint . --concurrency=auto --max-warnings=0
+	cd $(DASHBOARD_DIR) && $(PNPM) run test:smoke
+	cd $(DASHBOARD_DIR) && $(PNPM) build
 	$(NPX) prettier --check "dashboard/src/**/*.{ts,mts,js,mjs,vue,scss,css}" "dashboard/*.{ts,mts,mjs}"
 
 format-web:
@@ -141,21 +143,33 @@ format-web:
 
 check-data:
 	@echo "==> [data] prettier --check json/css/scss/html"
-	$(NPX) prettier --check "**/*.{json,jsonc,css,scss,html}"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.json','*.jsonc','*.css','*.scss','*.html' \
+		-ToolArgs '--check;--log-level;warn'
 
 format-data:
 	@echo "==> [data] prettier --write json/css/scss/html"
-	$(NPX) prettier --write "**/*.{json,jsonc,css,scss,html}"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.json','*.jsonc','*.css','*.scss','*.html' \
+		-ToolArgs '--write;--log-level;warn'
 
 check-md:
 	@echo "==> [md] prettier --check + markdownlint-cli2"
-	$(NPX) prettier --check "**/*.md"
-	$(NPX) markdownlint-cli2 "**/*.md"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.md' \
+		-ToolArgs '--check;--log-level;warn'
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool markdownlint-cli2 \
+		-Patterns '*.md' \
+		-ToolArgs '--no-globs'
 
 format-md:
 	@echo "==> [md] prettier --write + markdownlint-cli2 --fix"
-	$(NPX) prettier --write "**/*.md"
-	$(NPX) markdownlint-cli2 --fix "**/*.md"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.md' \
+		-ToolArgs '--write;--log-level;warn'
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool markdownlint-cli2 \
+		-Patterns '*.md' \
+		-ToolArgs '--fix;--no-globs'
 
 check-toml:
 	@echo "==> [toml] taplo fmt --check + lint"
@@ -173,12 +187,16 @@ format-toml:
 
 check-yaml:
 	@echo "==> [yaml] prettier --check + yamllint"
-	$(NPX) prettier --check "**/*.{yml,yaml}"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.yml','*.yaml' \
+		-ToolArgs '--check;--log-level;warn'
 	uv run yamllint --strict .
 
 format-yaml:
 	@echo "==> [yaml] prettier --write"
-	$(NPX) prettier --write "**/*.{yml,yaml}"
+	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
+		-Patterns '*.yml','*.yaml' \
+		-ToolArgs '--write;--log-level;warn'
 
 check-shell:
 	@if command -v shfmt >/dev/null 2>&1; then \
