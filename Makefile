@@ -131,13 +131,13 @@ format-py:
 check-web:
 	@echo "==> [web] typecheck + eslint + prettier"
 	cd $(DASHBOARD_DIR) && $(PNPM) run typecheck
-	cd $(DASHBOARD_DIR) && $(PNPM) exec eslint . --max-warnings=0
+	cd $(DASHBOARD_DIR) && $(PNPM) exec eslint . --concurrency=auto --max-warnings=0
 	$(NPX) prettier --check "dashboard/src/**/*.{ts,mts,js,mjs,vue,scss,css}" "dashboard/*.{ts,mts,mjs}"
 
 format-web:
 	@echo "==> [web] prettier + eslint --fix"
 	$(NPX) prettier --write "dashboard/src/**/*.{ts,mts,js,mjs,vue,scss,css}" "dashboard/*.{ts,mts,mjs}"
-	cd $(DASHBOARD_DIR) && $(PNPM) exec eslint . --fix
+	cd $(DASHBOARD_DIR) && $(PNPM) exec eslint . --concurrency=auto --fix
 
 check-data:
 	@echo "==> [data] prettier --check json/css/scss/html"

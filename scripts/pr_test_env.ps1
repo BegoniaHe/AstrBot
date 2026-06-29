@@ -1,6 +1,6 @@
 param(
     [ValidateSet("neo", "full")]
-    [string]$Profile = "neo",
+    [string]$TestProfile = "neo",
     [switch]$WithDashboard,
     [switch]$NoDashboard,
     [switch]$SkipSync,
@@ -29,7 +29,7 @@ if ($NoDashboard) {
     $runDashboard = $false
     $dashboardMode = "force-off"
 }
-if ($Profile -eq "full" -and $dashboardMode -eq "auto") {
+if ($TestProfile -eq "full" -and $dashboardMode -eq "auto") {
     $runDashboard = $true
 }
 
@@ -40,9 +40,9 @@ function Split-CommandLineArgs {
         return @()
     }
 
-    $matches = [regex]::Matches($Value, '("([^"\\]|\\.)*"|''([^''\\]|\\.)*''|[^\s]+)')
+    $regexMatches = [regex]::Matches($Value, '("([^"\\]|\\.)*"|''([^''\\]|\\.)*''|[^\s]+)')
     $arguments = [System.Collections.Generic.List[string]]::new()
-    foreach ($match in $matches) {
+    foreach ($match in $regexMatches) {
         $token = $match.Value.Trim()
         if (
             ($token.StartsWith('"') -and $token.EndsWith('"')) -or
@@ -128,7 +128,7 @@ function Run-SmokeTest {
     }
 }
 
-Write-Host "==> Profile: $Profile"
+Write-Host "==> Profile: $TestProfile"
 Write-Host "==> Sync dependencies: $runSync"
 Write-Host "==> Run lint: $runLint"
 Write-Host "==> Run quality checks: $runQuality"
@@ -199,7 +199,7 @@ $pytestArgs = [System.Collections.Generic.List[string]]::new()
 $pytestArgs.Add("run")
 $pytestArgs.Add("pytest")
 
-if ($Profile -eq "neo") {
+if ($TestProfile -eq "neo") {
     $pytestArgs.AddRange([string[]]@(
             "-q",
             "tests/test_neo_skill_sync.py",

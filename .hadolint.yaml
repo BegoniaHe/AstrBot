@@ -4,8 +4,14 @@
 # and hard-pinning every transitive apt package breaks reproducibly on base
 # refreshes for little security gain (the Python deps are already pinned via
 # uv.lock / requirements.txt). All other rules stay on.
+# `npm install -g corepack` intentionally tracks the Node-bundled Corepack
+# release instead of a separately pinned npm package version, and the
+# `echo '. "${BASH_ENV}"'` line writes a literal shell snippet rather than
+# expanding the variable during image build.
 ignored:
   - DL3008
   - DL3013
+  - DL3016
+  - SC2016
 
 failure-threshold: warning
