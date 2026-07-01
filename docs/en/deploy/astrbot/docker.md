@@ -66,7 +66,7 @@ Because both containers share the same internal network, NapCat does not need to
 
 The following are not the Docker deployment path for this fork anymore:
 
-- using `soulter/astrbot:latest` directly
+- using historical upstream prebuilt images directly
 - switching upstream image pulls to a mirror
 - deploying this fork through handwritten `docker run` commands
 

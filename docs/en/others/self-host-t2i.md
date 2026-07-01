@@ -1,19 +1,8 @@
 # Self-host the Text-to-Image Service
 
-AstrBot uses [AstrBotDevs/astrbot-t2i-service](https://github.com/AstrBotDevs/astrbot-t2i-service) as the default text-to-image service. The default service endpoints are:
+AstrBot can call a compatible text-to-image service endpoint. If you want full control over availability and network locality, you can self-host [AstrBotDevs/astrbot-t2i-service](https://github.com/AstrBotDevs/astrbot-t2i-service).
 
-```plain
-https://t2i.soulter.top/text2img
-https://t2i.rcfortress.site/text2img
-```
-
-This interface can ensure normal response for most of the time. However, due to the deployment of servers in New York, the response speed may be slower in some areas.
-
-You can choose to self-host the text-to-image service to improve response speed.
-
-```bash
-docker run -itd -p 8999:8999 soulter/astrbot-t2i-service:latest
-```
+Follow that repository's own build and run instructions. After the service is up, point AstrBot to your own endpoint.
 
 After deployment, go to AstrBot Dashboard -> Config -> System, and change `Text-to-Image Service API Endpoint` to the URL you deployed (as shown below).
 

@@ -12,7 +12,7 @@
 在开始之前，请确保您的 Kubernetes 集群满足以下条件：
 
 1. **拥有默认的 StorageClass**：用于动态创建 `PersistentVolumeClaim` (PVC)。您可以通过 `kubectl get sc` 查看。如果没有，您需要手动创建 `PersistentVolume` (PV) 或安装相应的存储插件 (如 `nfs-client-provisioner`)。
-2. **网络访问**：确保您的集群节点可以从 `docker.io` 或您指定的镜像仓库拉取镜像。
+2. **网络访问**：确保您的集群节点可以从您指定的镜像仓库拉取 AstrBot 镜像，并能拉取 NapCat / BusyBox 等依赖镜像。
 
 ## 部署方式
 
@@ -134,16 +134,24 @@ kubectl apply -f k8s/astrbot/02-deployment.yaml
 
 ## 高级配置
 
-### 镜像加速 (中国大陆用户)
+### AstrBot 镜像准备
 
-如果拉取 `soulter/astrbot:latest` 或 `mlikiowa/napcat-docker:latest` 镜像困难，可以手动修改对应的 `02-deployment.yaml` 文件，将 `image` 字段替换为国内的镜像加速地址，例如：
+当前 fork 不发布官方 Kubernetes 镜像。部署到集群前，请先自行构建 AstrBot 镜像并推送到你的镜像仓库，然后修改对应 `02-deployment.yaml` 中的 `image` 字段。
+
+示例：
+
+```bash
+docker build -t <your-registry>/astrbot:<tag> .
+docker push <your-registry>/astrbot:<tag>
+```
+
+然后在 `k8s/astrbot/02-deployment.yaml` 或 `k8s/astrbot_with_napcat/02-deployment.yaml` 中替换为：
 
 ```yaml
-# 示例：
-# image: soulter/astrbot:latest
-# 替换为
-image: m.daocloud.io/docker.io/soulter/astrbot:latest
+image: <your-registry>/astrbot:<tag>
 ```
+
+NapCat 如需使用镜像代理或自建镜像，可按同样方式调整其 `image` 字段。
 
 ### 沙盒运行环境
 

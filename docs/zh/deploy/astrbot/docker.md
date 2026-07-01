@@ -66,7 +66,7 @@ docker compose -f compose-with-napcat.yml up -d --build
 
 以下方式不再作为当前 fork 的 Docker 部署说明：
 
-- 直接使用 `soulter/astrbot:latest`
+- 直接使用历史上游预构建镜像
 - 使用镜像站替换上游镜像
 - 基于 `docker run` 手写容器命令部署当前 fork
 

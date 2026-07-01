@@ -14,15 +14,11 @@
 <div>
 <img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
-<a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%20plugins&label=Marketplace&cacheSeconds=3600">
 </div>
 
 <br>
 
 <a href="https://astrbot.app/">Documentation</a> ｜
-<a href="https://blog.astrbot.app/">Blog</a> ｜
-<a href="https://astrbot.featurebase.app/roadmap">Roadmap</a> ｜
 <a href="https://github.com/BegoniaHe/AstrBot/issues">Issue Tracker</a> ｜
 <a href="mailto:community@astrbot.app">Email Support</a>
 
@@ -65,9 +61,9 @@ This repository is a modernized fork of AstrBot. The code, commands, deployment 
 
 ## Quick Start
 
-### One-Click Deployment
+### `uv` Install
 
-For users who want to quickly experience AstrBot, are familiar with command-line usage, and can install a `uv` environment on their own, we recommend the `uv` one-click deployment method ⚡️:
+For a direct local install, use `uv`:
 
 ```bash
 uv tool install astrbot --python 3.14
@@ -92,14 +88,12 @@ uv tool upgrade astrbot --python 3.14
 
 ### Docker Deployment
 
-For users familiar with containers and looking for a more stable, production-ready deployment method, we recommend deploying AstrBot with Docker / Docker Compose.
-
-Use the compose files shipped in this repository:
+This fork does not publish an official prebuilt image. Build and run from the compose files in this repository:
 
 ```bash
 git clone https://github.com/BegoniaHe/AstrBot.git
 cd AstrBot
-docker compose up -d
+docker compose up -d --build
 ```
 
 If you want to start AstrBot and NapCat together from this repository:
@@ -109,24 +103,6 @@ docker compose -f compose-with-napcat.yml up -d --build
 ```
 
 More details: [Deploy AstrBot with Docker](https://docs.astrbot.app/deploy/astrbot/docker.html).
-
-### Deploy on RainYun
-
-For users who want one-click deployment and do not want to manage servers themselves, we recommend RainYun's one-click cloud deployment service ☁️:
-
-[![Deploy on RainYun](https://rainyun-apps.cn-nb1.rains3.com/materials/deploy-on-rainyun-en.svg)](https://app.rainyun.com/apps/rca/store/5994?ref=NjU1ODg0)
-
-### Desktop Application Deployment
-
-For users who want to use AstrBot on desktop and mainly use ChatUI, we recommend AstrBot App.
-
-Visit [AstrBot-desktop](https://github.com/AstrBotDevs/AstrBot-desktop) to download and install; this method is designed for desktop usage and is not recommended for server scenarios.
-
-### Launcher Deployment
-
-For desktop users who also want fast deployment and isolated multi-instance usage, we recommend AstrBot Launcher.
-
-Visit [AstrBot Launcher](https://github.com/AstrBotDevs/astrbot-launcher) to download and install.
 
 ### AUR
 
@@ -138,9 +114,7 @@ Run the command below to install `astrbot-git`, then start AstrBot in your local
 yay -S astrbot-git
 ```
 
-**More deployment methods**
-
-If you need panel-based management or deeper customization, see [BT-Panel Deployment](https://docs.astrbot.app/deploy/astrbot/btpanel.html) for BT Panel app-store setup, [1Panel Deployment](https://docs.astrbot.app/deploy/astrbot/1panel.html) for 1Panel app-market deployment, [CasaOS Deployment](https://docs.astrbot.app/deploy/astrbot/casaos.html) for NAS/home-server visual deployment, and [Manual Deployment](https://docs.astrbot.app/deploy/astrbot/cli.html) for fully custom source-based installation with `uv`.
+For source-based local development, see the development environment section below.
 
 ## Supported Messaging Platforms
 
@@ -169,47 +143,14 @@ Connect AstrBot to your favorite chat platform.
 
 ## Supported Model Services
 
-| Service                                                                                            | Type                                            |
-| -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| OpenAI and Compatible Services                                                                     | LLM Services                                    |
-| Anthropic                                                                                          | LLM Services                                    |
-| Google Gemini                                                                                      | LLM Services                                    |
-| Moonshot AI                                                                                        | LLM Services                                    |
-| Zhipu AI                                                                                           | LLM Services                                    |
-| DeepSeek                                                                                           | LLM Services                                    |
-| Ollama (Self-hosted)                                                                               | LLM Services                                    |
-| LM Studio (Self-hosted)                                                                            | LLM Services                                    |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                         | LLM Services (API Gateway, supports all models) |
-| [CompShare](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | LLM Services                                    |
-| [302.AI](https://share.302.ai/rr1M3l)                                                              | LLM Services                                    |
-| [TokenPony](https://www.tokenpony.cn/3YPyf)                                                        | LLM Services                                    |
-| [SiliconFlow](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                | LLM Services                                    |
-| [PPIO Cloud](https://ppio.com/user/register?invited_by=AIOONE)                                     | LLM Services                                    |
-| ModelScope                                                                                         | LLM Services                                    |
-| OneAPI                                                                                             | LLM Services                                    |
-| Dify                                                                                               | LLMOps Platforms                                |
-| Alibaba Cloud Bailian Applications                                                                 | LLMOps Platforms                                |
-| Coze                                                                                               | LLMOps Platforms                                |
-| OpenAI Whisper                                                                                     | Speech-to-Text Services                         |
-| SenseVoice                                                                                         | Speech-to-Text Services                         |
-| Xiaomi MiMo Omni                                                                                   | Speech-to-Text Services                         |
-| OpenAI TTS                                                                                         | Text-to-Speech Services                         |
-| Gemini TTS                                                                                         | Text-to-Speech Services                         |
-| GPT-Sovits-Inference                                                                               | Text-to-Speech Services                         |
-| GPT-Sovits                                                                                         | Text-to-Speech Services                         |
-| FishAudio                                                                                          | Text-to-Speech Services                         |
-| Edge TTS                                                                                           | Text-to-Speech Services                         |
-| Alibaba Cloud Bailian TTS                                                                          | Text-to-Speech Services                         |
-| Azure TTS                                                                                          | Text-to-Speech Services                         |
-| Minimax TTS                                                                                        | Text-to-Speech Services                         |
-| Xiaomi MiMo TTS                                                                                    | Text-to-Speech Services                         |
-| Volcano Engine TTS                                                                                 | Text-to-Speech Services                         |
-
-## ❤️ Sponsors
-
-<p align="center">
-  <img alt="sponsors" src="https://sponsors.astrbot.app/?v=1">
-</p>
+| Service Type                | Built-in Options                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| Conversation / LLM          | OpenAI-compatible services, OpenAI, Anthropic, Gemini, Moonshot, Zhipu, DeepSeek |
+| Local LLM                   | Ollama, LM Studio                                                                |
+| Agent Runners               | Dify, Coze, Alibaba Cloud Bailian applications, DeerFlow                         |
+| Speech-to-Text              | OpenAI Whisper, SenseVoice, Xiaomi MiMo Omni                                     |
+| Text-to-Speech              | OpenAI TTS, Gemini TTS, GPT-SoVITS, FishAudio, Edge TTS, Azure TTS, Minimax TTS |
+| Embedding / Rerank / Others | See the provider list in WebUI for the current built-in set                      |
 
 ## ❤️ Contributing
 

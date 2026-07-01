@@ -12,7 +12,7 @@
 Before you begin, make sure your Kubernetes cluster meets the following conditions:
 
 1. **Default StorageClass**: Used to dynamically create `PersistentVolumeClaim` (PVC). You can check this with `kubectl get sc`. If you don't have one, you need to manually create a `PersistentVolume` (PV) or install a corresponding storage plugin (e.g., `nfs-client-provisioner`).
-2. **Network Access**: Ensure that your cluster nodes can pull images from `docker.io` or your specified image repository.
+2. **Network Access**: Ensure that your cluster nodes can pull the AstrBot image from your chosen registry, plus dependency images such as NapCat and BusyBox.
 
 ## Deployment Methods
 
@@ -134,16 +134,24 @@ kubectl apply -f k8s/astrbot/02-deployment.yaml
 
 ## Advanced Configuration
 
-### Image Mirror (for users in mainland China)
+### Prepare the AstrBot Image
 
-If you have difficulty pulling the `soulter/astrbot:latest` or `mlikiowa/napcat-docker:latest` images, you can manually edit the corresponding `02-deployment.yaml` file and replace the `image` field with a domestic mirror address, for example:
+This fork does not publish an official Kubernetes image. Before deploying to a cluster, build the AstrBot image yourself, push it to a registry you control, and then update the `image` field in the relevant `02-deployment.yaml`.
+
+Example:
+
+```bash
+docker build -t <your-registry>/astrbot:<tag> .
+docker push <your-registry>/astrbot:<tag>
+```
+
+Then replace the manifest value in `k8s/astrbot/02-deployment.yaml` or `k8s/astrbot_with_napcat/02-deployment.yaml` with:
 
 ```yaml
-# Example:
-# image: soulter/astrbot:latest
-# Replace with:
-image: m.daocloud.io/docker.io/soulter/astrbot:latest
+image: <your-registry>/astrbot:<tag>
 ```
+
+If you also need a mirrored or self-hosted NapCat image, update that `image` field the same way.
 
 ### Sandbox Runtime
 

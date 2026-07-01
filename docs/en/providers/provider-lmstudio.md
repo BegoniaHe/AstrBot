@@ -1,26 +1,22 @@
-# Connect LM Studio to Use DeepSeek-R1 and Other Models
+# Connect LM Studio
 
-LM Studio allows you to deploy models locally on your computer (hardware requirements must be met).
+LM Studio can expose a local OpenAI-compatible model service on your machine (hardware requirements must be met).
 
 ## Download and Install LM Studio
 
 <https://lmstudio.ai/download>
 
-## Download and Run a Model
+## Download and Start a Model
 
 <https://lmstudio.ai/models>
 
-Follow the LM Studio instructions to download and run your desired model, e.g. `deepseek-r1-qwen-7b`:
-
-```bash
-lms get deepseek-r1-qwen-7b
-```
+Download the model you want in LM Studio and start its local inference server.
 
 ## Configure AstrBot
 
 In AstrBot:
 
-Go to **Configuration → Service Providers → + → OpenAI**
+Go to **Configuration → Service Providers → + → OpenAI-Compatible Service**
 
 Set `API Base URL` to `http://localhost:1234/v1`
 
@@ -32,6 +28,6 @@ Set `API Key` to `lm-studio`
 
 If LM Studio itself is deployed in Docker, ensure port 1234 is mapped to the host.
 
-Set the model name to the one you selected in the previous step, then save the configuration.
+Set the model name to the one currently exposed by LM Studio, then save the configuration.
 
 > Run `/provider` to view the models configured in AstrBot.

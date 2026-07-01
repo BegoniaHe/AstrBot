@@ -1,19 +1,8 @@
 # 自行部署文转图服务
 
-AstrBot 使用 [AstrBotDevs/astrbot-t2i-service](https://github.com/AstrBotDevs/astrbot-t2i-service) 项目作为默认的文本转图像服务。默认使用的文转图服务接口是
+AstrBot 可以调用兼容的文转图服务接口。如果你希望完全自行控制服务可用性和网络路径，可以自部署 [AstrBotDevs/astrbot-t2i-service](https://github.com/AstrBotDevs/astrbot-t2i-service)。
 
-```plain
-https://t2i.soulter.top/text2img
-https://t2i.rcfortress.site/text2img
-```
-
-此接口能够保障大部分时间正常响应。但是由于部署在国外的（纽约）服务器，因此响应速度可能会比较慢。
-
-您可以选择自行部署文转图服务，以提升响应速度。
-
-```bash
-docker run -itd -p 8999:8999 soulter/astrbot-t2i-service:latest
-```
+部署步骤请以该仓库自己的构建和运行说明为准。完成部署后，你只需要在 AstrBot 中把文转图服务地址指向你自己的实例。
 
 在部署完成后，前往 AstrBot 仪表盘 -> 配置文件 -> 系统，修改 `文本转图像服务 API 地址` 为你部署好的 url（如下图所示）
 

@@ -12,16 +12,12 @@
 <div>
 <img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
-<a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%E4%B8%AA&label=%E6%8F%92%E4%BB%B6%E5%B8%82%E5%9C%BA&cacheSeconds=3600">
 </div>
 
 <br>
 
 <a href="https://astrbot.app/">主页</a> ｜
 <a href="https://astrbot.app/">文档</a> ｜
-<a href="https://blog.astrbot.app/">博客</a> ｜
-<a href="https://astrbot.featurebase.app/roadmap">路线图</a> ｜
 <a href="https://github.com/BegoniaHe/AstrBot/issues">问题提交</a> ｜
 <a href="mailto:community@astrbot.app">Email</a>
 
@@ -64,9 +60,9 @@ AstrBot 是一个开源的一站式 Agentic 个人和群聊助手，可在 QQ、
 
 ## 快速开始
 
-### 一键部署
+### `uv` 安装
 
-对于想快速体验 AstrBot、且熟悉命令行并能够自行安装 `uv` 环境的用户，我们推荐使用 `uv` 一键部署方式 ⚡️。
+如需直接在本机安装运行，使用 `uv`：
 
 ```bash
 uv tool install astrbot --python 3.14
@@ -91,14 +87,12 @@ uv tool upgrade astrbot --python 3.14
 
 ### Docker 部署
 
-对于熟悉容器、希望获得更稳定且更适合生产环境部署方式的用户，我们推荐使用 Docker / Docker Compose 部署 AstrBot。
-
-请优先使用当前仓库自带的 Compose 文件：
+当前 fork 不提供官方预构建镜像，请直接使用仓库内的 Compose 文件本地构建并启动：
 
 ```bash
 git clone https://github.com/BegoniaHe/AstrBot.git
 cd AstrBot
-docker compose up -d
+docker compose up -d --build
 ```
 
 如果希望一并拉起 AstrBot 和 NapCat：
@@ -108,24 +102,6 @@ docker compose -f compose-with-napcat.yml up -d --build
 ```
 
 更多细节请参考 [使用 Docker 部署 AstrBot](https://docs.astrbot.app/deploy/astrbot/docker.html#%E4%BD%BF%E7%94%A8-docker-%E9%83%A8%E7%BD%B2-astrbot)。
-
-### 在 雨云 上部署
-
-对于希望一键部署 AstrBot 且不想自行管理服务器的用户，我们推荐使用雨云的一键云部署服务 ☁️：
-
-[![Deploy on RainYun](https://rainyun-apps.cn-nb1.rains3.com/materials/deploy-on-rainyun-en.svg)](https://app.rainyun.com/apps/rca/store/5994?ref=NjU1ODg0)
-
-### 桌面客户端部署
-
-对于希望在桌面端使用 AstrBot、并以 ChatUI 为主要入口的用户，我们推荐使用 AstrBot App。
-
-前往 [AstrBot-desktop](https://github.com/AstrBotDevs/AstrBot-desktop) 下载并安装；该方式面向桌面使用，不推荐服务器场景。
-
-### 启动器部署
-
-同样在桌面端，希望快速部署并实现环境隔离多开的用户，我们推荐使用 AstrBot Launcher。
-
-前往 [AstrBot Launcher](https://github.com/AstrBotDevs/astrbot-launcher) 下载并安装。
 
 ### AUR
 
@@ -137,9 +113,7 @@ AUR 方式面向 Arch Linux 用户，适合希望通过系统包管理器安装 
 yay -S astrbot-git
 ```
 
-**更多部署方式**
-
-若你需要面板化或更高自定义部署，可参考 [宝塔面板](https://docs.astrbot.app/deploy/astrbot/btpanel.html)（BT Panel 应用商店安装）、[1Panel](https://docs.astrbot.app/deploy/astrbot/1panel.html)（1Panel 应用商店安装）、[CasaOS](https://docs.astrbot.app/deploy/astrbot/casaos.html)（NAS / 家庭服务器可视化部署）和 [手动部署](https://docs.astrbot.app/deploy/astrbot/cli.html)（基于源码与 `uv` 的完整自定义安装）。
+如果你要从源码本地开发，请看下面的开发环境章节。
 
 ## 支持的消息平台
 
@@ -168,42 +142,14 @@ yay -S astrbot-git
 
 ## 支持的模型提供商
 
-| 提供商                                                                                            | 类型                         |
-| ------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 自定义                                                                                            | 任何 OpenAI API 兼容的服务   |
-| OpenAI                                                                                            | LLM                          |
-| Anthropic                                                                                         | LLM                          |
-| Google Gemini                                                                                     | LLM                          |
-| Moonshot AI                                                                                       | LLM                          |
-| 智谱 AI                                                                                           | LLM                          |
-| DeepSeek                                                                                          | LLM                          |
-| Ollama (本地部署)                                                                                 | LLM                          |
-| LM Studio (本地部署)                                                                              | LLM                          |
-| [AIHubMix](https://aihubmix.com/?aff=4bfH)                                                        | LLM (API 网关, 支持所有模型) |
-| [优云智算](https://www.compshare.cn/?ytag=GPU_YY-gh_astrbot&referral_code=FV7DcGowN4hB5UuXKgpE74) | LLM (API 网关, 支持所有模型) |
-| [硅基流动](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-astrbot)                  | LLM (API 网关, 支持所有模型) |
-| [PPIO 派欧云](https://ppio.com/user/register?invited_by=AIOONE)                                   | LLM (API 网关, 支持所有模型) |
-| [302.AI](https://share.302.ai/rr1M3l)                                                             | LLM (API 网关, 支持所有模型) |
-| [小马算力](https://www.tokenpony.cn/3YPyf)                                                        | LLM (API 网关, 支持所有模型) |
-| ModelScope                                                                                        | LLM                          |
-| OneAPI                                                                                            | LLM                          |
-| Dify                                                                                              | LLMOps 平台                  |
-| 阿里云百炼应用                                                                                    | LLMOps 平台                  |
-| Coze                                                                                              | LLMOps 平台                  |
-| OpenAI Whisper                                                                                    | 语音转文本                   |
-| SenseVoice                                                                                        | 语音转文本                   |
-| Xiaomi MiMo Omni                                                                                  | 语音转文本                   |
-| OpenAI TTS                                                                                        | 文本转语音                   |
-| Gemini TTS                                                                                        | 文本转语音                   |
-| GPT-Sovits-Inference                                                                              | 文本转语音                   |
-| GPT-Sovits                                                                                        | 文本转语音                   |
-| FishAudio                                                                                         | 文本转语音                   |
-| Edge TTS                                                                                          | 文本转语音                   |
-| 阿里云百炼 TTS                                                                                    | 文本转语音                   |
-| Azure TTS                                                                                         | 文本转语音                   |
-| Minimax TTS                                                                                       | 文本转语音                   |
-| Xiaomi MiMo TTS                                                                                   | 文本转语音                   |
-| 火山引擎 TTS                                                                                      | 文本转语音                   |
+| 服务类型             | 内置选项                                                                       |
+| -------------------- | ------------------------------------------------------------------------------ |
+| 对话 / LLM           | OpenAI 兼容服务、OpenAI、Anthropic、Gemini、Moonshot、智谱、DeepSeek           |
+| 本地 LLM             | Ollama、LM Studio                                                              |
+| Agent 执行器         | Dify、Coze、阿里云百炼应用、DeerFlow                                           |
+| 语音转文本           | OpenAI Whisper、SenseVoice、Xiaomi MiMo Omni                                   |
+| 文本转语音           | OpenAI TTS、Gemini TTS、GPT-SoVITS、FishAudio、Edge TTS、Azure TTS、Minimax TTS |
+| Embedding / Rerank 等 | 以 WebUI 中当前可选提供商列表为准                                             |
 
 ## ❤️ 贡献
 
@@ -219,6 +165,10 @@ AstrBot 使用 `ruff` 进行代码格式化和检查。
 
 ```bash
 git clone https://github.com/BegoniaHe/AstrBot.git
+cd AstrBot
+uv sync --group dev
+corepack enable
+cd dashboard && corepack pnpm install && cd ..
 pip install pre-commit
 pre-commit install
 ```
@@ -277,7 +227,7 @@ pre-commit install
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=astrbotdevs/astrbot&type=Date)](https://star-history.com/#astrbotdevs/astrbot&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=begoniahe/astrbot&type=Date)](https://star-history.com/#begoniahe/astrbot&Date)
 
 </div>
 

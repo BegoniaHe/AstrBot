@@ -1,26 +1,22 @@
-# 接入 LM Studio 使用 DeepSeek-R1 等模型
+# 接入 LM Studio
 
-LMStudio 允许在本地电脑上部署模型（需要电脑硬件配置符合要求）
+LM Studio 可以在本机启动兼容 OpenAI 的本地模型服务（需要电脑硬件配置符合要求）。
 
 ## 下载并安装 LMStudio
 
 <https://lmstudio.ai/download>
 
-## 下载并运行模型
+## 下载并启动模型
 
 <https://lmstudio.ai/models>
 
-跟随 LMStudio 下载并运行想要的模型，如 deepseek-r1-qwen-7b:
-
-```bash
-lms get deepseek-r1-qwen-7b
-```
+在 LM Studio 中下载你需要的模型，并启动本地推理服务。
 
 ## 配置 AstrBot
 
 在 AstrBot 上：
 
-点击 配置->服务提供商配置->加号->openai
+点击 配置 -> 服务提供商配置 -> 加号 -> OpenAI 兼容服务
 
 API Base URL 填写 `http://localhost:1234/v1`
 
@@ -31,8 +27,6 @@ API Key 填写 `lm-studio`
 
 如果 LM Studio 使用了 Docker 部署，请确保 1234 端口已经映射到宿主机。
 
-模型名填写上一步选好的
-
-保存配置即可。
+模型名称填写 LM Studio 当前暴露的模型名，保存配置即可。
 
 > 输入 /provider 查看 AstrBot 配置的模型
