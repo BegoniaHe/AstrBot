@@ -26,6 +26,7 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./data:/AstrBot/data
+      - /var/run/docker.sock:/var/run/docker.sock
       # - /etc/localtime:/etc/localtime:ro
     networks:
       - astrbot_network

@@ -17,6 +17,7 @@ venv*/
 ENV/
 .conda/
 dashboard/node_modules/
+docs/node_modules/
 dashboard/dist/
 data/
 tests/

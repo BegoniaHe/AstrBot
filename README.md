@@ -149,7 +149,7 @@ Connect AstrBot to your favorite chat platform.
 | Local LLM                   | Ollama, LM Studio                                                                |
 | Agent Runners               | Dify, Coze, Alibaba Cloud Bailian applications, DeerFlow                         |
 | Speech-to-Text              | OpenAI Whisper, SenseVoice, Xiaomi MiMo Omni                                     |
-| Text-to-Speech              | OpenAI TTS, Gemini TTS, GPT-SoVITS, FishAudio, Edge TTS, Azure TTS, Minimax TTS |
+| Text-to-Speech              | OpenAI TTS, Gemini TTS, GPT-SoVITS, FishAudio, Edge TTS, Azure TTS, Minimax TTS  |
 | Embedding / Rerank / Others | See the provider list in WebUI for the current built-in set                      |
 
 ## ❤️ Contributing
