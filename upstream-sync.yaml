@@ -9,4 +9,4 @@ last_synced:
   synced_at_utc: 2026-07-01T01:00:08Z
   sync_method: cherry-pick
   source_pr: null
-  note: Cherry-picked #8448 (local plugin install) and #9088 (file_read_tool directory error) from upstream/master; skipped the upstream 4.26.3 version-bump commit and bumped the fork to 4.26.3 directly. Conflicts resolved per the fork's no-legacy, Python 3.14-only policy.
+  note: "Cherry-picked #8448 (local plugin install) and #9088 (file_read_tool directory error) from upstream/master; skipped the upstream 4.26.3 version-bump commit and bumped the fork to 4.26.3 directly. Conflicts resolved per the fork's no-legacy, Python 3.14-only policy."
