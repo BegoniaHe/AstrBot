@@ -1,6 +1,6 @@
 .PHONY: worktree worktree-add worktree-rm pr-test-neo pr-test-full pr-test-full-fast \
 	build build-all build-backend build-dashboard run run-backend run-dashboard \
-	stop stop-backend stop-dashboard clean status quality quality-report \
+	stop stop-backend stop-dashboard clean status docs quality quality-report \
 	quality-all quality-sync quality-pyright quality-bandit quality-audit quality-radon-cc quality-radon-mi \
 	quality-report-all quality-report-pyright quality-report-bandit quality-report-audit quality-report-radon-cc quality-report-radon-mi \
 	check check-all format format-all \
@@ -17,6 +17,7 @@ BASE ?= master
 
 RUN_DIR ?= .make
 DASHBOARD_DIR ?= dashboard
+DOCS_DIR ?= docs
 PS := powershell -NoProfile -ExecutionPolicy Bypass -File
 PNPM := corepack pnpm
 NPX := npm exec --yes --
@@ -104,6 +105,10 @@ status:
 
 clean: stop
 	@$(PS) scripts/make_dev.ps1 clean
+
+docs:
+	cd $(DOCS_DIR) && $(PNPM) install
+	cd $(DOCS_DIR) && $(PNPM) run docs:dev
 
 quality:
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) quality-all
