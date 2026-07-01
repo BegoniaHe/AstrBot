@@ -17,6 +17,9 @@ ENV UV_INSTALL_DIR=/usr/local/bin \
     UV_LINK_MODE=copy \
     SHFMT_VERSION=3.10.0 \
     HADOLINT_VERSION=2.12.0 \
+    PLAYWRIGHT_VERSION=1.61.0 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    TYPST_VERSION=0.15.0 \
     DEBIAN_FRONTEND=noninteractive \
     APT_LISTCHANGES_FRONTEND=none
 
@@ -25,6 +28,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     printf '%s\n' \
         'Acquire::Retries "5";' \
         'Acquire::Languages "none";' \
+        'Acquire::PDiffs "false";' \
         'APT::Install-Recommends "0";' \
         'APT::Install-Suggests "0";' \
         'Dpkg::Use-Pty "0";' \
@@ -34,6 +38,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        eatmydata \
         gnupg \
     && curl -fsSL https://download.docker.com/linux/debian/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -42,8 +47,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" \
         > /etc/apt/sources.list.d/docker.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && eatmydata apt-get update \
+    && eatmydata apt-get install -y --no-install-recommends \
         bash \
         bat \
         build-essential \
@@ -55,9 +60,30 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         fd-find \
         ffmpeg \
         file \
+        fontconfig \
+        fonts-croscore \
+        fonts-crosextra-caladea \
+        fonts-crosextra-carlito \
+        fonts-dejavu-core \
+        fonts-dejavu-extra \
+        fonts-freefont-otf \
+        fonts-firacode \
+        fonts-inter \
         fonts-liberation \
+        fonts-liberation2 \
+        fonts-noto-cjk \
+        fonts-noto-color-emoji \
+        fonts-noto-core \
+        fonts-noto-extra \
+        fonts-noto-mono \
+        fonts-roboto \
+        fonts-texgyre \
+        fonts-texgyre-math \
+        fonts-wqy-microhei \
+        fonts-wqy-zenhei \
         fzf \
         gcc \
+        ghostscript \
         gh \
         git \
         iproute2 \
@@ -79,11 +105,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libssl-dev \
         libxml2-dev \
         libxslt1-dev \
+        lmodern \
         lsof \
+        latexmk \
         mtr-tiny \
         netcat-openbsd \
         ninja-build \
         openssh-client \
+        pandoc \
         pkg-config \
         procps \
         psmisc \
@@ -93,6 +122,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         shellcheck \
         sqlite3 \
         strace \
+        texlive-fonts-recommended \
+        texlive-lang-chinese \
+        texlive-latex-extra \
+        texlive-latex-recommended \
+        texlive-pictures \
+        texlive-xetex \
         tree \
         unzip \
         vim-common \
@@ -100,8 +135,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         zip \
         zlib1g-dev \
         zsh \
+        biber \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && ln -sf /usr/bin/batcat /usr/local/bin/bat \
+    && fc-cache -f \
     && docker --version \
     && docker compose version \
     && rm -f /etc/apt/apt.conf.d/99astrbot
@@ -128,9 +165,15 @@ RUN touch "${BASH_ENV}" \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --profile minimal --default-toolchain stable \
     && cargo --version \
+    && arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) cargo_binstall_arch="x86_64-unknown-linux-musl" ;; \
+        arm64) cargo_binstall_arch="aarch64-unknown-linux-musl" ;; \
+        *) echo "Unsupported architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
     && tmpdir="$(mktemp -d)" \
     && curl -L --proto '=https' --tlsv1.2 -sSf \
-        https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
+        "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${cargo_binstall_arch}.tgz" \
         | tar -C "$tmpdir" -xzf - \
     && install -m 0755 "$tmpdir/cargo-binstall" /usr/local/cargo/bin/cargo-binstall \
     && rm -rf "$tmpdir" \
@@ -161,6 +204,23 @@ RUN arch="$(dpkg --print-architecture)" \
     && shfmt --version \
     && hadolint --version
 
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) typst_arch="x86_64-unknown-linux-musl" ;; \
+        arm64) typst_arch="aarch64-unknown-linux-musl" ;; \
+        *) echo "Unsupported architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && tmpdir="$(mktemp -d)" \
+    && curl -fsSL \
+        "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-${typst_arch}.tar.xz" \
+        -o "${tmpdir}/typst.tar.xz" \
+    && tar -xJf "${tmpdir}/typst.tar.xz" -C "${tmpdir}" \
+    && install -m 0755 \
+        "$(find "${tmpdir}" -type f -name typst | head -n 1)" \
+        /usr/local/bin/typst \
+    && rm -rf "${tmpdir}" \
+    && typst --version
+
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv --version \
     && echo "3.14" > .python-version \
@@ -169,6 +229,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv pip install -r requirements.txt --no-cache-dir --system \
     && uv pip install socksio pilk --no-cache-dir --system \
     && uv sync --group dev --frozen
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    uv pip install "playwright==${PLAYWRIGHT_VERSION}" --no-cache-dir --system \
+    && PLAYWRIGHT_NODEJS_PATH=/usr/local/bin/node \
+       PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000 \
+       playwright install --with-deps chromium
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "${arch}" in \
