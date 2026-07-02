@@ -1,11 +1,12 @@
 """Tencent Silk audio conversion helpers."""
 
 import asyncio
-import audioop
 import os
 import subprocess
 import wave
 from io import BytesIO
+
+import audioop
 
 from astrbot.core import logger
 

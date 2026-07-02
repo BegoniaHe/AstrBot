@@ -37,6 +37,7 @@ This will:
 
 1. Generate JSON Schema for `OB11AllEvent`.
 2. Normalize the schema and regenerate `generated/ob11_events.py`.
+
 ## Validate
 
 From the repository root:

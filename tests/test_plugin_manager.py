@@ -1868,7 +1868,7 @@ async def test_turn_on_plugin_after_deactivated_reload_reactivates_tools(
     llm_tools.func_list = [plugin_tool]
     preferences = {
         "inactivated_plugins": [module_path],
-        "inactivated_llm_tools": [],
+        "inactivated_llm_tools": [plugin_tool.name],
     }
 
     async def mock_global_get(key, default=None):

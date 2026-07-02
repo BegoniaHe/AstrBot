@@ -2723,7 +2723,7 @@ async def test_restart_core_rejects_desktop_managed_backend(
     core_lifecycle_td: AstrBotCoreLifecycle,
     monkeypatch,
 ):
-    test_client = app.test_client()
+    test_client = DashboardTestClient(app)
     restart_called = False
 
     async def mock_restart():
@@ -2734,7 +2734,7 @@ async def test_restart_core_rejects_desktop_managed_backend(
     monkeypatch.setattr(core_lifecycle_td, "restart", mock_restart)
 
     response = await test_client.post(
-        "/api/stat/restart-core",
+        "/api/v1/system/restart",
         headers=authenticated_header,
     )
 
@@ -2916,7 +2916,7 @@ async def test_do_update_rejects_desktop_managed_backend(
     core_lifecycle_td: AstrBotCoreLifecycle,
     monkeypatch,
 ):
-    test_client = app.test_client()
+    test_client = DashboardTestClient(app)
     calls = []
 
     async def mock_download_core(*args, **kwargs):
@@ -2935,9 +2935,9 @@ async def test_do_update_rejects_desktop_managed_backend(
     monkeypatch.setattr(core_lifecycle_td, "restart", mock_restart)
 
     response = await test_client.post(
-        "/api/update/do",
+        "/api/v1/updates/core",
         headers=authenticated_header,
-        json={"version": "v3.4.0", "progress_id": "desktop-progress"},
+        json={"version": "v3.4.0", "reboot": False, "progress_id": "desktop-progress"},
     )
 
     assert response.status_code == 200

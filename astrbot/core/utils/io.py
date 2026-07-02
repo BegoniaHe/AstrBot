@@ -444,7 +444,7 @@ def is_dashboard_version_compatible(
             )
             == 0
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
@@ -492,7 +492,7 @@ def should_use_bundled_dashboard_dist(
         return True
     try:
         return not is_dashboard_version_compatible(user_version, current_version)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
