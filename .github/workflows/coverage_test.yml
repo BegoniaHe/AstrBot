@@ -26,11 +26,14 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Install dependencies
+      - name: Install uv
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-cov
-          pip install --editable .
+          python -m pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
 
       - name: Run tests
         run: |
@@ -39,7 +42,7 @@ jobs:
           mkdir -p data/temp
           export TESTING=true
           export ZHIPU_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          pytest --cov=astrbot -v -o log_cli=true -o log_level=DEBUG
+          uv run pytest --cov=astrbot -v -o log_cli=true -o log_level=DEBUG
 
       - name: Upload results to Codecov
         if: github.repository == 'AstrBotDevs/AstrBot'

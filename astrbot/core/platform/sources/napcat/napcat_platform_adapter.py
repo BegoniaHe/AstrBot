@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 from typing import cast
 
@@ -1297,7 +1297,7 @@ class NapCatPlatformAdapter(Platform):
 
     async def _resolve_fetched_message_at_names(
         self,
-        payload: list[object],
+        payload: Sequence[object],
         *,
         group_id: str,
     ) -> dict[str, str]:
@@ -1851,11 +1851,12 @@ class NapCatPlatformAdapter(Platform):
     ) -> None:
         event.set_extra("platform_event", "napcat")
 
-        if hasattr(raw_event, "model_dump"):
+        model_dump = getattr(raw_event, "model_dump", None)
+        if callable(model_dump):
             try:
                 event.set_extra(
                     "napcat_event",
-                    raw_event.model_dump(mode="json"),
+                    model_dump(mode="json"),
                 )
             except Exception as exc:
                 logger.warning("[NapCat] Failed to dump raw event payload: %s", exc)

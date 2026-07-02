@@ -11,6 +11,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+if ([string]::IsNullOrWhiteSpace($TypeName)) {
+    throw "TypeName must not be empty."
+}
+
 function Get-RepoRoot {
     $scriptDir = Split-Path -Parent $PSCommandPath
     return [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($scriptDir, "..", ".."))
@@ -116,10 +120,6 @@ if ([string]::IsNullOrWhiteSpace($OutputDir)) {
 
 $cloneDir = [System.IO.Path]::GetFullPath($CloneDir)
 $outputDir = [System.IO.Path]::GetFullPath($OutputDir)
-
-if ([string]::IsNullOrWhiteSpace($TypeName)) {
-    throw "TypeName must not be empty."
-}
 
 Ensure-NapCatRepo -RepoUrl $NapCatRepoUrl -Path $cloneDir -ResetClone:$ForceClone.IsPresent
 Ensure-Directory -Path $outputDir

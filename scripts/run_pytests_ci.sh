@@ -15,7 +15,7 @@ fi
 
 PYTEST_TARGETS=("${@:-./tests}")
 
- echo "[ci] syncing dependencies with uv"
+echo "[ci] syncing dependencies with uv"
 uv sync --dev
 
 echo "[ci] running tests: ${PYTEST_TARGETS[*]}"

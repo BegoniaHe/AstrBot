@@ -789,8 +789,9 @@ class NapCatMessageEvent(AstrMessageEvent):
             return None
         if isinstance(value, Mapping):
             return dict(value)
-        if hasattr(value, "to_dict") and callable(value.to_dict):
-            return value.to_dict()
+        to_dict = getattr(value, "to_dict", None)
+        if callable(to_dict):
+            return to_dict()
         if hasattr(value, "__dict__"):
             return {
                 key: item

@@ -1,7 +1,9 @@
 import asyncio
 import traceback
 from asyncio import Queue
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import cast
 
 from astrbot.core import logger
 from astrbot.core.config.astrbot_config import AstrBotConfig
@@ -341,7 +343,8 @@ class PlatformManager:
             raise NotImplementedError(
                 f"Platform {platform_id} action handler missing: `{action_name}`"
             )
-        return await method(**kwargs)
+        action_handler = cast(Callable[..., Awaitable[dict[str, object]]], method)
+        return await action_handler(**kwargs)
 
     def get_all_stats(self) -> dict:
         """获取所有平台的统计信息

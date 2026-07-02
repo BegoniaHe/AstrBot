@@ -240,7 +240,7 @@ def _validate_ob11_event(payload: Mapping[str, Any]) -> tuple[OB11AllEvent, str]
     model_class = _select_event_model(payload_dict)
     if model_class is None:
         return OB11AllEvent.model_validate(payload_dict, extra="ignore"), "OB11AllEvent"
-    typed_event = model_class.model_validate(payload_dict, extra="ignore")
+    typed_event = cast(Any, model_class.model_validate(payload_dict, extra="ignore"))
     return OB11AllEvent(root=typed_event), model_class.__name__
 
 
@@ -1648,13 +1648,16 @@ class NapCatForwardWebSocketClient:
             for item in message:
                 if isinstance(item, str):
                     normalized.append(self.text(item).to_dict())
-                elif hasattr(item, "to_dict") and callable(item.to_dict):
-                    normalized.append(item.to_dict())
                 else:
-                    normalized.append(item)
+                    to_dict = getattr(item, "to_dict", None)
+                    if callable(to_dict):
+                        normalized.append(to_dict())
+                    else:
+                        normalized.append(item)
             return normalized
-        if hasattr(message, "to_dict") and callable(message.to_dict):
-            return message.to_dict()
+        to_dict = getattr(message, "to_dict", None)
+        if callable(to_dict):
+            return to_dict()
         return message
 
     def _require_data_dict(

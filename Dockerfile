@@ -254,7 +254,7 @@ RUN arch="$(dpkg --print-architecture)" \
     && pwsh -NoLogo -NoProfile -Command "Set-PSRepository PSGallery -InstallationPolicy Trusted; Install-Module PSScriptAnalyzer -Scope AllUsers -Force -SkipPublisherCheck" \
     && pwsh -NoLogo -NoProfile -Command "Get-Module -ListAvailable PSScriptAnalyzer | Select-Object -First 1 Name, Version"
 
-RUN npm ci
+RUN npm install --no-fund --no-audit
 
 WORKDIR /AstrBot/dashboard
 RUN pnpm install --frozen-lockfile \

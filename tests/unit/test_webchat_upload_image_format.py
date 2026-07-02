@@ -16,9 +16,19 @@ async def test_webchat_upload_uses_detected_image_type(tmp_path):
         filename = "pasted.png"
         content_type = "image/png"
 
-        async def save(self, destination):
-            with open(destination, "wb") as output:
-                output.write(image_buffer.getvalue())
+        def __init__(self):
+            self._payload = image_buffer.getvalue()
+            self._offset = 0
+
+        async def seek(self, offset):
+            self._offset = offset
+
+        async def read(self, size=-1):
+            if size < 0:
+                size = len(self._payload) - self._offset
+            chunk = self._payload[self._offset : self._offset + size]
+            self._offset += len(chunk)
+            return chunk
 
     class FakeDatabase:
         def __init__(self):
