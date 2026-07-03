@@ -1,10 +1,12 @@
 import asyncio
+from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from starlette.datastructures import UploadFile
 
 from astrbot.core import LogBroker
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
@@ -12,12 +14,16 @@ from astrbot.core.db.sqlite import SQLiteDatabase
 from astrbot.core.exceptions import KnowledgeBaseUploadError
 from astrbot.core.knowledge_base.kb_helper import KBHelper
 from astrbot.core.knowledge_base.models import KBDocument
+from astrbot.core.provider.provider import EmbeddingProvider
 from astrbot.core.utils.auth_password import (
     hash_dashboard_password,
     hash_md5_dashboard_password,
 )
 from astrbot.dashboard.server import AstrBotDashboard
-from astrbot.dashboard.services.knowledge_base_service import KnowledgeBaseService
+from astrbot.dashboard.services.knowledge_base_service import (
+    KnowledgeBaseService,
+    KnowledgeBaseServiceError,
+)
 
 _TEST_DASHBOARD_PASSWORD = "AstrbotTest123"
 
@@ -358,4 +364,442 @@ async def test_list_documents_total_comes_from_count_documents():
 
     assert result["total"] == 42
     kb_helper.count_documents.assert_awaited_once_with(search="foo")
+
+
+def test_get_upload_progress_reports_processing_completed_and_failed_states():
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.upload_progress = {
+        "task-processing": {"status": "processing", "current": 3, "total": 10},
+    }
+    service.upload_tasks = {
+        "task-processing": {"status": "processing", "result": None, "error": None},
+        "task-completed": {
+            "status": "completed",
+            "result": {"ok": True},
+            "error": None,
+        },
+        "task-failed": {
+            "status": "failed",
+            "result": None,
+            "error": "boom",
+        },
+    }
+
+    assert service.get_upload_progress("task-processing") == {
+        "task_id": "task-processing",
+        "status": "processing",
+        "progress": {"status": "processing", "current": 3, "total": 10},
+    }
+    assert service.get_upload_progress("task-completed") == {
+        "task_id": "task-completed",
+        "status": "completed",
+        "result": {"ok": True},
+    }
+    assert service.get_upload_progress("task-failed") == {
+        "task_id": "task-failed",
+        "status": "failed",
+        "error": "boom",
+    }
+
+
+def test_get_upload_progress_rejects_missing_or_unknown_task():
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="缺少参数 task_id"):
+        service.get_upload_progress(None)
+
+    with pytest.raises(KnowledgeBaseServiceError, match="找不到该任务"):
+        service.get_upload_progress("missing")
+
+
+@pytest.mark.asyncio
+async def test_background_upload_from_url_task_marks_success_result():
+    uploaded_doc = MagicMock()
+    uploaded_doc.model_dump.return_value = {"doc_id": "doc-1"}
+    kb_helper = AsyncMock()
+    kb_helper.upload_from_url = AsyncMock(return_value=uploaded_doc)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    await service.background_upload_from_url_task(
+        task_id="task-url-ok",
+        kb_helper=kb_helper,
+        url="https://example.com/doc",
+        chunk_size=512,
+        chunk_overlap=50,
+        batch_size=32,
+        tasks_limit=3,
+        max_retries=3,
+        enable_cleaning=True,
+        cleaning_provider_id="cleaner-1",
+    )
+
+    assert service.upload_tasks["task-url-ok"]["status"] == "completed"
+    result = service.upload_tasks["task-url-ok"]["result"]
+    assert result == {
+        "task_id": "task-url-ok",
+        "uploaded": [{"doc_id": "doc-1"}],
+        "failed": [],
+        "total": 1,
+        "success_count": 1,
+        "failed_count": 0,
+    }
+    kb_helper.upload_from_url.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_background_upload_from_url_task_marks_failure_result():
+    kb_helper = AsyncMock()
+    kb_helper.upload_from_url = AsyncMock(side_effect=RuntimeError("fetch failed"))
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    await service.background_upload_from_url_task(
+        task_id="task-url-fail",
+        kb_helper=kb_helper,
+        url="https://example.com/doc",
+        chunk_size=512,
+        chunk_overlap=50,
+        batch_size=32,
+        tasks_limit=3,
+        max_retries=3,
+        enable_cleaning=False,
+        cleaning_provider_id=None,
+    )
+
+    assert service.upload_tasks["task-url-fail"]["status"] == "failed"
+    assert service.upload_tasks["task-url-fail"]["error"] == "fetch failed"
+    assert service.upload_progress["task-url-fail"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_list_kbs_clamps_page_and_includes_init_error():
+    kb = MagicMock()
+    kb.kb_id = "kb-1"
+    kb.model_dump.return_value = {"kb_id": "kb-1", "kb_name": "One"}
+    kb_helper = MagicMock(init_error="vector db failed")
+    kb_manager = MagicMock()
+    kb_manager.list_kbs = AsyncMock(return_value=[kb])
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    result = await service.list_kbs(page=0, page_size=0)
+
+    assert result == {
+        "items": [{"kb_id": "kb-1", "kb_name": "One", "init_error": "vector db failed"}],
+        "page": 1,
+        "page_size": 1,
+        "total": 1,
+    }
+
+
+class _EmbeddingProviderStub(EmbeddingProvider):
+    def __init__(self, vectors: list[float], dim: int):
+        super().__init__({}, {})
+        self._vectors = vectors
+        self._dim = dim
+
+    async def get_embedding(self, text: str) -> list[float]:
+        return self._vectors
+
+    async def get_embeddings(self, text: list[str]) -> list[list[float]]:
+        return [self._vectors for _ in text]
+
+    def get_dim(self) -> int:
+        return self._dim
+
+
+@pytest.mark.asyncio
+async def test_create_kb_wraps_embedding_validation_failure():
+    provider = _EmbeddingProviderStub(vectors=[0.1], dim=2)
+    kb_manager = MagicMock()
+    kb_manager.provider_manager = MagicMock(
+        get_provider_by_id=AsyncMock(return_value=provider)
+    )
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="测试嵌入模型失败"):
+        await service.create_kb(
+            {"kb_name": "demo", "embedding_provider_id": "embed-1"}
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_kb_uses_existing_name_when_name_is_omitted():
+    kb_helper = MagicMock()
+    kb_helper.kb = MagicMock()
+    kb_helper.kb.kb_name = "Existing KB"
+    updated_helper = MagicMock()
+    updated_helper.kb.model_dump.return_value = {"kb_id": "kb-1", "kb_name": "Existing KB"}
+    kb_manager = MagicMock()
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+    kb_manager.update_kb = AsyncMock(return_value=updated_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    result, message = await service.update_kb(
+        {"kb_id": "kb-1", "description": "updated description"}
+    )
+
+    assert result == {"kb_id": "kb-1", "kb_name": "Existing KB"}
+    assert message == "更新知识库成功"
+    kb_manager.update_kb.assert_awaited_once_with(
+        kb_id="kb-1",
+        kb_name="Existing KB",
+        description="updated description",
+        emoji=None,
+        embedding_provider_id=None,
+        rerank_provider_id=None,
+        chunk_size=None,
+        chunk_overlap=None,
+        top_k_dense=None,
+        top_k_sparse=None,
+        top_m_final=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_kb_requires_at_least_one_field():
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=MagicMock())
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="至少需要提供一个更新字段"):
+        await service.update_kb({"kb_id": "kb-1"})
+
+
+@pytest.mark.asyncio
+async def test_delete_kb_raises_when_target_is_missing():
+    kb_manager = MagicMock()
+    kb_manager.delete_kb = AsyncMock(return_value=False)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="知识库不存在"):
+        await service.delete_kb({"kb_id": "missing"})
+
+
+@pytest.mark.asyncio
+async def test_retrieve_reports_visualization_error_without_dropping_results(
+    monkeypatch,
+):
+    kb_manager = MagicMock()
+    kb_manager.retrieve = AsyncMock(
+        return_value={"results": [{"doc_id": "doc-1", "score": 0.9}]}
+    )
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    async def fail_visualization(_query, _kb_names, _kb_manager):
+        raise RuntimeError("tsne failed")
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.knowledge_base_service.generate_tsne_visualization",
+        fail_visualization,
+    )
+
+    result = await service.retrieve(
+        {"query": "astrbot", "kb_names": ["kb-1"], "debug": True, "top_k": 2}
+    )
+
+    assert result == {
+        "results": [{"doc_id": "doc-1", "score": 0.9}],
+        "total": 1,
+        "query": "astrbot",
+        "visualization_error": "tsne failed",
+    }
+    kb_manager.retrieve.assert_awaited_once_with(
+        query="astrbot",
+        kb_names=["kb-1"],
+        top_m_final=2,
+    )
+
+
+@pytest.mark.asyncio
+async def test_upload_document_sanitizes_filename_and_schedules_background_task(
+    monkeypatch, tmp_path
+):
+    kb_helper = AsyncMock()
+    kb_manager = MagicMock()
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    background_calls: list[dict] = []
+
+    async def fake_background_upload_task(**kwargs):
+        background_calls.append(kwargs)
+
+    monkeypatch.setattr(
+        service,
+        "background_upload_task",
+        fake_background_upload_task,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.knowledge_base_service.get_astrbot_temp_path",
+        lambda: str(tmp_path),
+    )
+
+    response = await service.upload_document(
+        content_type="multipart/form-data; boundary=test",
+        form_data={
+            "kb_id": "kb-1",
+            "chunk_size": "256",
+            "chunk_overlap": "32",
+            "batch_size": "8",
+            "tasks_limit": "2",
+            "max_retries": "5",
+        },
+        files=[
+            UploadFile(
+                file=BytesIO(b"hello world"),
+                filename="../unsafe name.txt",
+            )
+        ],
+    )
+    await asyncio.sleep(0)
+
+    assert response["file_count"] == 1
+    assert response["task_id"] in service.upload_tasks
+    assert service.upload_tasks[response["task_id"]]["status"] == "pending"
+    assert len(background_calls) == 1
+    assert background_calls[0] == {
+        "task_id": response["task_id"],
+        "kb_helper": kb_helper,
+        "files_to_upload": [
+            {
+                "file_name": "unsafe name.txt",
+                "file_content": b"hello world",
+                "file_type": "txt",
+            }
+        ],
+        "chunk_size": 256,
+        "chunk_overlap": 32,
+        "batch_size": 8,
+        "tasks_limit": 2,
+        "max_retries": 5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_upload_document_rejects_too_many_files():
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=MagicMock())
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="最多只能上传10个文件"):
+        await service.upload_document(
+            content_type="multipart/form-data",
+            form_data={"kb_id": "kb-1"},
+            files=[
+                UploadFile(file=BytesIO(b"x"), filename=f"file-{idx}.txt")
+                for idx in range(11)
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_document_raises_when_document_is_missing():
+    kb_helper = AsyncMock()
+    kb_helper.get_document = AsyncMock(return_value=None)
+    kb_manager = MagicMock()
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    with pytest.raises(KnowledgeBaseServiceError, match="文档不存在"):
+        await service.get_document(kb_id="kb-1", doc_id="doc-404")
+
+
+@pytest.mark.asyncio
+async def test_delete_document_and_chunk_delegate_to_helper():
+    kb_helper = AsyncMock()
+    kb_helper.delete_document = AsyncMock()
+    kb_helper.delete_chunk = AsyncMock()
+    kb_manager = MagicMock()
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    delete_doc_result = await service.delete_document(
+        {"kb_id": "kb-1", "doc_id": "doc-1"}
+    )
+    delete_chunk_result = await service.delete_chunk(
+        {"kb_id": "kb-1", "chunk_id": "chunk-1", "doc_id": "doc-1"}
+    )
+
+    assert delete_doc_result == (None, "删除文档成功")
+    assert delete_chunk_result == (None, "删除文本块成功")
+    kb_helper.delete_document.assert_awaited_once_with("doc-1")
+    kb_helper.delete_chunk.assert_awaited_once_with("chunk-1", "doc-1")
+
+
+@pytest.mark.asyncio
+async def test_list_chunks_returns_items_and_offset_page_metadata():
+    kb_helper = AsyncMock()
+    kb_helper.get_chunks_by_doc_id = AsyncMock(
+        return_value=[{"chunk_id": "c-1"}, {"chunk_id": "c-2"}]
+    )
+    kb_helper.get_chunk_count_by_doc_id = AsyncMock(return_value=7)
+    kb_manager = MagicMock()
+    kb_manager.get_kb = AsyncMock(return_value=kb_helper)
+
+    service = KnowledgeBaseService.__new__(KnowledgeBaseService)
+    service.core_lifecycle = MagicMock(kb_manager=kb_manager)
+    service.upload_progress = {}
+    service.upload_tasks = {}
+
+    result = await service.list_chunks(
+        kb_id="kb-1",
+        doc_id="doc-1",
+        page=3,
+        page_size=2,
+    )
+
+    assert result == {
+        "items": [{"chunk_id": "c-1"}, {"chunk_id": "c-2"}],
+        "page": 3,
+        "page_size": 2,
+        "total": 7,
+    }
+    kb_helper.get_chunks_by_doc_id.assert_awaited_once_with(
+        doc_id="doc-1",
+        offset=4,
+        limit=2,
+    )
+    kb_helper.get_chunk_count_by_doc_id.assert_awaited_once_with("doc-1")
 
