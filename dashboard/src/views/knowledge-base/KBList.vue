@@ -197,6 +197,8 @@
               variant="outlined"
               class="mb-4"
               :disabled="editingKB !== null"
+              :rules="[v => editingKB !== null || !!v || t('create.embeddingModelRequired')]"
+              required
               hint="嵌入模型选择后无法修改，如需更换请创建新的知识库。"
               persistent-hint
             >
@@ -628,7 +630,10 @@ const submitForm = async () => {
     if (editingKB.value) {
       response = await knowledgeApi.update(editingKB.value.kb_id, payload);
     } else {
-      response = await knowledgeApi.create(payload);
+      response = await knowledgeApi.create({
+        ...payload,
+        embedding_provider_id: formData.value.embedding_provider_id!,
+      });
     }
 
     if (response.data.status === 'ok') {

@@ -6,6 +6,7 @@ from astrbot.core import logger
 from astrbot.dashboard.async_utils import run_maybe_async
 from astrbot.dashboard.responses import error, ok
 from astrbot.dashboard.schemas import (
+    KnowledgeBaseCreateRequest,
     KnowledgeBaseImportRequest,
     KnowledgeBaseRequest,
     KnowledgeBaseRetrieveRequest,
@@ -34,14 +35,6 @@ def _to_int(value: Any, default: int) -> int:
         return int(value)
     except TypeError, ValueError:
         return default
-
-
-def _model_dict(payload) -> dict[str, Any]:
-    if payload is None:
-        return {}
-    if hasattr(payload, "model_dump"):
-        return payload.model_dump(exclude_none=True)
-    return payload if isinstance(payload, dict) else {}
 
 
 async def _run(operation, *, prefix: str):
@@ -75,12 +68,12 @@ async def list_knowledge_bases(
 
 @router.post("/knowledge-bases")
 async def create_knowledge_base(
-    payload: KnowledgeBaseRequest,
+    payload: KnowledgeBaseCreateRequest,
     _auth: AuthContext = Depends(require_kb_scope),
     service: KnowledgeBaseService = Depends(get_service),
 ):
     return await _run(
-        lambda: service.create_kb(_model_dict(payload)),
+        lambda: service.create_kb(payload.canonical_payload()),
         prefix="创建知识库失败",
     )
 
@@ -113,9 +106,8 @@ async def update_knowledge_base(
     _auth: AuthContext = Depends(require_kb_scope),
     service: KnowledgeBaseService = Depends(get_service),
 ):
-    body = _model_dict(payload)
     return await _run(
-        lambda: service.update_kb({"kb_id": kb_id, **body}),
+        lambda: service.update_kb({**payload.canonical_payload(), "kb_id": kb_id}),
         prefix="更新知识库失败",
     )
 
@@ -197,7 +189,7 @@ async def import_knowledge_base_documents(
     _auth: AuthContext = Depends(require_kb_scope),
     service: KnowledgeBaseService = Depends(get_service),
 ):
-    body = _model_dict(payload)
+    body = payload.model_dump(exclude_none=True)
     return await _run(
         lambda: service.import_documents({"kb_id": kb_id, **body}),
         prefix="导入文档失败",
@@ -211,7 +203,7 @@ async def import_knowledge_base_document_url(
     _auth: AuthContext = Depends(require_kb_scope),
     service: KnowledgeBaseService = Depends(get_service),
 ):
-    body = _model_dict(payload)
+    body = payload.model_dump(exclude_none=True)
     return await _run(
         lambda: service.upload_document_from_url({"kb_id": kb_id, **body}),
         prefix="从URL上传文档失败",
@@ -291,7 +283,7 @@ async def retrieve_knowledge_base(
     _auth: AuthContext = Depends(require_kb_scope),
     service: KnowledgeBaseService = Depends(get_service),
 ):
-    body = _model_dict(payload)
+    body = payload.model_dump(exclude_none=True)
     return await _run(
         lambda: service.retrieve({"kb_id": kb_id, **body}),
         prefix="检索失败",
