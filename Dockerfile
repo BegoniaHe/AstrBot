@@ -51,15 +51,22 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && curl -fsSL https://download.docker.com/linux/debian/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && curl -fsSL https://downloads.claude.ai/keys/claude-code.asc \
+        -o /etc/apt/keyrings/claude-code.asc \
+    && chmod a+r /etc/apt/keyrings/claude-code.asc \
     && . /etc/os-release \
     && echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" \
         > /etc/apt/sources.list.d/docker.list \
+    && echo \
+        "deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/stable stable main" \
+        > /etc/apt/sources.list.d/claude-code.list \
     && eatmydata apt-get update \
     && eatmydata apt-get install -y --no-install-recommends \
         bash \
         bat \
         build-essential \
+        claude-code \
         cmake \
         dnsutils \
         docker-ce-cli \
@@ -307,11 +314,7 @@ RUN curl https://mise.run | sh \
     && ln -sf /root/.local/bin/mise /usr/local/bin/mise \
     && mise --version
 
-RUN export PATH="$HOME/.local/bin:$PATH" \
-    && curl -fsSL https://downloads.claude.ai/claude-code-releases/bootstrap.sh | bash \
-    && test -x "$HOME/.local/bin/claude" \
-    && ln -sf "$HOME/.local/bin/claude" /usr/local/bin/claude \
-    && claude --version
+RUN claude --version
 
 RUN export PATH="$HOME/.local/bin:$PATH" \
     && CODEX_NON_INTERACTIVE=1 curl -fsSL https://chatgpt.com/codex/install.sh | sh \
