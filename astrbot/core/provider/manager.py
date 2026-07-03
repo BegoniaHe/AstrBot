@@ -802,6 +802,14 @@ class ProviderManager:
                 prov_inst = self.inst_map[provider_id]
                 if isinstance(prov_inst, TTSProvider):
                     self.tts_provider_insts.remove(prov_inst)
+            if self.inst_map[provider_id] in self.embedding_provider_insts:
+                prov_inst = self.inst_map[provider_id]
+                if isinstance(prov_inst, EmbeddingProvider):
+                    self.embedding_provider_insts.remove(prov_inst)
+            if self.inst_map[provider_id] in self.rerank_provider_insts:
+                prov_inst = self.inst_map[provider_id]
+                if isinstance(prov_inst, RerankProvider):
+                    self.rerank_provider_insts.remove(prov_inst)
 
             if self.inst_map[provider_id] == self.curr_provider_inst:
                 self.curr_provider_inst = None
@@ -890,9 +898,21 @@ class ProviderManager:
             except asyncio.CancelledError:
                 pass
 
-        for provider_inst in self.provider_insts:
-            if hasattr(provider_inst, "terminate"):
-                await provider_inst.terminate()  # type: ignore
+        provider_groups = (
+            self.provider_insts,
+            self.stt_provider_insts,
+            self.tts_provider_insts,
+            self.embedding_provider_insts,
+            self.rerank_provider_insts,
+        )
+        terminated_ids: set[int] = set()
+        for provider_group in provider_groups:
+            for provider_inst in provider_group:
+                if id(provider_inst) in terminated_ids:
+                    continue
+                terminated_ids.add(id(provider_inst))
+                if hasattr(provider_inst, "terminate"):
+                    await provider_inst.terminate()  # type: ignore
         try:
             await self.llm_tools.disable_mcp_server()
         except Exception:

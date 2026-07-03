@@ -221,6 +221,7 @@ class InternalAgentSubStage(Stage):
                 logger.debug("acquired session lock for llm request")
                 agent_runner: AgentRunner | None = None
                 runner_registered = False
+                history_saved = False
                 try:
                     build_cfg = replace(
                         self.main_agent_cfg,
@@ -337,6 +338,7 @@ class InternalAgentSubStage(Stage):
                                 agent_runner.stats,
                                 user_aborted=agent_runner.was_aborted(),
                             )
+                            history_saved = True
 
                     elif streaming_response and not stream_to_general:
                         # 流式响应
@@ -403,7 +405,11 @@ class InternalAgentSubStage(Stage):
                     )
 
                     # 检查事件是否被停止，如果被停止则不保存历史记录
-                    if not event.is_stopped() or agent_runner.was_aborted():
+                    if (
+                        action_type != "live"
+                        and not history_saved
+                        and (not event.is_stopped() or agent_runner.was_aborted())
+                    ):
                         await self._save_to_history(
                             event,
                             req,

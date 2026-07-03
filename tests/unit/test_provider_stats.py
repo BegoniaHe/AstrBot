@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from sqlmodel import select
+from unittest.mock import MagicMock
 
 from astrbot.core.agent.response import AgentStats
 from astrbot.core.db.po import ProviderStat
@@ -63,3 +64,116 @@ async def test_record_internal_agent_stats_persists_provider_stat(
     assert record.start_time == 100.0
     assert record.end_time == 108.5
     assert record.time_to_first_token == 0.6
+
+
+@pytest.mark.asyncio
+async def test_record_internal_agent_stats_marks_aborted_and_falls_back_to_meta_id(
+    temp_db,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(internal, "db_helper", temp_db)
+
+    event = SimpleNamespace(unified_msg_origin="webchat:FriendMessage:session-aborted")
+    stats = AgentStats(token_usage=TokenUsage(output=2))
+    provider = SimpleNamespace(
+        provider_config={"id": ""},
+        meta=lambda: SimpleNamespace(id="fallback-provider", type="openai"),
+        get_model=lambda: "gpt-4.1-mini",
+    )
+    agent_runner = SimpleNamespace(
+        provider=provider,
+        stats=stats,
+        was_aborted=lambda: True,
+    )
+
+    await internal._record_internal_agent_stats(
+        event,
+        req=None,
+        agent_runner=agent_runner,
+        final_resp=SimpleNamespace(role="assistant"),
+    )
+
+    async with temp_db.get_db() as session:
+        result = await session.execute(select(ProviderStat))
+        records = result.scalars().all()
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.status == "aborted"
+    assert record.provider_id == "fallback-provider"
+    assert record.conversation_id is None
+
+
+@pytest.mark.asyncio
+async def test_record_internal_agent_stats_marks_error_status_for_err_response(
+    temp_db,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(internal, "db_helper", temp_db)
+
+    event = SimpleNamespace(unified_msg_origin="webchat:FriendMessage:session-error")
+    req = ProviderRequest(conversation=SimpleNamespace(cid="conv-error"))
+    stats = AgentStats(token_usage=TokenUsage(input_other=1, output=1))
+    provider = SimpleNamespace(
+        provider_config={"id": "provider-error"},
+        meta=lambda: SimpleNamespace(id="provider-error", type="openai"),
+        get_model=lambda: "gpt-4.1",
+    )
+    agent_runner = SimpleNamespace(
+        provider=provider,
+        stats=stats,
+        was_aborted=lambda: False,
+    )
+
+    await internal._record_internal_agent_stats(
+        event,
+        req=req,
+        agent_runner=agent_runner,
+        final_resp=SimpleNamespace(role="err"),
+    )
+
+    async with temp_db.get_db() as session:
+        result = await session.execute(select(ProviderStat))
+        records = result.scalars().all()
+
+    assert len(records) == 1
+    assert records[0].status == "error"
+
+
+@pytest.mark.asyncio
+async def test_record_internal_agent_stats_swallows_insert_failures(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    logger_warning = MagicMock()
+    monkeypatch.setattr(internal.logger, "warning", logger_warning)
+
+    async def raise_insert(*args, **kwargs):
+        raise RuntimeError("db write failed")
+
+    monkeypatch.setattr(
+        internal,
+        "db_helper",
+        SimpleNamespace(insert_provider_stat=raise_insert),
+    )
+
+    event = SimpleNamespace(unified_msg_origin="webchat:FriendMessage:session-warning")
+    stats = AgentStats(token_usage=TokenUsage(output=1))
+    provider = SimpleNamespace(
+        provider_config={"id": "provider-warning"},
+        meta=lambda: SimpleNamespace(id="provider-warning", type="openai"),
+        get_model=lambda: "gpt-4.1",
+    )
+    agent_runner = SimpleNamespace(
+        provider=provider,
+        stats=stats,
+        was_aborted=lambda: False,
+    )
+
+    await internal._record_internal_agent_stats(
+        event,
+        req=None,
+        agent_runner=agent_runner,
+        final_resp=SimpleNamespace(role="assistant"),
+    )
+
+    logger_warning.assert_called_once()

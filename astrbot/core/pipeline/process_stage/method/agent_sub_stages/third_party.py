@@ -417,7 +417,7 @@ class ThirdPartyAgentSubStage(Stage):
                 and (stream_consumed or runner_closed)
             ):
                 stream_watchdog_task.cancel()
-            if not streaming_used:
+            if not streaming_used or not stream_consumed:
                 await close_runner_once()
 
         asyncio.create_task(
