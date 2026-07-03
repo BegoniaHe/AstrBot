@@ -1786,7 +1786,9 @@ async def test_internal_process_sends_error_for_blocked_provider_api_base(monkey
         agent_runner=runner,
         provider_request=ProviderRequest(conversation=SimpleNamespace(cid="conv-blocked")),
         provider=SimpleNamespace(
-            provider_config={"api_base": f"https://{internal.decoded_blocked[0]}/v1"},
+            provider_config={
+                "api_base": f"https://{next(iter(internal.BLOCKED_PROVIDER_HOSTS))}/v1"
+            },
             get_model=lambda: "fake-model",
         ),
         reset_coro=None,

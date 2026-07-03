@@ -4,9 +4,10 @@ This module allows LLM to review images before deciding whether to send them to 
 """
 
 import base64
-import os
+import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import ClassVar
 
 from astrbot import logger
@@ -39,6 +40,7 @@ class ToolImageCache:
     CACHE_DIR_NAME: ClassVar[str] = "tool_images"
     # Cache expiry time in seconds (1 hour)
     CACHE_EXPIRY: ClassVar[int] = 3600
+    _SAFE_ID_RE: ClassVar[re.Pattern[str]] = re.compile(r"[^A-Za-z0-9._-]+")
 
     def __new__(cls) -> ToolImageCache:
         if cls._instance is None:
@@ -50,8 +52,23 @@ class ToolImageCache:
         if self._initialized:
             return
         self._initialized = True
-        self._cache_dir = os.path.join(get_astrbot_temp_path(), self.CACHE_DIR_NAME)
-        os.makedirs(self._cache_dir, exist_ok=True)
+        self._cache_dir = Path(get_astrbot_temp_path()) / self.CACHE_DIR_NAME
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _sanitize_tool_call_id(self, tool_call_id: str) -> str:
+        sanitized = self._SAFE_ID_RE.sub("_", tool_call_id.strip())
+        return sanitized or "tool_call"
+
+    def _resolve_cache_path(self, file_name: str) -> Path:
+        cache_root = self._cache_dir.resolve(strict=False)
+        file_path = (self._cache_dir / file_name).resolve(strict=False)
+        try:
+            file_path.relative_to(cache_root)
+        except ValueError as exc:
+            raise ValueError(
+                "Resolved cache path escapes tool image cache directory."
+            ) from exc
+        return file_path
 
     def _get_file_extension(self, mime_type: str) -> str:
         """Get file extension from MIME type."""
@@ -87,13 +104,14 @@ class ToolImageCache:
             CachedImage object with file path.
         """
         ext = self._get_file_extension(mime_type)
-        file_name = f"{tool_call_id}_{index}{ext}"
-        file_path = os.path.join(self._cache_dir, file_name)
+        safe_tool_call_id = self._sanitize_tool_call_id(tool_call_id)
+        file_name = f"{safe_tool_call_id}_{index}{ext}"
+        file_path = self._resolve_cache_path(file_name)
 
         # Decode and save the image
         try:
             image_bytes = base64.b64decode(base64_data)
-            with open(file_path, "wb") as f:
+            with file_path.open("wb") as f:
                 f.write(image_bytes)
             logger.debug(f"Saved tool image to: {file_path}")
         except Exception as e:
@@ -103,7 +121,7 @@ class ToolImageCache:
         return CachedImage(
             tool_call_id=tool_call_id,
             tool_name=tool_name,
-            file_path=file_path,
+            file_path=str(file_path),
             mime_type=mime_type,
         )
 
@@ -119,11 +137,19 @@ class ToolImageCache:
         Returns:
             Tuple of (base64_data, mime_type) if found, None otherwise.
         """
-        if not os.path.exists(file_path):
+        cache_root = self._cache_dir.resolve(strict=False)
+        resolved_path = Path(file_path).resolve(strict=False)
+        try:
+            resolved_path.relative_to(cache_root)
+        except ValueError:
+            logger.warning("Rejected read outside tool image cache: %s", file_path)
+            return None
+
+        if not resolved_path.exists():
             return None
 
         try:
-            with open(file_path, "rb") as f:
+            with resolved_path.open("rb") as f:
                 image_bytes = f.read()
             base64_data = base64.b64encode(image_bytes).decode("utf-8")
             return base64_data, mime_type
@@ -141,12 +167,11 @@ class ToolImageCache:
         cleaned = 0
 
         try:
-            for file_name in os.listdir(self._cache_dir):
-                file_path = os.path.join(self._cache_dir, file_name)
-                if os.path.isfile(file_path):
-                    file_age = now - os.path.getmtime(file_path)
+            for file_path in self._cache_dir.iterdir():
+                if file_path.is_file():
+                    file_age = now - file_path.stat().st_mtime
                     if file_age > self.CACHE_EXPIRY:
-                        os.remove(file_path)
+                        file_path.unlink()
                         cleaned += 1
         except Exception as e:
             logger.warning(f"Error during cache cleanup: {e}")

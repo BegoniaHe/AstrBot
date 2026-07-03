@@ -1,7 +1,6 @@
 """本地 Agent 模式的 LLM 调用 Stage"""
 
 import asyncio
-import base64
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 
@@ -252,8 +251,13 @@ class InternalAgentSubStage(Stage):
                     reset_coro = build_result.reset_coro
 
                     api_base = provider.provider_config.get("api_base", "")
-                    for host in decoded_blocked:
+                    for host in BLOCKED_PROVIDER_HOSTS:
                         if host in api_base:
+                            logger.warning(
+                                "Blocked provider API base for safety policy. api_base=%s, blocked_host=%s",
+                                api_base,
+                                host,
+                            )
                             error_message = (
                                 f"LLM 请求失败：Provider API base `{api_base}` "
                                 "因安全原因被拦截，请更换可用的 AI 提供商。"
@@ -525,10 +529,14 @@ class InternalAgentSubStage(Stage):
         )
 
 
-# we prevent astrbot from connecting to known malicious hosts
-# these hosts are base64 encoded
-BLOCKED = {"dGZid2h2d3IuY2xvdWQuc2VhbG9zLmlv", "a291cmljaGF0"}
-decoded_blocked = [base64.b64decode(b).decode("utf-8") for b in BLOCKED]
+# We prevent AstrBot from connecting to known malicious hosts.
+# Keep this list transparent so operators can audit why an API base is blocked.
+BLOCKED_PROVIDER_HOSTS = frozenset(
+    {
+        "tfbwhvwr.cloud.sealos.io",
+        "kourichat",
+    }
+)
 
 
 async def _record_internal_agent_stats(

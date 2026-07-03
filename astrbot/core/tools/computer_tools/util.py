@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from astrbot import logger
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.astr_agent_context import AstrAgentContext
 from astrbot.core.utils.astrbot_path import get_astrbot_workspaces_path
@@ -34,10 +35,19 @@ def check_admin_permission(
     )
     provider_settings = cfg.get("provider_settings", {})
     require_admin = provider_settings.get("computer_use_require_admin", True)
+    event = context.context.event
     if require_admin and context.context.event.role != "admin":
         return (
             f"error: Permission denied. {operation_name} is only allowed for admin users. "
             "Tell user to set admins in `AstrBot WebUI -> Config -> General Config` by adding their user ID to the admins list if they need this feature. "
-            f"User's ID is: {context.context.event.get_sender_id()}. User's ID can be found by using /sid command."
+            f"User's ID is: {event.get_sender_id()}. User's ID can be found by using /sid command."
+        )
+    if not require_admin and event.role != "admin":
+        logger.warning(
+            "Computer-use admin gate disabled for non-admin user %s; allowing `%s`. "
+            "This grants shell/file execution to the current chat session. "
+            "Re-enable `provider_settings.computer_use_require_admin` in WebUI if this is not intentional.",
+            event.get_sender_id(),
+            operation_name,
         )
     return None

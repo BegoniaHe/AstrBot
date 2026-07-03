@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import ipaddress
 import logging
 import os
 import re
@@ -8,6 +9,7 @@ from contextlib import AsyncExitStack
 from datetime import timedelta
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlparse
 
 import httpx
 from tenacity import (
@@ -134,6 +136,30 @@ def _prepare_config(config: dict) -> dict:
         config = dict(config)
     config.pop("active", None)
     return config
+
+
+def _validate_remote_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("MCP remote connection URL must use http or https.")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("MCP remote connection URL must include a hostname.")
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    ):
+        raise ValueError(
+            "MCP remote connection URL cannot target private or local IP addresses."
+        )
 
 
 def _normalize_stdio_command_name(command: str) -> str:
@@ -286,6 +312,7 @@ async def _quick_test_mcp_connection(config: dict) -> tuple[bool, str]:
     cfg = _prepare_config(config.copy())
 
     url = cfg["url"]
+    _validate_remote_url(url)
     headers = cfg.get("headers", {})
     timeout = cfg.get("timeout", 10)
 
@@ -399,7 +426,6 @@ class MCPClient:
         # Initialize session and client objects
         self.session: Any | None = None
         self.exit_stack = AsyncExitStack()
-        self._old_exit_stacks: list[AsyncExitStack] = []  # Track old stacks for cleanup
 
         self.name: str | None = None
         self.active: bool = True
@@ -442,6 +468,7 @@ class MCPClient:
                 self.server_errlogs.append(log_msg)
 
         if "url" in cfg:
+            _validate_remote_url(cfg["url"])
             success, error_msg = await _quick_test_mcp_connection(cfg)
             if not success:
                 raise Exception(error_msg)
@@ -487,7 +514,7 @@ class MCPClient:
                                 timeout_seconds,
                                 read=sse_read_timeout_seconds,
                             ),
-                            follow_redirects=True,
+                            follow_redirects=False,
                         ),
                     )
                     self._streams_context = streamable_http_client(
@@ -588,9 +615,17 @@ class MCPClient:
                     f"Attempting to reconnect to MCP server {self._server_name}..."
                 )
 
-                # Save old exit_stack for later cleanup (don't close it now to avoid cancel scope issues)
+                # Close the previous stack before replacing it to avoid leaking
+                # transports and subprocesses across repeated reconnects.
                 if self.exit_stack:
-                    self._old_exit_stacks.append(self.exit_stack)
+                    try:
+                        await self.exit_stack.aclose()
+                    except Exception as close_exc:
+                        logger.warning(
+                            "Failed to close old MCP exit stack for %s during reconnect: %s",
+                            self._server_name,
+                            close_exc,
+                        )
 
                 # Mark old session as invalid
                 self.session = None
@@ -665,17 +700,12 @@ class MCPClient:
         return await _call_with_retry()
 
     async def cleanup(self) -> None:
-        """Clean up resources including old exit stacks from reconnections"""
+        """Clean up resources."""
         # Close current exit stack
         try:
             await self.exit_stack.aclose()
         except Exception as e:
             logger.debug(f"Error closing current exit stack: {e}")
-
-        # Don't close old exit stacks as they may be in different task contexts
-        # They will be garbage collected naturally
-        # Just clear the list to release references
-        self._old_exit_stacks.clear()
 
         # Set running_event first to unblock any waiting tasks
         self.running_event.set()

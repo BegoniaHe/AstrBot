@@ -48,6 +48,35 @@ _BAIDU_WEB_SEARCH_TOOL_CONFIG = {
     "provider_settings.web_search": True,
     "provider_settings.websearch_provider": "baidu_ai_search",
 }
+_DEFAULT_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=20, connect=10, sock_read=20)
+
+
+def _client_session() -> aiohttp.ClientSession:
+    return aiohttp.ClientSession(trust_env=True)
+
+
+def _post(session, url: str, *, json: dict, headers: dict):
+    try:
+        return session.post(
+            url,
+            json=json,
+            headers=headers,
+            timeout=_DEFAULT_HTTP_TIMEOUT,
+        )
+    except TypeError:
+        return session.post(url, json=json, headers=headers)
+
+
+def _get(session, url: str, *, params: dict, headers: dict):
+    try:
+        return session.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=_DEFAULT_HTTP_TIMEOUT,
+        )
+    except TypeError:
+        return session.get(url, params=params, headers=headers)
 
 
 @std_dataclass
@@ -73,6 +102,7 @@ class _KeyRotator:
             )
 
         async with self.lock:
+            self.index %= len(keys)
             key = keys[self.index]
             self.index = (self.index + 1) % len(keys)
             return key
@@ -124,8 +154,9 @@ async def _tavily_search(
         "Authorization": f"Bearer {tavily_key}",
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.tavily.com/search",
             json=payload,
             headers=header,
@@ -153,8 +184,9 @@ async def _tavily_extract(provider_settings: dict, payload: dict) -> list[dict]:
         "Authorization": f"Bearer {tavily_key}",
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.tavily.com/extract",
             json=payload,
             headers=header,
@@ -186,8 +218,9 @@ async def _bocha_search(
         # See: https://github.com/aio-libs/aiohttp/issues/11898
         "Accept-Encoding": "gzip, deflate",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.bochaai.com/v1/web-search",
             json=payload,
             headers=header,
@@ -219,8 +252,9 @@ async def _brave_search(
         "Accept": "application/json",
         "X-Subscription-Token": brave_key,
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.get(
+    async with _client_session() as session:
+        async with _get(
+            session,
             "https://api.search.brave.com/res/v1/web/search",
             params=payload,
             headers=header,
@@ -251,8 +285,9 @@ async def _firecrawl_search(
         "Authorization": f"Bearer {firecrawl_key}",
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.firecrawl.dev/v2/search",
             json=payload,
             headers=header,
@@ -288,8 +323,9 @@ async def _firecrawl_scrape(provider_settings: dict, payload: dict) -> dict:
         "Authorization": f"Bearer {firecrawl_key}",
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.firecrawl.dev/v2/scrape",
             json=payload,
             headers=header,
@@ -317,8 +353,9 @@ async def _exa_search(
         "x-api-key": exa_key,
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.exa.ai/search",
             json=payload,
             headers=headers,
@@ -353,8 +390,9 @@ async def _exa_get_contents(
         "x-api-key": exa_key,
         "Content-Type": "application/json",
     }
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+    async with _client_session() as session:
+        async with _post(
+            session,
             "https://api.exa.ai/contents",
             json=payload,
             headers=headers,
@@ -382,7 +420,8 @@ async def _baidu_search(
         "Content-Type": "application/json",
     }
     async with aiohttp.ClientSession(trust_env=True) as session:
-        async with session.post(
+        async with _post(
+            session,
             "https://qianfan.baidubce.com/v2/ai_search/web_search",
             json=payload,
             headers=headers,
