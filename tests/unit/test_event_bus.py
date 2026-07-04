@@ -699,3 +699,55 @@ class TestEventFiltering:
 
             # Verify error was logged for missing scheduler
             mock_logger.error.assert_called_once()
+
+
+class TestEventBusBackpressure:
+    @pytest.mark.asyncio
+    async def test_dispatch_stops_draining_queue_when_concurrency_is_full(
+        self,
+        event_queue,
+        mock_config_manager,
+    ):
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        scheduler = MagicMock()
+        scheduler.execute = AsyncMock()
+
+        async def execute_and_block(event):  # noqa: ARG001
+            started.set()
+            await release.wait()
+
+        scheduler.execute.side_effect = execute_and_block
+
+        event_bus = EventBus(
+            event_queue=event_queue,
+            pipeline_scheduler_mapping={"test-conf-id": scheduler},
+            astrbot_config_mgr=mock_config_manager,
+            max_concurrency=1,
+        )
+
+        events = []
+        for idx in range(3):
+            event = MagicMock()
+            event.unified_msg_origin = f"platform:group:{idx}"
+            event.get_platform_id.return_value = "platform"
+            event.get_platform_name.return_value = "Platform"
+            event.get_sender_name.return_value = f"User{idx}"
+            event.get_sender_id.return_value = f"user{idx}"
+            event.get_message_outline.return_value = f"Message {idx}"
+            events.append(event)
+            await event_queue.put(event)
+
+        task = asyncio.create_task(event_bus.dispatch())
+        try:
+            await asyncio.wait_for(started.wait(), timeout=1.0)
+            await asyncio.sleep(0.05)
+
+            assert scheduler.execute.call_count == 1
+            assert event_queue.qsize() == 1
+        finally:
+            release.set()
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task

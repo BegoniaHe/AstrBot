@@ -142,10 +142,10 @@ async def test_wecom_ai_bot_convert_message_ignores_failed_image_processing(monk
         }
     )
 
-    assert result.message_str == "[未知消息]"
+    assert result.message_str == "[image消息]"
     assert len(result.message) == 1
     assert isinstance(result.message[0], Plain)
-    assert result.message[0].text == "[未知消息]"
+    assert result.message[0].text == "[image消息]"
 
 
 @pytest.mark.asyncio

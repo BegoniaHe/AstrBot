@@ -36,6 +36,7 @@ from astrbot.core.provider.entities import (
 from astrbot.core.star.star_handler import EventType
 from astrbot.core.utils.metrics import Metric
 from astrbot.core.utils.session_lock import session_lock_manager
+from astrbot.core.utils.task_utils import create_tracked_task
 
 from .....astr_agent_run_util import AgentRunner, run_agent, run_live_agent
 from ....context import PipelineContext, call_event_hook
@@ -47,6 +48,8 @@ from ...follow_up import (
     try_capture_follow_up,
     unregister_active_runner,
 )
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class InternalAgentSubStage(Stage):
@@ -399,13 +402,15 @@ class InternalAgentSubStage(Stage):
                         resp=final_resp.completion_text if final_resp else None,
                     )
 
-                    asyncio.create_task(
+                    create_tracked_task(
+                        _BACKGROUND_TASKS,
                         _record_internal_agent_stats(
                             event,
                             req,
                             agent_runner,
                             final_resp,
-                        )
+                        ),
+                        name="record_internal_agent_stats",
                     )
 
                     # 检查事件是否被停止，如果被停止则不保存历史记录
@@ -423,12 +428,14 @@ class InternalAgentSubStage(Stage):
                             user_aborted=agent_runner.was_aborted(),
                         )
 
-                    asyncio.create_task(
+                    create_tracked_task(
+                        _BACKGROUND_TASKS,
                         Metric.upload(
                             llm_tick=1,
                             model_name=agent_runner.provider.get_model(),
                             provider_type=agent_runner.provider.meta().type,
                         ),
+                        name="upload_agent_metric",
                     )
                 finally:
                     if runner_registered and agent_runner is not None:

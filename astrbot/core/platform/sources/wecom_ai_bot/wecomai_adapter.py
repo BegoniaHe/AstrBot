@@ -529,7 +529,7 @@ class WecomAIBotAdapter(Platform):
         # 构建 AstrBotMessage
         abm = AstrBotMessage()
         abm.self_id = self.bot_name
-        abm.message_str = content or "[未知消息]"
+        abm.message_str = content or ""
         abm.message_id = str(uuid.uuid4())
         abm.timestamp = int(time.time())
         abm.raw_message = payload
@@ -555,10 +555,14 @@ class WecomAIBotAdapter(Platform):
         if self.bot_name and f"@{self.bot_name}" in abm.message_str:
             abm.message_str = abm.message_str.replace(f"@{self.bot_name}", "").strip()
             abm.message.append(At(qq=self.bot_name, name=self.bot_name))
-        abm.message.append(Plain(abm.message_str))
+        if abm.message_str:
+            abm.message.append(Plain(abm.message_str))
         if image_base64:
             for img_b64 in image_base64:
                 abm.message.append(Image.fromBase64(img_b64))
+        if not abm.message:
+            abm.message_str = f"[{msgtype}消息]"
+            abm.message.append(Plain(abm.message_str))
 
         logger.debug(f"WecomAIAdapter: {abm.message}")
         return abm

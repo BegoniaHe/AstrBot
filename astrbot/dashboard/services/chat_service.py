@@ -929,7 +929,7 @@ class ChatService:
                                     pass
                         if msg_type == "end":
                             break
-            except BaseException as e:
+            except Exception as e:
                 logger.exception(f"WebChat stream unexpected error: {e}", exc_info=True)
             finally:
                 try:

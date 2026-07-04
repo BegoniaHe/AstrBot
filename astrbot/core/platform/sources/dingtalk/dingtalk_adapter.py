@@ -40,6 +40,7 @@ from .dingtalk_event import DingtalkMessageEvent
 DINGTALK_RECONNECT_INITIAL_DELAY = 10
 DINGTALK_RECONNECT_MAX_DELAY = 300
 DINGTALK_RECONNECT_STABLE_SECONDS = 300
+_DINGTALK_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10, sock_read=30)
 
 
 def _dingtalk_reconnect_delay(retry_count: int) -> int:
@@ -361,7 +362,7 @@ class DingtalkPlatformAdapter(Platform):
         temp_dir.mkdir(parents=True, exist_ok=True)
         f_path = temp_dir / f"dingtalk_{uuid.uuid4()}.{ext}"
         async with (
-            aiohttp.ClientSession() as session,
+            aiohttp.ClientSession(timeout=_DINGTALK_HTTP_TIMEOUT) as session,
             session.post(
                 "https://api.dingtalk.com/v1.0/robot/messageFiles/download",
                 headers=headers,
@@ -400,7 +401,7 @@ class DingtalkPlatformAdapter(Platform):
             logger.warning(f"通过 dingtalk_stream 获取 access_token 失败: {e}")
 
         payload = {"appKey": self.client_id, "appSecret": self.client_secret}
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DINGTALK_HTTP_TIMEOUT) as session:
             async with session.post(
                 "https://api.dingtalk.com/v1.0/oauth2/accessToken",
                 json=payload,
@@ -448,7 +449,7 @@ class DingtalkPlatformAdapter(Platform):
             "Content-Type": "application/json",
             "x-acs-dingtalk-access-token": access_token,
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DINGTALK_HTTP_TIMEOUT) as session:
             async with session.post(
                 "https://api.dingtalk.com/v1.0/robot/groupMessages/send",
                 headers=headers,
@@ -481,7 +482,7 @@ class DingtalkPlatformAdapter(Platform):
             "Content-Type": "application/json",
             "x-acs-dingtalk-access-token": access_token,
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DINGTALK_HTTP_TIMEOUT) as session:
             async with session.post(
                 "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend",
                 headers=headers,
@@ -530,7 +531,7 @@ class DingtalkPlatformAdapter(Platform):
             filename=media_file_path.name,
             content_type="application/octet-stream",
         )
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DINGTALK_HTTP_TIMEOUT) as session:
             async with session.post(
                 f"https://oapi.dingtalk.com/media/upload?access_token={access_token}&type={media_type}",
                 data=form,

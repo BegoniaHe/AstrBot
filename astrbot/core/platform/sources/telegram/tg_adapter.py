@@ -578,7 +578,7 @@ class TelegramPlatformAdapter(Platform):
 
             record = Comp.Record(file=path_wav, url=path_wav)
             record.path = path_wav
-            message.message = [record]
+            message.message.append(record)
 
         elif update.message.photo:
             photo = update.message.photo[-1]  # get the largest photo

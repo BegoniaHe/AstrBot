@@ -73,6 +73,7 @@ class SessionPluginManager:
         )
         session_config = session_plugin_config.get(session_id, {})
         disabled_plugins = session_config.get("disabled_plugins", [])
+        enabled_plugins = session_config.get("enabled_plugins", [])
 
         for handler in handlers:
             # 获取处理器对应的插件
@@ -88,6 +89,12 @@ class SessionPluginManager:
                 continue
 
             if plugin.name is None:
+                continue
+
+            if enabled_plugins and plugin.name not in enabled_plugins:
+                logger.debug(
+                    f"插件 {plugin.name} 未被会话 {session_id} 显式启用，跳过处理器 {handler.handler_name}",
+                )
                 continue
 
             # 检查插件是否在当前会话中启用

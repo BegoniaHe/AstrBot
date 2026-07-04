@@ -289,13 +289,12 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
         self._skill_like_raw_tool_set = None
         if tool_schema_mode == "skills_like":
             tool_set = self.req.func_tool
-            if not tool_set:
-                return
-            self._skill_like_raw_tool_set = tool_set
-            light_set = tool_set.get_light_tool_set()
-            self._tool_schema_param_set = tool_set.get_param_only_tool_set()
-            # MODIFIE the req.func_tool to use light tool schemas
-            self.req.func_tool = light_set
+            if tool_set:
+                self._skill_like_raw_tool_set = tool_set
+                light_set = tool_set.get_light_tool_set()
+                self._tool_schema_param_set = tool_set.get_param_only_tool_set()
+                # MODIFIE the req.func_tool to use light tool schemas
+                self.req.func_tool = light_set
 
         # append existing messages in the run context
         messages = bind_checkpoint_messages(request.contexts or [])
@@ -327,7 +326,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
         request: ProviderRequest,
     ) -> dict[str, T.Any]:
         modalities = self.provider.provider_config.get("modalities", None)
-        if not modalities:  # Unconfigured (None or empty list) defaults to support all modalities for backward compatibility
+        if modalities is None or not isinstance(modalities, list):
             return await request.assemble_context()
 
         supports_image = "image" in modalities
@@ -906,9 +905,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
             # append a user message with images so LLM can see them
             if cached_images:
                 modalities = self.provider.provider_config.get("modalities", [])
-                supports_image = (
-                    not modalities or "image" in modalities
-                )  # Empty list is treated as unconfigured for backward compatibility
+                supports_image = isinstance(modalities, list) and "image" in modalities
                 if supports_image:
                     # Build user message with images for LLM to review
                     image_parts = []

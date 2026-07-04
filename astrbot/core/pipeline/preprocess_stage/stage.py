@@ -228,7 +228,7 @@ class PreProcessStage(Stage):
                         logger.debug(f"文件尚未就绪 ({path})，重试 {i + 1}/{retry}")
                         await asyncio.sleep(0.5)
                         continue
-                    except BaseException as e:
+                    except Exception as e:
                         logger.error(traceback.format_exc())
                         suffix = "(引用消息)" if is_reply else ""
                         logger.error(f"语音转文本{suffix}失败: {e}")

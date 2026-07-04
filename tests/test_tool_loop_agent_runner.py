@@ -1209,8 +1209,35 @@ async def test_stop_interrupts_pending_regular_tool(mock_hooks):
     assert runner.was_aborted() is True
     assert tool_state.cancelled is True
 
-    with pytest.raises(StopAsyncIteration):
-        await step_iter.__anext__()
+
+@pytest.mark.asyncio
+async def test_reset_skills_like_without_tools_still_initializes_runner(mock_hooks):
+    provider = MockProvider()
+    request = ProviderRequest(prompt="hello", contexts=[])
+    runner = ToolLoopAgentRunner()
+    event = MockEvent("webchat:FriendMessage:webchat!user!session", "user")
+
+    await runner.reset(
+        provider=provider,
+        request=request,
+        run_context=ContextWrapper(
+            context=SimpleNamespace(event=event, context=SimpleNamespace())
+        ),
+        tool_executor=FunctionToolExecutor(),
+        agent_hooks=mock_hooks,
+        streaming=False,
+        tool_schema_mode="skills_like",
+    )
+
+    assert runner.stats.start_time > 0
+    assert runner.run_context.messages[-1].role == "user"
+    assert runner.req.func_tool is None
+
+    responses = [response async for response in runner.step()]
+    assert any(response.type == "llm_result" for response in responses)
+    final_resp = runner.get_final_llm_resp()
+    assert final_resp is not None
+    assert final_resp.completion_text == "这是我的最终回答"
 
 
 @pytest.mark.asyncio

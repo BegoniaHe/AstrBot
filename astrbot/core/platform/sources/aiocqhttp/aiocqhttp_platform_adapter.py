@@ -234,7 +234,7 @@ class AiocqhttpAdapter(Platform):
             logger.critical(err)
             try:
                 await self.bot.send(event, err)
-            except BaseException as e:
+            except Exception as e:
                 logger.error(f"回复消息失败: {e}")
             raise ValueError(err)
 
@@ -271,14 +271,14 @@ class AiocqhttpAdapter(Platform):
                             if abm.type == MessageType.GROUP_MESSAGE:
                                 ret = await self.bot.call_action(
                                     action="get_group_file_url",
-                                    file_id=event.message[0]["data"]["file_id"],
+                                    file_id=m["data"]["file_id"],
                                     group_id=event.group_id,
                                     **routing_params,
                                 )
                             elif abm.type == MessageType.FRIEND_MESSAGE:
                                 ret = await self.bot.call_action(
                                     action="get_private_file_url",
-                                    file_id=event.message[0]["data"]["file_id"],
+                                    file_id=m["data"]["file_id"],
                                     **routing_params,
                                 )
                             if ret and "url" in ret:
@@ -297,7 +297,7 @@ class AiocqhttpAdapter(Platform):
 
                         except ActionFailed as e:
                             logger.error(f"获取文件失败: {e}，此消息段将被忽略。")
-                        except BaseException as e:
+                        except Exception as e:
                             logger.error(f"获取文件失败: {e}，此消息段将被忽略。")
 
             elif t == "reply":
@@ -337,7 +337,7 @@ class AiocqhttpAdapter(Platform):
                             )
 
                             abm.message.append(reply_seg)
-                        except BaseException as e:
+                        except Exception as e:
                             logger.error(f"获取引用消息失败: {e}。")
                             a = ComponentTypes[t](**m["data"])
                             abm.message.append(a)
@@ -391,7 +391,7 @@ class AiocqhttpAdapter(Platform):
                             abm.message.append(At(qq=str(m["data"]["qq"]), name=""))
                     except ActionFailed as e:
                         logger.error(f"获取 @ 用户信息失败: {e}，此消息段将被忽略。")
-                    except BaseException as e:
+                    except Exception as e:
                         logger.error(f"获取 @ 用户信息失败: {e}，此消息段将被忽略。")
 
                 message_str += "".join(at_parts)

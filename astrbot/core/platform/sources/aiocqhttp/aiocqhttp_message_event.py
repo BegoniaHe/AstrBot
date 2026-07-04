@@ -260,9 +260,9 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
         owner_id = None
         admin_ids = []
         for member in members:
-            if member["role"] == "owner":
+            if member.get("role") == "owner":
                 owner_id = member["user_id"]
-            if member["role"] == "admin":
+            if member.get("role") == "admin":
                 admin_ids.append(member["user_id"])
 
         group = Group(
@@ -270,7 +270,7 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
             group_name=info.get("group_name"),
             group_avatar="",
             group_admins=admin_ids,
-            group_owner=str(owner_id),
+            group_owner=str(owner_id) if owner_id is not None else "",
             members=[
                 MessageMember(
                     user_id=member["user_id"],

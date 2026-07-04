@@ -339,16 +339,24 @@ class LiveChatService:
             return existing_request_id
 
         request_id = f"ws_sub_{uuid.uuid4().hex}"
-        session.chat_subscriptions[chat_session_id] = request_id
-        task = asyncio.create_task(
-            self.forward_chat_subscription(
-                session,
-                chat_session_id,
-                request_id,
-                send_json,
-            ),
-            name=f"chat_ws_sub_{chat_session_id}",
+        coro = self.forward_chat_subscription(
+            session,
+            chat_session_id,
+            request_id,
+            send_json,
         )
+        task = None
+        try:
+            task = asyncio.create_task(
+                coro,
+                name=f"chat_ws_sub_{chat_session_id}",
+            )
+        except Exception:
+            coro.close()
+            session.chat_subscriptions.pop(chat_session_id, None)
+            raise
+
+        session.chat_subscriptions[chat_session_id] = request_id
         session.chat_subscription_tasks[chat_session_id] = task
         return request_id
 

@@ -174,6 +174,48 @@ async def test_dingtalk_callback_raw_process_wraps_ack_headers(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_dingtalk_get_access_token_uses_http_timeout(monkeypatch):
+    adapter = _build_adapter()
+    adapter.client_ = SimpleNamespace(get_access_token=MagicMock(side_effect=RuntimeError("no cached token")))
+    seen: dict[str, object] = {}
+
+    class FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {"data": {"accessToken": "token-123"}}
+
+        async def text(self):
+            return ""
+
+    class FakeSession:
+        def __init__(self, *, timeout=None, **kwargs):
+            seen["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(dingtalk_adapter.aiohttp, "ClientSession", FakeSession)
+
+    token = await adapter.get_access_token()
+
+    assert token == "token-123"
+    assert seen["timeout"] is dingtalk_adapter._DINGTALK_HTTP_TIMEOUT
+
+
+@pytest.mark.asyncio
 async def test_dingtalk_convert_msg_rich_text_group_parses_mentions_and_images():
     adapter = _build_adapter()
     adapter.download_ding_file = AsyncMock(return_value="/tmp/rich.jpg")

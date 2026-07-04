@@ -1,4 +1,6 @@
+import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -187,3 +189,40 @@ def test_napcat_config_metadata_hides_advanced_ws_fields_by_default() -> None:
     assert NAPCAT_CONFIG_METADATA["timeout_seconds"]["collapsed"] is True
     assert NAPCAT_CONFIG_METADATA["reconnect_interval_seconds"]["collapsed"] is True
     assert NAPCAT_CONFIG_METADATA["max_frame_size_mb"]["collapsed"] is True
+
+
+def test_save_config_propagates_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        config_service,
+        "validate_config",
+        lambda *args, **kwargs: (_ for _ in ()).throw(asyncio.CancelledError()),
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        config_service.save_config({}, SimpleNamespace(save_config=lambda *_args: None))
+
+
+@pytest.mark.asyncio
+async def test_delete_profile_clears_routing_entries_for_deleted_config() -> None:
+    acm = SimpleNamespace(delete_conf=AsyncMock(return_value=True))
+    ucr = SimpleNamespace(
+        umop_to_conf_id={
+            "onebot:group:123": "conf-a",
+            "onebot:friend:456": "conf-b",
+        },
+        update_routing_data=AsyncMock(),
+    )
+    core_lifecycle = SimpleNamespace(
+        astrbot_config_mgr=acm,
+        pipeline_scheduler_mapping={"conf-a": object(), "conf-b": object()},
+        umop_config_router=ucr,
+    )
+    service = config_service.ConfigProfileService(core_lifecycle)
+
+    await service.delete_profile("conf-a")
+
+    assert "conf-a" not in core_lifecycle.pipeline_scheduler_mapping
+    acm.delete_conf.assert_awaited_once_with("conf-a")
+    ucr.update_routing_data.assert_awaited_once_with({"onebot:friend:456": "conf-b"})

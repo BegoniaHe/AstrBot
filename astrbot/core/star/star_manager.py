@@ -43,6 +43,7 @@ from astrbot.core.utils.requirements_utils import (
     MissingRequirementsPlan,
     plan_missing_requirements_install,
 )
+from astrbot.core.utils.task_utils import create_tracked_task
 
 from . import StarMetadata
 from .command_management import sync_command_configs
@@ -203,8 +204,13 @@ class PluginManager:
         """加载失败插件的信息，用于后续可能的热重载"""
 
         self.failed_plugin_info = ""
+        self._background_tasks: set[asyncio.Task] = set()
         if os.getenv("ASTRBOT_RELOAD", "0") == "1":
-            asyncio.create_task(self._watch_plugins_changes())
+            create_tracked_task(
+                self._background_tasks,
+                self._watch_plugins_changes(),
+                name="plugin-watch",
+            )
 
     async def _watch_plugins_changes(self) -> None:
         """监视插件文件变化"""
@@ -1024,15 +1030,10 @@ class PluginManager:
                     if path not in inactivated_plugins:
                         # 只有没有禁用插件时才实例化插件类
                         if plugin_config and metadata.star_cls_type:
-                            try:
-                                metadata.star_cls = metadata.star_cls_type(
-                                    context=self.context,
-                                    config=plugin_config,
-                                )
-                            except TypeError as _:
-                                metadata.star_cls = metadata.star_cls_type(
-                                    context=self.context,
-                                )
+                            metadata.star_cls = metadata.star_cls_type(
+                                context=self.context,
+                                config=plugin_config,
+                            )
                         elif metadata.star_cls_type:
                             metadata.star_cls = metadata.star_cls_type(
                                 context=self.context,
@@ -1161,7 +1162,7 @@ class PluginManager:
                     except Exception:
                         logger.error(traceback.format_exc())
 
-            except BaseException as e:
+            except Exception as e:
                 logger.error(f"----- 插件 {root_dir_name} 载入失败 -----")
                 errors = traceback.format_exc()
                 for line in errors.split("\n"):
@@ -1336,11 +1337,13 @@ class PluginManager:
 
         """
         # this metric is for displaying plugins installation count in pages
-        asyncio.create_task(
+        create_tracked_task(
+            self._background_tasks,
             Metric.upload(
                 et="install_star",
                 repo=repo_url,
             ),
+            name="metric:install-star",
         )
 
         async with self._pm_lock:
@@ -1779,7 +1782,7 @@ class PluginManager:
             # remove the zip
             try:
                 os.remove(zip_file_path)
-            except BaseException as e:
+            except Exception as e:
                 logger.warning(f"删除插件压缩包失败: {e!s}")
             await self._ensure_plugin_requirements(desti_dir, dir_name)
             # await self.reload()
@@ -1824,11 +1827,13 @@ class PluginManager:
                 }
 
                 if plugin.repo:
-                    asyncio.create_task(
+                    create_tracked_task(
+                        self._background_tasks,
                         Metric.upload(
                             et="install_star_f",  # install star
                             repo=plugin.repo,
                         ),
+                        name="metric:install-star-success",
                     )
 
             return plugin_info

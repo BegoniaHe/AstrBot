@@ -72,7 +72,7 @@ class RateLimitStage(Stage):
             while True:
                 timestamps = self.event_timestamps[session_id]
                 self._remove_expired_timestamps(timestamps, now)
-                self._prune_idle_sessions(now)
+                self._prune_idle_sessions(now, active_session_id=session_id)
 
                 if self.rate_limit_count <= 0:
                     break
@@ -95,12 +95,17 @@ class RateLimitStage(Stage):
                         )
                         return event.stop_event()
 
-    def _prune_idle_sessions(self, now: datetime) -> None:
+    def _prune_idle_sessions(
+        self,
+        now: datetime,
+        *,
+        active_session_id: str | None = None,
+    ) -> None:
         if len(self.event_timestamps) <= self.max_sessions:
             empty_sessions = [
                 session_id
                 for session_id, timestamps in self.event_timestamps.items()
-                if not timestamps
+                if not timestamps and session_id != active_session_id
             ]
             for session_id in empty_sessions:
                 self.event_timestamps.pop(session_id, None)
@@ -110,7 +115,7 @@ class RateLimitStage(Stage):
         idle_sessions = [
             session_id
             for session_id, timestamps in self.event_timestamps.items()
-            if not timestamps
+            if not timestamps and session_id != active_session_id
         ]
         for session_id in idle_sessions:
             self.event_timestamps.pop(session_id, None)

@@ -23,6 +23,9 @@ from astrbot.api.message_components import (
 )
 from astrbot.api.platform import AstrBotMessage, MessageType, PlatformMetadata
 from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.task_utils import create_tracked_task
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 def _is_gif(path: str) -> bool:
@@ -522,8 +525,10 @@ class TelegramPlatformEvent(AstrMessageEvent):
             )
 
         # 内联父类 send_streaming 的副作用（避免传入已消费的 generator）
-        asyncio.create_task(
+        create_tracked_task(
+            _BACKGROUND_TASKS,
             Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
+            name=f"metric:telegram-stream:{self.platform_meta.name}",
         )
         self._has_send_oper = True
 

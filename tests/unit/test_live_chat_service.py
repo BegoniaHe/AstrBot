@@ -501,7 +501,7 @@ async def test_ensure_chat_subscription_replaces_completed_task(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ensure_chat_subscription_create_task_failure_leaves_subscription_marker(
+async def test_ensure_chat_subscription_create_task_failure_rolls_back_subscription_marker(
     monkeypatch,
 ):
     service = _service()
@@ -528,7 +528,7 @@ async def test_ensure_chat_subscription_create_task_failure_leaves_subscription_
             AsyncMock(),
         )
 
-    assert session.chat_subscriptions == {"chat-session": "ws_sub_broken-sub-id"}
+    assert session.chat_subscriptions == {}
     assert session.chat_subscription_tasks == {}
 
 

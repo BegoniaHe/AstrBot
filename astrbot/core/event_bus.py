@@ -54,8 +54,9 @@ class EventBus:
                         f"PipelineScheduler not found for id: {conf_id}, event ignored."
                     )
                     continue
+                await self._semaphore.acquire()
                 task = asyncio.create_task(
-                    self._execute_with_limit(scheduler, event),
+                    self._execute_scheduler(scheduler, event),
                     name=f"pipeline:{conf_id}",
                 )
                 self._pending_tasks.add(task)
@@ -65,13 +66,15 @@ class EventBus:
             except Exception:
                 logger.error("事件总线分发异常", exc_info=True)
 
-    async def _execute_with_limit(
+    async def _execute_scheduler(
         self,
         scheduler: PipelineScheduler,
         event: AstrMessageEvent,
     ) -> None:
-        async with self._semaphore:
+        try:
             await scheduler.execute(event)
+        finally:
+            self._semaphore.release()
 
     def _on_task_done(self, task: asyncio.Task) -> None:
         """pipeline 任务结束回调: 移除强引用并暴露未捕获的异常"""

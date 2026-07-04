@@ -92,7 +92,7 @@ class RespondStage(Stage):
             interval_str_ls = interval_str.replace(" ", "").split(",")
             try:
                 self.interval = [float(t) for t in interval_str_ls]
-            except BaseException as e:
+            except Exception as e:
                 logger.error(f"解析分段回复的间隔时间失败。{e}")
             logger.info(f"分段回复间隔时间：{self.interval}")
 

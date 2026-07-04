@@ -44,11 +44,14 @@ from astrbot.core.message.message_event_result import MessageChain, MessageEvent
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.provider.entities import ProviderRequest
 from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.task_utils import create_tracked_task
 from astrbot.core.utils.trace import TraceSpan
 
 from .astrbot_message import AstrBotMessage, Group
 from .message_session import MessageSession
 from .platform_metadata import PlatformMetadata
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class AstrMessageEvent(abc.ABC):
@@ -348,8 +351,10 @@ class AstrMessageEvent(abc.ABC):
         目前仅支持: telegram，qq official 私聊。
         Fallback仅支持 aiocqhttp。
         """
-        asyncio.create_task(
+        create_tracked_task(
+            _BACKGROUND_TASKS,
             Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
+            name=f"metric:stream:{self.platform_meta.name}",
         )
         self._has_send_oper = True
 
@@ -366,10 +371,10 @@ class AstrMessageEvent(abc.ABC):
         """
 
     async def _pre_send(self) -> None:
-        """调度器会在执行 send() 前调用该方法 deprecated in v3.5.18"""
+        """Reserved send hook for platform overrides."""
 
     async def _post_send(self) -> None:
-        """调度器会在执行 send() 后调用该方法 deprecated in v3.5.18"""
+        """Reserved post-send hook for platform overrides."""
 
     def set_result(self, result: MessageEventResult | str) -> None:
         """设置消息事件的结果。
@@ -545,12 +550,14 @@ class AstrMessageEvent(abc.ABC):
         # Leverage BLAKE2 hash function to generate a non-reversible hash of the sender ID for privacy.
         hash_obj = hashlib.blake2b(self.get_sender_id().encode("utf-8"), digest_size=16)
         sid = str(uuid.UUID(bytes=hash_obj.digest()))
-        asyncio.create_task(
+        create_tracked_task(
+            _BACKGROUND_TASKS,
             Metric.upload(
                 msg_event_tick=1,
                 adapter_name=self.platform_meta.name,
                 sid=sid,
             ),
+            name=f"metric:send:{self.platform_meta.name}",
         )
         self._has_send_oper = True
 

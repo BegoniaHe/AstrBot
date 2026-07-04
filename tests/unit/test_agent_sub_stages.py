@@ -2166,8 +2166,8 @@ async def test_internal_process_streaming_sets_finish_result_from_final_response
         if False:
             yield
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2298,8 +2298,8 @@ async def test_internal_process_awaits_reset_before_running_agent(monkeypatch):
         assert reset_flag.awaited is True
         yield
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2366,8 +2366,8 @@ async def test_internal_process_live_mode_sets_stream_and_saves_history(monkeypa
     async def fake_run_live_agent(*args, **kwargs):
         yield MessageChain().message("live chunk")
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2440,8 +2440,8 @@ async def test_internal_process_live_mode_skips_history_when_runner_not_done(mon
     async def fake_run_live_agent(*args, **kwargs):
         yield MessageChain().message("live chunk")
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2506,8 +2506,8 @@ async def test_internal_process_live_mode_skips_history_when_event_stopped_witho
     async def fake_run_live_agent(*args, **kwargs):
         yield MessageChain().message("live chunk")
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2573,8 +2573,8 @@ async def test_internal_process_live_mode_saves_history_when_event_stopped_but_r
     async def fake_run_live_agent(*args, **kwargs):
         yield MessageChain().message("live chunk")
 
-    def fake_create_task(coro):
-        task = asyncio.get_running_loop().create_task(coro)
+    def fake_create_task(coro, *, name=None):
+        task = asyncio.get_running_loop().create_task(coro, name=name)
         scheduled_tasks.append(task)
         return task
 
@@ -2826,7 +2826,7 @@ async def test_internal_process_sends_error_when_stats_task_creation_fails_befor
     async def fake_run_agent(*args, **kwargs):
         yield
 
-    def fail_create_task(coro):
+    def fail_create_task(coro, *, name=None):
         coro.close()
         raise RuntimeError("schedule stats failed")
 
@@ -2895,15 +2895,18 @@ async def test_internal_process_sends_error_when_metric_task_creation_fails_afte
     register_runner = MagicMock()
     unregister_runner = MagicMock()
     created_coroutines: list = []
+    scheduled_tasks: list[asyncio.Task] = []
 
     async def fake_run_agent(*args, **kwargs):
         yield
 
-    def fail_on_second_create_task(coro):
+    def fail_on_second_create_task(coro, *, name=None):
         created_coroutines.append(coro)
         if len(created_coroutines) == 1:
             coro.close()
-            return SimpleNamespace()
+            task = asyncio.get_running_loop().create_task(asyncio.sleep(0), name=name)
+            scheduled_tasks.append(task)
+            return task
         coro.close()
         raise RuntimeError("schedule metric failed")
 
@@ -2930,6 +2933,7 @@ async def test_internal_process_sends_error_when_metric_task_creation_fails_afte
     )
 
     yielded = [item async for item in stage.process(event, provider_wake_prefix="ask")]
+    await asyncio.gather(*scheduled_tasks)
 
     assert yielded == [None]
     save_to_history.assert_awaited_once()

@@ -1,21 +1,16 @@
 import importlib
-import os
 import sys
-import tempfile
 import types
 from types import SimpleNamespace
 
 import pytest
 
-os.environ.setdefault(
-    "ASTRBOT_ROOT",
-    tempfile.mkdtemp(prefix="astrbot-test-process-stage-"),
-)
-
 import astrbot.core.pipeline.process_stage as process_stage_pkg
 import astrbot.core.pipeline.process_stage.method as process_stage_method_pkg
+from astrbot.core.pipeline import stage as pipeline_stage_module
 from astrbot.core.provider.entities import ProviderRequest
 
+_original_registered_stages = list(pipeline_stage_module.registered_stages)
 _original_agent_request_module = sys.modules.get(
     "astrbot.core.pipeline.process_stage.method.agent_request"
 )
@@ -98,6 +93,8 @@ if _had_stage_attr:
 else:
     process_stage_pkg.__dict__.pop("stage", None)
 
+pipeline_stage_module.registered_stages[:] = _original_registered_stages
+
 
 class FakeEvent:
     def __init__(
@@ -179,6 +176,23 @@ async def test_process_stage_plugin_provider_request_yields_once_when_agent_emit
         agent_responses=[],
     )
     event = FakeEvent(extras={"activated_handlers": [SimpleNamespace(name="handler")]})
+
+    yielded = [item async for item in stage.process(event)]
+
+    assert yielded == [None]
+    assert stage.agent_sub_stage.calls == [(event,)]
+
+
+@pytest.mark.asyncio
+async def test_process_stage_plugin_provider_request_does_not_fall_through_to_wake_agent():
+    stage = _stage(
+        star_responses=[ProviderRequest(prompt="hello")],
+        agent_responses=["agent-step"],
+    )
+    event = FakeEvent(
+        extras={"activated_handlers": [SimpleNamespace(name="handler")]},
+        at_or_wake=True,
+    )
 
     yielded = [item async for item in stage.process(event)]
 

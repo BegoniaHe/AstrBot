@@ -40,6 +40,7 @@ from astrbot.core.provider.entities import (
 from astrbot.core.star.star_handler import EventType
 from astrbot.core.utils.config_number import coerce_int_config
 from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.task_utils import create_tracked_task
 
 from .....astr_agent_context import AgentContextWrapper, AstrAgentContext
 from ....context import PipelineContext, call_event_hook
@@ -57,6 +58,7 @@ RUNNER_NO_FINAL_RESPONSE_LOG = (
     "Agent Runner returned no final response, fallback to streamed error/result chain."
 )
 RUNNER_NO_RESULT_LOG = "Agent Runner did not return final result."
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 async def run_third_party_agent(
@@ -420,10 +422,12 @@ class ThirdPartyAgentSubStage(Stage):
             if not streaming_used or not stream_consumed:
                 await close_runner_once()
 
-        asyncio.create_task(
+        create_tracked_task(
+            _BACKGROUND_TASKS,
             Metric.upload(
                 llm_tick=1,
                 model_name=self.runner_type,
                 provider_type=self.runner_type,
             ),
+            name=f"metric:runner:{self.runner_type}",
         )

@@ -475,7 +475,6 @@ class WeixinOfficialAccountPlatformAdapter(Platform):
                     f"转换音频失败: {e}。如果没有安装 ffmpeg 请先安装。",
                 )
                 path_wav = path
-                return
 
             abm.message_str = ""
             abm.self_id = str(msg.target)

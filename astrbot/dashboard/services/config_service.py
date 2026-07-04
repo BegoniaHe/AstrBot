@@ -458,7 +458,7 @@ def save_config(
                 getattr(config, "schema", {}),
                 is_core,
             )
-    except BaseException as exc:
+    except Exception as exc:
         logger.error(traceback.format_exc())
         logger.warning(f"验证配置时出现异常: {exc}")
         raise ValueError(f"验证配置时出现异常: {exc}")
@@ -578,6 +578,14 @@ class ConfigProfileService:
         if not await self.acm.delete_conf(config_id):
             raise ValueError("Failed to delete config profile")
         self.core_lifecycle.pipeline_scheduler_mapping.pop(config_id, None)
+        ucr = self.core_lifecycle.umop_config_router
+        next_routing = {
+            umo: mapped_conf_id
+            for umo, mapped_conf_id in ucr.umop_to_conf_id.items()
+            if mapped_conf_id != config_id
+        }
+        if next_routing != ucr.umop_to_conf_id:
+            await ucr.update_routing_data(next_routing)
 
 
 class ConfigRoutingService:

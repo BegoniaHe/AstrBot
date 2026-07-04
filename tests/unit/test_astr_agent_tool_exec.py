@@ -372,7 +372,7 @@ async def test_background_wakeup_passes_provider_settings_to_main_agent(
     provider_settings = {
         "fallback_chat_models": ["fallback-provider"],
         "request_max_retries": 3,
-        "stream": True,
+        "streaming_response": True,
     }
     captured: dict = {}
 
@@ -425,7 +425,7 @@ async def test_background_wakeup_passes_provider_settings_to_main_agent(
 
     config = captured["config"]
     assert config.tool_call_timeout == 456
-    assert config.streaming_response == provider_settings["stream"]
+    assert config.streaming_response == provider_settings["streaming_response"]
     assert config.provider_settings == provider_settings
     assert config.provider_settings["fallback_chat_models"] == ["fallback-provider"]
 

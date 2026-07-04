@@ -880,7 +880,7 @@ async def _process_quote_message(
                         )
                 else:
                     logger.warning("No provider found for image captioning in quote.")
-            except BaseException as exc:
+            except Exception as exc:
                 logger.error("处理引用图片失败: %s", exc)
             finally:
                 if (
@@ -1286,8 +1286,6 @@ def _get_fallback_chat_providers(
 
 def _provider_supports_modality(provider: Provider, modality: str) -> bool:
     modalities = provider.provider_config.get("modalities", None)
-    if modalities == []:
-        return True  # Empty list from migration is treated as unconfigured for backward compatibility
     return isinstance(modalities, list) and modality in modalities
 
 

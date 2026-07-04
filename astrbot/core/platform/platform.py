@@ -10,6 +10,7 @@ from typing import Any
 
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.task_utils import create_tracked_task
 
 from .astr_message_event import AstrMessageEvent
 from .astrbot_message import AstrBotMessage
@@ -30,6 +31,8 @@ PLATFORM_ACTION_METHOD_NAMES = (
     "send_like",
     "send_poke",
 )
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class PlatformStatus(Enum):
@@ -169,8 +172,10 @@ class Platform(abc.ABC):
 
         异步方法。
         """
-        asyncio.create_task(
-            Metric.upload(msg_event_tick=1, adapter_name=self.meta().name)
+        create_tracked_task(
+            _BACKGROUND_TASKS,
+            Metric.upload(msg_event_tick=1, adapter_name=self.meta().name),
+            name=f"metric:send-by-session:{self.meta().name}",
         )
 
     def supported_actions(self) -> list[str]:
