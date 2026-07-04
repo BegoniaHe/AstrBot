@@ -66,7 +66,7 @@ class PluginUpdator(RepoZipUpdator):
         self.validate_plugin_archive(plugin_path + ".zip")
         try:
             remove_dir(plugin_path)
-        except BaseException as e:
+        except Exception as e:
             logger.error(
                 f"Failed to remove old plugin directory {plugin_path}: {e!s}; using overwrite installation.",
             )

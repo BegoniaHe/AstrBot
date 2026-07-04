@@ -192,6 +192,47 @@ async def test_execute_shell_copies_user_env_before_execution(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_execute_shell_accepts_timeout_alias(monkeypatch):
+    from astrbot.core.tools.computer_tools import shell as shell_tools
+
+    calls = []
+
+    class FakeShell:
+        async def exec(
+            self, command, cwd=None, background=False, env=None, timeout_seconds=None
+        ):
+            calls.append(timeout_seconds)
+            return {"success": True, "stdout": "", "stderr": "", "exit_code": 0}
+
+    class FakeBooter:
+        shell = FakeShell()
+
+    class FakeConfig:
+        def get_config(self, umo):
+            return {"provider_settings": {"computer_use_runtime": "sandbox"}}
+
+    class FakeEvent:
+        unified_msg_origin = "umo"
+        role = "admin"
+
+    class FakeAstrContext:
+        context = FakeConfig()
+        event = FakeEvent()
+
+    class FakeWrapper:
+        context = FakeAstrContext()
+
+    async def fake_get_booter(context, session_id):
+        return FakeBooter()
+
+    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+
+    await ExecuteShellTool().call(FakeWrapper(), command="echo hi", timeout=12)
+
+    assert calls == [12]
+
+
+@pytest.mark.asyncio
 async def test_execute_shell_avoids_double_background_for_detached_commands(
     monkeypatch,
 ):

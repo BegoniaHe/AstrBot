@@ -68,3 +68,45 @@ async def test_local_python_tool_uses_session_workspace(tmp_path, monkeypatch):
         silent=False,
         cwd=str(workspace.resolve(strict=False)),
     )
+
+
+@pytest.mark.asyncio
+async def test_local_python_tool_accepts_timeout_alias(tmp_path, monkeypatch):
+    tool = LocalPythonTool()
+    python_exec = AsyncMock(
+        return_value={"data": {"output": {"text": "ok", "images": []}, "error": ""}}
+    )
+    monkeypatch.setattr(
+        "astrbot.core.tools.computer_tools.python.get_local_booter",
+        lambda: SimpleNamespace(python=SimpleNamespace(exec=python_exec)),
+    )
+    monkeypatch.setattr(
+        "astrbot.core.tools.computer_tools.python.workspace_root",
+        lambda umo: tmp_path / umo.replace(":", "_"),
+    )
+
+    event = SimpleNamespace(
+        unified_msg_origin="onebot:GroupMessage:12345",
+        role="admin",
+        get_platform_name=lambda: "onebot",
+    )
+    context = ContextWrapper(
+        context=SimpleNamespace(
+            event=event,
+            context=SimpleNamespace(
+                get_config=lambda **_kwargs: {
+                    "provider_settings": {"computer_use_require_admin": True}
+                }
+            ),
+        ),
+        tool_call_timeout=60,
+    )
+
+    await tool.call(context, code="print('ok')", timeout=12)
+
+    python_exec.assert_awaited_once_with(
+        "print('ok')",
+        timeout_seconds=12,
+        silent=False,
+        cwd=str((tmp_path / "onebot_GroupMessage_12345").resolve(strict=False)),
+    )

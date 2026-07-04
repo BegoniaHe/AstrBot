@@ -84,15 +84,12 @@ def _get_pip_main():
     try:
         from pip._internal.cli.main import main as pip_main
     except ImportError:
-        try:
-            from pip import main as pip_main
-        except ImportError as exc:
-            raise ImportError(
-                "pip module is unavailable "
-                f"(sys.executable={sys.executable}, "
-                f"frozen={getattr(sys, 'frozen', False)}, "
-                f"ASTRBOT_DESKTOP_CLIENT={os.environ.get('ASTRBOT_DESKTOP_CLIENT')})"
-            ) from exc
+        raise ImportError(
+            "pip module is unavailable "
+            f"(sys.executable={sys.executable}, "
+            f"frozen={getattr(sys, 'frozen', False)}, "
+            f"ASTRBOT_DESKTOP_CLIENT={os.environ.get('ASTRBOT_DESKTOP_CLIENT')})"
+        ) from None
 
     return pip_main
 

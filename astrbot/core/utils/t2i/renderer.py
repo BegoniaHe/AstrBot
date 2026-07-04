@@ -52,7 +52,7 @@ class HtmlRenderer:
                     return_url=return_url,
                     template_name=template_name,
                 )
-            except BaseException as e:
+            except Exception as e:
                 logger.error(
                     f"Failed to render image via AstrBot API: {e}. Falling back to local rendering.",
                 )

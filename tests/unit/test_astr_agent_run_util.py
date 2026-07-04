@@ -1,17 +1,10 @@
 import asyncio
 import base64
-import os
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-os.environ.setdefault(
-    "ASTRBOT_ROOT",
-    tempfile.mkdtemp(prefix="astrbot-test-astr-agent-run-util-"),
-)
 
 import astrbot.core.astr_agent_run_util as util
 from astrbot.core.message.components import Json

@@ -27,12 +27,15 @@ from astrbot.api.platform import (
 from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import MediaResolver
+from astrbot.core.utils.task_utils import create_tracked_task
 from astrbot.core.utils.webhook_utils import log_webhook_info
 
 from ...register import register_platform_adapter
 from .bot_info import request_lark_bot_info
 from .lark_event import LarkMessageEvent
 from .server import LarkWebhookServer
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 @register_platform_adapter(
@@ -61,7 +64,11 @@ class LarkPlatformAdapter(Platform):
             await self.convert_msg(event)
 
         def do_v2_msg_event(event: lark.im.v1.P2ImMessageReceiveV1) -> None:
-            asyncio.create_task(on_msg_event_recv(event))
+            create_tracked_task(
+                _BACKGROUND_TASKS,
+                on_msg_event_recv(event),
+                name="lark:message-event",
+            )
 
         self.event_handler = (
             lark.EventDispatcherHandler.builder("", "")

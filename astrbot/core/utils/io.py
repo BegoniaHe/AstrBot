@@ -578,7 +578,7 @@ async def download_dashboard(
                 raise RuntimeError(
                     "Downloaded dashboard package is not a valid ZIP file"
                 )
-        except BaseException as _:
+        except Exception as _:
             if latest:
                 # Resolve latest release tag from GitHub API to construct correct asset URL
                 ssl_context = ssl.create_default_context(cafile=certifi.where())

@@ -88,6 +88,7 @@ class ExecuteShellTool(FunctionTool):
         background: bool = False,
         timeout_seconds: int | None = 300,
         env: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "Shell execution"):
             return permission_error
@@ -120,12 +121,17 @@ class ExecuteShellTool(FunctionTool):
                     local_runtime=local_runtime,
                 )
 
+            requested_timeout = kwargs.get("timeout")
             result = await sb.shell.exec(
                 command,
                 cwd=cwd,
                 background=effective_background,
                 env=env,
-                timeout_seconds=timeout_seconds or 300,
+                timeout_seconds=(
+                    requested_timeout
+                    if requested_timeout is not None
+                    else (timeout_seconds or 300)
+                ),
             )
             if stdout_file:
                 result["stdout"] = (

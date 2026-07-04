@@ -1,6 +1,4 @@
 import asyncio
-import os
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,11 +8,6 @@ import pytest_asyncio
 from requests import Response
 from wechatpy.exceptions import InvalidSignatureException
 from wechatpy.enterprise.messages import ImageMessage, TextMessage, VoiceMessage
-
-os.environ.setdefault(
-    "ASTRBOT_ROOT",
-    tempfile.mkdtemp(prefix="astrbot-test-wecom-adapter-"),
-)
 
 from astrbot.api.event import MessageChain
 from astrbot.api.message_components import File, Image, Plain, Record

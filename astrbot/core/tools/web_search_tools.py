@@ -56,27 +56,21 @@ def _client_session() -> aiohttp.ClientSession:
 
 
 def _post(session, url: str, *, json: dict, headers: dict):
-    try:
-        return session.post(
-            url,
-            json=json,
-            headers=headers,
-            timeout=_DEFAULT_HTTP_TIMEOUT,
-        )
-    except TypeError:
-        return session.post(url, json=json, headers=headers)
+    return session.post(
+        url,
+        json=json,
+        headers=headers,
+        timeout=_DEFAULT_HTTP_TIMEOUT,
+    )
 
 
 def _get(session, url: str, *, params: dict, headers: dict):
-    try:
-        return session.get(
-            url,
-            params=params,
-            headers=headers,
-            timeout=_DEFAULT_HTTP_TIMEOUT,
-        )
-    except TypeError:
-        return session.get(url, params=params, headers=headers)
+    return session.get(
+        url,
+        params=params,
+        headers=headers,
+        timeout=_DEFAULT_HTTP_TIMEOUT,
+    )
 
 
 @std_dataclass

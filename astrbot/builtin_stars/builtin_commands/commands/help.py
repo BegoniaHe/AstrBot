@@ -19,7 +19,7 @@ class HelpCommand:
                     timeout=aiohttp.ClientTimeout(total=2),
                 ) as resp:
                     return (await resp.json())["notice"]
-        except BaseException:
+        except Exception:
             return ""
 
     async def _build_reserved_command_lines(self) -> list[str]:
@@ -28,7 +28,7 @@ class HelpCommand:
         """
         try:
             commands = await command_management.list_commands()
-        except BaseException:
+        except Exception:
             return []
 
         lines: list[str] = []
@@ -69,7 +69,7 @@ class HelpCommand:
         notice = ""
         try:
             notice = await self._query_astrbot_notice()
-        except BaseException:
+        except Exception:
             pass
 
         dashboard_version = await get_dashboard_version()

@@ -507,7 +507,7 @@ class Context:
         if isinstance(session, str):
             try:
                 session = MessageSession.from_str(session)
-            except BaseException as e:
+            except Exception as e:
                 raise ValueError("不合法的 session 字符串: " + str(e))
 
         for platform in self.platform_manager.platform_insts:

@@ -63,7 +63,11 @@ class FunctionTool[TContext](ToolSchema):
     """
 
     def __repr__(self) -> str:
-        return f"FuncTool(name={self.name}, parameters={self.parameters}, description={self.description})"
+        return (
+            "FunctionTool("
+            f"name={self.name}, parameters={self.parameters}, "
+            f"description={self.description})"
+        )
 
     async def call(self, context: ContextWrapper[TContext], **kwargs) -> ToolExecResult:
         """Run the tool with the given arguments. The handler field has priority."""

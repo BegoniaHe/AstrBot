@@ -1,5 +1,6 @@
 import platform
 from dataclasses import dataclass, field
+from typing import Any
 
 import mcp
 
@@ -87,6 +88,7 @@ class PythonTool(FunctionTool):
         code: str,
         silent: bool = False,
         timeout_seconds: int = 30,
+        **kwargs: Any,
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "Python execution"):
             return permission_error
@@ -94,9 +96,12 @@ class PythonTool(FunctionTool):
             context.context.context,
             context.context.event.unified_msg_origin,
         )
+        requested_timeout = kwargs.get("timeout")
+        if requested_timeout is None:
+            requested_timeout = timeout_seconds
         effective_timeout = (
-            min(timeout_seconds, context.tool_call_timeout)
-            if timeout_seconds > 0
+            min(requested_timeout, context.tool_call_timeout)
+            if requested_timeout > 0
             else context.tool_call_timeout
         )
         try:
@@ -127,13 +132,17 @@ class LocalPythonTool(FunctionTool):
         code: str,
         silent: bool = False,
         timeout_seconds: int = 30,
+        **kwargs: Any,
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "Python execution"):
             return permission_error
         sb = get_local_booter()
+        requested_timeout = kwargs.get("timeout")
+        if requested_timeout is None:
+            requested_timeout = timeout_seconds
         effective_timeout = (
-            min(timeout_seconds, context.tool_call_timeout)
-            if timeout_seconds > 0
+            min(requested_timeout, context.tool_call_timeout)
+            if requested_timeout > 0
             else context.tool_call_timeout
         )
         try:

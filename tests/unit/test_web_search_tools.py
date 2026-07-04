@@ -78,6 +78,7 @@ async def test_firecrawl_search_maps_v2_data_list(monkeypatch):
             "Authorization": "Bearer firecrawl-key",
             "Content-Type": "application/json",
         },
+        "timeout": tools._DEFAULT_HTTP_TIMEOUT,
     }
     assert results == [
         tools.SearchResult(
@@ -219,6 +220,7 @@ async def test_firecrawl_search_uses_session_context(monkeypatch):
             "Authorization": "Bearer firecrawl-key",
             "Content-Type": "application/json",
         },
+        "timeout": tools._DEFAULT_HTTP_TIMEOUT,
     }
 
 
@@ -282,6 +284,7 @@ async def test_firecrawl_scrape_uses_request_setup(monkeypatch):
             "Authorization": "Bearer firecrawl-key",
             "Content-Type": "application/json",
         },
+        "timeout": tools._DEFAULT_HTTP_TIMEOUT,
     }
 
 
@@ -337,6 +340,7 @@ class _FakeFirecrawlSession:
         self.entered = False
         self.exited = False
         self.posted = None
+        self.gotten = None
 
     async def __aenter__(self):
         self.entered = True
@@ -346,8 +350,22 @@ class _FakeFirecrawlSession:
         self.exited = True
         return None
 
-    def post(self, url, json, headers):
-        self.posted = {"url": url, "json": json, "headers": headers}
+    def post(self, url, json, headers, timeout):
+        self.posted = {
+            "url": url,
+            "json": json,
+            "headers": headers,
+            "timeout": timeout,
+        }
+        return self.response
+
+    def get(self, url, params, headers, timeout):
+        self.gotten = {
+            "url": url,
+            "params": params,
+            "headers": headers,
+            "timeout": timeout,
+        }
         return self.response
 
 

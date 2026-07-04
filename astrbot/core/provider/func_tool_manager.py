@@ -124,8 +124,6 @@ PY_TO_JSON_TYPE = {
     "tuple": "array",
     "set": "array",
 }
-# Legacy alias.
-FuncTool = FunctionTool
 
 
 def _prepare_config(config: dict) -> dict:
@@ -254,9 +252,9 @@ class _PermissionGuardedTool(FunctionTool):
 
 class FunctionToolManager:
     def __init__(self) -> None:
-        self.func_list: list[FuncTool] = []
+        self.func_list: list[FunctionTool] = []
         """All tools include mcp tools and plugin tools, except astrbot builtin tools."""
-        self.builtin_func_list: dict[type[FuncTool], FuncTool] = {}
+        self.builtin_func_list: dict[type[FunctionTool], FunctionTool] = {}
         """All astrbot builtin tools, keyed by their class. Values are instantiated tool objects, created on demand."""
 
         self._mcp_server_runtime: dict[str, _MCPServerRuntime] = {}
@@ -295,7 +293,7 @@ class FunctionToolManager:
         func_args: list[dict],
         desc: str,
         handler: Callable[..., Awaitable[Any] | AsyncGenerator[Any]],
-    ) -> FuncTool:
+    ) -> FunctionTool:
         params = {
             "type": "object",  # hard-coded here
             "properties": {},
@@ -304,7 +302,7 @@ class FunctionToolManager:
             p = copy.deepcopy(param)
             p.pop("name", None)
             params["properties"][param["name"]] = p
-        return FuncTool(
+        return FunctionTool(
             name=name,
             parameters=params,
             description=desc,
@@ -345,7 +343,7 @@ class FunctionToolManager:
                 self.func_list.pop(i)
                 break
 
-    def get_tool(self, name) -> FuncTool | None:
+    def get_tool(self, name) -> FunctionTool | None:
         # 优先返回已激活的工具（后加载的覆盖前面的，与 ToolSet.add_tool 保持一致）
         # 使用 getattr(..., True) 与 ToolSet.add_tool 保持一致：没有 active 属性的工具视为已激活
         for f in reversed(self.func_list):
@@ -365,7 +363,10 @@ class FunctionToolManager:
             return builtin_tool
         return None
 
-    def get_builtin_tool(self, tool: str | type[FuncTool]) -> FuncTool:
+    def get_builtin_tool(
+        self,
+        tool: str | type[FunctionTool],
+    ) -> FunctionTool:
         ensure_builtin_tools_loaded()
 
         if isinstance(tool, str):
@@ -389,7 +390,7 @@ class FunctionToolManager:
         self.builtin_func_list[tool_cls] = builtin_tool
         return builtin_tool
 
-    def iter_builtin_tools(self) -> list[FuncTool]:
+    def iter_builtin_tools(self) -> list[FunctionTool]:
         ensure_builtin_tools_loaded()
         return [
             self.get_builtin_tool(tool_cls) for tool_cls in iter_builtin_tool_classes()
@@ -743,7 +744,7 @@ class FunctionToolManager:
             if not (isinstance(f, MCPTool) and f.mcp_server_name == name)
         ]
 
-        # 将 MCP 工具转换为 FuncTool 并添加到 func_list
+        # 将 MCP 工具转换为 FunctionTool 并添加到 func_list
         for tool in mcp_client.tools:
             func_tool = MCPTool(
                 mcp_tool=tool,
@@ -763,7 +764,7 @@ class FunctionToolManager:
             client = runtime.client
             # 关闭MCP连接
             await self._cleanup_mcp_client_safely(client, name)
-            # 移除关联的FuncTool
+            # 移除关联的 FunctionTool
             self.func_list = [
                 f
                 for f in self.func_list
@@ -1045,7 +1046,3 @@ class FunctionToolManager:
 
     def __repr__(self) -> str:
         return str(self.func_list)
-
-
-# Legacy alias.
-FuncCall = FunctionToolManager
