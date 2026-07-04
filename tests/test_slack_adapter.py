@@ -1,12 +1,15 @@
 import asyncio
+import base64
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from astrbot.api.platform import MessageType
+from astrbot.core import db_helper
 from astrbot.core.platform.sources.slack.slack_adapter import SlackAdapter
 from tests.fixtures.helpers import make_platform_config
 
@@ -25,6 +28,38 @@ def _build_adapter(**overrides) -> SlackAdapter:
         {},
         asyncio.Queue(),
     )
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
+
+
+def test_slack_adapter_requires_required_tokens_by_mode():
+    with pytest.raises(ValueError, match="Slack bot_token 是必需的"):
+        SlackAdapter(
+            make_platform_config(
+                "slack",
+                id="test_slack",
+                bot_token=None,
+                app_token="xapp-test",
+                signing_secret="secret",
+                slack_connection_mode="socket",
+            ),
+            {},
+            asyncio.Queue(),
+        )
+
+    with pytest.raises(ValueError, match="Socket Mode 需要 app_token"):
+        _build_adapter(app_token=None, slack_connection_mode="socket")
+
+    with pytest.raises(ValueError, match="Webhook Mode 需要 signing_secret"):
+        _build_adapter(signing_secret=None, slack_connection_mode="webhook")
 
 
 @pytest.mark.asyncio
@@ -371,6 +406,88 @@ async def test_slack_handle_webhook_event_ignores_noise_and_forwards_message():
 
 
 @pytest.mark.asyncio
+async def test_slack_get_file_base64_returns_base64_for_success(monkeypatch):
+    adapter = _build_adapter()
+
+    class FakeResponse:
+        status = 200
+
+        async def read(self):
+            return b"file-bytes"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeSession:
+        def __init__(self, *args, **kwargs):
+            self.calls = []
+
+        def get(self, url, headers=None):
+            self.calls.append((url, headers))
+            return FakeResponse()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    fake_session = FakeSession()
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.slack.slack_adapter.aiohttp.ClientSession",
+        lambda: fake_session,
+    )
+
+    encoded = await adapter.get_file_base64("https://files.example.com/private")
+
+    assert encoded == base64.b64encode(b"file-bytes").decode("utf-8")
+    assert fake_session.calls == [
+        (
+            "https://files.example.com/private",
+            {"Authorization": "Bearer xoxb-test"},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_slack_get_file_base64_raises_on_non_200(monkeypatch):
+    adapter = _build_adapter()
+
+    class FakeResponse:
+        status = 403
+
+        async def text(self):
+            return "forbidden"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeSession:
+        def get(self, url, headers=None):
+            return FakeResponse()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.slack.slack_adapter.aiohttp.ClientSession",
+        lambda: FakeSession(),
+    )
+
+    with pytest.raises(Exception, match="下载文件失败: 403"):
+        await adapter.get_file_base64("https://files.example.com/private")
+
+
+@pytest.mark.asyncio
 async def test_slack_webhook_callback_rejects_non_webhook_mode():
     adapter = _build_adapter(slack_connection_mode="socket")
 
@@ -412,3 +529,91 @@ def test_slack_unified_webhook_requires_webhook_mode_and_uuid():
     assert webhook_adapter.unified_webhook() is True
     assert socket_adapter.unified_webhook() is False
     assert missing_uuid_adapter.unified_webhook() is False
+
+
+@pytest.mark.asyncio
+async def test_slack_run_starts_socket_client(monkeypatch):
+    adapter = _build_adapter(slack_connection_mode="socket")
+    start = AsyncMock()
+    socket_clients = []
+
+    class FakeSocketClient:
+        def __init__(self, web_client, app_token, handler):
+            socket_clients.append((web_client, app_token, handler))
+            self.start = start
+
+    adapter.get_bot_user_id = AsyncMock(return_value="B1")
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.slack.slack_adapter.SlackSocketClient",
+        FakeSocketClient,
+    )
+
+    await adapter.run()
+
+    assert adapter.bot_self_id == "B1"
+    assert len(socket_clients) == 1
+    assert socket_clients[0][1] == "xapp-test"
+    start.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_slack_run_waits_on_unified_webhook_mode(monkeypatch):
+    adapter = _build_adapter(
+        slack_connection_mode="webhook",
+        unified_webhook_mode=True,
+        webhook_uuid="uuid-1",
+    )
+    waiter = AsyncMock()
+    webhook_clients = []
+
+    class FakeWebhookClient:
+        def __init__(self, web_client, signing_secret, host, port, path, handler):
+            webhook_clients.append((signing_secret, host, port, path, handler))
+            self.shutdown_event = SimpleNamespace(wait=waiter)
+            self.start = AsyncMock()
+
+    adapter.get_bot_user_id = AsyncMock(return_value="B1")
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.slack.slack_adapter.SlackWebhookClient",
+        FakeWebhookClient,
+    )
+
+    await adapter.run()
+
+    assert adapter.bot_self_id == "B1"
+    assert len(webhook_clients) == 1
+    assert webhook_clients[0][:4] == ("secret", "0.0.0.0", 3000, "/astrbot-slack-webhook/callback")
+    waiter.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_slack_run_starts_webhook_server_when_not_unified(monkeypatch):
+    adapter = _build_adapter(slack_connection_mode="webhook", unified_webhook_mode=False)
+    start = AsyncMock()
+
+    class FakeWebhookClient:
+        def __init__(self, web_client, signing_secret, host, port, path, handler):
+            self.shutdown_event = SimpleNamespace(wait=AsyncMock())
+            self.start = start
+
+    adapter.get_bot_user_id = AsyncMock(return_value="B1")
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.slack.slack_adapter.SlackWebhookClient",
+        FakeWebhookClient,
+    )
+
+    await adapter.run()
+
+    start.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_slack_terminate_stops_socket_and_webhook_clients():
+    adapter = _build_adapter()
+    adapter.socket_client = SimpleNamespace(stop=AsyncMock())
+    adapter.webhook_client = SimpleNamespace(stop=AsyncMock())
+
+    await adapter.terminate()
+
+    adapter.socket_client.stop.assert_awaited_once()
+    adapter.webhook_client.stop.assert_awaited_once()

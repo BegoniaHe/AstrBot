@@ -4,8 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from astrbot.api.message_components import Image, Record
+from astrbot.core import db_helper
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.platform.sources.discord import (
@@ -24,6 +26,16 @@ _PNG_BYTES = base64.b64decode(
 )
 _WAV_BYTES = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 16
 _WAV_PATH = "/tmp/discord_voice.wav"
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -534,6 +546,44 @@ async def test_discord_event_get_channel_uses_fetch_when_cache_misses():
 
 
 @pytest.mark.asyncio
+async def test_discord_event_get_channel_returns_none_for_invalid_session_id():
+    event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
+    event.client = SimpleNamespace(get_channel=MagicMock(), fetch_channel=AsyncMock())
+    event.session = SimpleNamespace(session_id="not-a-number")
+
+    result = await event._get_channel()
+
+    assert result is None
+    event.client.get_channel.assert_not_called()
+    event.client.fetch_channel.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_discord_event_get_channel_returns_none_when_fetch_forbidden(monkeypatch):
+    forbidden_error = discord_platform_event.discord.errors.Forbidden(
+        response=SimpleNamespace(status=403, reason="Forbidden"),
+        message="forbidden",
+    )
+    client = SimpleNamespace(
+        get_channel=MagicMock(return_value=None),
+        fetch_channel=AsyncMock(side_effect=forbidden_error),
+    )
+    event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
+    event.client = client
+    event.session = SimpleNamespace(session_id="456")
+    logger_error = MagicMock()
+
+    monkeypatch.setattr(discord_platform_event.logger, "error", logger_error)
+
+    result = await event._get_channel()
+
+    assert result is None
+    client.get_channel.assert_called_once_with(456)
+    client.fetch_channel.assert_awaited_once_with(456)
+    logger_error.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_discord_event_send_streaming_aggregates_plain_segments_once():
     event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
     event.send = AsyncMock()
@@ -555,6 +605,31 @@ async def test_discord_event_send_streaming_aggregates_plain_segments_once():
     assert len(sent_chain.chain) == 1
     assert sent_chain.chain[0].text == "Hello Discord"
     parent_send_streaming.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_discord_event_send_swallow_followup_send_error_and_still_calls_parent_send(
+    monkeypatch,
+):
+    followup = SimpleNamespace(send=AsyncMock(side_effect=RuntimeError("followup failed")))
+    event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
+    event.client = SimpleNamespace(get_message=MagicMock())
+    event.interaction_followup_webhook = followup
+    event._parse_to_discord = AsyncMock(return_value=("hello", [], None, [], None))
+    logger_error = MagicMock()
+
+    monkeypatch.setattr(discord_platform_event.logger, "error", logger_error)
+
+    with patch.object(
+        discord_platform_event.AstrMessageEvent,
+        "send",
+        AsyncMock(return_value=None),
+    ) as parent_send:
+        await event.send(MessageChain().message("hello"))
+
+    followup.send.assert_awaited_once_with(content="hello")
+    parent_send.assert_awaited_once()
+    logger_error.assert_called_once()
 
 
 @pytest.mark.asyncio

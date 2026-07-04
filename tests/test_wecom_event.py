@@ -2,19 +2,31 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 from wechatpy.exceptions import WeChatClientException
 
 from astrbot.api.event import MessageChain
-from astrbot.api.message_components import File, Image, Plain, Record
+from astrbot.api.message_components import File, Image, Plain, Record, Video
 from astrbot.api.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     PlatformMetadata,
 )
+from astrbot.core import db_helper
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.sources.wecom.wecom_event import WecomPlatformEvent
 from astrbot.core.platform.sources.wecom.wecom_kf_message import WeChatKFMessage
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
 
 
 def _build_message() -> AstrBotMessage:
@@ -89,6 +101,44 @@ async def test_wecom_event_send_kf_text_falls_back_on_40096():
 
     kf_message.send_text.assert_called_once_with("user-1", "bot-1", "hello")
     client.message.send_text.assert_called_once_with("bot-1", "user-1", "hello")
+    parent_send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wecom_event_send_kf_text_falls_back_on_40096_for_each_split_chunk():
+    kf_message = FakeKFMessage()
+    kf_message.send_text.side_effect = WeChatClientException(
+        40096,
+        "invalid external userid",
+    )
+    client = SimpleNamespace(
+        kf_message=kf_message,
+        message=SimpleNamespace(send_text=MagicMock()),
+    )
+    event = _build_event(client)
+
+    with (
+        patch.object(event, "split_plain", AsyncMock(return_value=["part 1", "part 2"])),
+        patch(
+            "astrbot.core.platform.sources.wecom.wecom_event.asyncio.sleep",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            AstrMessageEvent,
+            "send",
+            AsyncMock(return_value=None),
+        ) as parent_send,
+    ):
+        await event.send(MessageChain([Plain("long text")]))
+
+    assert kf_message.send_text.call_args_list == [
+        (("user-1", "bot-1", "part 1"),),
+        (("user-1", "bot-1", "part 2"),),
+    ]
+    assert client.message.send_text.call_args_list == [
+        (("bot-1", "user-1", "part 1"),),
+        (("bot-1", "user-1", "part 2"),),
+    ]
     parent_send.assert_awaited_once()
 
 
@@ -282,6 +332,82 @@ async def test_wecom_event_send_app_file_failure_sends_error_text(monkeypatch, t
 
 
 @pytest.mark.asyncio
+async def test_wecom_event_send_kf_file_failure_sends_error_text(monkeypatch, tmp_path):
+    file_path = tmp_path / "report.txt"
+    file_path.write_bytes(b"report")
+    file_comp = File(name="report.txt", file=str(file_path))
+    kf_message = FakeKFMessage()
+    kf_message.send_file = MagicMock()
+    client = SimpleNamespace(
+        kf_message=kf_message,
+        media=SimpleNamespace(upload=MagicMock(side_effect=RuntimeError("upload failed"))),
+    )
+    event = _build_event(client)
+
+    with (
+        patch.object(
+            File,
+            "get_file",
+            AsyncMock(return_value=str(file_path)),
+        ),
+        patch.object(
+            AstrMessageEvent,
+            "send",
+            AsyncMock(return_value=None),
+        ),
+        patch.object(
+            WecomPlatformEvent,
+            "send",
+            wraps=event.send,
+        ) as recursive_send,
+    ):
+        await event.send(MessageChain([file_comp]))
+
+    assert recursive_send.await_count == 2
+    error_chain = recursive_send.await_args_list[1].args[0]
+    assert error_chain.chain[0].text == "微信客服上传文件失败: upload failed"
+    kf_message.send_file.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_wecom_event_send_kf_video_failure_sends_error_text(monkeypatch, tmp_path):
+    video_path = tmp_path / "clip.mp4"
+    video_path.write_bytes(b"video")
+    video_comp = Video(file=str(video_path))
+    kf_message = FakeKFMessage()
+    kf_message.send_video = MagicMock()
+    client = SimpleNamespace(
+        kf_message=kf_message,
+        media=SimpleNamespace(upload=MagicMock(side_effect=RuntimeError("upload failed"))),
+    )
+    event = _build_event(client)
+
+    with (
+        patch.object(
+            Video,
+            "convert_to_file_path",
+            AsyncMock(return_value=str(video_path)),
+        ),
+        patch.object(
+            AstrMessageEvent,
+            "send",
+            AsyncMock(return_value=None),
+        ),
+        patch.object(
+            WecomPlatformEvent,
+            "send",
+            wraps=event.send,
+        ) as recursive_send,
+    ):
+        await event.send(MessageChain([video_comp]))
+
+    assert recursive_send.await_count == 2
+    error_chain = recursive_send.await_args_list[1].args[0]
+    assert error_chain.chain[0].text == "微信客服上传视频失败: upload failed"
+    kf_message.send_video.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_wecom_event_send_warns_for_unsupported_component():
     client = SimpleNamespace(message=SimpleNamespace(send_text=MagicMock()))
     event = _build_event(client)
@@ -327,6 +453,32 @@ async def test_wecom_event_send_streaming_aggregates_plain_segments():
     assert len(sent_chain.chain) == 1
     assert isinstance(sent_chain.chain[0], Plain)
     assert sent_chain.chain[0].text == "Hello world"
+    parent_send_streaming.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wecom_event_send_streaming_aggregates_mixed_segments_into_single_send():
+    event = _build_event(SimpleNamespace())
+    event.send = AsyncMock()
+
+    async def generator():
+        yield MessageChain([Plain("Hello "), Image(file="img.png", url="img.png")])
+        yield MessageChain([Plain("world")])
+
+    with patch.object(
+        AstrMessageEvent,
+        "send_streaming",
+        AsyncMock(return_value="stream-finished"),
+    ) as parent_send_streaming:
+        result = await event.send_streaming(generator())
+
+    assert result == "stream-finished"
+    event.send.assert_awaited_once()
+    sent_chain = event.send.await_args.args[0]
+    assert len(sent_chain.chain) == 2
+    assert isinstance(sent_chain.chain[0], Plain)
+    assert sent_chain.chain[0].text == "Hello world"
+    assert isinstance(sent_chain.chain[1], Image)
     parent_send_streaming.assert_awaited_once()
 
 

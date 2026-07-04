@@ -4,7 +4,9 @@ import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 
+from astrbot.core import db_helper
 from astrbot.core.message.components import (
     At,
     AtAll,
@@ -19,6 +21,16 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.platform.platform_metadata import PlatformMetadata
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
 
 
 class ConcreteAstrMessageEvent(AstrMessageEvent):

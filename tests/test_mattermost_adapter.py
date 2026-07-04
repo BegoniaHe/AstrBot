@@ -4,10 +4,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+import pytest_asyncio
 
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
 from astrbot.api.platform import MessageType
+from astrbot.core import db_helper
 from astrbot.core.platform.sources.mattermost.client import MattermostClient
 from astrbot.core.platform.sources.mattermost.mattermost_adapter import (
     MattermostPlatformAdapter,
@@ -34,6 +36,16 @@ def _build_adapter() -> MattermostPlatformAdapter:
     adapter.bot_username = "bot"
     adapter._mention_pattern = adapter._build_mention_pattern(adapter.bot_username)
     return adapter
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -409,6 +421,85 @@ async def test_mattermost_event_get_group_maps_channel_display_name():
     assert group.group_name == "Town Square"
     assert group.members[0].user_id == "user-1"
     assert group.members[0].nickname == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_mattermost_event_get_group_returns_none_without_channel_id():
+    event = _build_event()
+    event.message_obj.group_id = None
+    event.message_obj.session_id = ""
+
+    group = await event.get_group(group_id=None)
+
+    assert group is None
+    event.client.get_channel.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_mattermost_event_send_streaming_fallback_flushes_remaining_plain_text():
+    event = _build_event()
+    event.send = AsyncMock()
+
+    async def generator():
+        yield MessageChain([Comp.Plain("tail without punctuation")])
+
+    with patch.object(
+        MattermostMessageEvent.__mro__[1],
+        "send_streaming",
+        AsyncMock(return_value=None),
+    ) as parent_send_streaming:
+        result = await event.send_streaming(generator(), use_fallback=True)
+
+    assert result is None
+    event.send.assert_awaited_once_with(
+        MessageChain([Comp.Plain("tail without punctuation")])
+    )
+    parent_send_streaming.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_mattermost_ws_connect_and_listen_skips_non_json_text_frame(monkeypatch):
+    adapter = _build_adapter()
+    logger_debug = MagicMock()
+    ws = MagicMock()
+    ws.send_json = AsyncMock()
+    ws.close = AsyncMock()
+
+    class _WSMessage:
+        def __init__(self, data: str) -> None:
+            self.type = 1
+            self.data = data
+
+    class _AsyncWS:
+        def __init__(self, messages):
+            self._messages = iter(messages)
+            self.send_json = AsyncMock()
+            self.close = AsyncMock()
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self._messages)
+            except StopIteration as exc:
+                raise StopAsyncIteration from exc
+
+    ws = _AsyncWS([_WSMessage("not-json"), SimpleNamespace(type=257, data="")])
+    adapter.client.ws_connect = AsyncMock(return_value=ws)
+    adapter._handle_ws_event = AsyncMock()
+
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.mattermost.mattermost_adapter.logger.debug",
+        logger_debug,
+    )
+
+    await adapter._ws_connect_and_listen()
+
+    ws.send_json.assert_awaited_once()
+    adapter._handle_ws_event.assert_not_awaited()
+    logger_debug.assert_called_once()
+    ws.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

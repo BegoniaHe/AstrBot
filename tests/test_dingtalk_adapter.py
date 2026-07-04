@@ -4,10 +4,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+import pytest_asyncio
 
 from astrbot.api.event import MessageChain
 from astrbot.api.message_components import At, File, Image, Plain, Record, Video
 from astrbot.api.platform import MessageType
+from astrbot.core import db_helper
 from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.platform.sources.dingtalk import dingtalk_adapter
 from astrbot.core.platform.sources.dingtalk.dingtalk_adapter import (
@@ -43,6 +45,16 @@ def _build_adapter() -> DingtalkPlatformAdapter:
     adapter.client_id = "robot-code"
     adapter.client_secret = "client-secret"
     return adapter
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -91,6 +103,74 @@ async def test_dingtalk_reconnect_delay_wakes_on_terminate(monkeypatch):
             await adapter.terminate()
             run_task.cancel()
             await asyncio.gather(run_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_dingtalk_callback_raw_process_wraps_ack_headers(monkeypatch):
+    ack_headers = SimpleNamespace(message_id=None, content_type=None)
+
+    class FakeAckMessage:
+        STATUS_OK = 200
+
+        def __init__(self) -> None:
+            self.code = None
+            self.headers = ack_headers
+            self.data = None
+
+    class FakeHeaders:
+        CONTENT_TYPE_APPLICATION_JSON = "application/json"
+
+    class FakeCallbackClient:
+        def __init__(self, credential, logger=None):
+            self.credential = credential
+            self.logger = logger
+            self.registered = None
+
+        def register_callback_handler(self, topic, handler) -> None:
+            self.registered = (topic, handler)
+
+    monkeypatch.setattr(dingtalk_adapter, "AckMessage", FakeAckMessage)
+    monkeypatch.setattr(dingtalk_adapter, "Headers", FakeHeaders)
+    monkeypatch.setattr(
+        dingtalk_adapter.dingtalk_stream,
+        "Credential",
+        lambda client_id, client_secret: (client_id, client_secret),
+    )
+    monkeypatch.setattr(
+        dingtalk_adapter.dingtalk_stream,
+        "DingTalkStreamClient",
+        FakeCallbackClient,
+    )
+    monkeypatch.setattr(
+        dingtalk_adapter.dingtalk_stream,
+        "ChatbotMessage",
+        SimpleNamespace(
+            TOPIC="topic-chatbot",
+            from_dict=lambda data: data,
+        ),
+    )
+
+    adapter = DingtalkPlatformAdapter(
+        {"id": "test_dingtalk", "client_id": "robot-code", "client_secret": "secret"},
+        {},
+        asyncio.Queue(),
+    )
+    adapter.convert_msg = AsyncMock(return_value="abm")
+    adapter.handle_msg = AsyncMock()
+
+    ack = await adapter.client.raw_process(
+        SimpleNamespace(
+            data={"msg": "payload"},
+            headers=SimpleNamespace(message_id="msg-123"),
+        )
+    )
+
+    adapter.convert_msg.assert_awaited_once_with({"msg": "payload"})
+    adapter.handle_msg.assert_awaited_once_with("abm")
+    assert ack.code == FakeAckMessage.STATUS_OK
+    assert ack.headers.message_id == "msg-123"
+    assert ack.headers.content_type == "application/json"
+    assert ack.data == {"response": "OK"}
 
 
 @pytest.mark.asyncio
@@ -677,3 +757,62 @@ async def test_dingtalk_event_send_streaming_buffers_plain_segments_once():
     event.send.assert_awaited_once()
     buffered_chain = event.send.await_args.args[0]
     assert buffered_chain.get_plain_text() == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_dingtalk_event_send_without_adapter_logs_and_skips_parent_send(monkeypatch):
+    event = DingtalkMessageEvent.__new__(DingtalkMessageEvent)
+    event.adapter = None
+    event.platform_meta = SimpleNamespace(name="dingtalk")
+    event.message_obj = SimpleNamespace(raw_message={})
+    event._has_send_oper = False
+    logger_error = MagicMock()
+
+    monkeypatch.setattr(dingtalk_adapter.logger, "error", logger_error)
+    with patch.object(
+        DingtalkMessageEvent.__mro__[1],
+        "send",
+        AsyncMock(return_value=None),
+    ) as parent_send:
+        await event.send(MessageChain().message("hello"))
+
+    logger_error.assert_called_once()
+    parent_send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dingtalk_event_send_streaming_returns_none_for_empty_generator():
+    event = DingtalkMessageEvent.__new__(DingtalkMessageEvent)
+    event.platform_meta = SimpleNamespace(name="dingtalk")
+    event._has_send_oper = False
+    event.send = AsyncMock()
+
+    async def _generator():
+        if False:
+            yield MessageChain()
+
+    result = await event.send_streaming(_generator())
+
+    assert result is None
+    event.send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dingtalk_event_send_streaming_merges_mixed_components_before_send():
+    event = DingtalkMessageEvent.__new__(DingtalkMessageEvent)
+    event.platform_meta = SimpleNamespace(name="dingtalk")
+    event._has_send_oper = False
+    event.send = AsyncMock()
+
+    async def _generator():
+        yield MessageChain(chain=[Plain("hello "), At(qq="user-1")])
+        yield MessageChain().message("world")
+
+    await event.send_streaming(_generator())
+
+    event.send.assert_awaited_once()
+    buffered_chain = event.send.await_args.args[0]
+    assert isinstance(buffered_chain.chain[0], Plain)
+    assert buffered_chain.chain[0].text == "hello world"
+    assert isinstance(buffered_chain.chain[1], At)
+    assert buffered_chain.chain[1].qq == "user-1"

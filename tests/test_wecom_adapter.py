@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 from pathlib import Path
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 from requests import Response
+from wechatpy.exceptions import InvalidSignatureException
 from wechatpy.enterprise.messages import ImageMessage, TextMessage, VoiceMessage
 
 os.environ.setdefault(
@@ -75,8 +77,12 @@ def _patch_media_resolver(monkeypatch, *, result: str = "/tmp/wecom.wav", error=
 
 
 @pytest_asyncio.fixture(scope="module", autouse=True)
-async def _dispose_global_db_helper():
-    yield
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
     await db_helper.engine.dispose()
 
 
@@ -98,6 +104,125 @@ def test_extract_wecom_media_filename_uses_plain_filename_and_basename_only():
 def test_extract_wecom_media_filename_returns_none_without_filename():
     assert _extract_wecom_media_filename("attachment") is None
     assert _extract_wecom_media_filename(None) is None
+
+
+@pytest.mark.asyncio
+async def test_wecom_server_handle_verify_returns_echo_text():
+    server = wecom_adapter.WecomServer.__new__(wecom_adapter.WecomServer)
+    server.crypto = SimpleNamespace(check_signature=MagicMock(return_value="echo-ok"))
+    request = SimpleNamespace(
+        args={
+            "msg_signature": "sig",
+            "timestamp": "ts",
+            "nonce": "nonce",
+            "echostr": "echo",
+        }
+    )
+
+    response = await server.handle_verify(request)
+
+    assert response.body == b"echo-ok"
+    assert response.media_type == "text/plain"
+    server.crypto.check_signature.assert_called_once_with("sig", "ts", "nonce", "echo")
+
+
+@pytest.mark.asyncio
+async def test_wecom_server_handle_verify_reraises_invalid_signature():
+    server = wecom_adapter.WecomServer.__new__(wecom_adapter.WecomServer)
+    server.crypto = SimpleNamespace(
+        check_signature=MagicMock(side_effect=InvalidSignatureException())
+    )
+
+    with pytest.raises(InvalidSignatureException):
+        await server.handle_verify(
+            SimpleNamespace(
+                args={
+                    "msg_signature": "sig",
+                    "timestamp": "ts",
+                    "nonce": "nonce",
+                    "echostr": "echo",
+                }
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_wecom_server_handle_callback_decrypts_parses_and_invokes_callback(
+    monkeypatch,
+):
+    server = wecom_adapter.WecomServer.__new__(wecom_adapter.WecomServer)
+    server.crypto = SimpleNamespace(
+        decrypt_message=MagicMock(return_value="<xml>ok</xml>")
+    )
+    callback = AsyncMock()
+    server.callback = callback
+    parsed_message = SimpleNamespace(type="text")
+    monkeypatch.setattr(wecom_adapter, "parse_message", MagicMock(return_value=parsed_message))
+    request = SimpleNamespace(
+        args={"msg_signature": "sig", "timestamp": "ts", "nonce": "nonce"},
+        get_data=AsyncMock(return_value=b"encrypted"),
+    )
+
+    result = await server.handle_callback(request)
+
+    assert result == "success"
+    server.crypto.decrypt_message.assert_called_once_with(
+        b"encrypted", "sig", "ts", "nonce"
+    )
+    wecom_adapter.parse_message.assert_called_once_with("<xml>ok</xml>")
+    callback.assert_awaited_once_with(parsed_message)
+
+
+@pytest.mark.asyncio
+async def test_wecom_server_handle_callback_reraises_invalid_signature():
+    server = wecom_adapter.WecomServer.__new__(wecom_adapter.WecomServer)
+    server.crypto = SimpleNamespace(
+        decrypt_message=MagicMock(side_effect=InvalidSignatureException())
+    )
+    server.callback = AsyncMock()
+    request = SimpleNamespace(
+        args={"msg_signature": "sig", "timestamp": "ts", "nonce": "nonce"},
+        get_data=AsyncMock(return_value=b"encrypted"),
+    )
+
+    with pytest.raises(InvalidSignatureException):
+        await server.handle_callback(request)
+
+    server.callback.assert_not_awaited()
+
+
+def test_wecom_adapter_init_normalizes_api_base_and_injects_kf_clients(monkeypatch):
+    fake_server = SimpleNamespace(callback=None)
+    fake_client = SimpleNamespace()
+    fake_kf = SimpleNamespace(name="kf-api")
+    fake_kf_message = SimpleNamespace(name="kf-message-api")
+
+    monkeypatch.setattr(wecom_adapter, "WecomServer", lambda queue, config: fake_server)
+    monkeypatch.setattr(wecom_adapter, "WeChatClient", lambda corpid, secret: fake_client)
+    monkeypatch.setattr(wecom_adapter, "WeChatKF", lambda client: fake_kf)
+    monkeypatch.setattr(wecom_adapter, "WeChatKFMessage", lambda client: fake_kf_message)
+
+    adapter = WecomPlatformAdapter(
+        {
+            "id": "wecom-test",
+            "corpid": " corp ",
+            "secret": " secret ",
+            "token": "token",
+            "encoding_aes_key": "aes",
+            "api_base_url": "https://example.com/custom",
+            "kf_name": "support",
+        },
+        {},
+        asyncio.Queue(),
+    )
+
+    assert adapter.api_base_url == "https://example.com/custom/cgi-bin/"
+    assert adapter.server is fake_server
+    assert adapter.kf_name == "support"
+    assert adapter.client.kf is fake_kf
+    assert adapter.client.kf_message is fake_kf_message
+    assert adapter.client.API_BASE_URL == "https://example.com/custom/cgi-bin/"
+    assert callable(adapter.server.callback)
 
 
 @pytest.mark.asyncio
@@ -360,6 +485,65 @@ async def test_wecom_convert_wechat_kf_message_deduplicates_text():
 
 
 @pytest.mark.asyncio
+async def test_wecom_convert_wechat_kf_message_text_builds_friend_message(
+    monkeypatch,
+):
+    adapter = _adapter()
+    adapter._is_duplicate_wechat_kf_text_message = MagicMock(return_value=False)
+    monkeypatch.setattr(wecom_adapter.uuid, "uuid4", lambda: SimpleNamespace(hex="fallbackid"))
+
+    result = await adapter.convert_wechat_kf_message(
+        {
+            "msgtype": "text",
+            "open_kfid": "kf-2",
+            "external_userid": "user-text",
+            "text": {"content": "  hello wecom  "},
+        }
+    )
+
+    assert result is None
+    adapter.handle_msg.assert_awaited_once()
+    adapter._is_duplicate_wechat_kf_text_message.assert_called_once_with(
+        "user-text", "hello wecom"
+    )
+    abm = adapter.handle_msg.await_args.args[0]
+    assert abm.self_id == "kf-2"
+    assert abm.session_id == "user-text"
+    assert abm.message_id == "fallback"
+    assert abm.message_str == "hello wecom"
+    assert [type(component) for component in abm.message] == [Plain]
+    assert abm.message[0].text == "hello wecom"
+    assert abm.raw_message["_wechat_kf_flag"] is None
+
+
+@pytest.mark.asyncio
+async def test_wecom_convert_wechat_kf_message_blank_text_still_dispatches_plain_message():
+    adapter = _adapter()
+    adapter._is_duplicate_wechat_kf_text_message = MagicMock(return_value=False)
+
+    result = await adapter.convert_wechat_kf_message(
+        {
+            "msgtype": "text",
+            "open_kfid": "kf-3",
+            "external_userid": "user-blank",
+            "msgid": "msg-blank",
+            "text": {"content": "   "},
+        }
+    )
+
+    assert result is None
+    adapter.handle_msg.assert_awaited_once()
+    adapter._is_duplicate_wechat_kf_text_message.assert_called_once_with(
+        "user-blank", ""
+    )
+    abm = adapter.handle_msg.await_args.args[0]
+    assert abm.message_id == "msg-blank"
+    assert abm.message_str == ""
+    assert [type(component) for component in abm.message] == [Plain]
+    assert abm.message[0].text == ""
+
+
+@pytest.mark.asyncio
 async def test_wecom_convert_wechat_kf_message_voice_uses_media_resolver(
     monkeypatch, tmp_path
 ):
@@ -454,6 +638,36 @@ async def test_wecom_convert_wechat_kf_message_image_uses_detected_suffix(
 
 
 @pytest.mark.asyncio
+async def test_wecom_convert_wechat_kf_message_image_falls_back_to_jpg_suffix(
+    monkeypatch, tmp_path
+):
+    adapter = _adapter()
+    adapter.client.media.download.return_value = _response(b"img-bytes")
+    monkeypatch.setattr(
+        wecom_adapter,
+        "get_astrbot_temp_path",
+        lambda: str(tmp_path),
+    )
+    monkeypatch.setattr(
+        wecom_adapter,
+        "detect_image_mime_type_async",
+        AsyncMock(return_value=None),
+    )
+
+    await adapter.convert_wechat_kf_message(
+        {
+            "msgtype": "image",
+            "open_kfid": "kf-1",
+            "external_userid": "user-2",
+            "image": {"media_id": "img-fallback"},
+        }
+    )
+
+    abm = adapter.handle_msg.await_args.args[0]
+    assert Path(abm.message[0].file).name == "weixinkefu_img-fallback.jpg"
+
+
+@pytest.mark.asyncio
 async def test_wecom_convert_wechat_kf_message_file_uses_content_disposition_filename(
     monkeypatch, tmp_path
 ):
@@ -484,6 +698,34 @@ async def test_wecom_convert_wechat_kf_message_file_uses_content_disposition_fil
     assert file_component.name == "report.txt"
     assert Path(file_component.file).name == "weixinkefu_fixed_report.txt"
     assert Path(file_component.file).read_bytes() == b"file-bytes"
+
+
+@pytest.mark.asyncio
+async def test_wecom_convert_wechat_kf_message_file_falls_back_to_default_filename(
+    monkeypatch, tmp_path
+):
+    adapter = _adapter()
+    adapter.client.media.download.return_value = _response(b"file-bytes")
+    monkeypatch.setattr(
+        wecom_adapter,
+        "get_astrbot_temp_path",
+        lambda: str(tmp_path),
+    )
+    monkeypatch.setattr(wecom_adapter.uuid, "uuid4", lambda: SimpleNamespace(hex="fixed"))
+
+    await adapter.convert_wechat_kf_message(
+        {
+            "msgtype": "file",
+            "open_kfid": "kf-1",
+            "external_userid": "user-3",
+            "file": {"media_id": "file-fallback"},
+        }
+    )
+
+    abm = adapter.handle_msg.await_args.args[0]
+    file_component = abm.message[0]
+    assert file_component.name == "weixinkefu_file-fallback.bin"
+    assert Path(file_component.file).name == "weixinkefu_fixed_weixinkefu_file-fallback.bin"
 
 
 @pytest.mark.asyncio

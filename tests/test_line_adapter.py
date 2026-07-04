@@ -1,12 +1,15 @@
+import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Plain
-from astrbot.api.platform import MessageType
+from astrbot.api.message_components import At, File, Image, Plain, Record, Video
+from astrbot.api.platform import AstrBotMessage, MessageMember, MessageType
 from astrbot.core.platform.sources.line.line_adapter import LinePlatformAdapter
+from astrbot.core.platform.sources.line.line_event import LineMessageEvent
 
 
 def _adapter() -> LinePlatformAdapter:
@@ -22,6 +25,15 @@ def _adapter() -> LinePlatformAdapter:
         close=AsyncMock(),
     )
     return adapter
+
+
+def _platform_meta():
+    return SimpleNamespace(
+        name="line",
+        description="LINE",
+        id="line-test",
+        support_streaming_message=False,
+    )
 
 
 def test_line_parse_text_with_mentions_splits_user_mentions_and_plain_text():
@@ -43,6 +55,24 @@ def test_line_parse_text_with_mentions_splits_user_mentions_and_plain_text():
     assert components[1].name == "Alice"
     assert components[2].text == " and "
     assert components[3].text == "@all"
+
+
+def test_line_parse_text_with_mentions_ignores_invalid_mention_entries():
+    adapter = _adapter()
+
+    components = adapter._parse_text_with_mentions(
+        "hello @alice",
+        {
+            "mentionees": [
+                "bad-entry",
+                {"index": "1", "length": 5, "type": "user", "userId": "user-1"},
+            ]
+        },
+    )
+
+    assert len(components) == 1
+    assert isinstance(components[0], Plain)
+    assert components[0].text == "hello @alice"
 
 
 @pytest.mark.asyncio
@@ -80,6 +110,29 @@ async def test_line_convert_message_maps_group_message_and_external_image():
     assert result.timestamp == 1710000000
     assert result.message_str == "[image]"
     assert result.message[0].file == "https://example.test/image.png"
+
+
+@pytest.mark.asyncio
+async def test_line_convert_message_uses_fallback_self_id_and_current_time(monkeypatch):
+    adapter = _adapter()
+    adapter.destination = ""
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.line.line_adapter.time.time",
+        lambda: 1234.8,
+    )
+
+    result = await adapter.convert_message(
+        {
+            "type": "message",
+            "source": {"type": "user", "userId": "user-1"},
+            "message": {"type": "text", "text": "hello"},
+        }
+    )
+
+    assert result is not None
+    assert result.self_id == "line-test"
+    assert result.timestamp == 1234
+    assert result.session_id == "user-1"
 
 
 @pytest.mark.asyncio
@@ -180,6 +233,20 @@ async def test_line_parse_message_components_file_falls_back_to_placeholder_when
 
 
 @pytest.mark.asyncio
+async def test_line_parse_message_components_image_falls_back_to_placeholder_when_download_fails():
+    adapter = _adapter()
+    adapter.line_api.get_message_content = AsyncMock(return_value=None)
+
+    components = await adapter._parse_line_message_components(
+        {"id": "img-1", "type": "image"}
+    )
+
+    assert len(components) == 1
+    assert isinstance(components[0], Plain)
+    assert components[0].text == "[image]"
+
+
+@pytest.mark.asyncio
 async def test_line_build_file_component_uses_downloaded_filename_when_available():
     adapter = _adapter()
     adapter.line_api.get_message_content = AsyncMock(
@@ -195,6 +262,22 @@ async def test_line_build_file_component_uses_downloaded_filename_when_available
     assert component.name == "invoice.pdf"
     assert component.file.endswith(".bin")
     assert component.url == component.file
+
+
+@pytest.mark.asyncio
+async def test_line_build_image_component_downloads_binary_content_when_no_external_url():
+    adapter = _adapter()
+    adapter.line_api.get_message_content = AsyncMock(
+        return_value=(b"image-bytes", "image/png", "photo.png")
+    )
+
+    component = await adapter._build_image_component(
+        "msg-image",
+        {"id": "msg-image", "type": "image"},
+    )
+
+    assert isinstance(component, Image)
+    assert component.file.startswith("base64://")
 
 
 @pytest.mark.asyncio
@@ -244,6 +327,63 @@ async def test_line_send_by_session_skips_push_for_empty_built_messages(monkeypa
     super_send.assert_awaited_once()
 
 
+def test_line_meta_returns_configured_platform_metadata():
+    adapter = _adapter()
+
+    meta = adapter.meta()
+
+    assert meta.name == "line"
+    assert meta.id == "line-test"
+    assert meta.support_streaming_message is False
+
+
+@pytest.mark.asyncio
+async def test_line_run_logs_webhook_uuid_and_waits_for_shutdown(monkeypatch):
+    adapter = _adapter()
+    adapter.config["webhook_uuid"] = "uuid-1"
+    adapter.shutdown_event = SimpleNamespace(wait=AsyncMock())
+    logged = []
+
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.line.line_adapter.log_webhook_info",
+        lambda name, webhook_uuid: logged.append((name, webhook_uuid)),
+    )
+
+    await adapter.run()
+
+    assert logged == [("line-test(LINE)", "uuid-1")]
+    adapter.shutdown_event.wait.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_line_run_warns_when_webhook_uuid_missing(monkeypatch):
+    adapter = _adapter()
+    adapter.config["webhook_uuid"] = ""
+    adapter.shutdown_event = SimpleNamespace(wait=AsyncMock())
+    warnings = []
+
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.line.line_adapter.logger.warning",
+        lambda message, *args, **kwargs: warnings.append(str(message)),
+    )
+
+    await adapter.run()
+
+    assert any("webhook_uuid 为空" in message for message in warnings)
+    adapter.shutdown_event.wait.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_line_terminate_sets_shutdown_and_closes_api():
+    adapter = _adapter()
+    adapter.shutdown_event = MagicMock()
+
+    await adapter.terminate()
+
+    adapter.shutdown_event.set.assert_called_once_with()
+    adapter.line_api.close.assert_awaited_once()
+
+
 @pytest.mark.asyncio
 async def test_line_handle_webhook_event_skips_duplicates_and_non_message_events():
     adapter = _adapter()
@@ -283,6 +423,20 @@ async def test_line_handle_webhook_event_ignores_non_list_events_and_bad_entries
     adapter.convert_message.assert_awaited_once_with(
         {"webhookEventId": "evt-3", "type": "message"}
     )
+    adapter.handle_msg.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_line_handle_webhook_event_skips_when_convert_message_returns_none():
+    adapter = _adapter()
+    adapter.convert_message = AsyncMock(return_value=None)
+    adapter.handle_msg = AsyncMock()
+
+    await adapter.handle_webhook_event(
+        {"events": [{"webhookEventId": "evt-1", "type": "message", "message": {}}]}
+    )
+
+    adapter.convert_message.assert_awaited_once()
     adapter.handle_msg.assert_not_awaited()
 
 
@@ -429,6 +583,96 @@ async def test_line_build_video_component_stores_downloaded_video(monkeypatch, t
     saved_files = list(tmp_path.glob("line_video_msg-video_*.mp4"))
     assert len(saved_files) == 1
     assert saved_files[0].read_bytes() == b"video-bytes"
+
+
+def test_line_guess_suffix_prefers_mimetype_and_falls_back():
+    assert LinePlatformAdapter._guess_suffix("audio/mp4; charset=utf-8", ".wav") == ".m4a"
+    assert LinePlatformAdapter._guess_suffix(None, ".wav") == ".wav"
+
+
+def test_line_store_temp_content_sanitizes_original_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.line.line_adapter.get_astrbot_temp_path",
+        lambda: str(tmp_path),
+    )
+
+    stored = LinePlatformAdapter._store_temp_content(
+        "file",
+        "msg-1",
+        b"payload",
+        ".txt",
+        original_name="../bad name?.txt",
+    )
+
+    path = Path(stored)
+    assert path.exists()
+    assert path.read_bytes() == b"payload"
+    assert path.name.startswith("bad_name_")
+    assert path.suffix == ".txt"
+
+
+def test_line_get_external_content_url_requires_external_provider():
+    assert (
+        LinePlatformAdapter._get_external_content_url(
+            {"contentProvider": {"type": "external", "originalContentUrl": "https://a"}}
+        )
+        == "https://a"
+    )
+    assert LinePlatformAdapter._get_external_content_url({"contentProvider": {"type": "line"}}) == ""
+    assert LinePlatformAdapter._get_external_content_url({"contentProvider": "bad"}) == ""
+
+
+def test_line_build_message_str_covers_known_components_and_unknown_fallback():
+    class UnknownComponent:
+        type = "mystery"
+
+    message = LinePlatformAdapter._build_message_str(
+        [
+            Plain("hello"),
+            At(qq="u1", name="Alice"),
+            Image.fromURL("https://example.test/a.png"),
+            Video.fromURL("https://example.test/v.mp4"),
+            Record("voice.wav"),
+            File(name="report.pdf", file="report.pdf"),
+            UnknownComponent(),
+        ]
+    )
+
+    assert message == "hello @Alice [image] [video] [audio] report.pdf [mystery]"
+
+
+def test_line_create_event_wraps_message_with_line_context():
+    adapter = _adapter()
+    message = AstrBotMessage()
+    message.type = MessageType.FRIEND_MESSAGE
+    message.self_id = "bot"
+    message.sender = MessageMember(user_id="user-1", nickname="Alice")
+    message.session_id = "user-1"
+    message.message_id = "msg-1"
+    message.message = [Plain("hello")]
+    message.message_str = "hello"
+
+    event = adapter.create_event(message)
+
+    assert isinstance(event, LineMessageEvent)
+    assert event.line_api is adapter.line_api
+    assert event.message_str == "hello"
+    assert event.session_id == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_line_handle_msg_commits_created_event(monkeypatch):
+    adapter = _adapter()
+    event = object()
+    abm = SimpleNamespace(message_str="hello", session_id="user-1")
+
+    monkeypatch.setattr(adapter, "create_event", lambda message: event)
+    commit_event = MagicMock()
+    monkeypatch.setattr(adapter, "commit_event", commit_event)
+
+    await adapter.handle_msg(abm)
+
+    commit_event.assert_called_once_with(event)
 
 
 def test_line_clean_expired_events_removes_only_old_entries(monkeypatch):

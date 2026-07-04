@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 
 from astrbot.api.event import MessageChain
 from astrbot.api.message_components import File, Image, Plain
@@ -10,6 +11,7 @@ from astrbot.api.platform import (
     MessageType,
     PlatformMetadata,
 )
+from astrbot.core import db_helper
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.sources.slack.slack_event import SlackMessageEvent
 
@@ -42,6 +44,16 @@ def _build_event(*, group_id: str | None = None) -> SlackMessageEvent:
     )
 
 
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _isolate_metrics_and_dispose_global_db_helper():
+    with patch(
+        "astrbot.core.platform.astr_message_event.Metric.upload",
+        AsyncMock(return_value=None),
+    ):
+        yield
+    await db_helper.engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_slack_from_segment_to_block_uploads_local_image_and_returns_slack_file():
     web_client = AsyncMock()
@@ -66,6 +78,23 @@ async def test_slack_from_segment_to_block_uploads_local_image_and_returns_slack
     assert block == {
         "type": "image",
         "slack_file": {"url": "https://slack.example/files/local.png"},
+        "alt_text": "图片",
+    }
+
+
+@pytest.mark.asyncio
+async def test_slack_from_segment_to_block_uses_remote_image_url_without_upload():
+    web_client = AsyncMock()
+
+    block = await SlackMessageEvent._from_segment_to_slack_block(
+        Image.fromURL("https://example.com/remote.png"),
+        web_client,
+    )
+
+    web_client.files_upload_v2.assert_not_awaited()
+    assert block == {
+        "type": "image",
+        "image_url": "https://example.com/remote.png",
         "alt_text": "图片",
     }
 
