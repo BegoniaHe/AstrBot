@@ -424,6 +424,15 @@ async def test_update_kb_rejects_missing_identifier_and_empty_updates():
 async def test_update_kb_uses_existing_name_when_payload_omits_it():
     current_kb = MagicMock()
     current_kb.kb.kb_name = "Current Name"
+    current_kb.kb.description = None
+    current_kb.kb.emoji = None
+    current_kb.kb.embedding_provider_id = None
+    current_kb.kb.rerank_provider_id = None
+    current_kb.kb.chunk_size = None
+    current_kb.kb.chunk_overlap = None
+    current_kb.kb.top_k_dense = None
+    current_kb.kb.top_k_sparse = None
+    current_kb.kb.top_m_final = None
     updated_kb = MagicMock()
     updated_kb.kb.model_dump.return_value = {"kb_id": "kb-1", "kb_name": "Current Name"}
     kb_manager = MagicMock(

@@ -543,6 +543,15 @@ async def test_update_kb_uses_existing_name_when_name_is_omitted():
     kb_helper = MagicMock()
     kb_helper.kb = MagicMock()
     kb_helper.kb.kb_name = "Existing KB"
+    kb_helper.kb.description = None
+    kb_helper.kb.emoji = None
+    kb_helper.kb.embedding_provider_id = None
+    kb_helper.kb.rerank_provider_id = None
+    kb_helper.kb.chunk_size = None
+    kb_helper.kb.chunk_overlap = None
+    kb_helper.kb.top_k_dense = None
+    kb_helper.kb.top_k_sparse = None
+    kb_helper.kb.top_m_final = None
     updated_helper = MagicMock()
     updated_helper.kb.model_dump.return_value = {"kb_id": "kb-1", "kb_name": "Existing KB"}
     kb_manager = MagicMock()

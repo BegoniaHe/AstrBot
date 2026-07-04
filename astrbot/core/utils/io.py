@@ -94,6 +94,11 @@ def extract_zip_safely(
     """Extract a zip archive while rejecting path traversal and symlinks."""
 
     extract_root = Path(extract_path).resolve()
+    extract_root_str = str(extract_root)
+    windows_style_root = (
+        extract_root_str.startswith("\\\\?\\")
+        or re.match(r"^[A-Za-z]:[\\/]", extract_root_str) is not None
+    )
     members = (
         zip_file.infolist() if hasattr(zip_file, "infolist") else zip_file.namelist()
     )
@@ -106,6 +111,26 @@ def extract_zip_safely(
         mode = member.external_attr >> 16 if hasattr(member, "external_attr") else 0
         if stat.S_ISLNK(mode):
             raise ValueError(f"Unsafe {archive_label} symlink: {filename}")
+
+        if windows_style_root:
+            normalized_member = os.path.normpath(filename)
+            if normalized_member in ("", "."):
+                continue
+            if os.path.isabs(normalized_member):
+                raise ValueError(f"Unsafe {archive_label} path: {filename}")
+
+            target_path = os.path.normpath(
+                os.path.join(extract_root_str, normalized_member)
+            )
+            try:
+                if (
+                    os.path.commonpath([extract_root_str, target_path])
+                    != extract_root_str
+                ):
+                    raise ValueError(f"Unsafe {archive_label} path: {filename}")
+            except ValueError as exc:
+                raise ValueError(f"Unsafe {archive_label} path: {filename}") from exc
+            continue
 
         target_path = (extract_root / filename).resolve()
         if not target_path.is_relative_to(extract_root):
