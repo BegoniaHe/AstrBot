@@ -551,7 +551,10 @@ def save_config(
     config: AstrBotConfig,
     is_core: bool = False,
 ) -> None:
-    post_config = copy.deepcopy(post_config)
+    if isinstance(post_config, dict):
+        post_config = copy.deepcopy(dict(post_config))
+    else:
+        post_config = copy.deepcopy(post_config)
     current_config = dict(config) if isinstance(config, dict) else {}
     _restore_redacted_sensitive_config(post_config, current_config)
 

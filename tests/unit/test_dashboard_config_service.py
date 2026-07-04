@@ -1,10 +1,12 @@
 import asyncio
 import copy
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
+from astrbot.core.config.astrbot_config import AstrBotConfig
 from astrbot.core.platform.sources.napcat.napcat_platform_adapter import (
     NAPCAT_CONFIG_METADATA,
 )
@@ -339,6 +341,30 @@ def test_save_config_restores_redacted_sensitive_values(
     assert current.saved["provider"][0]["key"] == ["sk-live-1", "sk-live-2"]
     assert current.saved["provider"][1]["embedding_api_key"] == "embed-secret"
     assert current.saved["provider_settings"]["default_provider_id"] == "embed"
+
+
+def test_save_config_uses_plain_dict_snapshot_for_live_config(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        config_service,
+        "validate_config",
+        lambda post_config, _schema, _is_core: ([], post_config),
+    )
+
+    config_path = tmp_path / "cmd_config.json"
+    config_path.write_text('{"config_version": 2}', encoding="utf-8")
+
+    config = AstrBotConfig(config_path=str(config_path), default_config={})
+    object.__setattr__(config, "_runtime_lock", threading.Lock())
+    config["provider_sources"] = [{"id": "demo", "type": "openai_chat_completion"}]
+
+    config_service.save_config(config, config, is_core=True)
+
+    saved = AstrBotConfig._load_config_dict(str(config_path))
+    assert "_runtime_lock" not in saved
+    assert saved["provider_sources"][0]["id"] == "demo"
 
 
 @pytest.mark.asyncio
