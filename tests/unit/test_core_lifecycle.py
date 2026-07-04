@@ -48,6 +48,7 @@ class TestAstrBotCoreLifecycleInit:
         assert lifecycle.cron_manager is None
         assert lifecycle.temp_dir_cleaner is None
 
+
     def test_init_with_proxy(
         self,
         mock_log_broker,

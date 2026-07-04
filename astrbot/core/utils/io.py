@@ -6,6 +6,7 @@ import re
 import shutil
 import socket
 import ssl
+import stat
 import time
 import uuid
 import zipfile
@@ -82,6 +83,40 @@ def ensure_dir(dir_path: str | Path) -> None:
     except Exception as e:
         logger.error(f"创建目录 {p} 失败: {e!s}")
         raise RuntimeError(f"无法创建目录 {p}：{e!s}") from e
+
+
+def extract_zip_safely(
+    zip_file: zipfile.ZipFile,
+    extract_path: str | Path,
+    *,
+    archive_label: str = "archive",
+) -> None:
+    """Extract a zip archive while rejecting path traversal and symlinks."""
+
+    extract_root = Path(extract_path).resolve()
+    members = (
+        zip_file.infolist() if hasattr(zip_file, "infolist") else zip_file.namelist()
+    )
+    for member in members:
+        filename = member.filename if hasattr(member, "filename") else str(member)
+        member_path = Path(filename)
+        if member_path.is_absolute():
+            raise ValueError(f"Unsafe {archive_label} path: {filename}")
+
+        mode = member.external_attr >> 16 if hasattr(member, "external_attr") else 0
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"Unsafe {archive_label} symlink: {filename}")
+
+        target_path = (extract_root / filename).resolve()
+        if not target_path.is_relative_to(extract_root):
+            raise ValueError(f"Unsafe {archive_label} path: {filename}")
+
+    if hasattr(zip_file, "extract"):
+        for member in members:
+            zip_file.extract(member, extract_root)
+        return
+
+    zip_file.extractall(extract_root)
 
 
 def port_checker(port: int, host: str = "localhost") -> bool:
@@ -281,7 +316,7 @@ async def download_file(
     path: str,
     show_progress: bool = False,
     progress_callback=None,
-    allow_insecure_ssl_fallback: bool = True,
+    allow_insecure_ssl_fallback: bool = False,
 ) -> None:
     """Download a remote file to a local path.
 
@@ -536,7 +571,7 @@ async def download_dashboard(
     proxy: str | None = None,
     progress_callback=None,
     extract: bool = True,
-    allow_insecure_ssl_fallback: bool = True,
+    allow_insecure_ssl_fallback: bool = False,
 ) -> None:
     """Download dashboard assets and optionally extract them.
 
@@ -639,13 +674,6 @@ def extract_dashboard(zip_path: str | Path, extract_path: str | Path = "data") -
         None.
     """
 
-    extract_root = Path(extract_path).resolve()
-    ensure_dir(extract_root)
+    ensure_dir(extract_path)
     with zipfile.ZipFile(zip_path, "r") as z:
-        for member in z.infolist():
-            target_path = (extract_root / member.filename).resolve()
-            if not target_path.is_relative_to(extract_root):
-                raise ValueError(
-                    f"Unsafe dashboard archive path: {member.filename}",
-                )
-            z.extract(member, extract_root)
+        extract_zip_safely(z, extract_path, archive_label="dashboard archive")

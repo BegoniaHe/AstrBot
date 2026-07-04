@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -64,6 +65,68 @@ async def test_get_astrbot_config_loads_dashboard_platform_metadata(
     assert called == [True]
     assert "metadata" in result
     assert "config" in result
+
+
+@pytest.mark.asyncio
+async def test_get_astrbot_config_redacts_sensitive_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        config_service,
+        "_ensure_dashboard_platform_metadata_loaded",
+        lambda: None,
+    )
+    monkeypatch.setattr(config_service, "platform_registry", [])
+    monkeypatch.setattr(config_service, "provider_registry", [])
+    service = config_service.ConfigDisplayService(
+        SimpleNamespace(
+            astrbot_config={
+                "dashboard": {
+                    "jwt_secret": "jwt-secret",
+                    "pbkdf2_password": "pbkdf2-hash",
+                    "totp": {
+                        "enable": True,
+                        "secret": "totp-secret",
+                        "recovery_code_hash": "recovery-hash",
+                    },
+                },
+                "provider": [
+                    {"id": "demo", "key": ["sk-live-1", "sk-live-2"]},
+                    {"id": "embed", "embedding_api_key": "embed-secret"},
+                ],
+                "provider_settings": {"default_provider_id": "demo"},
+            }
+        ),
+    )
+
+    result = await service.get_astrbot_config()
+    redacted = result["config"]
+
+    assert (
+        redacted["dashboard"]["jwt_secret"]
+        == config_service.REDACTED_SECRET_PLACEHOLDER
+    )
+    assert (
+        redacted["dashboard"]["pbkdf2_password"]
+        == config_service.REDACTED_SECRET_PLACEHOLDER
+    )
+    assert (
+        redacted["dashboard"]["totp"]["secret"]
+        == config_service.REDACTED_SECRET_PLACEHOLDER
+    )
+    assert (
+        redacted["dashboard"]["totp"]["recovery_code_hash"]
+        == config_service.REDACTED_SECRET_PLACEHOLDER
+    )
+    assert redacted["provider"][0]["key"] == [
+        config_service.REDACTED_SECRET_PLACEHOLDER,
+        config_service.REDACTED_SECRET_PLACEHOLDER,
+    ]
+    assert (
+        redacted["provider"][1]["embedding_api_key"]
+        == config_service.REDACTED_SECRET_PLACEHOLDER
+    )
+    assert redacted["provider_settings"]["default_provider_id"] == "demo"
 
 
 def test_inject_platform_metadata_with_i18n_rewrites_field_labels() -> None:
@@ -202,6 +265,80 @@ def test_save_config_propagates_cancellation(
 
     with pytest.raises(asyncio.CancelledError):
         config_service.save_config({}, SimpleNamespace(save_config=lambda *_args: None))
+
+
+def test_save_config_restores_redacted_sensitive_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        config_service,
+        "validate_config",
+        lambda post_config, _schema, _is_core: ([], post_config),
+    )
+
+    class FakeConfig(dict):
+        def __init__(self, initial: dict) -> None:
+            super().__init__(copy.deepcopy(initial))
+            self.saved = None
+
+        def save_config(self, post_config=None, *, indent: int = 2) -> None:  # noqa: ARG002
+            self.saved = copy.deepcopy(post_config)
+            self.clear()
+            self.update(post_config)
+
+    current = FakeConfig(
+        {
+            "dashboard": {
+                "jwt_secret": "jwt-secret",
+                "pbkdf2_password": "pbkdf2-hash",
+                "totp": {
+                    "enable": True,
+                    "secret": "totp-secret",
+                    "recovery_code_hash": "recovery-hash",
+                },
+            },
+            "provider": [
+                {"id": "demo", "key": ["sk-live-1", "sk-live-2"]},
+                {"id": "embed", "embedding_api_key": "embed-secret"},
+            ],
+            "provider_settings": {"default_provider_id": "demo"},
+        }
+    )
+    posted = {
+        "dashboard": {
+            "jwt_secret": config_service.REDACTED_SECRET_PLACEHOLDER,
+            "pbkdf2_password": config_service.REDACTED_SECRET_PLACEHOLDER,
+            "totp": {
+                "enable": True,
+                "secret": config_service.REDACTED_SECRET_PLACEHOLDER,
+                "recovery_code_hash": config_service.REDACTED_SECRET_PLACEHOLDER,
+            },
+        },
+        "provider": [
+            {
+                "id": "demo",
+                "key": [
+                    config_service.REDACTED_SECRET_PLACEHOLDER,
+                    config_service.REDACTED_SECRET_PLACEHOLDER,
+                ],
+            },
+            {
+                "id": "embed",
+                "embedding_api_key": config_service.REDACTED_SECRET_PLACEHOLDER,
+            },
+        ],
+        "provider_settings": {"default_provider_id": "embed"},
+    }
+
+    config_service.save_config(posted, current, is_core=True)
+
+    assert current.saved["dashboard"]["jwt_secret"] == "jwt-secret"
+    assert current.saved["dashboard"]["pbkdf2_password"] == "pbkdf2-hash"
+    assert current.saved["dashboard"]["totp"]["secret"] == "totp-secret"
+    assert current.saved["dashboard"]["totp"]["recovery_code_hash"] == "recovery-hash"
+    assert current.saved["provider"][0]["key"] == ["sk-live-1", "sk-live-2"]
+    assert current.saved["provider"][1]["embedding_api_key"] == "embed-secret"
+    assert current.saved["provider_settings"]["default_provider_id"] == "embed"
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 """Tests for CronJobManager."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -68,6 +69,7 @@ class TestCronJobManagerInit:
 
         assert manager.db == mock_db
         assert manager._basic_handlers == {}
+        assert manager._background_tasks == set()
         assert manager._started is False
 
 
@@ -114,6 +116,42 @@ class TestCronJobManagerShutdown:
         """Test shutdown when not started."""
         # Should not raise
         await cron_manager.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_cancels_tracked_background_tasks(
+        self, cron_manager, mock_db, mock_context
+    ):
+        """Test shutdown cancels tracked background tasks."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocked_update(*args, **kwargs):
+            del args, kwargs
+            started.set()
+            await release.wait()
+
+        mock_db.list_cron_jobs.return_value = []
+        mock_db.update_cron_job.side_effect = blocked_update
+        await cron_manager.start(mock_context)
+
+        cron_manager._schedule_job(
+            CronJob(
+                job_id="tracked-job",
+                name="Tracked Job",
+                job_type="basic",
+                cron_expression="0 9 * * *",
+                timezone="UTC",
+                enabled=True,
+                persistent=True,
+                run_once=False,
+            )
+        )
+        await started.wait()
+        assert cron_manager._background_tasks
+
+        await cron_manager.shutdown()
+
+        assert cron_manager._background_tasks == set()
 
 
 class TestAddBasicJob:
@@ -473,6 +511,33 @@ class TestScheduleJob:
         cron_manager._schedule_job(job)
 
         assert cron_manager.scheduler.get_job("run-once-job") is not None
+
+    @pytest.mark.asyncio
+    async def test_schedule_job_tracks_next_run_update_task(
+        self, cron_manager, sample_cron_job, mock_context
+    ):
+        """Test scheduling keeps a strong reference to the next-run update task."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+        mock_db = cron_manager.db
+        mock_db.list_cron_jobs = AsyncMock(return_value=[])
+
+        async def blocked_update(*args, **kwargs):
+            del args, kwargs
+            started.set()
+            await release.wait()
+
+        mock_db.update_cron_job = AsyncMock(side_effect=blocked_update)
+        await cron_manager.start(mock_context)
+
+        cron_manager._schedule_job(sample_cron_job)
+        await started.wait()
+        assert cron_manager._background_tasks
+
+        release.set()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert cron_manager._background_tasks == set()
 
 
 class TestRunJob:

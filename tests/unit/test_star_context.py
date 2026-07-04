@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,6 +23,24 @@ def make_context() -> Context:
     context = Context.__new__(Context)
     context.provider_manager = SimpleNamespace(llm_tools=FunctionToolManager())
     return context
+
+
+def make_initialized_context() -> Context:
+    from asyncio import Queue
+
+    return Context(
+        Queue(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+    )
 
 
 def make_tool(name: str, module_path: str) -> FunctionTool:
@@ -104,3 +123,28 @@ def test_add_llm_tools_handles_empty_tool_module_path():
     context.add_llm_tools(tool)
 
     assert tool.handler_module_path == ""
+
+
+def test_context_mutable_state_is_not_shared_between_instances():
+    first = make_initialized_context()
+    second = make_initialized_context()
+
+    first.registered_web_apis.append(("route", MagicMock(), ["GET"], "desc"))
+    first.register_task(SimpleNamespace(), "task")
+    first._star_manager = object()
+
+    assert second.registered_web_apis == []
+    assert second._register_tasks == []
+    assert second._star_manager is None
+
+
+def test_context_commit_event_returns_false_when_queue_is_full():
+    from asyncio import Queue
+
+    context = make_initialized_context()
+    context._event_queue = Queue(maxsize=1)
+    context._event_queue.put_nowait(SimpleNamespace(unified_msg_origin="first"))
+
+    result = context.commit_event(SimpleNamespace(unified_msg_origin="second"))
+
+    assert result is False

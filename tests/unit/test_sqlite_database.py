@@ -239,6 +239,37 @@ async def test_get_filtered_conversations_combines_filters_and_paginates(temp_db
 
 
 @pytest.mark.asyncio
+async def test_get_filtered_conversations_supports_unicode_and_literal_wildcards(
+    temp_db: SQLiteDatabase,
+):
+    await temp_db.create_conversation(
+        user_id="wechat:FriendMessage:user-1",
+        platform_id="wechat",
+        title="中文 100% 命中",
+        content=[{"text": "内容"}],
+        cid="conv-unicode",
+    )
+    await temp_db.create_conversation(
+        user_id="wechat:FriendMessage:user-2",
+        platform_id="wechat",
+        title="中文 100X 命中",
+        content=[{"text": "内容"}],
+        cid="conv-other",
+    )
+
+    conversations, total = await temp_db.get_filtered_conversations(
+        page=1,
+        page_size=10,
+        search_query="中文 100%",
+    )
+
+    assert total == 1
+    assert [conversation.conversation_id for conversation in conversations] == [
+        "conv-unicode"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_get_session_conversations_joins_preferences_conversations_and_personas(
     temp_db: SQLiteDatabase,
 ):

@@ -360,7 +360,9 @@ class EmbeddingProvider(AbstractProvider):
 
         """
         semaphore = asyncio.Semaphore(tasks_limit)
-        all_embeddings: list[list[float]] = []
+        batch_results: list[list[list[float]] | None] = [None] * (
+            (len(texts) + batch_size - 1) // batch_size
+        )
         failed_batches: list[tuple[int, list[str]]] = []
         completed_count = 0
         total_count = len(texts)
@@ -371,7 +373,7 @@ class EmbeddingProvider(AbstractProvider):
                 for attempt in range(max_retries):
                     try:
                         batch_embeddings = await self.get_embeddings(batch_texts)
-                        all_embeddings.extend(batch_embeddings)
+                        batch_results[batch_idx] = batch_embeddings
                         completed_count += len(batch_texts)
                         if progress_callback:
                             await progress_callback(completed_count, total_count)
@@ -402,6 +404,12 @@ class EmbeddingProvider(AbstractProvider):
                 f"有 {len(errors)} 个批次处理失败: {'; '.join(str(e) for e in errors)}"
             )
             raise Exception(error_msg)
+
+        all_embeddings: list[list[float]] = []
+        for batch_result in batch_results:
+            if batch_result is None:
+                raise Exception("批量向量化结果不完整。")
+            all_embeddings.extend(batch_result)
 
         return all_embeddings
 

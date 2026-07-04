@@ -5,7 +5,7 @@ import yaml
 
 from astrbot.core import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_path
-from astrbot.core.utils.io import ensure_dir, remove_dir
+from astrbot.core.utils.io import ensure_dir, extract_zip_safely, remove_dir
 
 from ..star.star import StarMetadata
 from ..updator import RepoZipUpdator
@@ -208,6 +208,6 @@ class PluginUpdator(RepoZipUpdator):
         logger.info(f"Extracting archive: {zip_path}")
         with zipfile.ZipFile(zip_path, "r") as z:
             update_dir = self._resolve_archive_root_dir(z.namelist())
-            z.extractall(target_dir)
+            extract_zip_safely(z, target_dir, archive_label="plugin archive")
 
         self._finalize_extracted_archive(zip_path, target_dir, update_dir)

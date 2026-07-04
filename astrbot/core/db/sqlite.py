@@ -216,13 +216,21 @@ class SQLiteDatabase(BaseDatabase):
                     col(ConversationV2.platform_id).in_(platform_ids),
                 )
             if search_query:
-                search_query = search_query.encode("unicode_escape").decode("utf-8")
+                escaped_search_query = (
+                    search_query.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                )
+                search_pattern = f"%{escaped_search_query}%"
                 base_query = base_query.where(
                     or_(
-                        col(ConversationV2.title).ilike(f"%{search_query}%"),
-                        col(ConversationV2.content).ilike(f"%{search_query}%"),
-                        col(ConversationV2.user_id).ilike(f"%{search_query}%"),
-                        col(ConversationV2.conversation_id).ilike(f"%{search_query}%"),
+                        col(ConversationV2.title).ilike(search_pattern, escape="\\"),
+                        col(ConversationV2.content).ilike(search_pattern, escape="\\"),
+                        col(ConversationV2.user_id).ilike(search_pattern, escape="\\"),
+                        col(ConversationV2.conversation_id).ilike(
+                            search_pattern,
+                            escape="\\",
+                        ),
                     ),
                 )
             if "message_types" in kwargs and len(kwargs["message_types"]) > 0:

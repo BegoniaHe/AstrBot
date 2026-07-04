@@ -395,6 +395,31 @@ def test_plugin_unzip_file_rejects_archive_without_metadata(tmp_path: Path) -> N
     assert not target_dir.exists()
 
 
+def test_plugin_unzip_file_rejects_path_traversal(tmp_path: Path) -> None:
+    zip_path = tmp_path / "plugin.zip"
+    target_dir = tmp_path / "plugin"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr(
+            "demo-plugin/metadata.yaml",
+            "\n".join(
+                [
+                    "name: demo_plugin",
+                    "desc: Demo plugin",
+                    "version: 1.0.0",
+                    "author: AstrBot Team",
+                ]
+            ),
+        )
+        archive.writestr("../escape.txt", "escape")
+
+    updater = PluginUpdator.__new__(PluginUpdator)
+    updater.validate_plugin_archive = lambda _zip_path: "demo-plugin/metadata.yaml"
+    with pytest.raises(ValueError, match="Unsafe plugin archive path"):
+        updater.unzip_file(str(zip_path), str(target_dir))
+
+    assert not (tmp_path / "escape.txt").exists()
+
+
 def test_plugin_validate_archive_rejects_incomplete_metadata(tmp_path: Path) -> None:
     zip_path = tmp_path / "plugin.zip"
     with zipfile.ZipFile(zip_path, "w") as archive:

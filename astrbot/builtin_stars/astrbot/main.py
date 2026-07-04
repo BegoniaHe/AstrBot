@@ -121,7 +121,7 @@ class Main(star.Star):
                     Comp.At(qq=event.get_self_id(), name=event.get_self_id()),
                 )
                 new_event = copy.copy(event)
-                self.context.get_event_queue().put_nowait(new_event)
+                self.context.commit_event(new_event)
                 event.stop_event()
                 controller.stop()
 

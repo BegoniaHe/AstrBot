@@ -40,6 +40,33 @@ PROTECTED_2FA_CONFIG_PATHS = (
     ("dashboard", "totp", "recovery_code_hash"),
 )
 MAX_FILE_BYTES = 500 * 1024 * 1024
+REDACTED_SECRET_PLACEHOLDER = "__ASTRBOT_REDACTED__"
+SENSITIVE_CONFIG_KEYS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "app_secret",
+        "client_secret",
+        "jwt_secret",
+        "key",
+        "password",
+        "pbkdf2_password",
+        "recovery_code_hash",
+        "refresh_token",
+        "secret",
+        "secret_key",
+        "signing_secret",
+        "token",
+        "wecomaibot_ws_secret",
+    }
+)
+SENSITIVE_CONFIG_SUFFIXES = (
+    "_api_key",
+    "_key",
+    "_password",
+    "_secret",
+    "_token",
+)
 
 
 def _ensure_dashboard_platform_metadata_loaded() -> None:
@@ -88,6 +115,88 @@ def _expect_type(value, expected_type, path_key, errors, expected_name=None) -> 
         )
         return False
     return True
+
+
+def _is_sensitive_config_key(key: str | None) -> bool:
+    if not key:
+        return False
+    normalized = key.lower()
+    if normalized in SENSITIVE_CONFIG_KEYS:
+        return True
+    return normalized.endswith(SENSITIVE_CONFIG_SUFFIXES)
+
+
+def _redact_sensitive_config(value: Any, *, key_name: str | None = None) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _redact_sensitive_config(item, key_name=key)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        if key_name and _is_sensitive_config_key(key_name):
+            return [
+                REDACTED_SECRET_PLACEHOLDER if isinstance(item, str) and item else item
+                for item in value
+            ]
+        return [_redact_sensitive_config(item, key_name=key_name) for item in value]
+
+    if key_name and _is_sensitive_config_key(key_name):
+        if isinstance(value, str) and value:
+            return REDACTED_SECRET_PLACEHOLDER
+
+    return value
+
+
+def _restore_redacted_sensitive_config(
+    posted_value: Any,
+    current_value: Any,
+    *,
+    key_name: str | None = None,
+) -> Any:
+    if isinstance(posted_value, dict) and isinstance(current_value, dict):
+        for key, item in posted_value.items():
+            if key not in current_value:
+                continue
+            posted_value[key] = _restore_redacted_sensitive_config(
+                item,
+                current_value[key],
+                key_name=key,
+            )
+        return posted_value
+
+    if isinstance(posted_value, list) and isinstance(current_value, list):
+        if key_name and _is_sensitive_config_key(key_name):
+            restored_items = []
+            for idx, item in enumerate(posted_value):
+                if (
+                    item == REDACTED_SECRET_PLACEHOLDER
+                    and idx < len(current_value)
+                    and isinstance(current_value[idx], str)
+                ):
+                    restored_items.append(current_value[idx])
+                else:
+                    restored_items.append(item)
+            return restored_items
+
+        for idx, item in enumerate(posted_value):
+            if idx >= len(current_value):
+                break
+            posted_value[idx] = _restore_redacted_sensitive_config(
+                item,
+                current_value[idx],
+                key_name=key_name,
+            )
+        return posted_value
+
+    if (
+        key_name
+        and _is_sensitive_config_key(key_name)
+        and posted_value == REDACTED_SECRET_PLACEHOLDER
+    ):
+        return current_value
+
+    return posted_value
 
 
 def _validate_template_list(value, meta, path_key, errors, validate_fn) -> None:
@@ -442,8 +551,12 @@ def save_config(
     config: AstrBotConfig,
     is_core: bool = False,
 ) -> None:
+    post_config = copy.deepcopy(post_config)
+    current_config = dict(config) if isinstance(config, dict) else {}
+    _restore_redacted_sensitive_config(post_config, current_config)
+
     if is_core:
-        _log_computer_config_changes(dict(config), post_config)
+        _log_computer_config_changes(current_config, post_config)
 
     try:
         if is_core:
@@ -673,7 +786,7 @@ class ConfigDisplayService:
 
         return {
             "metadata": metadata,
-            "config": self.config,
+            "config": _redact_sensitive_config(copy.deepcopy(dict(self.config))),
             "platform_i18n_translations": platform_i18n_translations,
         }
 

@@ -11,6 +11,8 @@ import click
 import httpx
 import yaml
 
+from astrbot.core.utils.io import extract_zip_safely
+
 from .version_comparator import VersionComparator
 
 
@@ -139,7 +141,10 @@ def get_git_repo(url: str, target_path: Path, proxy: str | None = None) -> None:
             proxy,
         )
         with ZipFile(zip_content) as z:
-            z.extractall(temp_dir)
+            try:
+                extract_zip_safely(z, temp_dir, archive_label="plugin archive")
+            except ValueError as exc:
+                raise click.ClickException(str(exc)) from exc
             namelist = z.namelist()
             root_dir = Path(namelist[0]).parts[0] if namelist else ""
             if target_path.exists():

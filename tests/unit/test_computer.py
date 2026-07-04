@@ -133,6 +133,18 @@ class TestSecurityRestrictions:
         for cmd in blocked_commands:
             assert _is_safe_command(cmd) is False, f"Command '{cmd}' should be blocked"
 
+    def test_is_safe_command_blocks_whitespace_bypass_variants(self):
+        """Test dangerous commands stay blocked with whitespace variations."""
+        blocked_commands = [
+            "rm\t-rf /",
+            "rm    -r /tmp",
+            "sudo\tpython script.py",
+            "echo ok && rm\t-rf /",
+            "kill\t-9 1",
+        ]
+        for cmd in blocked_commands:
+            assert _is_safe_command(cmd) is False, f"Command '{cmd}' should be blocked"
+
 
 class TestLocalShellComponent:
     """Tests for LocalShellComponent."""

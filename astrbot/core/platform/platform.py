@@ -1,7 +1,8 @@
 import abc
 import asyncio
+import logging
 import uuid
-from asyncio import Queue
+from asyncio import Queue, QueueFull
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -33,6 +34,7 @@ PLATFORM_ACTION_METHOD_NAMES = (
 )
 
 _BACKGROUND_TASKS: set[asyncio.Task] = set()
+logger = logging.getLogger("astrbot")
 
 
 class PlatformStatus(Enum):
@@ -186,9 +188,17 @@ class Platform(abc.ABC):
         """Whether this adapter overrides a named proactive platform action."""
         return action_name in type(self).declared_supported_actions()
 
-    def commit_event(self, event: AstrMessageEvent) -> None:
+    def commit_event(self, event: AstrMessageEvent) -> bool:
         """提交一个事件到事件队列。"""
-        self._event_queue.put_nowait(event)
+        try:
+            self._event_queue.put_nowait(event)
+        except QueueFull:
+            logger.warning(
+                "Event queue full; dropping event from %s",
+                event.unified_msg_origin,
+            )
+            return False
+        return True
 
     def create_event(self, message: AstrBotMessage) -> AstrMessageEvent:
         """Creates a message event for this platform.

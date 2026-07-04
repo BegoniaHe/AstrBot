@@ -1,5 +1,5 @@
 import logging
-from asyncio import Queue
+from asyncio import Queue, QueueFull
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -103,11 +103,6 @@ class PlatformManagerProtocol(Protocol):
 class Context:
     """暴露给插件的接口上下文。"""
 
-    registered_web_apis: list[RegisteredWebApi] = []
-
-    _register_tasks: list[Awaitable] = []
-    _star_manager = None
-
     def __init__(
         self,
         event_queue: Queue,
@@ -146,6 +141,9 @@ class Context:
         self.cron_manager = cron_manager
         """Cron job manager, initialized by core lifecycle."""
         self.subagent_orchestrator = subagent_orchestrator
+        self.registered_web_apis: list[RegisteredWebApi] = []
+        self._register_tasks: list[Awaitable] = []
+        self._star_manager = None
 
     async def llm_generate(
         self,
@@ -576,6 +574,18 @@ class Context:
     def get_event_queue(self) -> Queue:
         """获取事件队列。"""
         return self._event_queue
+
+    def commit_event(self, event: AstrMessageEvent) -> bool:
+        """提交一个事件到事件队列。"""
+        try:
+            self._event_queue.put_nowait(event)
+        except QueueFull:
+            logger.warning(
+                "Event queue full; dropping event from %s",
+                event.unified_msg_origin,
+            )
+            return False
+        return True
 
     def get_platform_inst(self, platform_id: str) -> Platform | None:
         """获取指定 ID 的平台适配器实例。

@@ -1,6 +1,12 @@
+import io
+import zipfile
 from pathlib import Path
 
-from astrbot.cli.utils.plugin import PluginStatus, build_plug_list
+import click
+
+import pytest
+
+from astrbot.cli.utils.plugin import PluginStatus, build_plug_list, get_git_repo
 
 
 class FakeResponse:
@@ -130,3 +136,28 @@ repo: https://example.com/legacy-plugin
     plugins = build_plug_list(tmp_path)
 
     assert all(plugin["name"] != "legacy-plugin" for plugin in plugins)
+
+
+def test_get_git_repo_rejects_zip_path_traversal(monkeypatch, tmp_path):
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zip_file:
+        zip_file.writestr(
+            "repo-main/metadata.yaml",
+            "name: repo\ndesc: x\nversion: 1\nauthor: y\n",
+        )
+        zip_file.writestr("../escape.txt", "escape")
+    archive.seek(0)
+
+    monkeypatch.setattr(
+        "astrbot.cli.utils.plugin._download_plugin_archive",
+        lambda *_args, **_kwargs: archive,
+    )
+    monkeypatch.setattr(
+        "astrbot.cli.utils.plugin._resolve_download_url",
+        lambda url, proxy=None: url,
+    )
+
+    with pytest.raises(click.ClickException, match="Unsafe plugin archive path"):
+        get_git_repo("https://github.com/example/repo", tmp_path / "repo")
+
+    assert not (tmp_path / "escape.txt").exists()

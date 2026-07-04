@@ -19,6 +19,7 @@ from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.provider.entities import ProviderRequest
 from astrbot.core.utils.history_saver import persist_agent_history
+from astrbot.core.utils.task_utils import cancel_tracked_tasks, create_tracked_task
 
 if TYPE_CHECKING:
     from astrbot.core.star.context import Context
@@ -98,6 +99,7 @@ class CronJobManager:
         self.db = db
         self.scheduler = AsyncIOScheduler()
         self._basic_handlers: dict[str, Callable[..., Any]] = {}
+        self._background_tasks: set[asyncio.Task] = set()
         self._lock = asyncio.Lock()
         self._started = False
 
@@ -115,6 +117,7 @@ class CronJobManager:
             if not self._started:
                 return
             self.scheduler.shutdown(wait=False)
+            await cancel_tracked_tasks(self._background_tasks)
             self._started = False
 
     async def sync_from_db(self) -> None:
@@ -262,10 +265,12 @@ class CronJobManager:
                 replace_existing=True,
                 misfire_grace_time=30,
             )
-            asyncio.create_task(
+            create_tracked_task(
+                self._background_tasks,
                 self.db.update_cron_job(
                     job.job_id, next_run_time=self._get_next_run_time(job.job_id)
-                )
+                ),
+                name=f"cron:update-next-run:{job.job_id}",
             )
         except (ValueError, TypeError) as e:
             logger.exception("Failed to schedule cron job %s", job.job_id)

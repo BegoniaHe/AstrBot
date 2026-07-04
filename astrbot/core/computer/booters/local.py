@@ -22,25 +22,23 @@ from .base import ComputerBooter
 from .shipyard_search_file_util import _truncate_long_lines
 
 _BLOCKED_COMMAND_PATTERNS = [
-    " rm -rf ",
-    " rm -fr ",
-    " rm -r ",
-    " mkfs",
-    " dd if=",
-    " shutdown",
-    " reboot",
-    " poweroff",
-    " halt",
-    " sudo ",
-    ":(){:|:&};:",
-    " kill -9 ",
-    " killall ",
+    re.compile(r"(^|[;&|() ])rm(?:\.exe)?\s+-[a-z-]*r[a-z-]*(?:\s|$)"),
+    re.compile(r"(^|[;&|() ])mkfs(?:\.[a-z0-9_+-]+)?(?:\s|$)"),
+    re.compile(r"(^|[;&|() ])dd\s+if="),
+    re.compile(r"(^|[;&|() ])(?:shutdown|reboot|poweroff|halt)(?:\s|$)"),
+    re.compile(r"(^|[;&|() ])sudo(?:\s|$)"),
+    re.compile(r"(^|[;&|() ])kill\s+-9(?:\s|$)"),
+    re.compile(r"(^|[;&|() ])killall(?:\s|$)"),
 ]
 
 
 def _is_safe_command(command: str) -> bool:
-    cmd = f" {command.strip().lower()} "
-    return not any(pat in cmd for pat in _BLOCKED_COMMAND_PATTERNS)
+    normalized_command = re.sub(r"\s+", " ", command.strip().lower())
+    if ":(){:|:&};:" in normalized_command:
+        return False
+    return not any(
+        pattern.search(normalized_command) for pattern in _BLOCKED_COMMAND_PATTERNS
+    )
 
 
 def _decode_bytes_with_fallback(

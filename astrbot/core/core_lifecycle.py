@@ -42,6 +42,8 @@ from astrbot.core.utils.temp_dir_cleaner import TempDirCleaner
 from . import astrbot_config, html_renderer
 from .event_bus import EventBus
 
+EVENT_QUEUE_MAXSIZE = 1024
+
 
 class AstrBotCoreLifecycle:
     """AstrBot 核心生命周期管理类, 负责管理 AstrBot 的启动、停止、重启等操作.
@@ -179,7 +181,7 @@ class AstrBotCoreLifecycle:
         )
 
         # 初始化事件队列
-        self.event_queue = Queue()
+        self.event_queue = Queue(maxsize=EVENT_QUEUE_MAXSIZE)
 
         # 初始化人格管理器
         self.persona_mgr = PersonaManager(self.db, self.astrbot_config_mgr)
