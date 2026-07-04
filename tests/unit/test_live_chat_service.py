@@ -245,6 +245,119 @@ def test_extract_web_search_refs_filters_supported_results_and_attaches_favicon(
     }
 
 
+def test_extract_web_search_refs_returns_empty_for_invalid_tool_payload(monkeypatch):
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.sp.temporary_cache",
+        {"_ws_favicon": {}},
+    )
+
+    refs = LiveChatService.extract_web_search_refs(
+        "answer <ref>1</ref>",
+        [
+            {
+                "type": "tool_call",
+                "tool_calls": [
+                    {"name": "web_search_tavily", "result": "{bad json"},
+                    {"name": "web_search_tavily"},
+                ],
+            }
+        ],
+    )
+
+    assert refs == {}
+
+
+def test_authenticate_token_maps_invalid_and_expired_errors(monkeypatch):
+    service = _service()
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.jwt.decode",
+        MagicMock(side_effect=__import__("jwt").ExpiredSignatureError("expired")),
+    )
+    with pytest.raises(Exception, match="Token expired"):
+        service.authenticate_token("token")
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.jwt.decode",
+        MagicMock(side_effect=__import__("jwt").InvalidTokenError("invalid")),
+    )
+    with pytest.raises(Exception, match="Invalid token"):
+        service.authenticate_token("token")
+
+
+@pytest.mark.asyncio
+async def test_create_attachment_from_file_delegates_with_expected_paths(monkeypatch, tmp_path):
+    service = _service()
+    service.attachments_dir = str(tmp_path / "attachments")
+    service.webchat_img_dir = str(tmp_path / "webchat" / "imgs")
+    service.db.insert_attachment = AsyncMock()
+    captured = {}
+
+    async def fake_create_attachment_part_from_existing_file(
+        filename,
+        *,
+        attach_type,
+        insert_attachment,
+        attachments_dir,
+        fallback_dirs,
+    ):
+        captured.update(
+            {
+                "filename": filename,
+                "attach_type": attach_type,
+                "insert_attachment": insert_attachment,
+                "attachments_dir": attachments_dir,
+                "fallback_dirs": fallback_dirs,
+            }
+        )
+        return {"attachment_id": "att-1", "type": attach_type}
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.create_attachment_part_from_existing_file",
+        fake_create_attachment_part_from_existing_file,
+    )
+
+    result = await service.create_attachment_from_file("photo.png", "image")
+
+    assert result == {"attachment_id": "att-1", "type": "image"}
+    assert captured == {
+        "filename": "photo.png",
+        "attach_type": "image",
+        "insert_attachment": service.db.insert_attachment,
+        "attachments_dir": service.attachments_dir,
+        "fallback_dirs": [service.webchat_img_dir],
+    }
+
+
+@pytest.mark.asyncio
+async def test_save_bot_message_builds_history_and_persists_checkpoint():
+    service = _service()
+    service.platform_history_mgr.insert = AsyncMock(return_value=_record(77))
+
+    saved = await service.save_bot_message(
+        "conv-1",
+        [{"type": "plain", "text": "hello"}],
+        {"latency": 10},
+        {"used": [{"index": "1"}]},
+        "checkpoint-1",
+    )
+
+    assert saved.id == 77
+    service.platform_history_mgr.insert.assert_awaited_once_with(
+        platform_id="webchat",
+        user_id="conv-1",
+        content={
+            "type": "bot",
+            "message": [{"type": "plain", "text": "hello"}],
+            "agent_stats": {"latency": 10},
+            "refs": {"used": [{"index": "1"}]},
+        },
+        sender_id="bot",
+        sender_name="bot",
+        llm_checkpoint_id="checkpoint-1",
+    )
+
+
 @pytest.mark.asyncio
 async def test_handle_chat_message_bind_requires_session_id():
     service = _service()
@@ -388,6 +501,38 @@ async def test_ensure_chat_subscription_replaces_completed_task(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ensure_chat_subscription_create_task_failure_leaves_subscription_marker(
+    monkeypatch,
+):
+    service = _service()
+    session = service.create_session("alice")
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.uuid.uuid4",
+        lambda: SimpleNamespace(hex="broken-sub-id"),
+    )
+
+    def fail_create_task(coro, *, name=None):
+        coro.close()
+        raise RuntimeError("task create failed")
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.asyncio.create_task",
+        fail_create_task,
+    )
+
+    with pytest.raises(RuntimeError, match="task create failed"):
+        await service.ensure_chat_subscription(
+            session,
+            "chat-session",
+            AsyncMock(),
+        )
+
+    assert session.chat_subscriptions == {"chat-session": "ws_sub_broken-sub-id"}
+    assert session.chat_subscription_tasks == {}
+
+
+@pytest.mark.asyncio
 async def test_forward_chat_subscription_forwards_payload_and_cleans_state(monkeypatch):
     service = _service()
     session = service.create_session("alice")
@@ -484,6 +629,64 @@ async def test_handle_chat_message_interrupt_sets_flag_and_sends_interrupted_err
 
 
 @pytest.mark.asyncio
+async def test_handle_chat_message_rejects_unsupported_message_type():
+    service = _service()
+    session = service.create_session("alice")
+    sent_payloads: list[dict] = []
+
+    async def send_json(payload: dict) -> None:
+        sent_payloads.append(payload)
+
+    await service.handle_chat_message(
+        session,
+        {"t": "mystery"},
+        send_json,
+    )
+
+    assert sent_payloads == [
+        {
+            "ct": "chat",
+            "t": "error",
+            "data": "Unsupported message type: mystery",
+            "code": "INVALID_MESSAGE_FORMAT",
+        }
+    ]
+    assert session.is_processing is False
+    assert session.should_interrupt is False
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_bind_reuses_existing_subscription_request_id():
+    service = _service()
+    session = service.create_session("alice")
+    service.ensure_chat_subscription = AsyncMock(return_value="req-existing")
+    sent_payloads: list[dict] = []
+
+    async def send_json(payload: dict) -> None:
+        sent_payloads.append(payload)
+
+    await service.handle_chat_message(
+        session,
+        {"t": "bind", "session_id": "chat-session"},
+        send_json,
+    )
+
+    service.ensure_chat_subscription.assert_awaited_once_with(
+        session,
+        "chat-session",
+        send_json,
+    )
+    assert sent_payloads == [
+        {
+            "ct": "chat",
+            "type": "session_bound",
+            "session_id": "chat-session",
+            "message_id": "req-existing",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_handle_chat_message_send_rejects_busy_session():
     service = _service()
     session = service.create_session("alice")
@@ -508,6 +711,61 @@ async def test_handle_chat_message_send_rejects_busy_session():
         }
     ]
     assert session.is_processing is True
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_send_rejects_non_list_message_payload():
+    service = _service()
+    session = service.create_session("alice")
+    sent_payloads: list[dict] = []
+
+    async def send_json(payload: dict) -> None:
+        sent_payloads.append(payload)
+
+    await service.handle_chat_message(
+        session,
+        {"t": "send", "message": "not-a-list"},
+        send_json,
+    )
+
+    assert sent_payloads == [
+        {
+            "ct": "chat",
+            "t": "error",
+            "data": "message must be list",
+            "code": "INVALID_MESSAGE_FORMAT",
+        }
+    ]
+    assert session.is_processing is False
+    assert session.should_interrupt is False
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_send_rejects_empty_message_parts():
+    service = _service()
+    service.build_chat_message_parts = AsyncMock(return_value=[])
+    session = service.create_session("alice")
+    sent_payloads: list[dict] = []
+
+    async def send_json(payload: dict) -> None:
+        sent_payloads.append(payload)
+
+    await service.handle_chat_message(
+        session,
+        {"t": "send", "message": [{"type": "plain", "text": ""}]},
+        send_json,
+    )
+
+    assert sent_payloads == [
+        {
+            "ct": "chat",
+            "t": "error",
+            "data": "Message content is empty",
+            "code": "INVALID_MESSAGE_FORMAT",
+        }
+    ]
+    assert session.is_processing is False
+    assert session.should_interrupt is False
 
 
 @pytest.mark.asyncio
@@ -557,6 +815,73 @@ async def test_handle_chat_message_send_reports_processing_failure_and_cleans_qu
     assert removed_request_ids == ["msg-error"]
     assert session.is_processing is False
     assert session.should_interrupt is False
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_send_logs_pending_flush_failure_and_still_cleans_queue(
+    monkeypatch,
+):
+    service = _service()
+    service.ensure_chat_subscription = AsyncMock(return_value="sub-flush")
+    service.build_chat_message_parts = AsyncMock(
+        return_value=[{"type": "plain", "text": "hello"}]
+    )
+    service.platform_history_mgr.insert = AsyncMock(return_value=_record(12))
+    service.save_bot_message = AsyncMock(side_effect=RuntimeError("flush failed"))
+    session = service.create_session("alice")
+    chat_queue: asyncio.Queue = asyncio.Queue()
+    back_queue: asyncio.Queue = asyncio.Queue()
+    removed_request_ids: list[str] = []
+    logged_exceptions: list[str] = []
+
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-flush",
+            "type": "plain",
+            "data": "Hello",
+            "streaming": False,
+        }
+    )
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_queue",
+        lambda _conversation_id: chat_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_back_queue",
+        lambda _request_id, _conversation_id=None: back_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.remove_back_queue",
+        removed_request_ids.append,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.logger.exception",
+        lambda message, *args, **kwargs: logged_exceptions.append(str(message)),
+    )
+
+    async def send_json(_payload: dict) -> None:
+        return None
+
+    await service.handle_chat_message(
+        session,
+        {
+            "t": "send",
+            "session_id": "chat-session",
+            "message_id": "msg-flush",
+            "message": [{"type": "plain", "text": "hello"}],
+        },
+        send_json,
+    )
+
+    assert service.save_bot_message.await_count >= 1
+    assert removed_request_ids == ["msg-flush"]
+    assert session.is_processing is False
+    assert session.should_interrupt is False
+    assert any(
+        "Failed to persist pending chat message: flush failed" in message
+        for message in logged_exceptions
+    )
 
 
 @pytest.mark.asyncio
@@ -695,6 +1020,181 @@ async def test_handle_chat_message_send_enqueues_and_persists_messages(monkeypat
     }
     assert removed_request_ids == ["msg-1"]
     assert session.is_processing is False
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_send_ignores_empty_mismatched_and_bad_agent_stats(
+    monkeypatch,
+):
+    service = _service()
+    service.platform_history_mgr.insert = AsyncMock(return_value=_record(13))
+    service.ensure_chat_subscription = AsyncMock(return_value="sub-3")
+    service.build_chat_message_parts = AsyncMock(
+        return_value=[{"type": "plain", "text": "hello"}]
+    )
+    service.save_bot_message = AsyncMock(return_value=_record(23))
+    session = service.create_session("alice")
+    chat_queue: asyncio.Queue = asyncio.Queue()
+    back_queue: asyncio.Queue = asyncio.Queue()
+    sent_payloads: list[dict] = []
+    removed_request_ids: list[str] = []
+
+    back_queue.put_nowait(None)
+    back_queue.put_nowait(
+        {
+            "message_id": "someone-else",
+            "type": "plain",
+            "data": "ignored",
+            "streaming": False,
+        }
+    )
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-3",
+            "type": "plain",
+            "data": "{bad json",
+            "chain_type": "agent_stats",
+        }
+    )
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-3",
+            "type": "plain",
+            "data": "kept",
+            "streaming": False,
+        }
+    )
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-3",
+            "type": "end",
+            "data": "",
+            "streaming": False,
+        }
+    )
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_queue",
+        lambda _conversation_id: chat_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_back_queue",
+        lambda _request_id, _conversation_id=None: back_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.remove_back_queue",
+        removed_request_ids.append,
+    )
+
+    async def send_json(payload: dict) -> None:
+        sent_payloads.append(payload)
+
+    await service.handle_chat_message(
+        session,
+        {
+            "t": "send",
+            "session_id": "chat-session",
+            "message_id": "msg-3",
+            "message": [{"type": "plain", "text": "hello"}],
+        },
+        send_json,
+    )
+
+    service.save_bot_message.assert_awaited_once()
+    save_args = service.save_bot_message.await_args.args
+    assert save_args[1] == [{"type": "plain", "text": "kept"}]
+    assert save_args[2] == {}
+    assert sent_payloads[1] == {
+        "ct": "chat",
+        "message_id": "msg-3",
+        "type": "plain",
+        "data": "kept",
+        "streaming": False,
+    }
+    assert removed_request_ids == ["msg-3"]
+    assert session.is_processing is False
+    assert session.should_interrupt is False
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_send_falls_back_when_extract_web_search_refs_fails(
+    monkeypatch,
+):
+    service = _service()
+    service.platform_history_mgr.insert = AsyncMock(return_value=_record(14))
+    service.ensure_chat_subscription = AsyncMock(return_value="sub-4")
+    service.build_chat_message_parts = AsyncMock(
+        return_value=[{"type": "plain", "text": "hello"}]
+    )
+    service.save_bot_message = AsyncMock(return_value=_record(24))
+    session = service.create_session("alice")
+    chat_queue: asyncio.Queue = asyncio.Queue()
+    back_queue: asyncio.Queue = asyncio.Queue()
+    removed_request_ids: list[str] = []
+    logged_exceptions: list[str] = []
+
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-4",
+            "type": "plain",
+            "data": "answer <ref>1</ref>",
+            "streaming": False,
+        }
+    )
+    back_queue.put_nowait(
+        {
+            "message_id": "msg-4",
+            "type": "end",
+            "data": "",
+            "streaming": False,
+        }
+    )
+
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_queue",
+        lambda _conversation_id: chat_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.get_or_create_back_queue",
+        lambda _request_id, _conversation_id=None: back_queue,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.webchat_queue_mgr.remove_back_queue",
+        removed_request_ids.append,
+    )
+    monkeypatch.setattr(
+        service,
+        "extract_web_search_refs",
+        MagicMock(side_effect=RuntimeError("refs boom")),
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.live_chat_service.logger.exception",
+        lambda message, *args, **kwargs: logged_exceptions.append(str(message)),
+    )
+
+    async def send_json(_payload: dict) -> None:
+        return None
+
+    await service.handle_chat_message(
+        session,
+        {
+            "t": "send",
+            "session_id": "chat-session",
+            "message_id": "msg-4",
+            "message": [{"type": "plain", "text": "hello"}],
+        },
+        send_json,
+    )
+
+    service.save_bot_message.assert_awaited_once()
+    save_args = service.save_bot_message.await_args.args
+    assert save_args[1] == [{"type": "plain", "text": "answer <ref>1</ref>"}]
+    assert save_args[3] == {}
+    assert removed_request_ids == ["msg-4"]
+    assert any(
+        "Failed to extract web search refs: refs boom" in message
+        for message in logged_exceptions
+    )
 
 
 @pytest.mark.asyncio

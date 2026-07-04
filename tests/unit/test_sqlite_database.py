@@ -1051,6 +1051,63 @@ async def test_get_platform_sessions_by_creator_paginated_orders_by_latest_updat
 
 
 @pytest.mark.asyncio
+async def test_get_platform_sessions_by_creator_applies_platform_filter_and_returns_project_metadata(
+    temp_db: SQLiteDatabase,
+):
+    webchat_session = await temp_db.create_platform_session(
+        creator="alice",
+        platform_id="webchat",
+        session_id="session-webchat",
+    )
+    telegram_session = await temp_db.create_platform_session(
+        creator="alice",
+        platform_id="telegram",
+        session_id="session-telegram",
+    )
+    project = await temp_db.create_chatui_project(
+        creator="alice",
+        title="Alpha",
+        emoji="A",
+    )
+    await temp_db.add_session_to_project(webchat_session.session_id, project.project_id)
+
+    rows = await temp_db.get_platform_sessions_by_creator(
+        creator="alice",
+        platform_id="webchat",
+        page=1,
+        page_size=10,
+    )
+
+    assert [row["session"].session_id for row in rows] == ["session-webchat"]
+    assert rows[0]["project_id"] == project.project_id
+    assert rows[0]["project_title"] == "Alpha"
+    assert rows[0]["project_emoji"] == "A"
+    assert all(row["session"].session_id != telegram_session.session_id for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_update_platform_session_without_display_name_only_touches_timestamp(
+    temp_db: SQLiteDatabase,
+):
+    created = await temp_db.create_platform_session(
+        creator="alice",
+        platform_id="webchat",
+        session_id="session-touch",
+        display_name="Original Name",
+    )
+    before = await temp_db.get_platform_session_by_id(created.session_id)
+    assert before is not None
+    before_updated_at = before.updated_at
+
+    await temp_db.update_platform_session(created.session_id)
+
+    updated = await temp_db.get_platform_session_by_id(created.session_id)
+    assert updated is not None
+    assert updated.display_name == "Original Name"
+    assert updated.updated_at >= before_updated_at
+
+
+@pytest.mark.asyncio
 async def test_get_platform_message_history_is_paginated_and_scoped_by_platform_and_user(
     temp_db: SQLiteDatabase,
 ):
