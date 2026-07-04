@@ -21,8 +21,10 @@ async def kb_db(tmp_path):
     db_path = str(tmp_path / "test_kb.db")
     db = KBSQLiteDatabase(db_path)
     await db.initialize()
-    await db.migrate_to_v1()
-    return db
+    try:
+        yield db
+    finally:
+        await db.close()
 
 
 @pytest_asyncio.fixture
@@ -185,7 +187,6 @@ async def test_update_kb_stats_counts_chunks_for_single_kb(kb_db, seeded_kb):
     async with kb_db.get_db() as session, session.begin():
         session.add(kb2)
         await session.flush()
-        kb_id2 = kb2.kb_id
 
     # Mock vec_db: count_documents 应被调用并带有 kb_id 过滤
     mock_vec_db = MagicMock()

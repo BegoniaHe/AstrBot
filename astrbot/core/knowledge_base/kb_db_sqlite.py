@@ -232,7 +232,7 @@ class KBSQLiteDatabase:
 
         return metadata_map
 
-    async def delete_document_by_id(self, doc_id: str, vec_db: "FaissVecDB") -> None:
+    async def delete_document_by_id(self, doc_id: str, vec_db: FaissVecDB) -> None:
         """删除单个文档及其相关数据（包括多媒体记录）"""
         async with self.get_db() as session, session.begin():
             # 删除多媒体记录

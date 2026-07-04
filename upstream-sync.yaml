@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: 89b80a6ca7281baf9aa4295e8b9c920819a3eb90
-  synced_at_utc: 2026-07-02T18:38:13Z
+  commit: e2f3b000882ae9999d9dd81a69ae73c3421570b4
+  synced_at_utc: 2026-07-04T11:49:53.9038406Z
   sync_method: cherry-pick
   source_pr: null
-  note: "Cherry-picked upstream/master fixes from 372b9f5bfc52524a6239f672f54028164beb33c4 through 89b80a6ca7281baf9aa4295e8b9c920819a3eb90, including QR platform ID customization and ModelScope MCP sync filtering. Skipped the upstream 4.26.4 version-bump commit and bumped the fork to 4.26.4 directly. Resolved conflicts without reintroducing legacy dashboard API aliases or compatibility shims."
+  note: "Cherry-picked upstream/master knowledge-base fixes aecee6fc9f22dcba819b45ac4904c627c2548daa through e2f3b000882ae9999d9dd81a69ae73c3421570b4, covering duplicate kb_name pre-check, retrieval resilience, and KBMedia cleanup/update_kb_stats. Skipped upstream custom-workspace follow-up commits 6d798908ad8a60f0822caf490933e7c4bcf92c14 and 20008f179ca579b3d4ab87bd2380021325172cc5 because this fork does not carry the ChatUI project workspace feature they modify."
