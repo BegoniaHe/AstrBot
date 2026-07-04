@@ -139,6 +139,7 @@ yay -S astrbot-git
 | Telegram                                                                          | Официальная |
 | Приложение WeChat Work и интеллектуальный бот WeChat Work                         | Официальная |
 | Служба поддержки WeChat и официальные аккаунты WeChat                             | Официальная |
+| Личный WeChat                                                                     | Официальная |
 | Feishu (Lark)                                                                     | Официальная |
 | DingTalk                                                                          | Официальная |
 | Slack                                                                             | Официальная |
@@ -190,6 +191,7 @@ yay -S astrbot-git
 | Minimax TTS                                                                                        | Сервисы синтеза речи                            |
 | Xiaomi MiMo TTS                                                                                    | Сервисы синтеза речи                            |
 | Volcano Engine TTS                                                                                 | Сервисы синтеза речи                            |
+| ElevenLabs TTS                                                                                     | Сервисы синтеза речи                            |
 
 ## ❤️ Вклад в проект
 

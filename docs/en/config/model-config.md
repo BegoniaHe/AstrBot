@@ -1,11 +1,29 @@
-# 配置自定义的模型参数
+# Configuring Custom Model Parameters
 
-请手动修改位于 `data/cmd_config.json` 下的配置文件。
+Open **Providers** in the AstrBot WebUI left sidebar, then edit the provider you want to customize.
 
-找到 `provider`，并找到你想要修改的提供商的模型配置：
+In the provider edit dialog, find the `Custom request body parameters` (`custom_extra_body`) field. Any key/value pair you add here is merged into the request body sent to the model, so you can tune parameters such as `temperature`, `top_p`, `max_tokens`, and `reasoning_effort` per provider.
 
-![alt text](https://files.astrbot.app/docs/source/images/model-config/image-2.png)
+The WebUI pre-fills a template for the common `temperature`, `top_p`, and `max_tokens` parameters; you can add any other parameter your provider supports the same way.
 
-然后在 `model_config` 中添加新的参数即可。
+If you need to customize HTTP request headers instead (for example, to pass a non-standard auth header), use the `Custom request headers` (`custom_headers`) field, which is merged into the OpenAI SDK's `default_headers`.
 
-具体的参数请参看对应的提供商的文档。
+You can also edit these fields directly in `data/cmd_config.json`, under the corresponding entry in the `provider` list:
+
+```json
+{
+  "provider": [
+    {
+      "id": "my-provider",
+      "custom_extra_body": {
+        "temperature": 0.6,
+        "top_p": 1.0,
+        "max_tokens": 8192
+      },
+      "custom_headers": {}
+    }
+  ]
+}
+```
+
+For the exact parameters supported, refer to the corresponding provider's own documentation.

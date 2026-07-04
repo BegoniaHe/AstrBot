@@ -40,7 +40,7 @@ Leave the remaining options at their default values unless you explicitly know y
 - `API Timeout (weixin_oc_api_timeout_ms)`
 
 > [!TIP]
-> `token` and `account_id` are saved automatically by AstrBot after QR login succeeds. You normally do not need to fill them manually.
+> `weixin_oc_token` and `weixin_oc_account_id` are saved automatically by AstrBot after QR login succeeds. You normally do not need to fill them manually.
 
 ## QR Login
 

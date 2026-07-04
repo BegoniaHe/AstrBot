@@ -72,7 +72,7 @@ For the domain field, if you're using Lark China, keep the default value. If you
 
 For the subscription method, `socket` uses a long connection subscription approach, while `webhook` sends events to your developer server and requires a public server. Generally, `socket` is recommended. However, if you're using Lark International or a self-hosted Lark instance, choose `webhook`. The subsequent configuration steps will differ accordingly.
 
-If you selected the `webhook` method, navigate to the Lark Developer Console, click on "Events & Callbacks," then "Encryption Policy," and fill in the Encrypt Key. While not mandatory, AstrBot takes your data security seriously, so we strongly recommend setting this up. After filling it in, copy the `Encrypt Key` and `Verification Token` to the corresponding `encrypt_key` and `verification_token` fields in AstrBot's configuration.
+If you selected the `webhook` method, navigate to the Lark Developer Console, click on "Events & Callbacks," then "Encryption Policy," and fill in the Encrypt Key. While not mandatory, AstrBot takes your data security seriously, so we strongly recommend setting this up. After filling it in, copy the `Encrypt Key` and `Verification Token` to the corresponding `lark_encrypt_key` and `lark_verification_token` fields in AstrBot's configuration.
 
 Click `Save`.
 

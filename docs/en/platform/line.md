@@ -48,7 +48,6 @@ Fill in these fields:
 - `Enable`: Checked
 - `LINE Channel Access Token`: your `channel_access_token`
 - `LINE Channel Secret`: your `channel_secret`
-- `LINE Bot User ID`: optional; if empty, AstrBot uses webhook `destination`
 
 Click Save.
 

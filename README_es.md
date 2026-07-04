@@ -139,6 +139,7 @@ Conecta AstrBot a tu plataforma de chat favorita.
 | Telegram                                                                          | Oficial    |
 | Wecom y Wecom AI Bot                                                              | Oficial    |
 | Cuentas oficiales de WeChat                                                       | Oficial    |
+| WeChat personal                                                                   | Oficial    |
 | Feishu (Lark)                                                                     | Oficial    |
 | DingTalk                                                                          | Oficial    |
 | Slack                                                                             | Oficial    |
@@ -190,6 +191,7 @@ Conecta AstrBot a tu plataforma de chat favorita.
 | Minimax TTS                                                                                        | Servicios de texto a voz                               |
 | Xiaomi MiMo TTS                                                                                    | Servicios de texto a voz                               |
 | Volcano Engine TTS                                                                                 | Servicios de texto a voz                               |
+| ElevenLabs TTS                                                                                     | Servicios de texto a voz                               |
 
 ## ❤️ Patrocinadores
 

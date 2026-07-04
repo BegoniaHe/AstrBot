@@ -153,6 +153,7 @@ yay -S astrbot-git
 | Telegram                                                                          | 官方維護 |
 | 企微應用 & 企微智慧機器人                                                         | 官方維護 |
 | 微信客服 & 微信公眾號                                                             | 官方維護 |
+| 個人微信                                                                          | 官方維護 |
 | 飛書                                                                              | 官方維護 |
 | 釘釘                                                                              | 官方維護 |
 | Slack                                                                             | 官方維護 |
@@ -204,6 +205,7 @@ yay -S astrbot-git
 | Minimax TTS                                                                                       | 文字轉語音服務                         |
 | Xiaomi MiMo TTS                                                                                   | 文字轉語音服務                         |
 | 火山引擎 TTS                                                                                      | 文字轉語音服務                         |
+| ElevenLabs TTS                                                                                    | 文字轉語音服務                         |
 
 ## ❤️ 貢獻
 

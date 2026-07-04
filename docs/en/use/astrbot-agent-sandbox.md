@@ -32,6 +32,108 @@ For `Shipyard Neo`, the workspace root is fixed at `/workspace`. When using file
 > [!TIP]
 > Browser capability is not available in every `Shipyard Neo` profile. AstrBot only mounts browser-related tools when the selected profile supports the `browser` capability. A typical example is `browser-python`.
 
+## CUA Runtime
+
+`CUA` is a sandbox runtime for computer use. It can create Linux, macOS, Windows, and Android sandboxes through a unified Python SDK, and exposes shell, screenshot, mouse, keyboard, and filesystem interfaces.
+
+After selecting the `CUA` driver in AstrBot, the Agent can use, inside the CUA sandbox:
+
+- Shell tools
+- Python tools
+- File read, write, edit, and search tools
+- Screenshot tools
+- Mouse click tools
+- Keyboard input tools
+- Sandbox file upload and download tools
+
+> [!NOTE]
+> CUA is an optional runtime; AstrBot's default installation does not install it by default. If you select `CUA` but the current Python environment does not have the `cua` package installed, AstrBot will prompt you to install it when starting a sandbox.
+
+### Installing CUA Dependencies
+
+If you run AstrBot from source or in a virtual environment, install CUA into the Python environment AstrBot uses:
+
+```bash
+pip install cua
+```
+
+If you manage the AstrBot environment with `uv`, you can run this inside the AstrBot project directory:
+
+```bash
+uv pip install cua
+```
+
+CUA itself also depends on the specific runtime mode:
+
+- Local Linux containers usually require Docker to be available.
+- Local Linux/Windows VMs usually require QEMU or CUA's corresponding local runtime.
+- macOS VMs usually depend on CUA/Lume-related runtimes.
+- Cloud CUA requires a valid CUA API key.
+
+For detailed host requirements, image support, and local runtime installation, see the [official CUA documentation](https://cua.ai/docs).
+
+### Configuring CUA in AstrBot
+
+Open the WebUI:
+
+- `Config -> General Config -> Agent Computer Use`
+
+Then set:
+
+- `Computer Use Runtime` = `sandbox`
+- `Sandbox Driver` = `CUA`
+
+The CUA-related configuration items include:
+
+- `CUA Image`: the CUA image to launch. Common values are `linux`, `macos`, `windows`, `android`. Default is `linux`.
+- `CUA OS Type`: the operating system type of the image. Default is `linux`. It affects how AstrBot decides whether to use the POSIX shell fallback.
+- `CUA Idle Timeout`: the sandbox idle timeout, in seconds. Default is `0`, meaning idle sandboxes are not actively closed; when greater than `0`, a sandbox idle for longer than this duration will be actively closed.
+- `CUA Telemetry`: whether to allow the CUA SDK to send telemetry data. Disabled by default.
+- `CUA Local Sandbox`: whether to prefer the local sandbox. Enabled by default, which avoids requiring a CUA API key for cloud sandboxes. When disabled, the CUA cloud sandbox is used instead.
+- `CUA API Key`: the API key required for cloud CUA. Only needed when using the cloud runtime.
+
+A minimal local Linux container configuration typically looks like:
+
+```text
+Computer Use Runtime = sandbox
+Sandbox Driver = CUA
+CUA Image = linux
+CUA OS Type = linux
+CUA Local Sandbox = true
+```
+
+If using cloud CUA, you can instead use:
+
+```text
+Computer Use Runtime = sandbox
+Sandbox Driver = CUA
+CUA Image = linux
+CUA OS Type = linux
+CUA Local Sandbox = false
+CUA API Key = <your-cua-api-key>
+```
+
+> [!WARNING]
+> Do not write your CUA API key into public logs, screenshots, or issues. AstrBot's runtime logs do not print this field, but you still need to protect deployment platforms, shell history, and container environment variables yourself.
+
+### Notes When Using CUA
+
+- The `linux` image is generally suitable for shell, Python, filesystem, and desktop automation testing.
+- Non-POSIX images (such as `windows` and `android`) do not necessarily support commands like `sh`, `cat`, `ls`, `rm`, and `base64`. AstrBot returns a clear error for fallback operations that require these commands.
+- If you need to open a browser or a GUI program inside the CUA sandbox, you should generally run it in the background via the shell, for example by explicitly passing `background=true`, to avoid blocking subsequent tool calls.
+- Sending sandbox-internal file paths directly to the user is generally not viable. Prefer using AstrBot's sandbox download tools to download the file to AstrBot's temp directory first, then send it.
+- CUA and Shipyard Neo have different workspace semantics. Shipyard Neo always uses `/workspace`; CUA's working directory and file paths depend on the image and runtime.
+
+### When to Choose CUA
+
+We recommend choosing `CUA` in the following scenarios:
+
+- You need desktop screenshots, mouse clicks, keyboard input, or other GUI automation capabilities.
+- You need to test behavior across different OS images, such as Linux, Windows, or Android.
+- You already have a CUA runtime environment deployed locally or in the cloud.
+
+If you only need a stable Python/shell/filesystem sandbox without desktop GUI operations, `Shipyard Neo` is usually the better default. It fits more naturally with AstrBot's workspace, Skills sync, and long-running usage patterns.
+
 ## Performance Requirements
 
 AstrBot limits each sandbox instance to at most 1 CPU and 512 MB of memory.

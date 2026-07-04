@@ -47,16 +47,17 @@ When creating an API Key, you can configure `scopes`. Each scope controls the ra
 | `plugin`   | Manage plugins, plugin config, plugin sources, and marketplace entries                                                 | `GET /api/v1/plugins`, `GET/PUT /api/v1/plugins/config`, `POST /api/v1/plugins/install/url`                                     |
 | `mcp`      | Manage MCP server configurations and provider sync                                                                     | `GET/POST /api/v1/mcp/servers`, `PATCH /api/v1/mcp/servers/{server_name}/enabled`, `POST /api/v1/mcp/providers/modelscope/sync` |
 | `skill`    | Manage skills, skill archives, skill files, and Shipyard Neo skill workflows                                           | `GET/POST /api/v1/skills`, `PUT /api/v1/skills/{skill_name}/files/{file_path}`, `POST /api/v1/skills/neo/sync`                  |
+| `kb`       | Manage knowledge bases and their retrieval                                                                             | `GET/POST /api/v1/knowledge-bases`, `GET/PUT/DELETE /api/v1/knowledge-bases/{kb_id}`                                            |
 
 If the API Key does not include the required scope for the target endpoint, the request will return `403 Insufficient API key scope`.
 
 `config` is a broad management scope. When an API key is created with `config`, AstrBot grants the key `config`, `bot`, and `provider` access together. The WebUI mirrors this dependency: selecting `config` selects `bot` and `provider`; deselecting `bot` or `provider` removes `config`.
 
-Developer API keys currently support the 11 scopes listed above. Use the singular `skill` scope for `/api/v1/skills/*` endpoints.
+Developer API keys currently support the 12 scopes listed above. Use the singular `skill` scope for `/api/v1/skills/*` endpoints.
 
-Note: the backend already accepts the `data` scope, but the current WebUI scope picker in Settings does not list `data` yet.
+Note: the backend already accepts the `data` and `kb` scopes, but the current WebUI scope picker in Settings does not list them yet.
 
-`tool`, `kb`, and `system` routes still exist in the full local `/api/v1/openapi.json` schema, but they are dashboard-session routes today rather than developer API key scopes.
+`tool` and `system` routes still exist in the full local `/api/v1/openapi.json` schema, but they are dashboard-session routes today rather than developer API key scopes.
 
 ## Common Endpoints
 

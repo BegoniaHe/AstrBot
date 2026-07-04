@@ -12,7 +12,7 @@ AstrBot supports both WeCom Applications and WeCom Customer Service.
 | Video        | No      | Yes  |       |
 | File         | No      | Yes  |       |
 
-Proactive message push: Supported for WeCom Application. Not fully tested for WeCom Customer Service.
+Proactive message push: Supported for WeCom Application. Not supported for WeCom Customer Service (calling it in customer-service mode raises an error).
 
 ## Before You Start
 
@@ -30,7 +30,7 @@ A configuration dialog will appear. Keep it open and continue with the steps bel
 > This method works directly inside WeChat.
 
 1. Open [WeCom Customer Service Console](https://kf.weixin.qq.com/) and sign in with WeCom QR login.
-2. Create a customer service account in `Customer Service Account`, then copy its **name** (not account ID) to AstrBot field `wechat_kf_account_name`.
+2. Create a customer service account in `Customer Service Account`, then copy its **name** (not account ID) to AstrBot field `kf_name`.
 3. Go to [WeCom Enterprise Info](https://work.weixin.qq.com/wework_admin/frame#profile), copy `Corpid`, and fill AstrBot `corpid`.
 4. Configure callback verification:
 

@@ -72,7 +72,7 @@
 
 对于订阅方式，`socket` 代表使用「长连接」订阅方式，`webhook` 代表「将事件发送至开发者服务器」的订阅方式，后者需要您拥有公网服务器。一般来说使用 `socket` 即可，如果您使用国际版飞书或者企业自部署飞书，请选择 `webhook`。相应地，接下来的配置也会有所不同。
 
-如果您选择了 `webhook` 方式，选择了之后，前往飞书的开发者后台，点击事件与回调，点击加密策略，填写 Encrypt Key。这不是必须的，AstrBot 十分注重你的数据安全，所以请务必填写。填写后复制 `Encrypt Key` 和 `Verification Token` 到 AstrBot 配置的 `encrypt_key` 和 `verification_token` 处。
+如果您选择了 `webhook` 方式，选择了之后，前往飞书的开发者后台，点击事件与回调，点击加密策略，填写 Encrypt Key。这不是必须的，AstrBot 十分注重你的数据安全，所以请务必填写。填写后复制 `Encrypt Key` 和 `Verification Token` 到 AstrBot 配置的 `lark_encrypt_key` 和 `lark_verification_token` 处。
 
 点击 `保存`。
 

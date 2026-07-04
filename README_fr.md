@@ -139,6 +139,7 @@ Connectez AstrBot à vos plateformes de chat préférées.
 | Telegram                                                                          | Officielle  |
 | Application WeChat Work & Bot intelligent WeChat Work                             | Officielle  |
 | Service client WeChat & Comptes officiels WeChat                                  | Officielle  |
+| WeChat personnel                                                                  | Officielle  |
 | Feishu (Lark)                                                                     | Officielle  |
 | DingTalk                                                                          | Officielle  |
 | Slack                                                                             | Officielle  |
@@ -190,6 +191,7 @@ Connectez AstrBot à vos plateformes de chat préférées.
 | Minimax TTS                                                                                        | Services de synthèse vocale                                     |
 | Xiaomi MiMo TTS                                                                                    | Services de synthèse vocale                                     |
 | Volcano Engine TTS                                                                                 | Services de synthèse vocale                                     |
+| ElevenLabs TTS                                                                                     | Services de synthèse vocale                                     |
 
 ## ❤️ Contribuer
 

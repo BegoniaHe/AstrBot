@@ -44,6 +44,11 @@ Scheduling tasks is supported on all platforms. However, due to some platforms n
 - Discord
 - Misskey
 - Satori
+- DingTalk
+- WeCom (application mode only; customer service mode is not supported)
+- WeCom Smart Bot
+- WebChat
+- QQ Official Bot (WebSocket and Webhook)
 
 ## Sending Multimedia Messages
 

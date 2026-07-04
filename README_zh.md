@@ -126,6 +126,7 @@ yay -S astrbot-git
 | **Telegram**                                                                          | 官方维护 |
 | **企微应用 & 企微智能机器人**                                                         | 官方维护 |
 | **微信客服 & 微信公众号**                                                             | 官方维护 |
+| **个人微信**                                                                          | 官方维护 |
 | **飞书**                                                                              | 官方维护 |
 | **钉钉**                                                                              | 官方维护 |
 | **Slack**                                                                             | 官方维护 |
@@ -142,14 +143,14 @@ yay -S astrbot-git
 
 ## 支持的模型提供商
 
-| 服务类型              | 内置选项                                                                        |
-| --------------------- | ------------------------------------------------------------------------------- |
-| 对话 / LLM            | OpenAI 兼容服务、OpenAI、Anthropic、Gemini、Moonshot、智谱、DeepSeek            |
-| 本地 LLM              | Ollama、LM Studio                                                               |
-| Agent 执行器          | Dify、Coze、阿里云百炼应用、DeerFlow                                            |
-| 语音转文本            | OpenAI Whisper、SenseVoice、Xiaomi MiMo Omni                                    |
-| 文本转语音            | OpenAI TTS、Gemini TTS、GPT-SoVITS、FishAudio、Edge TTS、Azure TTS、Minimax TTS |
-| Embedding / Rerank 等 | 以 WebUI 中当前可选提供商列表为准                                               |
+| 服务类型              | 内置选项                                                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 对话 / LLM            | OpenAI 兼容服务、OpenAI、Anthropic、Gemini、Moonshot、智谱、DeepSeek                                                          |
+| 本地 LLM              | Ollama、LM Studio                                                                                                             |
+| Agent 执行器          | Dify、Coze、阿里云百炼应用、DeerFlow                                                                                          |
+| 语音转文本            | OpenAI Whisper、SenseVoice、Xiaomi MiMo Omni                                                                                  |
+| 文本转语音            | OpenAI TTS、Gemini TTS、GPT-SoVITS、FishAudio、Edge TTS、Azure TTS、Minimax TTS、火山引擎 TTS、ElevenLabs TTS、阿里云百炼 TTS |
+| Embedding / Rerank 等 | 以 WebUI 中当前可选提供商列表为准                                                                                             |
 
 ## ❤️ 贡献
 

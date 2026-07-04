@@ -62,6 +62,7 @@ The default AstrBot configuration is as follows:
         "websearch_tavily_key": [],
         "websearch_bocha_key": [],
         "websearch_brave_key": [],
+        "websearch_exa_key": [],
         "web_search_link": False,
         "display_reasoning_text": False,
         "identifier": False,
@@ -112,7 +113,7 @@ The default AstrBot configuration is as follows:
     "t2i_use_file_service": False,
     "t2i_active_template": "base",
     "http_proxy": "",
-    "no_proxy": ["localhost", "127.0.0.1", "::1"],
+    "no_proxy": ["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"],
     "dashboard": {
         "enable": True,
         "username": "astrbot",
@@ -286,12 +287,13 @@ Whether to enable AstrBot's built-in web search capability. Default is `false`. 
 
 #### `provider_settings.websearch_provider`
 
-Web search provider type. Default is `tavily`. Currently supports `tavily`, `bocha`, `baidu_ai_search`, `brave`, and `firecrawl`.
+Web search provider type. Default is `tavily`. Currently supports `tavily`, `baidu_ai_search`, `bocha`, `brave`, `exa`, and `firecrawl`.
 
 - `tavily`: Uses the Tavily search engine.
-- `bocha`: Uses the BoCha search engine.
 - `baidu_ai_search`: Uses Baidu AI Search (MCP).
+- `bocha`: Uses the BoCha search engine.
 - `brave`: Uses Brave Search API.
+- `exa`: Uses the Exa search engine.
 - `firecrawl`: Uses the Firecrawl Search API.
 
 #### `provider_settings.websearch_tavily_key`
@@ -305,6 +307,10 @@ API Key list for the BoCha search engine. Required when using `bocha` as the web
 #### `provider_settings.websearch_brave_key`
 
 API Key list for the Brave search engine. Required when using `brave` as the web search provider.
+
+#### `provider_settings.websearch_exa_key`
+
+API Key list for the Exa search engine. Required when using `exa` as the web search provider.
 
 #### `provider_settings.websearch_firecrawl_key`
 
@@ -368,7 +374,7 @@ Limit on the maximum number of Agent steps. Default is `30`. Each tool call by t
 
 #### `provider_settings.tool_call_timeout`
 
-Maximum timeout for tool calls (seconds), default is `60` seconds.
+Maximum timeout for tool calls (seconds), default is `120` seconds.
 
 #### `provider_stt_settings`
 
@@ -414,7 +420,7 @@ The context content is placed in the conversation's system prompt.
 
 #### `provider_ltm_settings.group_message_max_cnt`
 
-Maximum number of group chat messages to record. Default is `100`. Messages exceeding this count are discarded.
+Maximum number of group chat messages to record. Default is `300`. Messages exceeding this count are discarded.
 
 #### `provider_ltm_settings.image_caption`
 
@@ -487,7 +493,7 @@ HTTP proxy. E.g., `http://localhost:7890`.
 
 ### `no_proxy`
 
-List of addresses that bypass the proxy. E.g., `["localhost", "127.0.0.1"]`.
+List of addresses that bypass the proxy. Default is `["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"]`.
 
 ### `dashboard`
 

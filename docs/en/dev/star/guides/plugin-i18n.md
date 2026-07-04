@@ -77,9 +77,20 @@ Corresponding `.astrbot-plugin/i18n/zh-CN.json`:
 
 `options` are stored configuration values and should usually not be translated. Use `labels` for select display text.
 
-## Removed Support
+## Plugin Dashboard Pages
 
-This fork no longer supports plugin Dashboard Pages or plugin Web UI bridges, so `pages` i18n entries are ignored.
+Titles and descriptions for plugin Dashboard Pages (custom WebUI pages a plugin provides under its `pages/` directory) can also be translated through the `pages` field, nested by page name:
+
+```json
+{
+  "pages": {
+    "overview": {
+      "title": "Overview",
+      "description": "View the plugin's runtime status and statistics."
+    }
+  }
+}
+```
 
 ## Nested Configuration
 

@@ -467,9 +467,9 @@ export default defineConfig({
           },
           {
             text: 'Open Source Summer',
-            base: '/en/ospp',
+            base: '/en/community-events',
             collapsed: true,
-            items: [{ text: 'OSPP 2025', link: '/2025' }],
+            items: [{ text: 'OSPP 2025', link: '/ospp-2025' }],
           },
         ],
         outline: {

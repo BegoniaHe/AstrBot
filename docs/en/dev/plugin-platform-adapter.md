@@ -93,7 +93,7 @@ from .fake_platform_event import FakePlatformEvent
 class FakePlatformAdapter(Platform):
 
     def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
-        super().__init__(event_queue)
+        super().__init__(platform_config, event_queue)
         self.config = platform_config # The default config above; filled in by the user and passed here
         self.settings = platform_settings # platform_settings: platform settings
 

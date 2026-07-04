@@ -77,9 +77,20 @@ your_plugin/
 
 `options` 是配置保存值，不建议翻译。下拉框的展示文本请使用 `labels`。
 
-## 已移除支持
+## 插件 Dashboard Pages
 
-这个 fork 已不再支持插件 Dashboard Pages 和插件 Web UI bridge，因此 `pages` i18n 条目不会再被使用。
+插件 Dashboard Pages（插件在 `pages/` 目录下提供的自定义 Web UI 页面）的标题和描述也可以通过 `pages` 字段翻译，按页面名称嵌套：
+
+```json
+{
+  "pages": {
+    "overview": {
+      "title": "总览",
+      "description": "查看插件的运行状态和统计信息。"
+    }
+  }
+}
+```
 
 ## 嵌套配置
 

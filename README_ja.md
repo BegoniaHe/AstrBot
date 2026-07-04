@@ -139,6 +139,7 @@ AstrBot をよく使うチャットプラットフォームに接続できます
 | Telegram                                                                          | 公式         |
 | WeChat Work アプリケーション & WeChat Work インテリジェントボット                 | 公式         |
 | WeChat カスタマーサービス & WeChat 公式アカウント                                 | 公式         |
+| 個人 WeChat                                                                       | 公式         |
 | Feishu (Lark)                                                                     | 公式         |
 | DingTalk                                                                          | 公式         |
 | Slack                                                                             | 公式         |
@@ -190,6 +191,7 @@ AstrBot をよく使うチャットプラットフォームに接続できます
 | Minimax TTS                                                                                       | 音声合成サービス                                          |
 | Xiaomi MiMo TTS                                                                                   | 音声合成サービス                                          |
 | Volcano Engine TTS                                                                                | 音声合成サービス                                          |
+| ElevenLabs TTS                                                                                    | 音声合成サービス                                          |
 
 ## ❤️ コントリビューション
 

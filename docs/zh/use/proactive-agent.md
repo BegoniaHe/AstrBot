@@ -44,6 +44,11 @@ AstrBot 引入了主动 Agent（Proactive Agent）系统，使 AstrBot 不仅能
 - Discord
 - Misskey
 - Satori
+- 钉钉 (DingTalk)
+- 企业微信（应用模式；客服模式不支持）
+- 企业微信智能机器人
+- WebChat
+- QQ 官方机器人（WebSocket 及 Webhook）
 
 ## 多媒体消息的发送
 

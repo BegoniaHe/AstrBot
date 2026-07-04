@@ -127,6 +127,7 @@ Connect AstrBot to your favorite chat platform.
 | Telegram                                                                          | Official   |
 | Wecom & Wecom AI Bot                                                              | Official   |
 | WeChat Official Accounts                                                          | Official   |
+| Personal WeChat                                                                   | Official   |
 | Feishu (Lark)                                                                     | Official   |
 | DingTalk                                                                          | Official   |
 | Slack                                                                             | Official   |
@@ -143,14 +144,14 @@ Connect AstrBot to your favorite chat platform.
 
 ## Supported Model Services
 
-| Service Type                | Built-in Options                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| Conversation / LLM          | OpenAI-compatible services, OpenAI, Anthropic, Gemini, Moonshot, Zhipu, DeepSeek |
-| Local LLM                   | Ollama, LM Studio                                                                |
-| Agent Runners               | Dify, Coze, Alibaba Cloud Bailian applications, DeerFlow                         |
-| Speech-to-Text              | OpenAI Whisper, SenseVoice, Xiaomi MiMo Omni                                     |
-| Text-to-Speech              | OpenAI TTS, Gemini TTS, GPT-SoVITS, FishAudio, Edge TTS, Azure TTS, Minimax TTS  |
-| Embedding / Rerank / Others | See the provider list in WebUI for the current built-in set                      |
+| Service Type                | Built-in Options                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Conversation / LLM          | OpenAI-compatible services, OpenAI, Anthropic, Gemini, Moonshot, Zhipu, DeepSeek                                               |
+| Local LLM                   | Ollama, LM Studio                                                                                                              |
+| Agent Runners               | Dify, Coze, Alibaba Cloud Bailian applications, DeerFlow                                                                       |
+| Speech-to-Text              | OpenAI Whisper, SenseVoice, Xiaomi MiMo Omni                                                                                   |
+| Text-to-Speech              | OpenAI TTS, Gemini TTS, GPT-SoVITS, FishAudio, Edge TTS, Azure TTS, Minimax TTS, Volcengine TTS, ElevenLabs TTS, Dashscope TTS |
+| Embedding / Rerank / Others | See the provider list in WebUI for the current built-in set                                                                    |
 
 ## ❤️ Contributing
 

@@ -33,9 +33,9 @@ const sidebarScopeClass = computed(() => {
 
   if (
     normalizedPath === '/what-is-astrbot' || normalizedPath === '/community' || normalizedPath === '/faq'
-    || path.startsWith('/deploy/') || path.startsWith('/others/') || path.startsWith('/ospp/')
+    || path.startsWith('/deploy/') || path.startsWith('/others/') || path.startsWith('/community-events/')
     || normalizedPath === '/en/what-is-astrbot' || normalizedPath === '/en/community' || normalizedPath === '/en/faq'
-    || path.startsWith('/en/deploy/') || path.startsWith('/en/others/') || path.startsWith('/en/ospp/')
+    || path.startsWith('/en/deploy/') || path.startsWith('/en/others/') || path.startsWith('/en/community-events/')
   )
     return 'sidebar-scope-intro-deploy'
 

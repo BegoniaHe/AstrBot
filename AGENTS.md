@@ -74,7 +74,7 @@ AstrBot routes incoming messages from many IM platforms through a staged pipelin
 
 ### Agent & providers
 
-- **`astrbot/core/agent/`** is the LLM agent runtime: tool execution (`tool_executor.py`), MCP client (`mcp_client.py`), handoffs, runners, and run context. The main agent assembly lives in `astrbot/core/astr_main_agent.py` and related `astr_agent_*` modules. `subagent_orchestrator.py` manages sub-agents.
+- **`astrbot/core/agent/`** is the LLM agent runtime: tool execution (`tool_executor.py`), MCP client (`mcp_client.py`), handoffs, runners, and run context. The main agent assembly lives in `astrbot/core/astr_main_agent.py` and related `astr_agent_*` modules. `astrbot/core/subagent_orchestrator.py` manages sub-agents.
 - **`astrbot/core/provider/`** abstracts LLM/STT/TTS/embedding/rerank services. Concrete integrations live in `provider/sources/*` (OpenAI, Anthropic, Gemini, Dify, etc.). `ProviderManager` (`provider/manager.py`) tracks instances and the default provider; `func_tool_manager.py` manages function tools exposed to the LLM.
 
 ### Plugins ("Stars")
@@ -98,7 +98,7 @@ The `astrbot` console entry point (`astrbot/cli/__main__.py`, commands in `astrb
 
 - **KISS / first principles.** Identify the real problem and the smallest correct change. Do not add features, config switches, abstractions, dependencies, or compatibility layers without clear, current need.
 - **Inline-first, few helpers.** Implement logic inline within the main function. Only extract a helper when the exact logic repeats in 3+ places or inlining makes a function exceed ~50 lines. Do not split continuous linear logic into tiny functions. When editing existing code, don't restructure or extract helpers unless the code already violates these rules.
-- **Paths:** use `pathlib.Path`, not string paths. Get AstrBot data/temp directories via `astrbot.core.utils.path_utils` — don't hardcode.
+- **Paths:** use `pathlib.Path`, not string paths. Get AstrBot data/temp directories via `astrbot.core.utils.astrbot_path` (e.g. `get_astrbot_data_path()`, `get_astrbot_temp_path()`) — don't hardcode.
 - **Docstrings:** Google style (`Args:` / `Returns:` / `Raises:`). Comment non-obvious logic. Write all new comments in English. (Note: much existing code has Chinese comments; match the surrounding file when editing, but prefer English for new code.)
 - **Version sync:** keep `[project].version` in `pyproject.toml` and `__version__` in `astrbot/__init__.py` in sync. `VERSION` in `astrbot/core/config/default.py` derives from `astrbot.__version__` — don't hardcode it.
 - **Upstream sync:** the default sync method is **cherry-pick**, not merge. When syncing from `AstrBotDevs/AstrBot`, `git log <last_synced.commit>..upstream/master` to list the new commits, then cherry-pick each one in order. Skip upstream version-bump commits — bump the fork's version yourself so `pyproject.toml` and `astrbot/__init__.py` stay in sync. Resolve conflicts in favor of the fork's no-legacy, Python 3.14-only policy: never reintroduce 3.10–3.13 fallbacks or `AstrBotDevs`/`soulter` URLs, and preserve fork-specific docs (`uv`/`corepack pnpm` commands, the "modernized fork" declaration). Reserve `merge` for large bulk syncs where cherry-picking every commit is impractical.

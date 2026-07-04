@@ -47,16 +47,17 @@ X-API-Key: abk_xxx
 | `plugin`   | 管理插件、插件配置、插件源和插件市场                                               | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/config`、`POST /api/v1/plugins/install/url`                                     |
 | `mcp`      | 管理 MCP 服务器配置和服务端同步                                                    | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
 | `skill`    | 管理 Skills、Skill 压缩包、Skill 文件和 Shipyard Neo Skill 流程                    | `GET/POST /api/v1/skills`、`PUT /api/v1/skills/{skill_name}/files/{file_path}`、`POST /api/v1/skills/neo/sync`                  |
+| `kb`       | 管理知识库及其检索                                                                 | `GET/POST /api/v1/knowledge-bases`、`GET/PUT/DELETE /api/v1/knowledge-bases/{kb_id}`                                            |
 
 如果 API Key 未包含目标接口所需 scope，请求会返回 `403 Insufficient API key scope`。
 
 `config` 是较大的管理 scope。创建 API Key 时如果包含 `config`，AstrBot 会同时授予该 Key `config`、`bot` 和 `provider` 访问权限。WebUI 的勾选逻辑也会体现这个依赖关系：选中 `config` 会同时选中 `bot` 和 `provider`；取消选中 `bot` 或 `provider` 时，会同步取消 `config`。
 
-当前开发者 API Key 支持以上 11 个 scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。
+当前开发者 API Key 支持以上 12 个 scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。
 
-注意：后端已经支持 `data` scope，但当前 Settings 页面里的 scope 选择器暂时还没有把 `data` 列出来。
+注意：后端已经支持 `data` 和 `kb` scope，但当前 Settings 页面里的 scope 选择器暂时还没有把它们列出来。
 
-`tool`、`kb`、`system` 等接口仍然会出现在本地完整的 `/api/v1/openapi.json` 规范里，但它们目前属于依赖 Dashboard 登录态的接口，而不是开发者 API Key scope。
+`tool`、`system` 等接口仍然会出现在本地完整的 `/api/v1/openapi.json` 规范里，但它们目前属于依赖 Dashboard 登录态的接口，而不是开发者 API Key scope。
 
 ## 常用接口
 

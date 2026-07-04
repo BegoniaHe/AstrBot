@@ -87,9 +87,9 @@ CUA 相关配置项包括：
 
 - `CUA Image`：要启动的 CUA 镜像。常见值为 `linux`、`macos`、`windows`、`android`。默认 `linux`。
 - `CUA OS Type`：镜像的操作系统类型。默认 `linux`。它会影响 AstrBot 对 POSIX Shell fallback 的判断。
-- `CUA Sandbox TTL`：沙盒生命周期，单位为秒。默认 `3600`。
-- `CUA Telemetry Enabled`：是否启用 CUA 侧遥测。默认关闭。
-- `CUA Local Runtime`：是否使用本地运行时。默认开启。关闭后会按 CUA SDK 的云端方式创建沙盒。
+- `CUA Idle Timeout`：沙盒空闲超时，单位为秒。默认 `0`，表示不主动关闭空闲沙盒；大于 `0` 时，沙盒空闲超过该时长会被主动关闭。
+- `CUA Telemetry`：是否允许 CUA SDK 发送遥测数据。默认关闭。
+- `CUA Local Sandbox`：是否优先使用本地沙箱。默认开启，避免云端沙箱要求 CUA API Key。关闭后可使用 CUA 云端沙箱。
 - `CUA API Key`：云端 CUA 所需的 API Key。仅在使用云端运行时时填写。
 
 一个最小本地 Linux 容器配置通常是：
@@ -99,8 +99,7 @@ Computer Use Runtime = sandbox
 沙箱环境驱动器 = CUA
 CUA Image = linux
 CUA OS Type = linux
-CUA Local Runtime = true
-CUA Sandbox TTL = 3600
+CUA Local Sandbox = true
 ```
 
 如果使用云端 CUA，可改为：
@@ -110,7 +109,7 @@ Computer Use Runtime = sandbox
 沙箱环境驱动器 = CUA
 CUA Image = linux
 CUA OS Type = linux
-CUA Local Runtime = false
+CUA Local Sandbox = false
 CUA API Key = <your-cua-api-key>
 ```
 
