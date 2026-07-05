@@ -2,18 +2,27 @@ from types import SimpleNamespace
 
 import pytest
 
+from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.dashboard.services.open_api_service import (
     OpenApiService,
+    OpenApiServiceError,
     OpenApiWebSocketChatBridge,
 )
 
 
 def _service() -> OpenApiService:
     core_lifecycle = SimpleNamespace(
-        platform_manager=SimpleNamespace(platform_insts=[]),
+        platform_manager=SimpleNamespace(
+            send_to_session=None,
+        ),
         platform_message_history_manager=None,
     )
-    return OpenApiService(SimpleNamespace(), core_lifecycle)
+    return OpenApiService(
+        SimpleNamespace(
+            get_attachment_by_id=lambda _attachment_id: None,
+        ),
+        core_lifecycle,
+    )
 
 
 def _bridge() -> OpenApiWebSocketChatBridge:
@@ -131,3 +140,86 @@ async def test_run_chat_websocket_handles_control_messages(monkeypatch):
         },
     ]
     assert handled == [{"t": "send", "message": "hello"}]
+
+
+@pytest.mark.asyncio
+async def test_open_api_send_message_delegates_to_platform_manager():
+    service = _service()
+    calls: list[tuple[object, object]] = []
+
+    async def _send_to_session(session, message_chain):
+        calls.append((session, message_chain))
+        return PlatformSendResult(
+            platform_id="webchat-main",
+            success=True,
+            target="test-session",
+            message_count=1,
+        )
+
+    service.platform_manager.send_to_session = _send_to_session
+
+    await service.send_message(
+        {
+            "umo": "webchat-main:FriendMessage:test-session",
+            "message": "hello",
+        }
+    )
+
+    assert len(calls) == 1
+    session, message_chain = calls[0]
+    assert str(session) == "webchat-main:FriendMessage:test-session"
+    assert message_chain.chain[0].text == "hello"
+
+
+@pytest.mark.asyncio
+async def test_open_api_send_message_raises_when_platform_missing():
+    service = _service()
+
+    async def _send_to_session(session, message_chain):
+        return PlatformSendResult(
+            platform_id=session.platform_id,
+            success=False,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+            error_message="platform adapter not found",
+        )
+
+    service.platform_manager.send_to_session = _send_to_session
+
+    with pytest.raises(
+        OpenApiServiceError,
+        match="Bot not found or not running for platform: platform-not-running",
+    ):
+        await service.send_message(
+            {
+                "umo": "platform-not-running:FriendMessage:test-session",
+                "message": "hello",
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_open_api_send_message_raises_with_adapter_error_message():
+    service = _service()
+
+    async def _send_to_session(session, message_chain):
+        return PlatformSendResult(
+            platform_id=session.platform_id,
+            success=False,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+            error_message="adapter rejected payload",
+        )
+
+    service.platform_manager.send_to_session = _send_to_session
+
+    with pytest.raises(
+        OpenApiServiceError,
+        match="Failed to send message: adapter rejected payload",
+    ):
+        await service.send_message(
+            {
+                "umo": "telegram:FriendMessage:test-session",
+                "message": "hello",
+            }
+        )

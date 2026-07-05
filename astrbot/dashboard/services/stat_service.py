@@ -270,9 +270,7 @@ class StatService:
             stat_dict.update(
                 {
                     "message_count": message_count,
-                    "platform_count": len(
-                        self.core_lifecycle.platform_manager.get_insts(),
-                    ),
+                    "platform_count": self.core_lifecycle.platform_manager.get_platform_count(),
                     "plugin_count": len(plugins),
                     "plugins": plugin_info,
                     "message_time_series": message_time_based_stats,

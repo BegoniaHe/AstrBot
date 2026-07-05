@@ -14,7 +14,7 @@ from astrbot.core.db import BaseDatabase
 from astrbot.core.knowledge_base.kb_mgr import KnowledgeBaseManager
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.persona_mgr import PersonaManager
-from astrbot.core.platform import Platform
+from astrbot.core.platform import PlatformSendResult
 from astrbot.core.platform.astr_message_event import AstrMessageEvent, MessageSession
 from astrbot.core.platform_message_history_mgr import PlatformMessageHistoryManager
 from astrbot.core.provider.entities import LLMResponse, ProviderRequest, ProviderType
@@ -96,8 +96,12 @@ def _resolve_tool_handler_module_path(tool: FunctionTool) -> str:
 
 
 class PlatformManagerProtocol(Protocol):
-    platform_insts: list[Platform]
-    get_insts: Callable[[], list[Platform]]
+    create_event: Callable[[str, object], None]
+    invoke_action: Callable[..., Awaitable[dict[str, object]]]
+    send_to_session: Callable[
+        [MessageSession, MessageChain],
+        Awaitable[PlatformSendResult],
+    ]
 
 
 class Context:
@@ -126,7 +130,7 @@ class Context:
         """AstrBot 数据库"""
         self.provider_manager = provider_manager
         """模型提供商管理器"""
-        self.platform_manager = platform_manager
+        self._platform_manager = platform_manager
         """平台适配器管理器"""
         self.conversation_manager = conversation_manager
         """会话管理器"""
@@ -485,7 +489,7 @@ class Context:
         self,
         session: str | MessageSession,
         message_chain: MessageChain,
-    ) -> bool:
+    ) -> PlatformSendResult:
         """根据 session(unified_msg_origin) 主动发送消息。
 
         Args:
@@ -493,7 +497,7 @@ class Context:
             message_chain: 消息链。
 
         Returns:
-            是否找到匹配的平台。
+            标准化发送结果。
 
         Raises:
             ValueError: session 字符串不合法时抛出。
@@ -508,14 +512,15 @@ class Context:
             except Exception as e:
                 raise ValueError("不合法的 session 字符串: " + str(e))
 
-        for platform in self.platform_manager.platform_insts:
-            if platform.meta().id == session.platform_name:
-                await platform.send_by_session(session, message_chain)
-                return True
+        result = await self._platform_manager.send_to_session(session, message_chain)
+        if result.success:
+            return result
         logger.warning(
-            f"cannot find platform for session {str(session)}, message not sent"
+            "send_message failed for session %s: %s",
+            str(session),
+            result.error_message or "unknown error",
         )
-        return False
+        return result
 
     def add_llm_tools(self, *tools: FunctionTool) -> None:
         """添加 LLM 工具。
@@ -587,22 +592,6 @@ class Context:
             return False
         return True
 
-    def get_platform_inst(self, platform_id: str) -> Platform | None:
-        """获取指定 ID 的平台适配器实例。
-
-        Args:
-            platform_id: 平台适配器的唯一标识符。
-
-        Returns:
-            平台适配器实例，如果未找到则返回 None。
-
-        Note:
-            可以通过 event.get_platform_id() 获取平台 ID。
-        """
-        for platform in self.platform_manager.platform_insts:
-            if platform.meta().id == platform_id:
-                return platform
-
     def get_db(self) -> BaseDatabase:
         """获取 AstrBot 数据库。
 
@@ -610,6 +599,46 @@ class Context:
             数据库实例。
         """
         return self._db
+
+    async def invoke_platform_action(
+        self,
+        platform_id: str,
+        action_name: str,
+        **kwargs: Any,
+    ) -> dict[str, object]:
+        """Invoke a declared proactive platform action through PlatformManager."""
+        return await self._platform_manager.invoke_action(
+            platform_id,
+            action_name,
+            **kwargs,
+        )
+
+    async def invoke_event_platform_action(
+        self,
+        event: AstrMessageEvent,
+        action_name: str,
+        **kwargs: Any,
+    ) -> dict[str, object]:
+        """Invoke a platform action for the platform that produced the event."""
+        return await self.invoke_platform_action(
+            event.get_platform_id(),
+            action_name,
+            **kwargs,
+        )
+
+    def create_platform_event(
+        self,
+        platform: str,
+        event_message: Any,
+        *,
+        is_wake: bool = True,
+    ) -> None:
+        """Create and commit an event through a platform adapter lookup."""
+        self._platform_manager.create_event(
+            platform,
+            event_message,
+            is_wake=is_wake,
+        )
 
     def register_provider(self, provider: Provider) -> None:
         """注册一个 LLM Provider(Chat_Completion 类型)。

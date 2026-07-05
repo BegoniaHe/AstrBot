@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 
 import astrbot.dashboard.services.config_service as config_service
 from astrbot.core import file_token_service
+from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.dashboard.api.app import create_dashboard_asgi_app
 from astrbot.dashboard.services.api_key_service import ApiKeyService
 from astrbot.dashboard.services.auth_service import DASHBOARD_JWT_COOKIE_NAME
@@ -409,8 +410,23 @@ class FakePlatform:
             "payload": payload,
         }
 
-    async def send_by_session(self, session, message_chain) -> None:
+    async def send_by_session(self, session, message_chain) -> PlatformSendResult:
         self.sent_messages.append((session, message_chain))
+        return PlatformSendResult(
+            platform_id=self.platform_id,
+            success=True,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+        )
+
+    async def send_to_session(self, session, message_chain) -> PlatformSendResult:
+        self.sent_messages.append((session, message_chain))
+        return PlatformSendResult(
+            platform_id=self.platform_id,
+            success=True,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+        )
 
 
 class FakePersonaManager:
@@ -697,8 +713,8 @@ def fake_core_lifecycle():
         terminated_platform_ids=terminated_platform_ids,
         umop_config_router=umop_config_router,
         platform_manager=SimpleNamespace(
-            platform_insts=[platform],
             fake_platform=platform,
+            send_to_session=platform.send_to_session,
             reload=reload_platform,
             load_platform=load_platform,
             terminate_platform=terminate_platform,

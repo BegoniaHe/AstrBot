@@ -3,15 +3,17 @@ import traceback
 from asyncio import Queue
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import TypeVar, cast
 
 from astrbot.core import logger
 from astrbot.core.config.astrbot_config import AstrBotConfig
 from astrbot.core.star.star_handler import EventType, star_handlers_registry, star_map
 from astrbot.core.utils.webhook_utils import ensure_platform_webhook_config
 
+from .message_session import MessageSession
 from .platform import Platform, PlatformStatus
 from .register import platform_cls_map
+from .send_result import PlatformSendResult
 from .sources.webchat.webchat_adapter import WebChatAdapter
 
 
@@ -21,13 +23,18 @@ class PlatformTasks:
     wrapper: asyncio.Task
 
 
+_T = TypeVar("_T")
+
+
 class PlatformManager:
     def __init__(self, config: AstrBotConfig, event_queue: Queue) -> None:
-        self.platform_insts: list[Platform] = []
+        self._platform_insts: list[Platform] = []
         """加载的 Platform 的实例"""
 
         self._inst_map: dict[str, dict] = {}
         self._platform_tasks: dict[str, PlatformTasks] = {}
+        self._platform_limiters: dict[str, asyncio.Semaphore] = {}
+        self._platform_limit_settings: dict[str, int] = {}
 
         self.astrbot_config = config
         self.platforms_config = config["platform"]
@@ -86,6 +93,32 @@ class PlatformManager:
         finally:
             await self._stop_platform_task(client_id)
 
+    def set_platform_concurrency_limit(
+        self, platform_id: str, limit: int | None
+    ) -> None:
+        if limit is None:
+            self._platform_limiters.pop(platform_id, None)
+            self._platform_limit_settings.pop(platform_id, None)
+            return
+        if limit < 1:
+            raise ValueError("platform concurrency limit must be >= 1")
+        self._platform_limiters[platform_id] = asyncio.Semaphore(limit)
+        self._platform_limit_settings[platform_id] = limit
+
+    def get_platform_concurrency_limit(self, platform_id: str) -> int | None:
+        return self._platform_limit_settings.get(platform_id)
+
+    async def run_with_platform_limit(
+        self,
+        platform_id: str,
+        operation: Callable[[], Awaitable[_T]],
+    ) -> _T:
+        limiter = self._platform_limiters.get(platform_id)
+        if limiter is None:
+            return await operation()
+        async with limiter:
+            return await operation()
+
     async def initialize(self) -> None:
         """初始化所有平台适配器"""
         for platform in self.platforms_config:
@@ -98,7 +131,7 @@ class PlatformManager:
 
         # 网页聊天
         webchat_inst = WebChatAdapter({}, self.settings, self.event_queue)
-        self.platform_insts.append(webchat_inst)
+        self._platform_insts.append(webchat_inst)
         self._start_platform_task("webchat", webchat_inst)
 
     async def load_platform(self, platform_config: dict) -> None:
@@ -218,7 +251,7 @@ class PlatformManager:
             "inst": inst,
             "client_id": inst.client_self_id,
         }
-        self.platform_insts.append(inst)
+        self._platform_insts.append(inst)
         self._start_platform_task(
             f"platform_{platform_config['type']}_{platform_config['id']}",
             inst,
@@ -271,6 +304,8 @@ class PlatformManager:
                 await self.terminate_platform(key)
 
     async def terminate_platform(self, platform_id: str) -> None:
+        self._platform_limiters.pop(platform_id, None)
+        self._platform_limit_settings.pop(platform_id, None)
         if platform_id in self._inst_map:
             logger.info(f"正在尝试终止 {platform_id} 平台适配器 ...")
 
@@ -279,10 +314,10 @@ class PlatformManager:
             client_id = info["client_id"]
             inst: Platform = info["inst"]
             try:
-                self.platform_insts.remove(
+                self._platform_insts.remove(
                     next(
                         inst
-                        for inst in self.platform_insts
+                        for inst in self._platform_insts
                         if inst.client_self_id == client_id
                     ),
                 )
@@ -299,30 +334,83 @@ class PlatformManager:
                 terminated_client_ids.add(info["client_id"])
             await self.terminate_platform(platform_id)
 
-        for inst in list(self.platform_insts):
+        for inst in list(self._platform_insts):
             client_id = inst.client_self_id
             if client_id in terminated_client_ids:
                 continue
             await self._terminate_inst_and_tasks(inst)
 
-        self.platform_insts.clear()
+        self._platform_insts.clear()
         self._inst_map.clear()
         self._platform_tasks.clear()
+        self._platform_limiters.clear()
+        self._platform_limit_settings.clear()
 
-    def get_insts(self):
-        return self.platform_insts
+    def get_platform_count(self) -> int:
+        return len(self._platform_insts)
 
-    def get_inst_by_id(self, platform_id: str) -> Platform | None:
+    def _find_inst_by_id(self, platform_id: str) -> Platform | None:
         info = self._inst_map.get(platform_id)
         if info:
             inst = info.get("inst")
             if isinstance(inst, Platform):
                 return inst
 
-        for inst in self.platform_insts:
+        for inst in self._platform_insts:
             if inst.meta().id == platform_id or inst.config.get("id") == platform_id:
                 return inst
         return None
+
+    def _find_inst_by_name(self, platform_name: str) -> Platform | None:
+        for inst in self._platform_insts:
+            if inst.meta().name == platform_name:
+                return inst
+        return None
+
+    def find_inst_by_webhook_uuid(self, webhook_uuid: str) -> Platform | None:
+        for inst in self._platform_insts:
+            if (
+                inst.config.get("webhook_uuid") == webhook_uuid
+                and inst.unified_webhook()
+            ):
+                return inst
+        return None
+
+    async def send_to_session(
+        self,
+        session: MessageSession,
+        message_chain,
+    ) -> PlatformSendResult:
+        inst = self._find_inst_by_id(session.platform_id)
+        if inst is None:
+            return PlatformSendResult(
+                platform_id=session.platform_id,
+                success=False,
+                target=session.session_id,
+                message_count=len(message_chain.chain),
+                error_message="platform adapter not found",
+            )
+        try:
+            result = await self.run_with_platform_limit(
+                session.platform_id,
+                lambda: inst.send_by_session(session, message_chain),
+            )
+        except Exception as exc:
+            return PlatformSendResult(
+                platform_id=session.platform_id,
+                success=False,
+                target=session.session_id,
+                message_count=len(message_chain.chain),
+                error_message=str(exc),
+            )
+        if isinstance(result, PlatformSendResult):
+            return result
+        return PlatformSendResult(
+            platform_id=session.platform_id,
+            success=True,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+        )
 
     async def invoke_action(
         self,
@@ -330,7 +418,7 @@ class PlatformManager:
         action_name: str,
         **kwargs,
     ) -> dict[str, object]:
-        inst = self.get_inst_by_id(platform_id)
+        inst = self._find_inst_by_id(platform_id)
         if inst is None:
             raise LookupError(f"Platform adapter not found: {platform_id}")
         if not inst.supports_action(action_name):
@@ -344,7 +432,27 @@ class PlatformManager:
                 f"Platform {platform_id} action handler missing: `{action_name}`"
             )
         action_handler = cast(Callable[..., Awaitable[dict[str, object]]], method)
-        return await action_handler(**kwargs)
+        return await self.run_with_platform_limit(
+            platform_id,
+            lambda: action_handler(**kwargs),
+        )
+
+    def create_event(
+        self,
+        platform: str,
+        event_message: object,
+        *,
+        is_wake: bool = True,
+    ) -> None:
+        inst = self._find_inst_by_id(platform)
+        if inst is None:
+            inst = self._find_inst_by_name(platform)
+        if inst is None:
+            raise ValueError(f"Platform not found: {platform}")
+
+        event = inst.create_event(event_message)
+        event.is_wake = is_wake
+        inst.commit_event(event)
 
     def get_all_stats(self) -> dict:
         """获取所有平台的统计信息
@@ -357,7 +465,7 @@ class PlatformManager:
         running_count = 0
         error_count = 0
 
-        for inst in self.platform_insts:
+        for inst in self._platform_insts:
             try:
                 stat = inst.get_stats()
                 stats_list.append(stat)

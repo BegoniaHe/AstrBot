@@ -50,7 +50,7 @@ async def test_stat_service_get_stat_accepts_unix_second_timestamps(
     core_lifecycle = SimpleNamespace(
         start_time=timestamp - 3600,
         star_context=SimpleNamespace(get_all_stars=lambda: []),
-        platform_manager=SimpleNamespace(get_insts=lambda: ["qq-main"]),
+        platform_manager=SimpleNamespace(get_platform_count=lambda: 1),
     )
 
     monkeypatch.setattr(

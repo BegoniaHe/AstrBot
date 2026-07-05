@@ -17,6 +17,8 @@ from .astr_message_event import AstrMessageEvent
 from .astrbot_message import AstrBotMessage
 from .message_session import MessageSession
 from .platform_metadata import PlatformMetadata
+from .route_identity import PlatformRouteIdentity
+from .send_result import PlatformSendResult
 
 PLATFORM_ACTION_METHOD_NAMES = (
     "set_group_admin",
@@ -169,7 +171,7 @@ class Platform(abc.ABC):
         self,
         session: MessageSession,
         message_chain: MessageChain,
-    ) -> None:
+    ) -> PlatformSendResult:
         """通过会话发送消息。该方法旨在让插件能够直接通过**可持久化的会话数据**发送消息，而不需要保存 event 对象。
 
         异步方法。
@@ -179,6 +181,25 @@ class Platform(abc.ABC):
             Metric.upload(msg_event_tick=1, adapter_name=self.meta().name),
             name=f"metric:send-by-session:{self.meta().name}",
         )
+        return PlatformSendResult(
+            platform_id=self.meta().id,
+            success=True,
+            target=session.session_id,
+            message_count=len(message_chain.chain),
+        )
+
+    async def send_by_route(
+        self,
+        route_identity: PlatformRouteIdentity,
+        message_chain: MessageChain,
+    ) -> PlatformSendResult:
+        """Send a reply using immutable transport routing identity."""
+        session = MessageSession(
+            platform_name=route_identity.platform_id,
+            message_type=route_identity.message_type,
+            session_id=route_identity.target_id,
+        )
+        return await self.send_by_session(session, message_chain)
 
     def supported_actions(self) -> list[str]:
         """Return platform-specific proactive actions supported by this adapter."""
@@ -215,9 +236,6 @@ class Platform(abc.ABC):
             platform_meta=self.meta(),
             session_id=message.session_id,
         )
-
-    def get_client(self) -> object:
-        """获取平台的客户端对象。"""
 
     def _unsupported_action(self, action_name: str) -> NotImplementedError:
         return NotImplementedError(

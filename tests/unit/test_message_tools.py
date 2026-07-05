@@ -2,7 +2,7 @@
 
 import os
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,6 +11,7 @@ from astrbot.core.message.message_event_result import (
     ResultContentType,
 )
 from astrbot.core.pipeline.respond.stage import RespondStage
+from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.core.tools.message_tools import SendMessageToUserTool, SendPokeToUserTool
 
 
@@ -44,7 +45,14 @@ def _make_context(
             event=event,
             context=SimpleNamespace(
                 get_config=lambda umo: cfg,
-                send_message=AsyncMock(),
+                send_message=AsyncMock(
+                    return_value=PlatformSendResult(
+                        platform_id="feishu",
+                        success=True,
+                        target="oc_xxx",
+                        message_count=1,
+                    )
+                ),
             ),
         )
     )
@@ -105,10 +113,21 @@ class _DummyRespondEvent:
     async def _record_send(self, *_args, **_kwargs) -> None:
         """Record send ordering for assertions."""
         self._call_order.append("send")
+        return PlatformSendResult(
+            platform_id="test",
+            success=True,
+            target="session-1",
+            message_count=1,
+        )
 
     async def _record_send_streaming(self, *_args, **_kwargs) -> None:
         """Record streaming-send ordering for assertions."""
         self._call_order.append("send_streaming")
+        return PlatformSendResult(
+            platform_id="test",
+            success=True,
+            target="session-1",
+        )
 
     async def _record_stop_typing(self, *_args, **_kwargs) -> None:
         """Record stop_typing ordering for assertions."""
@@ -173,6 +192,37 @@ async def test_send_message_defaults_to_current_session():
     assert ctx.context.event.get_extra(
         "_send_message_to_user_current_session_plain_texts",
     ) == ["hello"]
+
+
+@pytest.mark.asyncio
+async def test_send_message_returns_error_when_delivery_fails():
+    tool = SendMessageToUserTool()
+    ctx = _make_context(current_session="feishu:GroupMessage:oc_xxx")
+    ctx.context.context.send_message.return_value = PlatformSendResult(
+        platform_id="feishu",
+        success=False,
+        target="oc_xxx",
+        message_count=1,
+        error_message="adapter rejected payload",
+    )
+
+    result = await tool.call(
+        ctx,
+        messages=[{"type": "plain", "text": "hello"}],
+    )
+
+    assert (
+        result
+        == "error: failed to send message to session feishu:GroupMessage:oc_xxx: "
+        "adapter rejected payload"
+    )
+    assert ctx.context.event._has_send_oper is False
+    assert (
+        ctx.context.event.get_extra(
+            "_send_message_to_user_current_session_plain_texts",
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -304,6 +354,35 @@ async def test_respond_stage_stops_typing_before_streaming_send():
     event.send.assert_not_awaited()
     event.send_streaming.assert_awaited_once()
     assert event._call_order == ["stop_typing", "send_streaming"]
+
+
+@pytest.mark.asyncio
+async def test_respond_stage_logs_failed_send_result():
+    stage = _make_respond_stage()
+    event = _DummyRespondEvent(
+        result_text="failure reply",
+        sent_plain_texts=[],
+    )
+    event.send = AsyncMock(
+        return_value=PlatformSendResult(
+            platform_id="test",
+            success=False,
+            target="session-1",
+            message_count=1,
+            error_message="adapter rejected payload",
+        )
+    )
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        error_mock = MagicMock()
+        monkeypatch.setattr(
+            "astrbot.core.pipeline.respond.stage.logger.error",
+            error_mock,
+        )
+        await stage.process(event)
+
+    assert error_mock.call_count == 1
+    assert "发送消息链失败" in error_mock.call_args.args[0]
 
 
 @pytest.mark.asyncio

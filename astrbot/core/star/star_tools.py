@@ -7,7 +7,9 @@ from typing import ClassVar
 from astrbot.api.platform import AstrBotMessage, MessageMember, MessageType
 from astrbot.core.message.components import BaseMessageComponent
 from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrMessageEvent
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.core.star.context import Context
 from astrbot.core.star.star import star_map
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
@@ -33,7 +35,7 @@ class StarTools:
         cls,
         session: str | MessageSession,
         message_chain: MessageChain,
-    ) -> bool:
+    ) -> PlatformSendResult:
         """Sends a message to a session by unified message origin.
 
         Args:
@@ -41,7 +43,7 @@ class StarTools:
             message_chain: Message chain to send.
 
         Returns:
-            Whether a matching platform was found.
+            Standardized platform send result.
 
         Raises:
             ValueError: If StarTools is not initialized or session parsing fails.
@@ -115,19 +117,15 @@ class StarTools:
         Raises:
             ValueError: If StarTools is not initialized or the platform is not
                 found.
+
+        Note:
+            Prefer `send_message()` or `invoke_platform_action()` for normal
+            plugin-side platform IO. Creating events should remain an
+            exceptional path.
         """
         if cls._context is None:
             raise ValueError("StarTools not initialized")
-        platforms = cls._context.platform_manager.get_insts()
-        adapter = next((p for p in platforms if p.meta().id == platform), None)
-        if adapter is None:
-            adapter = next((p for p in platforms if p.meta().name == platform), None)
-        if adapter is None:
-            raise ValueError(f"Platform not found: {platform}")
-
-        event = adapter.create_event(abm)
-        event.is_wake = is_wake
-        adapter.commit_event(event)
+        cls._context.create_platform_event(platform, abm, is_wake=is_wake)
 
     @classmethod
     async def activate_llm_tool(cls, name: str) -> bool:
@@ -162,6 +160,38 @@ class StarTools:
         if cls._context is None:
             raise ValueError("StarTools not initialized")
         return await cls._context.deactivate_llm_tool(name)
+
+    @classmethod
+    async def invoke_platform_action(
+        cls,
+        platform_id: str,
+        action_name: str,
+        **kwargs,
+    ) -> dict[str, object]:
+        """Invokes a proactive platform action through the context boundary."""
+        if cls._context is None:
+            raise ValueError("StarTools not initialized")
+        return await cls._context.invoke_platform_action(
+            platform_id,
+            action_name,
+            **kwargs,
+        )
+
+    @classmethod
+    async def invoke_event_platform_action(
+        cls,
+        event: AstrMessageEvent,
+        action_name: str,
+        **kwargs,
+    ) -> dict[str, object]:
+        """Invokes a proactive platform action for the event's own platform."""
+        if cls._context is None:
+            raise ValueError("StarTools not initialized")
+        return await cls._context.invoke_event_platform_action(
+            event,
+            action_name,
+            **kwargs,
+        )
 
     @classmethod
     def get_data_dir(cls, plugin_name: str | None = None) -> Path:

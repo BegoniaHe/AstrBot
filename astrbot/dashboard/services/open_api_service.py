@@ -589,23 +589,17 @@ class OpenApiService:
         except Exception as exc:
             raise OpenApiServiceError(f"Invalid umo: {exc}") from exc
 
-        platform_id = session.platform_name
-        platform_inst = next(
-            (
-                inst
-                for inst in self.platform_manager.platform_insts
-                if inst.meta().id == platform_id
-            ),
-            None,
-        )
-        if not platform_inst:
-            raise OpenApiServiceError(
-                f"Bot not found or not running for platform: {platform_id}"
-            )
-
         try:
             message_chain = await self.build_message_chain_from_payload(message_payload)
-            await platform_inst.send_by_session(session, message_chain)
+            result = await self.platform_manager.send_to_session(session, message_chain)
+            if not result.success:
+                if result.error_message == "platform adapter not found":
+                    raise OpenApiServiceError(
+                        f"Bot not found or not running for platform: {session.platform_id}"
+                    )
+                raise OpenApiServiceError(
+                    f"Failed to send message: {result.error_message or 'unknown error'}"
+                )
         except OpenApiServiceError:
             raise
         except ValueError as exc:

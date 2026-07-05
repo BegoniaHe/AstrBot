@@ -132,6 +132,15 @@ class TestUnifiedMsgOrigin:
         assert astr_message_event.session.platform_name == "new_platform"
         assert astr_message_event.session.session_id == "new_session"
 
+    def test_route_origin_is_stable_after_session_mutation(self, astr_message_event):
+        """Transport routing identity should not follow business-session rewrites."""
+        assert astr_message_event.route_origin == "test_platform_id:FriendMessage:session123"
+
+        astr_message_event.session_id = "mutated-session"
+
+        assert astr_message_event.unified_msg_origin == "test_platform_id:FriendMessage:mutated-session"
+        assert astr_message_event.route_origin == "test_platform_id:FriendMessage:session123"
+
 
 class TestSessionId:
     """Tests for session_id property."""
@@ -389,11 +398,48 @@ class TestExtras:
         all_extras = astr_message_event.get_extra()
         assert all_extras == {"key1": "value1", "key2": "value2"}
 
+    def test_get_lazy_extra_resolves_once(self, astr_message_event):
+        """Test lazy extras resolve on first access and are cached."""
+        call_count = 0
+
+        def resolver():
+            nonlocal call_count
+            call_count += 1
+            return {"payload": True}
+
+        astr_message_event.set_lazy_extra("lazy", resolver)
+
+        assert astr_message_event.get_extra("lazy") == {"payload": True}
+        assert astr_message_event.get_extra("lazy") == {"payload": True}
+        assert call_count == 1
+
     def test_clear_extra(self, astr_message_event):
         """Test clear_extra method."""
         astr_message_event.set_extra("key1", "value1")
         astr_message_event.clear_extra()
         assert astr_message_event._extras == {}
+
+
+def test_cleanup_temporary_local_files_includes_message_obj_paths(
+    platform_meta,
+    astrbot_message,
+    tmp_path,
+):
+    temp_file = tmp_path / "late-added.bin"
+    temp_file.write_bytes(b"payload")
+    astrbot_message.temporary_file_paths = []
+    event = ConcreteAstrMessageEvent(
+        message_str="Hello world",
+        message_obj=astrbot_message,
+        platform_meta=platform_meta,
+        session_id="session123",
+    )
+
+    astrbot_message.temporary_file_paths.append(str(temp_file))
+
+    event.cleanup_temporary_local_files()
+
+    assert not temp_file.exists()
 
 
 class TestSetResult:

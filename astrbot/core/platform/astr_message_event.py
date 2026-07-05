@@ -50,11 +50,48 @@ from astrbot.core.utils.trace import TraceSpan
 from .astrbot_message import AstrBotMessage, Group
 from .message_session import MessageSession
 from .platform_metadata import PlatformMetadata
+from .route_identity import PlatformRouteIdentity
+from .send_result import PlatformSendResult
 
 _BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
+class _LazyExtraValue:
+    def __init__(self, resolver) -> None:
+        self._resolver = resolver
+        self._resolved = False
+        self._value = None
+
+    def resolve(self) -> Any:
+        if not self._resolved:
+            self._value = self._resolver()
+            self._resolved = True
+        return self._value
+
+
 class AstrMessageEvent(abc.ABC):
+    @staticmethod
+    def _resolve_route_target_id(
+        message_obj: AstrBotMessage,
+        message_type: MessageType,
+        session_id: str,
+    ) -> str:
+        if message_type == MessageType.GROUP_MESSAGE:
+            group_id = getattr(message_obj, "group_id", "") or ""
+            if isinstance(group_id, str) and group_id:
+                return group_id
+            if group_id:
+                return str(group_id)
+
+        if session_id:
+            return session_id
+
+        sender = getattr(message_obj, "sender", None)
+        sender_id = getattr(sender, "user_id", "")
+        if isinstance(sender_id, str):
+            return sender_id
+        return str(sender_id) if sender_id else ""
+
     def __init__(
         self,
         message_str: str,
@@ -92,6 +129,15 @@ class AstrMessageEvent(abc.ABC):
             message_type=message_type,
             session_id=session_id,
         )
+        self.route_identity = PlatformRouteIdentity(
+            platform_id=platform_meta.id,
+            message_type=message_type,
+            target_id=self._resolve_route_target_id(
+                message_obj=message_obj,
+                message_type=message_type,
+                session_id=session_id,
+            ),
+        )
         # self.unified_msg_origin = str(self.session)
         """统一的消息来源字符串。格式为 platform_name:message_type:session_id"""
         self._result: MessageEventResult | None = None
@@ -123,6 +169,11 @@ class AstrMessageEvent(abc.ABC):
     def unified_msg_origin(self) -> str:
         """统一的消息来源字符串。格式为 platform_name:message_type:session_id"""
         return str(self.session)
+
+    @property
+    def route_origin(self) -> str:
+        """Immutable transport routing origin string."""
+        return self.route_identity.as_origin()
 
     @unified_msg_origin.setter
     def unified_msg_origin(self, value: str) -> None:
@@ -288,11 +339,27 @@ class AstrMessageEvent(abc.ABC):
         """设置额外的信息。"""
         self._extras[key] = value
 
+    def set_lazy_extra(self, key, resolver) -> None:
+        """Set an extra value resolved on first access."""
+        self._extras[key] = _LazyExtraValue(resolver)
+
+    def _resolve_extra_value(self, key: str, value: Any) -> Any:
+        if not isinstance(value, _LazyExtraValue):
+            return value
+        resolved = value.resolve()
+        self._extras[key] = resolved
+        return resolved
+
     def get_extra(self, key: str | None = None, default=None) -> Any:
         """获取额外的信息。"""
         if key is None:
-            return self._extras
-        return self._extras.get(key, default)
+            return {
+                extra_key: self._resolve_extra_value(extra_key, extra_value)
+                for extra_key, extra_value in list(self._extras.items())
+            }
+        if key not in self._extras:
+            return default
+        return self._resolve_extra_value(key, self._extras[key])
 
     def clear_extra(self) -> None:
         """清除额外的信息。"""
@@ -304,6 +371,8 @@ class AstrMessageEvent(abc.ABC):
             self._temporary_local_files.append(path)
 
     def cleanup_temporary_local_files(self) -> None:
+        for path in getattr(self.message_obj, "temporary_file_paths", []):
+            self.track_temporary_local_file(path)
         paths = list(self._temporary_local_files)
         self._temporary_local_files.clear()
         for path in paths:
@@ -329,6 +398,34 @@ class AstrMessageEvent(abc.ABC):
         """是否是管理员。"""
         return self.role == "admin"
 
+    def _success_send_result(
+        self,
+        *,
+        target: str | None = None,
+        message_count: int = 0,
+    ) -> PlatformSendResult:
+        return PlatformSendResult(
+            platform_id=self.get_platform_id(),
+            success=True,
+            target=target or self.route_identity.target_id,
+            message_count=message_count,
+        )
+
+    def _failure_send_result(
+        self,
+        error_message: str,
+        *,
+        target: str | None = None,
+        message_count: int = 0,
+    ) -> PlatformSendResult:
+        return PlatformSendResult(
+            platform_id=self.get_platform_id(),
+            success=False,
+            target=target or self.route_identity.target_id,
+            message_count=message_count,
+            error_message=error_message,
+        )
+
     async def process_buffer(self, buffer: str, pattern: re.Pattern) -> str:
         """将消息缓冲区中的文本按指定正则表达式分割后发送至消息平台，作为不支持流式输出平台的Fallback。"""
         while True:
@@ -346,7 +443,7 @@ class AstrMessageEvent(abc.ABC):
         self,
         generator: AsyncGenerator[MessageChain],
         use_fallback: bool = False,
-    ) -> None:
+    ) -> PlatformSendResult:
         """发送流式消息到消息平台，使用异步生成器。
         目前仅支持: telegram，qq official 私聊。
         Fallback仅支持 aiocqhttp。
@@ -357,6 +454,7 @@ class AstrMessageEvent(abc.ABC):
             name=f"metric:stream:{self.platform_meta.name}",
         )
         self._has_send_oper = True
+        return self._success_send_result()
 
     async def send_typing(self) -> None:
         """发送输入中状态。
@@ -540,7 +638,7 @@ class AstrMessageEvent(abc.ABC):
 
     """平台适配器"""
 
-    async def send(self, message: MessageChain) -> None:
+    async def send(self, message: MessageChain) -> PlatformSendResult:
         """发送消息到消息平台。
 
         Args:
@@ -560,6 +658,7 @@ class AstrMessageEvent(abc.ABC):
             name=f"metric:send:{self.platform_meta.name}",
         )
         self._has_send_oper = True
+        return self._success_send_result(message_count=len(message.chain))
 
     async def react(self, emoji: str) -> None:
         """对消息添加表情回应。

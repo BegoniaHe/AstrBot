@@ -8,6 +8,20 @@ from astrbot.dashboard.services.platform_service import (
 )
 
 
+def test_platform_service_find_platform_by_uuid_delegates_to_platform_manager() -> None:
+    platform = object()
+    platform_manager = SimpleNamespace(
+        find_inst_by_webhook_uuid=lambda webhook_uuid: platform
+        if webhook_uuid == "uuid-1"
+        else None
+    )
+    service = PlatformService(SimpleNamespace(platform_manager=platform_manager))
+
+    result = service.find_platform_by_uuid("uuid-1")
+
+    assert result is platform
+
+
 @pytest.mark.asyncio
 async def test_platform_service_invoke_platform_action_success() -> None:
     calls: list[tuple[str, str, dict]] = []

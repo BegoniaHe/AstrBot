@@ -9,6 +9,7 @@ from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.platform.platform_metadata import PlatformMetadata
+from astrbot.core.platform.send_result import PlatformSendResult
 
 
 class CronMessageEvent(AstrMessageEvent):
@@ -53,15 +54,20 @@ class CronMessageEvent(AstrMessageEvent):
         if extras:
             self._extras.update(extras)
 
-    async def send(self, message: MessageChain) -> None:
+    async def send(self, message: MessageChain) -> PlatformSendResult:
         if message is None:
-            return
-        await self.context_obj.send_message(self.session, message)
+            return self._success_send_result(message_count=0)
+        send_result = await self.context_obj.send_message(self.session, message)
         await super().send(message)
+        return send_result
 
-    async def send_streaming(self, generator, use_fallback: bool = False) -> None:
+    async def send_streaming(
+        self, generator, use_fallback: bool = False
+    ) -> PlatformSendResult:
+        last_result = self._success_send_result(message_count=0)
         async for chain in generator:
-            await self.send(chain)
+            last_result = await self.send(chain)
+        return last_result
 
 
 __all__ = ["CronMessageEvent"]
