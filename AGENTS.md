@@ -98,6 +98,7 @@ The `astrbot` console entry point (`astrbot/cli/__main__.py`, commands in `astrb
 
 - **KISS / first principles.** Identify the real problem and the smallest correct change. Do not add features, config switches, abstractions, dependencies, or compatibility layers without clear, current need.
 - **Inline-first, few helpers.** Implement logic inline within the main function. Only extract a helper when the exact logic repeats in 3+ places or inlining makes a function exceed ~50 lines. Do not split continuous linear logic into tiny functions. When editing existing code, don't restructure or extract helpers unless the code already violates these rules.
+- **Cross-platform.** When relevant, consider behavior on Windows, macOS, and Linux, and on Arm64/x86 platforms, while keeping the current Python 3.14+ baseline.
 - **Paths:** use `pathlib.Path`, not string paths. Get AstrBot data/temp directories via `astrbot.core.utils.astrbot_path` (e.g. `get_astrbot_data_path()`, `get_astrbot_temp_path()`) — don't hardcode.
 - **Docstrings:** Google style (`Args:` / `Returns:` / `Raises:`). Comment non-obvious logic. Write all new comments in English. (Note: much existing code has Chinese comments; match the surrounding file when editing, but prefer English for new code.)
 - **Version sync:** keep `[project].version` in `pyproject.toml` and `__version__` in `astrbot/__init__.py` in sync. `VERSION` in `astrbot/core/config/default.py` derives from `astrbot.__version__` — don't hardcode it.
