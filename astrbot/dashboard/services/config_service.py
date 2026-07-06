@@ -23,6 +23,7 @@ from astrbot.core.platform.register import platform_cls_map, platform_registry
 from astrbot.core.provider.register import provider_registry
 from astrbot.core.star.star import star_registry
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
+from astrbot.core.utils.llm_metadata import LLM_METADATAS
 from astrbot.core.utils.totp import (
     is_totp_enabled,
     revoke_user_trusted_devices,
@@ -1254,15 +1255,23 @@ class ProviderConfigService:
     def _build_provider_source_response(self, source: dict) -> dict:
         return self._ensure_provider_type(copy.deepcopy(source))
 
+    def _attach_model_metadata(self, provider: dict) -> dict:
+        model_id = provider.get("model")
+        if isinstance(model_id, str) and model_id in LLM_METADATAS:
+            provider["model_metadata"] = LLM_METADATAS[model_id]
+        return provider
+
     def _build_provider_response(self, provider: dict) -> dict:
         if provider.get("provider_source_id"):
             normalized = self.provider_manager.get_merged_provider_config(provider)
         else:
             normalized = copy.deepcopy(provider)
-        return self._ensure_provider_type(normalized)
+        normalized = self._ensure_provider_type(normalized)
+        return self._attach_model_metadata(normalized)
 
     def _build_raw_provider_response(self, provider: dict) -> dict:
-        return self._ensure_provider_type(copy.deepcopy(provider))
+        normalized = self._ensure_provider_type(copy.deepcopy(provider))
+        return self._attach_model_metadata(normalized)
 
     def get_provider_schema(self) -> dict:
         provider_metadata = ConfigMetadataI18n.convert_to_i18n_keys(
@@ -1506,7 +1515,8 @@ class ProviderConfigService:
         if provider is None:
             raise ValueError(f"Provider {provider_id} not found")
         if merged:
-            return {"provider": self._ensure_provider_type(provider)}
+            provider_response = self._ensure_provider_type(copy.deepcopy(provider))
+            return {"provider": self._attach_model_metadata(provider_response)}
         return {"provider": self._build_raw_provider_response(provider)}
 
     async def create_provider(self, config: dict, source_id: str | None = None) -> None:

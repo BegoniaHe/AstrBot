@@ -43,6 +43,7 @@ interface ProviderItem extends GenericObject {
   modalities?: string[];
   reasoning?: boolean;
   max_context_tokens?: number;
+  model_metadata?: ProviderModelMetadata | null;
 }
 
 interface AvailableModelItem {
@@ -54,12 +55,14 @@ interface ConfiguredModelEntry {
   type: 'configured';
   provider: ProviderItem;
   metadata: ProviderModelMetadata | null;
+  hasModelMetadata?: boolean;
 }
 
 interface AvailableModelEntry {
   type: 'available';
   model: string;
   metadata: ProviderModelMetadata | null;
+  hasModelMetadata?: boolean;
 }
 
 type MergedModelEntry = ConfiguredModelEntry | AvailableModelEntry;
@@ -274,12 +277,17 @@ export function useProviderSources(options: UseProviderSourcesOptions) {
   const mergedModelEntries = computed<MergedModelEntry[]>(() => {
     const configuredEntries: ConfiguredModelEntry[] = (
       sourceProviders.value || []
-    ).map((provider) => ({
-      type: 'configured',
-      provider,
-      metadata:
-        getModelMetadata(provider.model) || buildMetadataFromProvider(provider),
-    }));
+    ).map((provider) => {
+      const modelMetadataForProvider =
+        getModelMetadata(provider.model) || provider.model_metadata || null;
+      return {
+        type: 'configured',
+        provider,
+        metadata:
+          modelMetadataForProvider || buildMetadataFromProvider(provider),
+        hasModelMetadata: Boolean(modelMetadataForProvider),
+      };
+    });
 
     const availableEntries: AvailableModelEntry[] = (
       sortedAvailableModels.value || []
@@ -289,10 +297,12 @@ export function useProviderSources(options: UseProviderSourcesOptions) {
       })
       .map((item) => {
         const name = item.name;
+        const metadata = item.metadata || getModelMetadata(name);
         return {
           type: 'available',
           model: name,
-          metadata: item.metadata || getModelMetadata(name),
+          metadata,
+          hasModelMetadata: Boolean(metadata),
         };
       });
 
