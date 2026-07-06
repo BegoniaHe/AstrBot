@@ -219,6 +219,7 @@ export default defineConfig({
             base: '/others',
             collapsed: true,
             items: [
+              { text: '异常诊断', link: '/diagnostics' },
               { text: '自部署文转图', link: '/self-host-t2i' },
               {
                 text: '插件下载不了?试试自建 GitHub 加速服务',
@@ -462,6 +463,7 @@ export default defineConfig({
             base: '/en/others',
             collapsed: true,
             items: [
+              { text: 'Diagnostics', link: '/diagnostics' },
               { text: 'Self-hosted HTML to Image', link: '/self-host-t2i' },
             ],
           },
