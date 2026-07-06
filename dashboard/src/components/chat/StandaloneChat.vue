@@ -6,7 +6,7 @@
       </div>
 
       <div v-else-if="!activeMessages.length" class="standalone-state">
-        <div class="welcome-title">{{ tm("welcome.title") }}</div>
+        <div class="welcome-title">{{ tm('welcome.title') }}</div>
       </div>
 
       <div v-else class="message-list">
@@ -22,7 +22,7 @@
               :class="{ user: isUserMessage(msg), bot: !isUserMessage(msg) }"
             >
               <div v-if="messageContent(msg).isLoading" class="loading-message">
-                {{ tm("message.loading") }}
+                {{ tm('message.loading') }}
               </div>
 
               <template v-else>
@@ -50,7 +50,7 @@
                         v-if="part.type === 'plain' && isUserMessage(msg)"
                         class="plain-content"
                       >
-                        {{ part.text || "" }}
+                        {{ part.text || '' }}
                       </div>
 
                       <MarkdownMessagePart
@@ -68,7 +68,10 @@
                         type="button"
                         @click="openImage(partUrl(part))"
                       >
-                        <img :src="partUrl(part)" :alt="part.filename || 'image'" />
+                        <img
+                          :src="partUrl(part)"
+                          :alt="part.filename || 'image'"
+                        />
                       </button>
 
                       <audio
@@ -122,7 +125,7 @@
                           >
                             <template #label>
                               <v-icon size="16">mdi-code-json</v-icon>
-                              <span>{{ tool.name || "python" }}</span>
+                              <span>{{ tool.name || 'python' }}</span>
                               <span class="tool-call-inline-status">
                                 {{ toolCallStatusText(tool) }}
                               </span>
@@ -144,7 +147,9 @@
                         </template>
                       </div>
 
-                      <pre v-else class="unknown-part">{{ formatJson(part) }}</pre>
+                      <pre v-else class="unknown-part">{{
+                        formatJson(part)
+                      }}</pre>
                     </template>
                   </template>
                 </template>
@@ -200,23 +205,23 @@ import {
   onMounted,
   reactive,
   ref,
-} from "vue";
-import { chatApi, configRouteApi, fileApi } from "@/api/v1";
-import { setCustomComponents } from "markstream-vue";
-import "markstream-vue/index.css";
-import ChatInput from "@/components/chat/ChatInput.vue";
-import IPythonToolBlock from "@/components/chat/message_list_comps/IPythonToolBlock.vue";
-import MarkdownMessagePart from "@/components/chat/message_list_comps/MarkdownMessagePart.vue";
-import ReasoningBlock from "@/components/chat/message_list_comps/ReasoningBlock.vue";
-import RefNode from "@/components/chat/message_list_comps/RefNode.vue";
-import ToolCallCard from "@/components/chat/message_list_comps/ToolCallCard.vue";
-import ToolCallItem from "@/components/chat/message_list_comps/ToolCallItem.vue";
-import ThemeAwareMarkdownCodeBlock from "@/components/shared/ThemeAwareMarkdownCodeBlock.vue";
+} from 'vue';
+import { chatApi, configRouteApi, fileApi } from '@/api/v1';
+import { setCustomComponents } from 'markstream-vue';
+import 'markstream-vue/index.css';
+import ChatInput from '@/components/chat/ChatInput.vue';
+import IPythonToolBlock from '@/components/chat/message_list_comps/IPythonToolBlock.vue';
+import MarkdownMessagePart from '@/components/chat/message_list_comps/MarkdownMessagePart.vue';
+import ReasoningBlock from '@/components/chat/message_list_comps/ReasoningBlock.vue';
+import RefNode from '@/components/chat/message_list_comps/RefNode.vue';
+import ToolCallCard from '@/components/chat/message_list_comps/ToolCallCard.vue';
+import ToolCallItem from '@/components/chat/message_list_comps/ToolCallItem.vue';
+import ThemeAwareMarkdownCodeBlock from '@/components/shared/ThemeAwareMarkdownCodeBlock.vue';
 import {
   attachmentName,
   attachmentPresentation,
-} from "@/components/chat/attachmentPresentation";
-import { useMediaHandling } from "@/composables/useMediaHandling";
+} from '@/components/chat/attachmentPresentation';
+import { useMediaHandling } from '@/composables/useMediaHandling';
 import {
   displayParts as displayMessageParts,
   messageBlocks as buildMessageBlocks,
@@ -225,35 +230,35 @@ import {
   type ChatRecord,
   type MessagePart,
   type TransportMode,
-} from "@/composables/useMessages";
-import type { Session } from "@/composables/useSessions";
-import { useModuleI18n } from "@/i18n/composables";
-import { useCustomizerStore } from "@/stores/customizer";
-import { buildWebchatUmoDetails } from "@/utils/chatConfigBinding";
+} from '@/composables/useMessages';
+import type { Session } from '@/composables/useSessions';
+import { useModuleI18n } from '@/i18n/composables';
+import { useCustomizerStore } from '@/stores/customizer';
+import { buildWebchatUmoDetails } from '@/utils/chatConfigBinding';
 
 const props = withDefaults(defineProps<{ configId?: string | null }>(), {
-  configId: "default",
+  configId: 'default',
 });
 
-setCustomComponents("chat-message", {
+setCustomComponents('chat-message', {
   ref: RefNode,
   code_block: ThemeAwareMarkdownCodeBlock,
 });
 
-const { tm } = useModuleI18n("features/chat");
+const { tm } = useModuleI18n('features/chat');
 const customizer = useCustomizerStore();
-const currSessionId = ref("");
+const currSessionId = ref('');
 const currentSession = ref<Session | null>(null);
-const draft = ref("");
+const draft = ref('');
 const initializing = ref(false);
 const enableStreaming = ref(true);
 const shouldStickToBottom = ref(true);
 const messagesContainer = ref<HTMLElement | null>(null);
 const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
-const imagePreview = reactive({ visible: false, url: "" });
+const imagePreview = reactive({ visible: false, url: '' });
 
-const isDark = computed(() => customizer.uiTheme === "PurpleThemeDark");
-const customMarkdownTags = ["ref"];
+const isDark = computed(() => customizer.uiTheme === 'PurpleThemeDark');
+const customMarkdownTags = ['ref'];
 
 const {
   stagedFiles,
@@ -290,9 +295,9 @@ const {
 });
 
 const transportMode = computed<TransportMode>(() =>
-  (localStorage.getItem("chat.transportMode") as TransportMode) === "websocket"
-    ? "websocket"
-    : "sse",
+  (localStorage.getItem('chat.transportMode') as TransportMode) === 'websocket'
+    ? 'websocket'
+    : 'sse',
 );
 
 onMounted(async () => {
@@ -320,7 +325,7 @@ async function ensureSession() {
 }
 
 async function bindConfigToSession(sessionId: string) {
-  const confId = props.configId || "default";
+  const confId = props.configId || 'default';
   const umo = buildWebchatUmoDetails(sessionId, false).umo;
   await configRouteApi.upsert(umo, { config_id: confId });
 }
@@ -334,7 +339,7 @@ async function sendCurrentMessage() {
   const selection = inputRef.value?.getCurrentSelection();
   const { botRecord } = createLocalExchange({ sessionId, messageId, parts });
 
-  draft.value = "";
+  draft.value = '';
   clearStaged({ revokeUrls: false });
   scrollToBottom();
   await focusChatInput();
@@ -345,8 +350,8 @@ async function sendCurrentMessage() {
     parts,
     transport: transportMode.value,
     enableStreaming: enableStreaming.value,
-    selectedProvider: selection?.providerId || "",
-    selectedModel: selection?.modelName || "",
+    selectedProvider: selection?.providerId || '',
+    selectedModel: selection?.modelName || '',
     botRecord,
   });
 }
@@ -354,7 +359,7 @@ async function sendCurrentMessage() {
 function buildOutgoingParts(text: string): MessagePart[] {
   const parts: MessagePart[] = [];
   if (text) {
-    parts.push({ type: "plain", text });
+    parts.push({ type: 'plain', text });
   }
   stagedFiles.value.forEach((file) => {
     parts.push({
@@ -368,7 +373,7 @@ function buildOutgoingParts(text: string): MessagePart[] {
 }
 
 function hasNonReasoningContent(message: ChatRecord) {
-  return renderBlocks(message).some((block) => block.kind === "content");
+  return renderBlocks(message).some((block) => block.kind === 'content');
 }
 
 function bubbleParts(message: ChatRecord) {
@@ -378,7 +383,7 @@ function bubbleParts(message: ChatRecord) {
 function renderBlocks(message: ChatRecord): MessageDisplayBlock[] {
   if (isUserMessage(message)) {
     const parts = bubbleParts(message);
-    return parts.length ? [{ kind: "content", parts }] : [];
+    return parts.length ? [{ kind: 'content', parts }] : [];
   }
   return buildMessageBlocks(messageContent(message));
 }
@@ -386,7 +391,7 @@ function renderBlocks(message: ChatRecord): MessageDisplayBlock[] {
 function hasFollowingContentBlock(message: ChatRecord, blockIndex: number) {
   return renderBlocks(message)
     .slice(blockIndex + 1)
-    .some((block) => block.kind === "content");
+    .some((block) => block.kind === 'content');
 }
 
 async function stopCurrentSession() {
@@ -397,7 +402,7 @@ async function stopCurrentSession() {
 async function handleFilesSelected(files: FileList) {
   const selectedFiles = Array.from(files || []);
   for (const file of selectedFiles) {
-    if (file.type.startsWith("image/")) {
+    if (file.type.startsWith('image/')) {
       await processAndUploadImage(file);
     } else {
       await processAndUploadFile(file);
@@ -423,7 +428,7 @@ async function focusChatInput() {
 
 function messageRefs(message: ChatRecord) {
   const refs = messageContent(message).refs;
-  if (refs && typeof refs === "object" && Array.isArray(refs.used)) {
+  if (refs && typeof refs === 'object' && Array.isArray(refs.used)) {
     return refs as { used?: Array<Record<string, unknown>> };
   }
   return null;
@@ -435,7 +440,7 @@ function partUrl(part: MessagePart) {
   if (part.attachment_id) return fileApi.contentUrl(part.attachment_id);
   const lookupFilename = part.stored_filename || part.filename;
   if (lookupFilename) return fileApi.byNameUrl(lookupFilename);
-  return "";
+  return '';
 }
 
 function normalizeToolCall(tool: Record<string, unknown>) {
@@ -443,33 +448,33 @@ function normalizeToolCall(tool: Record<string, unknown>) {
   normalized.args = parseJsonSafe(normalized.args || normalized.arguments);
   normalized.result = parseJsonSafe(normalized.result);
   if (!normalized.ts) normalized.ts = Date.now() / 1000;
-  if (normalized.result && typeof normalized.result === "object") {
+  if (normalized.result && typeof normalized.result === 'object') {
     normalized.result = JSON.stringify(normalized.result, null, 2);
   }
   return normalized;
 }
 
 function isIPythonToolCall(tool: Record<string, unknown>) {
-  const name = String(tool.name || "").toLowerCase();
-  return name.includes("python") || name.includes("ipython");
+  const name = String(tool.name || '').toLowerCase();
+  return name.includes('python') || name.includes('ipython');
 }
 
 function toolCallStatusText(tool: Record<string, unknown>) {
-  if (tool.finished_ts) return tm("toolStatus.done");
-  return tm("toolStatus.running");
+  if (tool.finished_ts) return tm('toolStatus.done');
+  return tm('toolStatus.running');
 }
 
 function formatJson(value: unknown) {
-  if (typeof value === "string") return value;
+  if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return String(value ?? "");
+    return String(value ?? '');
   }
 }
 
 function parseJsonSafe(value: unknown) {
-  if (typeof value !== "string") return value;
+  if (typeof value !== 'string') return value;
   try {
     return JSON.parse(value);
   } catch {
@@ -484,7 +489,7 @@ function openImage(url: string) {
 
 function closeImage() {
   imagePreview.visible = false;
-  imagePreview.url = "";
+  imagePreview.url = '';
 }
 </script>
 
@@ -514,7 +519,7 @@ function closeImage() {
 }
 
 .welcome-title {
-  font-family: "Outfit", "Noto Sans", sans-serif;
+  font-family: 'Outfit', 'Noto Sans', sans-serif;
   font-size: 24px;
   font-weight: 700;
 }
@@ -676,7 +681,7 @@ function closeImage() {
 }
 
 .standalone-composer::before {
-  content: "";
+  content: '';
   position: absolute;
   z-index: -1;
   left: 0;
