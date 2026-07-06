@@ -325,6 +325,7 @@
             :is-running="
               Boolean(currSessionId && isSessionRunning(currSessionId))
             "
+            :token-usage="tokenUsageIndicator"
             :session-id="currSessionId || null"
             :current-session="currentSession"
             :reply-to="chatInputReplyTarget"
@@ -409,6 +410,7 @@
             :is-running="
               Boolean(currSessionId && isSessionRunning(currSessionId))
             "
+            :token-usage="tokenUsageIndicator"
             :session-id="currSessionId || null"
             :current-session="currentSession"
             :reply-to="chatInputReplyTarget"
@@ -512,7 +514,7 @@ import {
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { isAxiosError } from 'axios';
-import { chatApi } from '@/api/v1';
+import { chatApi, providerApi } from '@/api/v1';
 import StyledMenu from '@/components/shared/StyledMenu.vue';
 import ProjectDialog, {
   type ProjectFormData,
@@ -546,6 +548,12 @@ import {
 } from '@/i18n/composables';
 import type { Locale } from '@/i18n/types';
 import { askForConfirmation, useConfirmDialog } from '@/utils/confirmDialog';
+import {
+  contextLimit,
+  formatTokenCount,
+  type ProviderModelMetadata,
+  type ProviderMetadataSource,
+} from '@/utils/providerMetadata';
 import { useToast } from '@/utils/toast';
 
 const props = withDefaults(
@@ -604,6 +612,11 @@ const {
 type WorkspaceView = 'chat' | 'providers';
 
 const sidebarCollapsed = ref(false);
+interface TokenProviderConfig extends ProviderMetadataSource {
+  id: string;
+  enable?: boolean;
+}
+
 const activeWorkspace = ref<WorkspaceView>('chat');
 const projectDialogOpen = ref(false);
 const editingProject = ref<Project | null>(null);
@@ -618,6 +631,9 @@ const savingMessageEdit = ref(false);
 const projectSessions = ref<Session[]>([]);
 const loadingSessions = ref(false);
 const draft = ref('');
+const tokenProviderConfigs = ref<TokenProviderConfig[]>([]);
+const tokenModelMetadata = ref<Record<string, ProviderModelMetadata>>({});
+const selectedTokenProviderId = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 const shouldStickToBottom = ref(true);
@@ -762,13 +778,70 @@ const chatInputReplyTarget = computed(() =>
         selectedText: replyPreview(replyTarget.value.id, ''),
       },
 );
+const currentTokenProvider = computed(() => {
+  const selectedProvider = tokenProviderConfigs.value.find(
+    (provider) => provider.id === selectedTokenProviderId.value,
+  );
+  return selectedProvider || tokenProviderConfigs.value[0] || null;
+});
+const currentTokenMetadata = computed(() => {
+  const model = currentTokenProvider.value?.model;
+  return model ? tokenModelMetadata.value[model] || null : null;
+});
+const latestTokenUsageTotal = computed(() => {
+  for (let index = activeMessages.value.length - 1; index >= 0; index -= 1) {
+    const message = activeMessages.value[index];
+    if (isUserMessage(message)) continue;
+    const usage = message.content?.agentStats?.token_usage;
+    if (!usage) continue;
+    return (
+      readTokenCount(usage.input_other) +
+      readTokenCount(usage.input_cached) +
+      readTokenCount(usage.output)
+    );
+  }
+  return 0;
+});
+const tokenUsageIndicator = computed(() => {
+  const used = latestTokenUsageTotal.value;
+  const limit = contextLimit(currentTokenProvider.value, currentTokenMetadata.value);
+  if (used <= 0 || limit <= 0) return null;
+
+  const percent = (used / limit) * 100;
+  return {
+    used,
+    limit,
+    percent: Math.min(100, Math.max(0, percent)),
+    tooltip: tm("tokenUsage.tooltip", {
+      used: formatTokenCount(used),
+      limit: formatTokenCount(limit),
+      percent: formatUsagePercent(percent),
+    }),
+  };
+});
+
+function getSelectedProviderSelection() {
+  const inputSelection = inputRef.value?.getCurrentSelection();
+  if (inputSelection?.providerId) {
+    selectedTokenProviderId.value = inputSelection.providerId;
+    return inputSelection;
+  }
+  if (typeof window === "undefined") {
+    return { providerId: "", modelName: "" };
+  }
+  syncSelectedTokenProvider();
+  return {
+    providerId: localStorage.getItem('selectedProvider') || '',
+    modelName: localStorage.getItem('selectedProviderModel') || '',
+  };
+}
 
 provide('isDark', isDark);
 
 onMounted(async () => {
   loadingSessions.value = true;
   try {
-    await Promise.all([getSessions(), getProjects()]);
+    await Promise.all([getSessions(), getProjects(), loadTokenProviders()]);
     const routeSessionId = getRouteSessionId();
     if (routeSessionId === 'models') {
       activeWorkspace.value = 'providers';
@@ -850,6 +923,40 @@ async function openProviderWorkspace() {
 
 function sessionTitle(session: Session) {
   return session.display_name?.trim() || tm('conversation.newConversation');
+}
+
+function syncSelectedTokenProvider() {
+  if (typeof window === "undefined") return;
+  selectedTokenProviderId.value = localStorage.getItem("selectedProvider") || "";
+}
+
+async function loadTokenProviders() {
+  syncSelectedTokenProvider();
+  try {
+    const response = await providerApi.listByProviderType("chat_completion");
+    if (response.data.status === "ok") {
+      tokenModelMetadata.value = (
+        (response.data as any).model_metadata || {}
+      ) as Record<string, ProviderModelMetadata>;
+      tokenProviderConfigs.value = (
+        (response.data.data || []) as unknown as TokenProviderConfig[]
+      ).filter((provider) => provider.enable !== false);
+    }
+  } catch (error) {
+    console.error("Failed to load provider context metadata:", error);
+  }
+}
+
+function readTokenCount(value: unknown) {
+  const count = Number(value || 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function formatUsagePercent(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value >= 10) return String(Math.round(value));
+  if (value >= 1) return String(Math.round(value * 10) / 10);
+  return String(Math.round(value * 100) / 100);
 }
 
 async function startNewChat() {
@@ -1022,7 +1129,7 @@ async function sendCurrentMessage() {
     const text = draft.value.trim();
     const messageId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     const outgoingParts = buildOutgoingParts(text);
-    const selection = inputRef.value?.getCurrentSelection();
+    const selection = getSelectedProviderSelection();
     const { userRecord, botRecord } = createLocalExchange({
       sessionId,
       messageId,
@@ -1139,7 +1246,7 @@ async function saveMessageEdit() {
     cancelMessageEdit();
 
     if (result.needsRegenerate && result.truncatedAfterMessage) {
-      const selection = inputRef.value?.getCurrentSelection();
+      const selection = getSelectedProviderSelection();
       continueEditedMessage({
         sessionId: currSessionId.value,
         sourceRecord: target,
