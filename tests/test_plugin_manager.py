@@ -1761,6 +1761,17 @@ async def test_load_syncs_existing_metadata_activation_from_preferences(
     async def mock_sync_command_configs():
         return None
 
+    def mock_load_plugin_metadata(**_kwargs):
+        return star_manager_module.StarMetadata(
+            name=plugin_name,
+            author="AstrBot Team",
+            desc="Demo plugin",
+            version="1.0.0",
+            root_dir_name=plugin_name,
+            module_path=module_path,
+            activated=False,
+        )
+
     monkeypatch.setattr(star_manager_module.sp, "global_get", mock_global_get)
     monkeypatch.setattr(
         plugin_manager_pm,
@@ -1772,7 +1783,11 @@ async def test_load_syncs_existing_metadata_activation_from_preferences(
         "_import_plugin_with_dependency_recovery",
         mock_import_plugin_with_dependency_recovery,
     )
-    monkeypatch.setattr(plugin_manager_pm, "_load_plugin_metadata", lambda **_: None)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_load_plugin_metadata",
+        mock_load_plugin_metadata,
+    )
     monkeypatch.setattr(
         star_manager_module,
         "sync_command_configs",

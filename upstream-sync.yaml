@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: 25cbd41e08eb7e678b0ab3f5e6c972581bd0589f
-  synced_at_utc: 2026-07-06T04:43:52.9201516Z
+  commit: 331444b41f77f6d364c215cff3266b1e9233928f
+  synced_at_utc: 2026-07-07T04:57:00Z
   sync_method: cherry-pick
-  source_pr: 9144
-  note: "Cherry-picked upstream/master commits 8a31cf01f23a0c189457e2185790b71409db1b31 through 25cbd41e08eb7e678b0ab3f5e6c972581bd0589f, covering web-search API key failover, ChatUI attachment display and session ownership checks, project update temp staging hardening, QQ Official retry-on-None handling, MiMo STT v2.5 adaptation, cross-platform guidance notes, POSIX file URI test coverage, and malformed tool-call-name sanitation. Continued to skip upstream custom-workspace commits 6d798908ad8a60f0822caf490933e7c4bcf92c14 and 20008f179ca579b3d4ab87bd2380021325172cc5 because this fork removed that workspace path layer and will not reintroduce it."
+  source_pr: 9173
+  note: "Cherry-picked upstream/master commits 6627fd53c1423da67c6f31298da3ff1b55700a65 through bf18fadbe623476b79bfd6bcfec3c0ff47d4efc2, covering provider model metadata UI/API changes, webchat UTC timestamp serialization, chat token usage indicator, plugin activation status sync, QQ Official quoted-message context preservation and proactive fallback reply-id removal, MCP lifecycle/exit-stack cleanup, event-loop diagnostics, diagnostics docs, and snackbar polish. Skipped upstream version bump 39090a74b51e28a3ba1dad7ec51489ec50a58ec2 per fork policy. Recorded sync point at 331444b41f77f6d364c215cff3266b1e9233928f even though that changelog-format commit became empty here because this fork keeps changelogs/v4.26.5.md deleted."
