@@ -331,13 +331,8 @@
     </v-dialog>
 
     <!-- 消息提示 -->
-    <v-snackbar
-      v-model="save_message_snack"
-      :timeout="3000"
-      elevation="24"
-      :color="save_message_success"
-      location="top"
-    >
+    <v-snackbar :timeout="3000" elevation="6" :color="save_message_success" v-model="save_message_snack"
+      location="top">
       {{ save_message }}
     </v-snackbar>
   </div>

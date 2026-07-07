@@ -436,7 +436,7 @@ const updateDialogPluginLogo = computed(() => {
   <v-snackbar
     v-model="snack_show"
     :timeout="2000"
-    elevation="24"
+    elevation="6"
     :color="snack_success"
     location="bottom center"
   >

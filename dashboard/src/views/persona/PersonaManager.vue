@@ -419,7 +419,7 @@
     <v-snackbar
       v-model="showMessage"
       :timeout="3000"
-      elevation="24"
+      elevation="6"
       :color="messageType"
       location="top"
     >
