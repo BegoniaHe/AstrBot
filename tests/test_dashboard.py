@@ -1444,31 +1444,22 @@ async def test_generated_password_requires_password_change_until_changed(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("endpoint", "method"),
-    [
-        ("/api/auth/account/edit", "post"),
-        ("/api/v1/auth/account", "patch"),
-    ],
-)
 @pytest.mark.parametrize("new_username", ["ab", "   "])
 async def test_account_edit_rejects_invalid_username(
-    app: FastAPIAppAdapter,
+    app: FastAPI,
     core_lifecycle_td: AstrBotCoreLifecycle,
-    endpoint: str,
-    method: str,
     new_username: str,
 ):
     original_dashboard_config = copy.deepcopy(
         core_lifecycle_td.astrbot_config["dashboard"]
     )
-    test_client = app.test_client()
+    test_client = DashboardTestClient(app)
     current_username = core_lifecycle_td.astrbot_config["dashboard"]["username"]
     current_password = _resolve_dashboard_password(core_lifecycle_td)
 
     try:
         login_response = await test_client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={"username": current_username, "password": current_password},
         )
         login_data = await login_response.get_json()
@@ -1481,8 +1472,11 @@ async def test_account_edit_rejects_invalid_username(
             "confirm_password": "",
             "new_username": new_username,
         }
-        request = getattr(test_client, method)
-        response = await request(endpoint, headers=headers, json=payload)
+        response = await test_client.patch(
+            "/api/v1/auth/account",
+            headers=headers,
+            json=payload,
+        )
         data = await response.get_json()
 
         assert data["status"] == "error"
@@ -1492,6 +1486,7 @@ async def test_account_edit_rejects_invalid_username(
             == (original_dashboard_config["username"])
         )
     finally:
+        await test_client.aclose()
         await _restore_dashboard_password_state(
             core_lifecycle_td,
             original_dashboard_config,
@@ -1500,27 +1495,27 @@ async def test_account_edit_rejects_invalid_username(
 
 @pytest.mark.asyncio
 async def test_account_edit_trims_valid_username(
-    app: FastAPIAppAdapter,
+    app: FastAPI,
     core_lifecycle_td: AstrBotCoreLifecycle,
 ):
     original_dashboard_config = copy.deepcopy(
         core_lifecycle_td.astrbot_config["dashboard"]
     )
-    test_client = app.test_client()
+    test_client = DashboardTestClient(app)
     current_username = core_lifecycle_td.astrbot_config["dashboard"]["username"]
     current_password = _resolve_dashboard_password(core_lifecycle_td)
 
     try:
         login_response = await test_client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={"username": current_username, "password": current_password},
         )
         login_data = await login_response.get_json()
         assert login_data["status"] == "ok"
         headers = {"Authorization": f"Bearer {login_data['data']['token']}"}
 
-        response = await test_client.post(
-            "/api/auth/account/edit",
+        response = await test_client.patch(
+            "/api/v1/auth/account",
             headers=headers,
             json={
                 "password": current_password,
@@ -1536,6 +1531,7 @@ async def test_account_edit_trims_valid_username(
             "astrbot-admin"
         )
     finally:
+        await test_client.aclose()
         await _restore_dashboard_password_state(
             core_lifecycle_td,
             original_dashboard_config,

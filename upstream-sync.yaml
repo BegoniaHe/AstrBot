@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: 331444b41f77f6d364c215cff3266b1e9233928f
-  synced_at_utc: 2026-07-07T04:57:00Z
+  commit: 0be821afc600a8b47d583d7952a1d1b1d605e534
+  synced_at_utc: 2026-07-08T10:07:22Z
   sync_method: cherry-pick
-  source_pr: 9173
-  note: "Cherry-picked upstream/master commits 6627fd53c1423da67c6f31298da3ff1b55700a65 through bf18fadbe623476b79bfd6bcfec3c0ff47d4efc2, covering provider model metadata UI/API changes, webchat UTC timestamp serialization, chat token usage indicator, plugin activation status sync, QQ Official quoted-message context preservation and proactive fallback reply-id removal, MCP lifecycle/exit-stack cleanup, event-loop diagnostics, diagnostics docs, and snackbar polish. The upstream version bump 39090a74bae58608c7f0b758e75b4c0cd71898e8 was applied as a follow-up local sync step together with a fork-adjusted v4.26.5 changelog that reflects absorbed commits."
+  source_pr: 9175
+  note: "Cherry-picked upstream/master commit dcc40ede1decb1f62b950291c02b413a7b33a3e9 for dashboard account username validation and trimming. Skipped README-only commits adebd2958ed885548107cd69552757f76197da66 and 0be821afc600a8b47d583d7952a1d1b1d605e534 because this fork preserves fork-specific documentation, Python 3.14+ requirements, and BegoniaHe repository links instead of upstream README content."
