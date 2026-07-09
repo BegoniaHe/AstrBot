@@ -334,9 +334,8 @@ class CommandFilter(HandlerFilter):
 
             if self._is_bool_option(param):
                 if inline_value is None:
-                    if (
-                        token_idx + 1 < len(params)
-                        and self._looks_like_bool_literal(params[token_idx + 1])
+                    if token_idx + 1 < len(params) and self._looks_like_bool_literal(
+                        params[token_idx + 1]
                     ):
                         parsed_options[param.name] = self._convert_param_value(
                             params[token_idx + 1],
