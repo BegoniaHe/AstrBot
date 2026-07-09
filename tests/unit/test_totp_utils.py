@@ -69,7 +69,7 @@ async def test_issue_and_validate_trusted_device_token(tmp_path):
         assert isinstance(token, str) and token
         assert await is_totp_trusted_device_valid(config, db, token) is True
     finally:
-        await db.engine.dispose()
+        await db.close()
 
 
 @pytest.mark.asyncio
@@ -95,4 +95,4 @@ async def test_trusted_device_invalid_after_totp_secret_change(tmp_path):
         config["dashboard"]["totp"]["secret"] = new_secret
         assert await is_totp_trusted_device_valid(config, db, token) is False
     finally:
-        await db.engine.dispose()
+        await db.close()

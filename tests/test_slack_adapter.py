@@ -54,7 +54,7 @@ async def _isolate_metrics_and_dispose_global_db_helper():
         AsyncMock(return_value=None),
     ):
         yield
-    await db_helper.engine.dispose()
+    await db_helper.close()
 
 
 def test_slack_adapter_requires_required_tokens_by_mode():

@@ -24,7 +24,7 @@ async def _isolate_metrics_and_dispose_global_db_helper():
         AsyncMock(return_value=None),
     ):
         yield
-    await db_helper.engine.dispose()
+    await db_helper.close()
 
 
 def _build_event(*, group_id: str | None = None, reply_token: str = "reply-1") -> LineMessageEvent:

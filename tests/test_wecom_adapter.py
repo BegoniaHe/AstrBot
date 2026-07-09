@@ -76,7 +76,7 @@ async def _isolate_metrics_and_dispose_global_db_helper():
         AsyncMock(return_value=None),
     ):
         yield
-    await db_helper.engine.dispose()
+    await db_helper.close()
 
 
 def test_extract_wecom_media_filename_prefers_utf8_filename_star():

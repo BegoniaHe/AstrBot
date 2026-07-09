@@ -419,7 +419,7 @@ class AstrBotCoreLifecycle:
 
         # 释放数据库引擎连接池
         try:
-            await self.db.engine.dispose()
+            await self.db.close()
         except Exception as e:
             logger.warning(f"释放数据库引擎失败: {e}")
 

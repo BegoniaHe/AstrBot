@@ -3,6 +3,7 @@ import datetime
 import typing as T
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from weakref import WeakSet
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -63,6 +64,7 @@ class BaseDatabase(abc.ABC):
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        self._active_sessions: WeakSet[AsyncSession] = WeakSet()
 
     async def initialize(self) -> None:
         """初始化数据库连接"""
@@ -73,8 +75,25 @@ class BaseDatabase(abc.ABC):
         if not self.inited:
             await self.initialize()
             self.inited = True
-        async with self.AsyncSessionLocal() as session:
+        session = self.AsyncSessionLocal()
+        self._active_sessions.add(session)
+        try:
             yield session
+        finally:
+            try:
+                await session.close()
+            finally:
+                self._active_sessions.discard(session)
+
+    async def close(self) -> None:
+        """Close tracked sessions and dispose the database engine."""
+        for session in list(self._active_sessions):
+            try:
+                await session.close()
+            finally:
+                self._active_sessions.discard(session)
+        await self.engine.dispose()
+        self.inited = False
 
     @abc.abstractmethod
     async def insert_platform_stats(
