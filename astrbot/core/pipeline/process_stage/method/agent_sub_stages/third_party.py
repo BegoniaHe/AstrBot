@@ -63,6 +63,7 @@ _BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 async def run_third_party_agent(
     runner: BaseAgentRunner,
+    max_step: int = 30,
     stream_to_general: bool = False,
     custom_error_message: str | None = None,
 ) -> AsyncGenerator[tuple[MessageChain, bool]]:
@@ -71,7 +72,7 @@ async def run_third_party_agent(
     类似于 run_agent 函数，但专门处理第三方 agent runner
     """
     try:
-        async for resp in runner.step_until_done(max_step=30):  # type: ignore[misc]
+        async for resp in runner.step_until_done(max_step=max_step):  # type: ignore[misc]
             if resp.type == "streaming_delta":
                 if stream_to_general:
                     continue
@@ -187,6 +188,13 @@ class ThirdPartyAgentSubStage(Stage):
             field_name="third_party_stream_consumption_close_timeout_sec",
             source="Third-party runner config",
         )
+        self.max_step: int = coerce_int_config(
+            settings.get("max_agent_step", 30),
+            default=30,
+            min_value=1,
+            field_name="max_agent_step",
+            source="Third-party runner config",
+        )
 
     async def _resolve_persona_custom_error_message(
         self, event: AstrMessageEvent
@@ -216,12 +224,14 @@ class ThirdPartyAgentSubStage(Stage):
         mark_stream_consumed: Callable[[], None],
     ) -> AsyncGenerator[None]:
         aggregator = _RunnerResultAggregator()
+        max_step = getattr(self, "max_step", 30)
 
         async def _stream_runner_chain() -> AsyncGenerator[MessageChain]:
             mark_stream_consumed()
             try:
                 async for chain, is_error in run_third_party_agent(
                     runner,
+                    max_step=max_step,
                     stream_to_general=False,
                     custom_error_message=custom_error_message,
                 ):
@@ -262,8 +272,10 @@ class ThirdPartyAgentSubStage(Stage):
         custom_error_message: str | None,
     ) -> AsyncGenerator[None]:
         aggregator = _RunnerResultAggregator()
+        max_step = getattr(self, "max_step", 30)
         async for chain, is_error in run_third_party_agent(
             runner,
+            max_step=max_step,
             stream_to_general=stream_to_general,
             custom_error_message=custom_error_message,
         ):

@@ -601,7 +601,8 @@ class FunctionToolExecutor(BaseFunctionToolExecutor[AstrAgentContext]):
             return
 
         runner = result.agent_runner
-        async for _ in runner.step_until_done(30):
+        max_agent_step = int(provider_settings.get("max_agent_step", 30))
+        async for _ in runner.step_until_done(max_agent_step):
             # agent will send message to user via using tools
             pass
         llm_resp = runner.get_final_llm_resp()

@@ -105,9 +105,19 @@ class CozeAgentRunner(BaseAgentRunner[TContext]):
     async def step_until_done(
         self, max_step: int = 30
     ) -> T.AsyncGenerator[AgentResponse]:
-        while not self.done():
+        if max_step <= 0:
+            raise ValueError("max_step must be greater than 0")
+
+        step_count = 0
+        while not self.done() and step_count < max_step:
+            step_count += 1
             async for resp in self.step():
                 yield resp
+
+        if not self.done():
+            raise RuntimeError(
+                f"Coze agent reached max_step ({max_step}) without completion."
+            )
 
     async def _execute_coze_request(self):
         """执行 Coze 请求的核心逻辑"""

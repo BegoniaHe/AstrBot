@@ -225,7 +225,7 @@ class Context:
             tools: ToolSet of tools available to the LLM
             system_prompt: System prompt to guide the LLM's behavior, if provided, it will always insert as the first system message in the context
             contexts: context messages for the LLM
-            max_steps: Maximum number of tool calls before stopping the loop
+            max_steps: Maximum number of agent steps/LLM-tool loop rounds before stopping the loop
             **kwargs: Additional keyword arguments. The kwargs will not be passed to the LLM directly for now, but can include:
                 stream: bool - whether to stream the LLM response
                 agent_hooks: BaseAgentRunHooks[AstrAgentContext] - hooks to run during agent execution
