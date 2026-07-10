@@ -60,7 +60,7 @@ def test_load_plugin_i18n_reads_locale_files(tmp_path: Path):
     i18n_path.mkdir(parents=True)
     (i18n_path / "zh-CN.json").write_text(
         json.dumps({"metadata": {"desc": "中文描述"}}, ensure_ascii=False),
-        encoding="utf-8",
+        encoding="utf-8-sig",
     )
     (i18n_path / "en-US.json").write_text(
         json.dumps({"metadata": {"desc": "English description"}}),
@@ -72,6 +72,74 @@ def test_load_plugin_i18n_reads_locale_files(tmp_path: Path):
         "zh-CN": {"metadata": {"desc": "中文描述"}},
         "en-US": {"metadata": {"desc": "English description"}},
     }
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_schema_accepts_utf8_bom(
+    plugin_manager_pm: PluginManager, tmp_path: Path, monkeypatch
+):
+    _clear_star_runtime_state()
+    plugin_name = "bom_schema_plugin"
+    module_path = f"data.plugins.{plugin_name}.main"
+    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path.mkdir()
+    (plugin_path / "_conf_schema.json").write_text(
+        json.dumps({"enabled": {"type": "bool", "default": True}}),
+        encoding="utf-8-sig",
+    )
+    metadata = star_manager_module.StarMetadata(
+        name=plugin_name,
+        author="AstrBot Team",
+        desc="BOM schema test plugin",
+        version="1.0.0",
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    star_manager_module.star_map[module_path] = metadata
+    star_manager_module.star_registry.append(metadata)
+
+    async def mock_global_get(_key, default=None):
+        return default
+
+    async def mock_import_plugin_with_dependency_recovery(**_kwargs):
+        return ModuleType(module_path)
+
+    async def mock_sync_command_configs():
+        return None
+
+    monkeypatch.setattr(star_manager_module.sp, "global_get", mock_global_get)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_get_plugin_modules",
+        lambda: [{"pname": plugin_name, "module": "main"}],
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_import_plugin_with_dependency_recovery",
+        mock_import_plugin_with_dependency_recovery,
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_load_plugin_metadata",
+        lambda **_kwargs: metadata,
+    )
+    monkeypatch.setattr(
+        star_manager_module,
+        "sync_command_configs",
+        mock_sync_command_configs,
+    )
+    config_path = tmp_path / "config"
+    config_path.mkdir()
+    monkeypatch.setattr(plugin_manager_pm, "plugin_config_path", str(config_path))
+
+    try:
+        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+    finally:
+        _clear_star_runtime_state()
+
+    assert success is True
+    assert error is None
+    assert metadata.config is not None
 
 
 def test_load_plugin_i18n_ignores_legacy_directories(tmp_path: Path):
@@ -1478,6 +1546,8 @@ async def test_ensure_plugin_requirements_does_not_mask_install_error_when_clean
         )
 
     assert any("删除临时插件依赖文件失败" in log for log in warning_logs)
+
+
 # --- Tests for plugin_id KV cleanup logic ---
 
 

@@ -538,7 +538,7 @@ class PluginManager:
                     continue
 
                 try:
-                    with file_path.open(encoding="utf-8") as f:
+                    with file_path.open(encoding="utf-8-sig") as f:
                         locale_data = json.load(f)
                     if isinstance(locale_data, dict):
                         translations[locale] = locale_data
@@ -975,7 +975,7 @@ class PluginManager:
                 )
                 if os.path.exists(plugin_schema_path):
                     # 加载插件配置
-                    with open(plugin_schema_path, encoding="utf-8") as f:
+                    with open(plugin_schema_path, encoding="utf-8-sig") as f:
                         plugin_config = AstrBotConfig(
                             config_path=os.path.join(
                                 self.plugin_config_path,
