@@ -1,4 +1,5 @@
-import subprocess
+# The command's executable and arguments are fixed; shell remains disabled.
+import subprocess  # nosec B404
 import sys
 
 import click
@@ -14,7 +15,7 @@ def install_browser() -> None:
             "Playwright is not installed. Reinstall AstrBot before installing Chromium."
         ) from exc
 
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603
         [sys.executable, "-m", "playwright", "install", "chromium"],
         check=False,
     )
