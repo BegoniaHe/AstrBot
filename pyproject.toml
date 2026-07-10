@@ -28,11 +28,14 @@ dependencies = [
   "filelock>=3.29.7",
   "google-genai>=2.11.0",
   "httpx[socks]>=0.28.1",
+  "jinja2>=3.1.6",
   "lark-oapi>=1.7.1",
+  "markdown-it-py>=3.0.0",
   "mcp>=1.28.1,<2",
   "openai>=2.45.0",
   "ormsgpack>=1.12.2",
   "pillow>=12.3.0",
+  "playwright>=1.54.0",
   "pip>=26.1.2",
   "psutil>=7.2.2",
   "py-cord>=2.8.0",
@@ -67,6 +70,9 @@ dependencies = [
   "packaging>=26.2",
   "python-ripgrep>=0.0.9",
   "pyotp>=2.10.0",
+  "mdit-py-plugins>=0.6.1",
+  "pykatex>=0.1.1",
+  "latex2mathml>=3.81.0",
 ]
 
 [dependency-groups]

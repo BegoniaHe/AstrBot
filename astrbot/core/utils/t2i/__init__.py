@@ -3,7 +3,11 @@ from abc import ABC, abstractmethod
 
 class RenderStrategy(ABC):
     @abstractmethod
-    async def render(self, text: str, return_url: bool) -> str:
+    async def render(
+        self,
+        text: str,
+        template_name: str | None = None,
+    ) -> str:
         pass
 
     @abstractmethod
@@ -11,6 +15,6 @@ class RenderStrategy(ABC):
         self,
         tmpl_str: str,
         tmpl_data: dict,
-        return_url: bool,
+        options: dict | None = None,
     ) -> str:
         pass

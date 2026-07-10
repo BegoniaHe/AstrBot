@@ -46,7 +46,7 @@ class Star(CommandParserMixin, PluginKVStoreMixin):
             star_map[cls.__module__].star_cls_type = cls
             star_map[cls.__module__].module_path = cls.__module__
 
-    async def text_to_image(self, text: str, return_url=True) -> str:
+    async def text_to_image(self, text: str) -> str:
         """将文本转换为图片"""
         config_obj = self._get_context_config()
         template_name = None
@@ -57,7 +57,6 @@ class Star(CommandParserMixin, PluginKVStoreMixin):
                 template_name = None
         return await html_renderer.render_t2i(
             text,
-            return_url=return_url,
             template_name=template_name,
         )
 
@@ -65,14 +64,12 @@ class Star(CommandParserMixin, PluginKVStoreMixin):
         self,
         tmpl: str,
         data: dict,
-        return_url=True,
         options: dict | None = None,
     ) -> str:
         """渲染 HTML"""
         return await html_renderer.render_custom_template(
             tmpl,
             data,
-            return_url=return_url,
             options=options,
         )
 

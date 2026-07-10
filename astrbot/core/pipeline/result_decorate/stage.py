@@ -36,9 +36,10 @@ class ResultDecorateStage(Stage):
             self.t2i_word_threshold = max(self.t2i_word_threshold, 50)
         except Exception:
             self.t2i_word_threshold = 150
-        self.t2i_strategy = ctx.astrbot_config["t2i_strategy"]
-        self.t2i_use_network = self.t2i_strategy == "remote"
         self.t2i_active_template = ctx.astrbot_config["t2i_active_template"]
+        self.t2i_use_file_service = bool(
+            ctx.astrbot_config.get("t2i_use_file_service", False),
+        )
 
         self.forward_threshold = ctx.astrbot_config["platform_settings"][
             "forward_threshold"
@@ -370,39 +371,48 @@ class ResultDecorateStage(Stage):
                 if plain_str and len(plain_str) > self.t2i_word_threshold:
                     render_start = time.time()
                     try:
-                        url = await html_renderer.render_t2i(
+                        image_path = await html_renderer.render_t2i(
                             plain_str,
-                            return_url=True,
-                            use_network=self.t2i_use_network,
                             template_name=self.t2i_active_template,
                         )
                     except asyncio.CancelledError:
                         raise
                     except KeyboardInterrupt, SystemExit:
                         raise
-                    except Exception:
-                        logger.error("文本转图片失败，使用文本发送。")
+                    except Exception as exc:
+                        logger.error("文本转图片失败，使用文本发送：%s", exc)
                         return
                     if time.time() - render_start > 3:
                         logger.warning(
                             "文本转图片耗时超过了 3 秒，如果觉得很慢可以在 WebUI 中关闭文本转图片模式。",
                         )
-                    if url:
-                        if url.startswith("http"):
-                            result.chain = [Image.fromURL(url)]
-                        elif (
-                            self.ctx.astrbot_config["t2i_use_file_service"]
-                            and self.ctx.astrbot_config["callback_api_base"]
-                        ):
-                            token = await file_token_service.register_file(url)
-                            url = (
-                                f"{self.ctx.astrbot_config['callback_api_base']}"
-                                f"/api/v1/files/tokens/{token}"
-                            )
-                            logger.debug(f"已注册：{url}")
-                            result.chain = [Image.fromURL(url)]
+                    if image_path:
+                        if hasattr(event, "track_temporary_local_file"):
+                            event.track_temporary_local_file(image_path)
+                        callback_api_base = str(
+                            self.ctx.astrbot_config.get("callback_api_base", "") or "",
+                        ).rstrip("/")
+                        should_use_file_service = bool(callback_api_base) and (
+                            self.t2i_use_file_service
+                            or event.get_platform_name() in {"aiocqhttp", "napcat"}
+                        )
+                        if should_use_file_service:
+                            try:
+                                token = await file_token_service.register_file(
+                                    image_path,
+                                )
+                                image_url = (
+                                    f"{callback_api_base}/api/v1/files/tokens/{token}"
+                                )
+                                logger.debug(f"已注册：{image_url}")
+                                result.chain = [Image.fromURL(image_url)]
+                            except Exception:
+                                logger.warning(
+                                    "文转图文件服务注册失败，回退为本地图片发送。"
+                                )
+                                result.chain = [Image.fromFileSystem(image_path)]
                         else:
-                            result.chain = [Image.fromFileSystem(url)]
+                            result.chain = [Image.fromFileSystem(image_path)]
 
             # 触发转发消息
             if event.get_platform_name() == "aiocqhttp":

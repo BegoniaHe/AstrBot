@@ -20,6 +20,7 @@ AstrBot requires Python 3.14 or later. Use `--python 3.14` to ensure that `uv` c
 
 ```bash
 uv tool install astrbot --python 3.14
+astrbot install-browser # Required only when using local text-to-image rendering
 astrbot init
 astrbot run
 ```

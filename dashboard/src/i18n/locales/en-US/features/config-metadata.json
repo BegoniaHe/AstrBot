@@ -1000,17 +1000,13 @@
     "name": "System",
     "system": {
       "description": "System Settings",
-      "t2i_strategy": {
-        "description": "Text-to-Image Strategy",
-        "hint": "Text-to-image strategy. `remote` uses a remote HTML-based rendering service, `local` uses PIL for local rendering. When using local, place a TTF font named 'font.ttf' in the data/ directory to customize the font."
-      },
-      "t2i_endpoint": {
-        "description": "Text-to-Image Service API Endpoint",
-        "hint": "Uses AstrBot API service when empty"
-      },
       "t2i_template": {
         "description": "Text-to-Image Custom Template",
         "hint": "When enabled, you can customize HTML templates for text-to-image rendering."
+      },
+      "t2i_use_file_service": {
+        "description": "Expose Local Text-to-Image Results Through the File Service",
+        "hint": "When enabled, text-to-image results are registered as AstrBot file token URLs. Configure the externally accessible callback API address correctly."
       },
       "t2i_active_template": {
         "description": "Currently Active Text-to-Image Rendering Template",

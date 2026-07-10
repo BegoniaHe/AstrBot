@@ -5,7 +5,7 @@ import sys
 import click
 
 from . import __version__
-from .commands import conf, init, password, plug, run
+from .commands import conf, init, install_browser, password, plug, run
 
 logo_tmpl = r"""
      ___           _______.___________..______      .______     ______   .___________.
@@ -50,6 +50,7 @@ def help(command_name: str | None) -> None:
 
 
 cli.add_command(init)
+cli.add_command(install_browser)
 cli.add_command(run)
 cli.add_command(help)
 cli.add_command(plug)

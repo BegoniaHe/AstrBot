@@ -32,6 +32,7 @@ Alternatively, download the source code directly from GitHub and extract it:
 
 ```bash
 uv sync
+uv run astrbot install-browser  # Required only when using local text-to-image rendering
 uv run main.py
 ```
 
@@ -63,6 +64,7 @@ Execute on Mac/Linux/WSL:
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m playwright install chromium  # Required only when using local text-to-image rendering
 python main.py
 ```
 
@@ -71,6 +73,7 @@ Execute on Windows:
 ```bash
 .venv\Scripts\activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m playwright install chromium  # Required only when using local text-to-image rendering
 python main.py
 ```
 

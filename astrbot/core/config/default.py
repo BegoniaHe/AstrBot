@@ -237,8 +237,6 @@ DEFAULT_CONFIG = {
     "admins_id": ["astrbot"],
     "t2i": False,
     "t2i_word_threshold": 150,
-    "t2i_strategy": "remote",
-    "t2i_endpoint": "",
     "t2i_use_file_service": False,
     "t2i_active_template": "base",
     "http_proxy": "",
@@ -3035,13 +3033,6 @@ CONFIG_METADATA_2 = {
                 "type": "int",
                 "condition": {"trace_log_enable": True},
             },
-            "t2i_strategy": {
-                "type": "string",
-                "options": ["remote", "local"],
-            },
-            "t2i_endpoint": {
-                "type": "string",
-            },
             "t2i_use_file_service": {
                 "type": "bool",
             },
@@ -4189,33 +4180,21 @@ CONFIG_METADATA_3_SYSTEM = {
                 "description": "系统配置",
                 "type": "object",
                 "items": {
-                    "t2i_strategy": {
-                        "description": "文本转图像策略",
-                        "type": "string",
-                        "hint": "文本转图像策略。`remote` 为使用远程基于 HTML 的渲染服务，`local` 为使用 PIL 本地渲染。当使用 local 时，将 ttf 字体命名为 'font.ttf' 放在 data/ 目录下可自定义字体。",
-                        "options": ["remote", "local"],
-                    },
-                    "t2i_endpoint": {
-                        "description": "文本转图像服务 API 地址",
-                        "type": "string",
-                        "hint": "为空时使用 AstrBot API 服务",
-                        "condition": {
-                            "t2i_strategy": "remote",
-                        },
-                    },
                     "t2i_template": {
-                        "description": "文本转图像自定义模版",
+                        "description": "本地文转图模板",
                         "type": "bool",
-                        "hint": "启用后可自定义 HTML 模板用于文转图渲染。",
-                        "condition": {
-                            "t2i_strategy": "remote",
-                        },
+                        "hint": "管理本地 Playwright 渲染使用的 HTML 模板。",
                         "_special": "t2i_template",
+                    },
+                    "t2i_use_file_service": {
+                        "description": "通过文件服务公开本地文转图结果",
+                        "type": "bool",
+                        "hint": "启用后，文转图结果会优先注册为 AstrBot 文件 token URL。需要正确配置 callback_api_base。",
                     },
                     "t2i_active_template": {
                         "description": "当前应用的文转图渲染模板",
                         "type": "string",
-                        "hint": "此处的值由文转图模板管理页面进行维护。",
+                        "hint": "此处的值由本地文转图模板管理页面进行维护。",
                         "invisible": True,
                     },
                     "log_level": {

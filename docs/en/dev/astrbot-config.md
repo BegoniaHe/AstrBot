@@ -108,8 +108,6 @@ The default AstrBot configuration is as follows:
     "admins_id": ["astrbot"],
     "t2i": False,
     "t2i_word_threshold": 150,
-    "t2i_strategy": "remote",
-    "t2i_endpoint": "",
     "t2i_use_file_service": False,
     "t2i_active_template": "base",
     "http_proxy": "",
@@ -472,20 +470,11 @@ Whether to enable Text-to-Image (T2I) functionality. Default is `false`. When en
 
 Character threshold for T2I. Default is `150`. When a message exceeds this count, the bot renders it as an image.
 
-### `t2i_strategy`
-
-Rendering strategy for T2I. Options are `local` and `remote`. Default is `remote`.
-
-- `local`: Uses AstrBot's local T2I service for rendering. Lower quality but doesn't depend on external services.
-- `remote`: Uses a remote T2I service for rendering. Uses the official AstrBot service by default, which offers better quality.
-
-### `t2i_endpoint`
-
-AstrBot API address. Used for rendering Markdown images. Effective when `t2i_strategy` is `remote`. Default is empty, meaning the official AstrBot service is used.
-
 ### `t2i_use_file_service`
 
-Whether to enable the file service. Default is `false`. When enabled, the bot provides the rendered image as an external HTTP link to the message platform. This depends on the `callback_api_base` configuration.
+Whether to expose local rendered images through the file service. Default is `false`. When enabled, the bot provides rendered images as external HTTP links to the message platform. This depends on the `callback_api_base` configuration.
+
+Text-to-image rendering uses local Playwright Chromium. After installing from source or with `uv tool`, install the browser once with `astrbot install-browser`.
 
 ### `http_proxy`
 

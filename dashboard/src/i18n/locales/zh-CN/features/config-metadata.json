@@ -996,17 +996,13 @@
     "name": "系统配置",
     "system": {
       "description": "系统配置",
-      "t2i_strategy": {
-        "description": "文本转图像策略",
-        "hint": "文本转图像策略。`remote` 为使用远程基于 HTML 的渲染服务,`local` 为使用 PIL 本地渲染。当使用 local 时,将 ttf 字体命名为 'font.ttf' 放在 data/ 目录下可自定义字体。"
-      },
-      "t2i_endpoint": {
-        "description": "文本转图像服务 API 地址",
-        "hint": "为空时使用 AstrBot API 服务"
-      },
       "t2i_template": {
         "description": "文本转图像自定义模版",
         "hint": "启用后可自定义 HTML 模板用于文转图渲染。"
+      },
+      "t2i_use_file_service": {
+        "description": "通过文件服务公开本地文转图结果",
+        "hint": "启用后，文转图结果会优先注册为 AstrBot 文件 token URL。需要正确配置对外可达的回调接口地址。"
       },
       "t2i_active_template": {
         "description": "当前应用的文转图渲染模板",

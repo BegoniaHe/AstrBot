@@ -38,7 +38,9 @@ class TestStarBase:
 
         mock_context = MagicMock()
         mock_config = MagicMock()
-        mock_config.get.return_value = "default_template"
+        mock_config.get.side_effect = lambda key, default=None: {
+            "t2i_active_template": "default_template",
+        }.get(key, default)
         mock_context.get_config.return_value = mock_config
 
         class TestStar(Star):
@@ -51,15 +53,14 @@ class TestStarBase:
             "astrbot.core.star.base.html_renderer.render_t2i",
             new_callable=AsyncMock,
         ) as mock_render:
-            mock_render.return_value = "http://example.com/image.png"
-            result = await star.text_to_image("test text", return_url=True)
+            mock_render.return_value = "D:/temp/image.png"
+            result = await star.text_to_image("test text")
 
             mock_render.assert_called_once_with(
                 "test text",
-                return_url=True,
                 template_name="default_template",
             )
-            assert result == "http://example.com/image.png"
+            assert result == "D:/temp/image.png"
 
     @pytest.mark.asyncio
     async def test_text_to_image_without_config(self):
@@ -79,15 +80,14 @@ class TestStarBase:
             "astrbot.core.star.base.html_renderer.render_t2i",
             new_callable=AsyncMock,
         ) as mock_render:
-            mock_render.return_value = "http://example.com/image.png"
-            result = await star.text_to_image("test text", return_url=False)
+            mock_render.return_value = "D:/temp/image.png"
+            result = await star.text_to_image("test text")
 
             mock_render.assert_called_once_with(
                 "test text",
-                return_url=False,
                 template_name=None,
             )
-            assert result == "http://example.com/image.png"
+            assert result == "D:/temp/image.png"
 
     @pytest.mark.asyncio
     async def test_html_render(self):
@@ -95,6 +95,7 @@ class TestStarBase:
         from astrbot.core.star import Star
 
         mock_context = MagicMock()
+        mock_context.get_config.return_value = MagicMock()
 
         class TestStar(Star):
             name = "test_star"
@@ -106,20 +107,46 @@ class TestStarBase:
             "astrbot.core.star.base.html_renderer.render_custom_template",
             new_callable=AsyncMock,
         ) as mock_render:
-            mock_render.return_value = "http://example.com/rendered.png"
+            mock_render.return_value = "D:/temp/rendered.png"
+            result = await star.html_render("<html>{{ data }}</html>", {"data": "test"})
+
+            mock_render.assert_called_once_with(
+                "<html>{{ data }}</html>",
+                {"data": "test"},
+                options=None,
+            )
+            assert result == "D:/temp/rendered.png"
+
+    @pytest.mark.asyncio
+    async def test_html_render_passes_options(self):
+        from astrbot.core.star import Star
+
+        mock_context = MagicMock()
+        mock_context.get_config.return_value = MagicMock()
+
+        class TestStar(Star):
+            name = "test_star"
+            author = "test_author"
+
+        star = TestStar(context=mock_context)
+
+        with patch(
+            "astrbot.core.star.base.html_renderer.render_custom_template",
+            new_callable=AsyncMock,
+        ) as mock_render:
+            mock_render.return_value = "D:/temp/rendered.png"
             result = await star.html_render(
                 "<html>{{ data }}</html>",
                 {"data": "test"},
-                return_url=True,
+                options={"viewport_width": 1440},
             )
 
             mock_render.assert_called_once_with(
                 "<html>{{ data }}</html>",
                 {"data": "test"},
-                return_url=True,
-                options=None,
+                options={"viewport_width": 1440},
             )
-            assert result == "http://example.com/rendered.png"
+            assert result == "D:/temp/rendered.png"
 
     @pytest.mark.asyncio
     async def test_initialize_and_terminate(self):

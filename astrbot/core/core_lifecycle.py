@@ -404,6 +404,7 @@ class AstrBotCoreLifecycle:
         await self.provider_manager.terminate()
         await self.platform_manager.terminate()
         await self.kb_manager.terminate()
+        await html_renderer.terminate()
         self.dashboard_shutdown_event.set()
 
         # 再次遍历curr_tasks等待每个任务真正结束
@@ -428,6 +429,7 @@ class AstrBotCoreLifecycle:
         await self.provider_manager.terminate()
         await self.platform_manager.terminate()
         await self.kb_manager.terminate()
+        await html_renderer.terminate()
         self.dashboard_shutdown_event.set()
         threading.Thread(
             target=self.astrbot_updator._reboot,

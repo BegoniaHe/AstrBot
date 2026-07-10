@@ -108,8 +108,6 @@ AstrBot 默认配置如下：
     "admins_id": ["astrbot"],
     "t2i": False,
     "t2i_word_threshold": 150,
-    "t2i_strategy": "remote",
-    "t2i_endpoint": "",
     "t2i_use_file_service": False,
     "t2i_active_template": "base",
     "http_proxy": "",
@@ -472,20 +470,11 @@ Agent 最大步骤数限制。默认为 `30`。模型的每次工具调用算作
 
 文本转图像的字数阈值。默认为 `150`。当用户发送的消息超过此字数时，机器人会将消息渲染成图片发送给用户。
 
-### `t2i_strategy`
-
-文本转图像的渲染策略。可选值为 `local` 和 `remote`。默认为 `remote`。
-
-- `local`: 使用 AstrBot 本地的文本转图像服务进行渲染。效果较差，但不依赖外部服务。
-- `remote`: 使用远程的文本转图像服务进行渲染。默认使用 AstrBot 官方提供的服务，效果较好。
-
-### `t2i_endpoint`
-
-AstrBot API 的地址。用于渲染 Markdown 图片。当 `t2i_strategy` 为 `remote` 时生效。默认为空，表示使用 AstrBot 官方提供的服务。
-
 ### `t2i_use_file_service`
 
-是否启用文件服务。默认为 `false`。启用后，机器人会将渲染的图片以 HTTP 文件外链的形式提供给消息平台。此配置项依赖于 `callback_api_base` 的配置。
+是否通过文件服务公开本地渲染图片。默认为 `false`。启用后，机器人会将渲染的图片以 HTTP 文件外链的形式提供给消息平台。此配置项依赖于 `callback_api_base` 的配置。
+
+文本转图像使用本地 Playwright Chromium。通过源码或 `uv tool` 安装后，请执行一次 `astrbot install-browser` 安装浏览器。
 
 ### `http_proxy`
 

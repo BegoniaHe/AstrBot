@@ -746,9 +746,8 @@ const systemConfigGroups = computed(() => {
     ]),
     createGroup('tempStorage', ['temp_dir_max_size']),
     createGroup('t2iRendering', [
-      't2i_strategy',
-      't2i_endpoint',
       't2i_template',
+      't2i_use_file_service',
       't2i_active_template',
     ]),
   ].filter((group) => Object.keys(group.metadata[group.key].items).length > 0);
@@ -1147,7 +1146,7 @@ onUnmounted(() => {
 .settings-page {
   --settings-border: rgba(17, 24, 39, 0.13);
   --settings-divider: rgba(17, 24, 39, 0.09);
-  width: min(100%, 940px);
+  width: min(100%, 1120px);
   margin: 0 auto;
   padding: 36px 18px 48px;
 }
@@ -1330,7 +1329,7 @@ onUnmounted(() => {
   justify-content: flex-end;
   min-width: 0;
   width: 100%;
-  max-width: 270px;
+  max-width: 420px;
   justify-self: end;
 }
 
@@ -1450,7 +1449,13 @@ onUnmounted(() => {
 
 .system-config-group :deep(.config-input > *) {
   width: 100%;
-  max-width: 270px;
+}
+
+@media (min-width: 600px) {
+  .system-config-group :deep(.config-input) {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
 }
 
 .system-config-group :deep(.config-input .v-switch) {

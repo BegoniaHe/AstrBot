@@ -32,6 +32,7 @@ cd AstrBot
 
 ```bash
 uv sync
+uv run astrbot install-browser # 仅在使用本地文转图时需要执行一次
 uv run main.py
 ```
 
@@ -63,6 +64,7 @@ Mac/Linux/WSL 执行：
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m playwright install chromium # 仅在使用本地文转图时需要执行一次
 python main.py
 ```
 
@@ -71,6 +73,7 @@ Windows 执行:
 ```bash
 .venv\Scripts\activate
 python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m playwright install chromium # 仅在使用本地文转图时需要执行一次
 python main.py
 ```
 

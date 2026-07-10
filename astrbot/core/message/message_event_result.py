@@ -19,7 +19,7 @@ class MessageChain:
 
     Attributes:
         `chain` (list): 用于顺序存储各个组件。
-        `use_t2i_` (bool): 用于标记是否使用文本转图片服务。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用文本转图片服务。
+        `use_t2i_` (bool): 用于标记是否启用本地文本转图片渲染。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用本地文本转图片渲染。
 
     """
 
@@ -112,10 +112,10 @@ class MessageChain:
         return self
 
     def use_t2i(self, use_t2i: bool):
-        """设置是否使用文本转图片服务。
+        """设置是否使用文本转图片渲染。
 
         Args:
-            use_t2i (bool): 是否使用文本转图片服务。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用文本转图片服务。
+            use_t2i (bool): 是否使用文本转图片渲染。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用本地文本转图片渲染。
 
         """
         self.use_t2i_ = use_t2i
@@ -214,7 +214,7 @@ class MessageEventResult(MessageChain):
 
     Attributes:
         `chain` (list): 用于顺序存储各个组件。
-        `use_t2i_` (bool): 用于标记是否使用文本转图片服务。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用文本转图片服务。
+        `use_t2i_` (bool): 用于标记是否启用本地文本转图片渲染。默认为 None，即跟随用户的设置。当设置为 True 时，将会使用本地文本转图片渲染。
         `result_type` (EventResultType): 事件处理的结果类型。
 
     """

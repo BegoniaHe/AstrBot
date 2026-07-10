@@ -19,6 +19,7 @@ AstrBot 需要 Python 3.14 或更高版本。使用 `--python 3.14` 可以确保
 
 ```bash
 uv tool install astrbot --python 3.14
+astrbot install-browser # 仅在使用本地文转图时需要执行一次
 astrbot init # 只需要在第一次部署时执行，后续启动不需要执行
 astrbot run
 ```

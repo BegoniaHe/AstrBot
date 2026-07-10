@@ -699,12 +699,17 @@ class TestAstrBotCoreLifecycleStopAdditional:
 
         lifecycle.curr_tasks = []
 
-        await lifecycle.stop()
+        mock_html_renderer = MagicMock()
+        mock_html_renderer.terminate = AsyncMock()
+
+        with patch("astrbot.core.core_lifecycle.html_renderer", mock_html_renderer):
+            await lifecycle.stop()
 
         # Verify all managers were terminated
         lifecycle.provider_manager.terminate.assert_awaited_once()
         lifecycle.platform_manager.terminate.assert_awaited_once()
         lifecycle.kb_manager.terminate.assert_awaited_once()
+        mock_html_renderer.terminate.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_stop_handles_plugin_termination_error(
@@ -772,14 +777,20 @@ class TestAstrBotCoreLifecycleRestart:
         lifecycle.dashboard_shutdown_event = asyncio.Event()
 
         lifecycle.astrbot_updator = MagicMock()
+        mock_html_renderer = MagicMock()
+        mock_html_renderer.terminate = AsyncMock()
 
-        with patch("astrbot.core.core_lifecycle.threading.Thread") as mock_thread:
+        with (
+            patch("astrbot.core.core_lifecycle.threading.Thread") as mock_thread,
+            patch("astrbot.core.core_lifecycle.html_renderer", mock_html_renderer),
+        ):
             await lifecycle.restart()
 
             # Verify managers were terminated
             lifecycle.provider_manager.terminate.assert_awaited_once()
             lifecycle.platform_manager.terminate.assert_awaited_once()
             lifecycle.kb_manager.terminate.assert_awaited_once()
+            mock_html_renderer.terminate.assert_awaited_once()
 
             # Verify thread was started
             mock_thread.assert_called_once()
