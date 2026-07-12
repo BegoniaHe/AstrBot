@@ -643,9 +643,9 @@ function autoResize() {
     return;
   }
   el.style.height = 'auto';
-  el.style.setProperty("min-height", "0", "important");
+  el.style.setProperty('min-height', '0', 'important');
   const measuredHeight = el.scrollHeight;
-  el.style.removeProperty("min-height");
+  el.style.removeProperty('min-height');
   const computed = getComputedStyle(el);
   let lineHeight = parseFloat(computed.lineHeight);
   if (!Number.isFinite(lineHeight)) {

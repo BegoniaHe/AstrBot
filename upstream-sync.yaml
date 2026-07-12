@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: 12f2f5a09ce0e7b0535f5d0754567151b88942a7
-  synced_at_utc: 2026-07-09T16:32:29.5467001Z
+  commit: d0e5e68c55804bb99b40ab946dfb9d2b38fdbe1f
+  synced_at_utc: 2026-07-12T20:08:21.7340954Z
   sync_method: cherry-pick
-  source_pr: "9187, 9183"
-  note: "Cherry-picked upstream/master commits afb898e61fc7e8ba8cbe38f4858cde6bd3191914 and 12f2f5a09ce0e7b0535f5d0754567151b88942a7 for LINE webhook JSON parsing and safer result-decorate content cleanup filtering. No upstream commits in this range were skipped."
+  source_pr: "9205, 9202, 9200, 9197, 9170, 9201, 9213, 9215, 9209"
+  note: "Cherry-picked all nine upstream/master commits from 7422fb075c51f0b0432cc4be20de2e3c794c24a2 through d0e5e68c55804bb99b40ab946dfb9d2b38fdbe1f. Conflicts were adapted to the fork's typed dashboard and path-based API; no upstream commits were skipped."
