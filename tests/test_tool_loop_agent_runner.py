@@ -106,7 +106,7 @@ class LargeTextToolExecutor:
         self.text = text
 
     @classmethod
-    def from_text(cls, text: str) -> "LargeTextToolExecutor":
+    def from_text(cls, text: str) -> LargeTextToolExecutor:
         return cls(text)
 
     def execute(self, tool, run_context, **tool_args):

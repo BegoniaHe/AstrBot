@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -25,6 +26,8 @@ def _service() -> ChatService:
     service.conv_mgr = MagicMock()
     service.platform_history_mgr = MagicMock()
     service.running_convs = {}
+    service.chat_runs = {}
+    service.chat_runs_by_session = {}
     service.delete_threads_by_ids = AsyncMock()
     service.supported_imgs = ["jpg", "jpeg", "png", "gif", "webp"]
     return service
@@ -298,7 +301,7 @@ async def test_build_chat_stream_saves_plain_response_and_emits_saved_events(mon
     service = _service()
     queue = AsyncMock()
     queue.put = AsyncMock()
-    back_queue = object()
+    back_queue = asyncio.Queue()
     user_record = _history_record(
         1,
         {"type": "user", "message": [{"type": "plain", "text": "hi"}]},
@@ -350,7 +353,17 @@ async def test_build_chat_stream_saves_plain_response_and_emits_saved_events(mon
     async def fake_poll(_back_queue, _username):
         return next(results)
 
-    monkeypatch.setattr(chat_service_module, "poll_webchat_stream_result", fake_poll)
+    await back_queue.put(
+        {
+            "message_id": "mid-1",
+            "type": "plain",
+            "data": "hello",
+            "streaming": False,
+        }
+    )
+    await back_queue.put(
+        {"message_id": "mid-1", "type": "end", "data": "", "streaming": False}
+    )
     monkeypatch.setattr(chat_service_module.uuid, "uuid4", lambda: "mid-1")
 
     stream = await service.build_chat_stream(
@@ -407,7 +420,7 @@ async def test_build_chat_stream_collects_tool_call_refs_and_agent_stats_on_end(
     service = _service()
     queue = AsyncMock()
     queue.put = AsyncMock()
-    back_queue = object()
+    back_queue = asyncio.Queue()
     service.build_user_message_parts = AsyncMock(
         return_value=[{"type": "plain", "text": "ask"}]
     )
@@ -490,7 +503,42 @@ async def test_build_chat_stream_collects_tool_call_refs_and_agent_stats_on_end(
     async def fake_poll(_back_queue, _username):
         return next(results)
 
-    monkeypatch.setattr(chat_service_module, "poll_webchat_stream_result", fake_poll)
+    await back_queue.put(
+        {
+            "message_id": "mid-2",
+            "type": "plain",
+            "data": '{"id":"call-1","name":"web_search_baidu"}',
+            "streaming": True,
+            "chain_type": "tool_call",
+        }
+    )
+    await back_queue.put(
+        {
+            "message_id": "mid-2",
+            "type": "plain",
+            "data": (
+                '{"id":"call-1","result":"{\\"results\\":[{\\"index\\":\\"1\\",'
+                '\\"url\\":\\"https://example.com\\",\\"title\\":\\"Example\\",'
+                '\\"snippet\\":\\"Snippet\\"}]}","ts":123}'
+            ),
+            "streaming": True,
+            "chain_type": "tool_call_result",
+        }
+    )
+    await back_queue.put(
+        {"message_id": "mid-2", "type": "agent_stats", "data": '{"latency": 12}'}
+    )
+    await back_queue.put(
+        {
+            "message_id": "mid-2",
+            "type": "plain",
+            "data": "Answer <ref>1</ref>",
+            "streaming": True,
+        }
+    )
+    await back_queue.put(
+        {"message_id": "mid-2", "type": "end", "data": "", "streaming": True}
+    )
     monkeypatch.setattr(chat_service_module.uuid, "uuid4", lambda: "mid-2")
 
     try:
@@ -560,7 +608,7 @@ async def test_build_chat_stream_emits_attachment_saved_event_for_image(monkeypa
     service = _service()
     queue = AsyncMock()
     queue.put = AsyncMock()
-    back_queue = object()
+    back_queue = asyncio.Queue()
     user_record = _history_record(
         4,
         {"type": "user", "message": [{"type": "plain", "text": "upload"}]},
@@ -614,7 +662,17 @@ async def test_build_chat_stream_emits_attachment_saved_event_for_image(monkeypa
     async def fake_poll(_back_queue, _username):
         return next(results)
 
-    monkeypatch.setattr(chat_service_module, "poll_webchat_stream_result", fake_poll)
+    await back_queue.put(
+        {
+            "message_id": "mid-3",
+            "type": "image",
+            "data": "[IMAGE]photo.png",
+            "streaming": False,
+        }
+    )
+    await back_queue.put(
+        {"message_id": "mid-3", "type": "end", "data": "", "streaming": False}
+    )
     monkeypatch.setattr(chat_service_module.uuid, "uuid4", lambda: "mid-3")
 
     stream = await service.build_chat_stream(
@@ -623,7 +681,9 @@ async def test_build_chat_stream_emits_attachment_saved_event_for_image(monkeypa
     )
     events = await _collect(stream)
 
-    service.create_attachment_from_file.assert_awaited_once_with("photo.png", "image")
+    service.create_attachment_from_file.assert_awaited_once_with(
+        "photo.png", "image", display_name=None
+    )
     service.save_bot_message.assert_awaited_once_with(
         "session-3",
         [{"type": "image", "attachment_id": "att-1"}],
@@ -717,11 +777,14 @@ async def test_update_message_truncates_latest_turn_and_returns_regenerate_flag(
         ],
     )
     service.delete_threads_by_ids.assert_awaited_once_with(["thread-1"], "alice")
-    assert result == {
-        "message": {"id": 10, "content": edited_content},
-        "needs_regenerate": True,
-        "truncated_after_message": True,
+    assert result["message"] == {
+        "id": 10,
+        "content": edited_content,
+        "created_at": result["message"]["created_at"],
+        "updated_at": None,
     }
+    assert result["needs_regenerate"] is True
+    assert result["truncated_after_message"] is True
 
 
 @pytest.mark.asyncio
@@ -952,7 +1015,8 @@ async def test_get_session_includes_project_threads_and_running_state():
     result = await service.get_session("alice", "session-1")
 
     assert result["is_running"] is True
-    assert result["history"] == [{"id": 1, "content": {"type": "user", "message": []}}]
+    assert result["history"][0]["id"] == 1
+    assert result["history"][0]["content"] == {"type": "user", "message": []}
     assert result["project"] == {"project_id": "proj-1", "title": "Alpha", "emoji": "A"}
     assert result["threads"][0]["thread_id"] == "thread-1"
     service.platform_history_mgr.get.assert_awaited_once_with(
@@ -1043,7 +1107,8 @@ async def test_get_thread_returns_history_and_running_state():
 
     assert result["is_running"] is True
     assert result["thread"]["thread_id"] == "thread-1"
-    assert result["history"] == [{"id": 2, "content": {"type": "bot", "message": []}}]
+    assert result["history"][0]["id"] == 2
+    assert result["history"][0]["content"] == {"type": "bot", "message": []}
     service.platform_history_mgr.get.assert_awaited_once_with(
         platform_id="webchat_thread",
         user_id="thread-1",

@@ -809,7 +809,10 @@ const latestContextTokens = computed(() => {
 });
 const tokenUsageIndicator = computed(() => {
   const used = latestContextTokens.value;
-  const limit = contextLimit(currentTokenProvider.value, currentTokenMetadata.value);
+  const limit = contextLimit(
+    currentTokenProvider.value,
+    currentTokenMetadata.value,
+  );
   if (used <= 0 || limit <= 0) return null;
 
   const percent = (used / limit) * 100;

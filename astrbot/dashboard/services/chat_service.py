@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from starlette.datastructures import UploadFile
+
 from astrbot.core import logger, sp
 from astrbot.core.agent.message import get_checkpoint_id, is_checkpoint_message
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
@@ -30,6 +32,7 @@ from astrbot.core.utils.media_utils import (
     MEDIA_MIME_EXTENSIONS,
     detect_image_mime_type_async,
 )
+from astrbot.dashboard.upload_utils import save_upload_to_path
 
 SSE_HEARTBEAT = ": heartbeat\n\n"
 CHAT_RUN_SUBSCRIBER_QUEUE_SIZE = 256
@@ -243,7 +246,7 @@ def extract_web_search_refs(accumulated_text: str, accumulated_parts: list) -> d
                             "title": item.get("title"),
                             "snippet": item.get("snippet"),
                         }
-            except (json.JSONDecodeError, KeyError):
+            except json.JSONDecodeError, KeyError:
                 pass
 
     if not web_search_results:
@@ -335,8 +338,8 @@ def serialize_history_entry(history) -> dict:
     """
     return {
         **history.model_dump(),
-        "created_at": to_utc_isoformat(history.created_at),
-        "updated_at": to_utc_isoformat(history.updated_at),
+        "created_at": to_utc_isoformat(getattr(history, "created_at", None)),
+        "updated_at": to_utc_isoformat(getattr(history, "updated_at", None)),
     }
 
 
@@ -586,7 +589,7 @@ class ChatService:
     ) -> tuple[str, str | None]:
         return await self.resolve_attachment_file(attachment_id)
 
-    async def save_uploaded_file(self, file) -> dict:
+    async def save_uploaded_file(self, file: UploadFile) -> dict:
         filename = sanitize_upload_filename(file.filename)
         content_type = file.content_type or "application/octet-stream"
 
@@ -604,10 +607,10 @@ class ChatService:
         if not file_path.is_relative_to(attachments_dir):
             raise ChatServiceError("Invalid filename")
 
-        await file.save(str(file_path))
+        await save_upload_to_path(file, file_path)
         if attach_type == "image":
             detected_mime_type = await detect_image_mime_type_async(
-                file_path,
+                file_path.read_bytes(),
                 default_mime_type=None,
             )
             if detected_mime_type:
@@ -846,7 +849,7 @@ class ChatService:
                 while True:
                     try:
                         item = await asyncio.wait_for(subscriber.get(), timeout=1)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield SSE_HEARTBEAT
                         continue
                     if item is None:
@@ -950,7 +953,7 @@ class ChatService:
                 if chain_type == "agent_stats":
                     try:
                         run.agent_stats = json.loads(result_text)
-                    except (TypeError, json.JSONDecodeError):
+                    except TypeError, json.JSONDecodeError:
                         run.agent_stats = {}
                     pending_agent_stats = run.agent_stats
                     self._publish_chat_run(

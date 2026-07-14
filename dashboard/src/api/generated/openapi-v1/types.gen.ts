@@ -1810,14 +1810,20 @@ export type StopChatSessionResponses = {
 export type StopChatSessionResponse = StopChatSessionResponses[keyof StopChatSessionResponses];
 
 export type ResumeChatRunData = {
+    body?: never;
     path: {
         run_id: string;
     };
+    query?: never;
+    url: '/api/v1/chat/runs/{run_id}/stream';
 };
 
-export type ResumeChatRunResponse = (unknown);
-
-export type ResumeChatRunError = unknown;
+export type ResumeChatRunResponses = {
+    /**
+     * Resumed server-sent chat stream or an error envelope
+     */
+    200: unknown;
+};
 
 export type UpdateChatMessageData = {
     body: ChatMessagePatchRequest;

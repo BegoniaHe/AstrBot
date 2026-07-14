@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: d0e5e68c55804bb99b40ab946dfb9d2b38fdbe1f
-  synced_at_utc: 2026-07-12T20:08:21.7340954Z
+  commit: d98a296000e76ddcebf82f6a425cdb0af66afa0f
+  synced_at_utc: 2026-07-14T08:22:37.1075804Z
   sync_method: cherry-pick
-  source_pr: "9205, 9202, 9200, 9197, 9170, 9201, 9213, 9215, 9209"
-  note: "Cherry-picked all nine upstream/master commits from 7422fb075c51f0b0432cc4be20de2e3c794c24a2 through d0e5e68c55804bb99b40ab946dfb9d2b38fdbe1f. Conflicts were adapted to the fork's typed dashboard and path-based API; no upstream commits were skipped."
+  source_pr: "9255, 9259, 4532, 9273"
+  note: "Cherry-picked all four upstream/master commits from cc0ec5e5c5bb065dc63f3114f93ff4654122ae35 through d98a296000e76ddcebf82f6a425cdb0af66afa0f. Conflicts were adapted to the fork's modern typed dashboard and composition-based persona UI; no upstream commits were skipped."

@@ -631,14 +631,18 @@ async function handleImportFile(event: Event) {
       persona_id: personaId,
       system_prompt: imported.system_prompt,
       begin_dialogs: Array.isArray(imported.begin_dialogs)
-        ? imported.begin_dialogs.filter((item): item is string => typeof item === 'string')
+        ? imported.begin_dialogs.filter(
+            (item): item is string => typeof item === 'string',
+          )
         : [],
       tools: null,
       skills: null,
       folder_id: currentFolderId.value,
     });
     if (createResponse.data.status !== 'ok') {
-      throw new Error(createResponse.data.message || tm('messages.importError'));
+      throw new Error(
+        createResponse.data.message || tm('messages.importError'),
+      );
     }
     await personaStore.refreshCurrentFolder();
     if (personaId !== baseId) {

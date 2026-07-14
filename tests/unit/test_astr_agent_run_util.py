@@ -81,6 +81,42 @@ class FakeRunner:
         self._done = True
 
 
+@pytest.mark.asyncio
+async def test_run_agent_forwards_streaming_provider_error():
+    error_text = (
+        "LLM response error: model was not found or permission was denied"
+    )
+    runner = FakeRunner(
+        [
+            SimpleNamespace(
+                type="err",
+                data={"chain": MessageChain().message(error_text)},
+            )
+        ],
+        event=FakeEvent(),
+        streaming=True,
+    )
+
+    chains = [chain async for chain in util.run_agent(runner)]
+
+    assert len(chains) == 1
+    assert chains[0].get_plain_text() == error_text
+
+
+@pytest.mark.asyncio
+async def test_run_agent_replaces_malformed_streaming_provider_error():
+    runner = FakeRunner(
+        [SimpleNamespace(type="err", data={})],
+        event=FakeEvent(),
+        streaming=True,
+    )
+
+    chains = [chain async for chain in util.run_agent(runner)]
+
+    assert len(chains) == 1
+    assert chains[0].get_plain_text() == "Error occurred during AI execution."
+
+
 class MultiStepRunner(FakeRunner):
     def __init__(self, step_responses, *, event: FakeEvent, streaming: bool = False):
         super().__init__([], event=event, streaming=streaming)
@@ -1487,7 +1523,7 @@ async def test_run_live_agent_logs_runtime_error_and_cancels_pending_tasks(
     event = FakeEvent()
     runner = FakeRunner([], event=event)
     logger_error = MagicMock()
-    create_task_calls: list["_FakeTask"] = []
+    create_task_calls = []
 
     async def fake_feeder(*args, **kwargs):
         await asyncio.sleep(60)

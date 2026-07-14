@@ -203,7 +203,12 @@ function formatDate(dateString: string | undefined | null): string {
 }
 
 async function exportPersona() {
-  if (!(await askForConfirmationDialog(tm('messages.exportConfirm'), confirmDialog))) {
+  if (
+    !(await askForConfirmationDialog(
+      tm('messages.exportConfirm'),
+      confirmDialog,
+    ))
+  ) {
     return;
   }
 
@@ -226,11 +231,7 @@ async function exportPersona() {
     emit('export', tm('messages.exportSuccess'), false);
   } catch (error) {
     console.error('Failed to export persona:', error);
-    emit(
-      'export',
-      tm('messages.exportError', { error: String(error) }),
-      true,
-    );
+    emit('export', tm('messages.exportError', { error: String(error) }), true);
   }
 }
 </script>

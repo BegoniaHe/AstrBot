@@ -50,10 +50,15 @@ async def test_webchat_file_send_keeps_original_filename(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_webchat_llm_sources_emit_deduplicated_refs_payload(monkeypatch):
     queue = asyncio.Queue()
+
+    async def put_back_queue(_request_id, payload):
+        await queue.put(payload)
+        return True
+
     monkeypatch.setattr(
         webchat_event.webchat_queue_mgr,
-        "get_or_create_back_queue",
-        lambda *_args: queue,
+        "put_back_queue",
+        put_back_queue,
     )
 
     await webchat_event.WebChatMessageEvent._send(
