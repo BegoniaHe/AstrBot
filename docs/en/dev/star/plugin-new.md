@@ -28,7 +28,7 @@ Welcome to the AstrBot Plugin Development Guide! This section will guide you thr
 Clone both the AstrBot main project and the plugin repository you just created to your local machine.
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 mkdir -p AstrBot/data/plugins
 cd AstrBot/data/plugins
 git clone <your-plugin-repository-url>

@@ -12,14 +12,14 @@
 <br>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 </div>
 
 <br>
 
 <a href="https://astrbot.app/">Documentation</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">Issue Tracker</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">Issue Tracker</a> ｜
 <a href="mailto:community@astrbot.app">Email Support</a>
 
 </div>
@@ -91,7 +91,7 @@ uv tool upgrade astrbot --python 3.14
 This fork does not publish an official prebuilt image. Build and run from the compose files in this repository:
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 docker compose up -d --build
 ```
@@ -166,7 +166,7 @@ You can contribute by reviewing issues or helping with pull request reviews. Any
 AstrBot uses `ruff` for code formatting and linting.
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 uv sync --group dev
 corepack enable
@@ -204,8 +204,8 @@ pre-commit install
 
 Special thanks to all Contributors and plugin developers for their contributions to AstrBot ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 Additionally, the birth of this project would not have been possible without the help of the following open-source projects:

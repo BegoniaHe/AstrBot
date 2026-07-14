@@ -10,7 +10,7 @@ For this fork, the maintained Docker path is based on `compose-with-napcat.yml`.
 Clone the repository first:
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 

@@ -10,7 +10,7 @@
 <a href="./README_ru.md">Русский</a>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 </div>
 
@@ -18,7 +18,7 @@
 
 <a href="https://astrbot.app/">主页</a> ｜
 <a href="https://astrbot.app/">文档</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">问题提交</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">问题提交</a> ｜
 <a href="mailto:community@astrbot.app">Email</a>
 
 </div>
@@ -90,7 +90,7 @@ uv tool upgrade astrbot --python 3.14
 当前 fork 不提供官方预构建镜像，请直接使用仓库内的 Compose 文件本地构建并启动：
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 docker compose up -d --build
 ```
@@ -165,7 +165,7 @@ yay -S astrbot-git
 AstrBot 使用 `ruff` 进行代码格式化和检查。
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 uv sync --group dev
 corepack enable
@@ -203,8 +203,8 @@ pre-commit install
 
 特别感谢所有 Contributors 和插件开发者对 AstrBot 的贡献 ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 此外，本项目的诞生离不开以下开源项目的帮助：

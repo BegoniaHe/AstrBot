@@ -14,7 +14,7 @@
 ### 报告问题
 
 请在当前 fork 的仓库提交问题：
-<https://github.com/BegoniaHe/AstrBot/issues>
+<https://github.com/Xero-Team/AstrBot/issues>
 
 提交前请先确认是否已有相同问题，并尽量附上：
 
@@ -26,7 +26,7 @@
 ### 开发环境
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 uv sync --group dev
 corepack enable
@@ -91,7 +91,7 @@ This repository is a modernized AstrBot fork. Please follow these rules:
 ### Reporting Issues
 
 Please file issues in this fork:
-<https://github.com/BegoniaHe/AstrBot/issues>
+<https://github.com/Xero-Team/AstrBot/issues>
 
 Include:
 
@@ -103,7 +103,7 @@ Include:
 ### Development Setup
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 uv sync --group dev
 corepack enable

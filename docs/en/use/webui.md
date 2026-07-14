@@ -119,7 +119,7 @@ When AstrBot starts, it automatically checks if the admin panel needs updating. 
 
 Use the `/dashboard_update` command to manually update the admin panel (admin command).
 
-Admin panel files are located in the `data/dist` directory. If you need to replace them manually, download the dashboard ZIP asset from <https://github.com/BegoniaHe/AstrBot/releases/> and extract it into the `data` directory.
+Admin panel files are located in the `data/dist` directory. If you need to replace them manually, download the dashboard ZIP asset from <https://github.com/Xero-Team/AstrBot/releases/> and extract it into the `data` directory.
 
 ## Customizing WebUI Port
 

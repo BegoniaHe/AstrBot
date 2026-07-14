@@ -12,7 +12,7 @@ hero:
       link: /what-is-astrbot
     - theme: alt
       text: GitHub 仓库
-      link: https://github.com/BegoniaHe/AstrBot
+      link: https://github.com/Xero-Team/AstrBot
 
 features:
   - icon: ✨

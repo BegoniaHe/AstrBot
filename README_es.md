@@ -12,7 +12,7 @@
 <br>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 <a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%20plugins&label=Marketplace&cacheSeconds=3600">
@@ -23,7 +23,7 @@
 <a href="https://astrbot.app/">Documentación</a> ｜
 <a href="https://blog.astrbot.app/">Blog</a> ｜
 <a href="https://astrbot.featurebase.app/roadmap">Hoja de ruta</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">Registro de incidencias</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">Registro de incidencias</a> ｜
 <a href="mailto:community@astrbot.app">Soporte por correo</a>
 
 </div>
@@ -212,7 +212,7 @@ Puedes contribuir revisando issues o ayudando con la revisión de pull requests.
 AstrBot usa `ruff` para el formateo y linting de código.
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 pip install pre-commit
 pre-commit install
 ```
@@ -246,8 +246,8 @@ pre-commit install
 
 Un agradecimiento especial a todos los contribuidores y desarrolladores de plugins por sus contribuciones a AstrBot ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 Además, el nacimiento de este proyecto no habría sido posible sin la ayuda de los siguientes proyectos de código abierto:

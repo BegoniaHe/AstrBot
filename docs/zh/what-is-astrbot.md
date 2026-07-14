@@ -34,4 +34,4 @@ AstrBot 是一个开源的一站式 Agentic 个人和群聊助手，可在 QQ、
 ## 说明
 
 - AstrBot 是一个非盈利项目，由全世界热心开源贡献者维护，并受 [AGPL-v3](https://www.chinasona.org/gnu/agpl-3.0-cn.html) 开源许可证保护。如果您对 AstrBot 进行了修改并将其用于提供具有商业盈利性质的网络服务，您必须开源所做的修改。详细联系 [community@astrbot.app](mailto:community@astrbot.app)。
-- 使用此项目前，请务必阅读本项目的最终用户许可协议（EULA）：[最终用户许可协议](https://github.com/BegoniaHe/AstrBot/blob/master/EULA.md)。如果您不同意该协议的任何条款，请勿使用本项目。
+- 使用此项目前，请务必阅读本项目的最终用户许可协议（EULA）：[最终用户许可协议](https://github.com/Xero-Team/AstrBot/blob/master/EULA.md)。如果您不同意该协议的任何条款，请勿使用本项目。

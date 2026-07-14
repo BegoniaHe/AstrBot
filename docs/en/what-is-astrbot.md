@@ -28,4 +28,4 @@ This documentation is divided into the following sections:
 ## Notice
 
 1. AstrBot is a non-profit open-source project maintained by contributors worldwide and protected by the [AGPL-v3](https://www.chinasona.org/gnu/agpl-3.0-cn.html) license. If you modify AstrBot and use it to provide commercial network services, you must open-source your modifications. For details, contact [community@astrbot.app](mailto:community@astrbot.app).
-2. Before using this project, please read the End User License Agreement (EULA): [End User License Agreement](https://github.com/BegoniaHe/AstrBot/blob/master/EULA.md). If you do not agree to any terms of the agreement, do not use this project.
+2. Before using this project, please read the End User License Agreement (EULA): [End User License Agreement](https://github.com/Xero-Team/AstrBot/blob/master/EULA.md). If you do not agree to any terms of the agreement, do not use this project.

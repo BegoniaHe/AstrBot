@@ -12,7 +12,7 @@
 <br>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 <a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%E5%80%8B&label=%E6%8F%92%E4%BB%B6%E5%B8%82%E5%A0%B4&cacheSeconds=3600">
@@ -23,7 +23,7 @@
 <a href="https://astrbot.app/">文件</a> ｜
 <a href="https://blog.astrbot.app/">Blog</a> ｜
 <a href="https://astrbot.featurebase.app/roadmap">路線圖</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">問題回報</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">問題回報</a> ｜
 <a href="mailto:community@astrbot.app">Email</a>
 
 </div>
@@ -97,7 +97,7 @@ uv tool upgrade astrbot --python 3.14
 請優先使用目前倉庫內建的 Compose 檔案：
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 docker compose up -d
 ```
@@ -220,7 +220,7 @@ yay -S astrbot-git
 AstrBot 使用 `ruff` 進行程式碼格式化和檢查。
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 pip install pre-commit
 pre-commit install
 ```
@@ -251,8 +251,8 @@ pre-commit install
 
 特別感謝所有 Contributors 和外掛開發者對 AstrBot 的貢獻 ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 此外，本專案的誕生離不開以下開源專案的幫助：

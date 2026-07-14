@@ -86,4 +86,4 @@ After enabling, under Subscribe to bot events below, click Add Bot User Event an
 
 Enter the Slack workspace you just added, navigate to the channel where you want to use the bot, then @ mention the app you just created. Click the Add button in the message subsequently sent by Slackbot to add it to the workspace. Then, @ mention the app and type `/help`. If it responds successfully, the test is successful.
 
-If you have any questions, please [submit an Issue](https://github.com/BegoniaHe/AstrBot/issues).
+If you have any questions, please [submit an Issue](https://github.com/Xero-Team/AstrBot/issues).

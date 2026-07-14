@@ -4,7 +4,7 @@
 
 ### 当管理面板打开时遇到 404 错误
 
-在 [release](https://github.com/BegoniaHe/AstrBot/releases) 页面下载管理面板 ZIP 资源，解压到 `AstrBot/data` 下，然后重启 AstrBot。如果还不行，再尝试重启电脑。
+在 [release](https://github.com/Xero-Team/AstrBot/releases) 页面下载管理面板 ZIP 资源，解压到 `AstrBot/data` 下，然后重启 AstrBot。如果还不行，再尝试重启电脑。
 
 ### 首次登录的默认账号和随机密码
 

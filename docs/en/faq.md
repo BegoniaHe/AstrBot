@@ -4,7 +4,7 @@
 
 ### Encountering 404 Error When Opening the Dashboard
 
-Download the dashboard ZIP asset from the [release](https://github.com/BegoniaHe/AstrBot/releases) page, extract it into `AstrBot/data`, and then restart AstrBot. If it still does not work, try restarting your computer as well.
+Download the dashboard ZIP asset from the [release](https://github.com/Xero-Team/AstrBot/releases) page, extract it into `AstrBot/data`, and then restart AstrBot. If it still does not work, try restarting your computer as well.
 
 ### First Login Account and Random Password
 

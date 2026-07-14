@@ -10,7 +10,7 @@
 先克隆仓库：
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 

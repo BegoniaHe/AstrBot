@@ -1,7 +1,7 @@
 # user service
 [Unit]
 Description=AstrBot Service
-Documentation=https://github.com/BegoniaHe/AstrBot
+Documentation=https://github.com/Xero-Team/AstrBot
 After=network-online.target
 Wants=network-online.target
 

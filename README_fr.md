@@ -12,7 +12,7 @@
 <br>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 <a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%20&label=Marketplace&cacheSeconds=3600">
@@ -23,7 +23,7 @@
 <a href="https://astrbot.app/">Documentation</a> ｜
 <a href="https://blog.astrbot.app/">Blog</a> ｜
 <a href="https://astrbot.featurebase.app/roadmap">Feuille de route</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">Signaler un problème</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">Signaler un problème</a> ｜
 <a href="mailto:community@astrbot.app">Email Support</a>
 
 </div>
@@ -206,7 +206,7 @@ Vous pouvez contribuer en examinant les issues ou en aidant à la revue des pull
 AstrBot utilise `ruff` pour le formatage et le linting du code.
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 pip install pre-commit
 pre-commit install
 ```
@@ -237,8 +237,8 @@ pre-commit install
 
 Un grand merci à tous les contributeurs et développeurs de plugins pour leurs contributions à AstrBot ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 De plus, la naissance de ce projet n'aurait pas été possible sans l'aide des projets open source suivants :

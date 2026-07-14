@@ -10,9 +10,9 @@
 If you have `git` installed on your computer, you can download the source code with the following command:
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 # The above code will pull the latest commit of the source code, if you need to pull the latest stable release version of the source code, you can use the following command:
-# git clone --depth=1 --branch $(git ls-remote --tags --sort='-v:refname' https://github.com/BegoniaHe/AstrBot.git | head -n1 | awk -F/ '{print $3}') https://github.com/BegoniaHe/AstrBot.git
+# git clone --depth=1 --branch $(git ls-remote --tags --sort='-v:refname' https://github.com/Xero-Team/AstrBot.git | head -n1 | awk -F/ '{print $3}') https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 

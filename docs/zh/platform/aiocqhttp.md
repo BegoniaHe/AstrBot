@@ -74,7 +74,7 @@ AstrBot 支持接入所有适配了 OneBotv11 反向 Websockets（AstrBot 做服
 如果您希望直接使用当前仓库提供的一键联动方案，请优先使用仓库根目录的 `compose-with-napcat.yml`：
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose -f compose-with-napcat.yml up -d --build
 ```

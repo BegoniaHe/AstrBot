@@ -51,7 +51,7 @@ If after a few seconds you see `aiocqhttp adapter has been closed`, it means the
 If you want a repo-managed AstrBot + NapCat setup, use the `compose-with-napcat.yml` file shipped at this repository root:
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose -f compose-with-napcat.yml up -d --build
 ```

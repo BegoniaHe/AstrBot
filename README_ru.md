@@ -12,7 +12,7 @@
 <br>
 
 <div>
-<img src="https://img.shields.io/github/v/release/BegoniaHe/AstrBot?color=76bad9" href="https://github.com/BegoniaHe/AstrBot/releases/latest">
+<img src="https://img.shields.io/github/v/release/Xero-Team/AstrBot?color=76bad9" href="https://github.com/Xero-Team/AstrBot/releases/latest">
 <img src="https://img.shields.io/badge/python-3.14+-blue.svg" alt="python">
 <a href="https://hub.docker.com/r/soulter/astrbot"><img alt="Docker pull" src="https://img.shields.io/docker/pulls/soulter/astrbot.svg?color=76bad9"/></a>
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.soulter.top%2Fastrbot%2Fplugin-num&query=%24.result&suffix=%20&label=%D0%9C%D0%B0%D1%80%D0%BA%D0%B5%D1%82%D0%BF%D0%BB%D0%B5%D0%B9%D1%81&cacheSeconds=3600">
@@ -23,7 +23,7 @@
 <a href="https://astrbot.app/">Документация</a> ｜
 <a href="https://blog.astrbot.app/">Блог</a> ｜
 <a href="https://astrbot.featurebase.app/roadmap">Дорожная карта</a> ｜
-<a href="https://github.com/BegoniaHe/AstrBot/issues">Сообщить о проблеме</a> ｜
+<a href="https://github.com/Xero-Team/AstrBot/issues">Сообщить о проблеме</a> ｜
 <a href="mailto:community@astrbot.app">Email Support</a>
 
 </div>
@@ -206,7 +206,7 @@ Issues и Pull Request всегда приветствуются! Не стес�
 AstrBot использует `ruff` для форматирования и линтинга кода.
 
 ```bash
-git clone https://github.com/BegoniaHe/AstrBot.git
+git clone https://github.com/Xero-Team/AstrBot.git
 pip install pre-commit
 pre-commit install
 ```
@@ -237,8 +237,8 @@ pre-commit install
 
 Особая благодарность всем контрибьюторам и разработчикам плагинов за их вклад в AstrBot ❤️
 
-<a href="https://github.com/BegoniaHe/AstrBot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=BegoniaHe/AstrBot&max=300&columns=15" />
+<a href="https://github.com/Xero-Team/AstrBot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Xero-Team/AstrBot&max=300&columns=15" />
 </a>
 
 Кроме того, рождение этого проекта было бы невозможно без помощи следующих проектов с открытым исходным кодом:
