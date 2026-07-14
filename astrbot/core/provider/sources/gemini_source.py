@@ -854,10 +854,10 @@ class ProviderGoogleGenAI(Provider):
         # tool calls result
         if tool_calls_result:
             if not isinstance(tool_calls_result, list):
-                context_query.extend(tool_calls_result.to_openai_messages())
+                context_query.extend(tool_calls_result.to_messages())
             else:
                 for tcr in tool_calls_result:
-                    context_query.extend(tcr.to_openai_messages())
+                    context_query.extend(tcr.to_messages())
 
         model = model or self.get_model()
 
@@ -921,10 +921,10 @@ class ProviderGoogleGenAI(Provider):
         # tool calls result
         if tool_calls_result:
             if not isinstance(tool_calls_result, list):
-                context_query.extend(tool_calls_result.to_openai_messages())
+                context_query.extend(tool_calls_result.to_messages())
             else:
                 for tcr in tool_calls_result:
-                    context_query.extend(tcr.to_openai_messages())
+                    context_query.extend(tcr.to_messages())
 
         model = model or self.get_model()
 

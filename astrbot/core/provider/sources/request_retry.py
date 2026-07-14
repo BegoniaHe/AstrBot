@@ -42,6 +42,15 @@ def _is_retryable_provider_request_error(
     *,
     retry_rate_limits: bool,
 ) -> bool:
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        error_data = body.get("error", body)
+        if isinstance(error_data, dict) and error_data.get("code") in {
+            "invalid_request",
+            "invalid_parameter",
+        }:
+            return False
+
     if is_connection_error(error):
         return True
 

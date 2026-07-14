@@ -84,6 +84,12 @@ export function getProviderDescription(
 ): string {
   const type = template.type ?? '';
 
+  if (type === 'openai_chat_completions') {
+    return tm('providers.description.openai_chat_completions');
+  }
+  if (type === 'openai_responses') {
+    return tm('providers.description.openai_responses');
+  }
   if (name === 'OpenAI') {
     return tm('providers.description.openai', { type });
   }

@@ -1243,6 +1243,22 @@ class ProviderConfigService:
         return value if isinstance(value, str) and value else None
 
     def _ensure_provider_type(self, config: dict) -> dict:
+        if config.get("type") == "openai_responses" and isinstance(
+            config.get("web_search"), dict
+        ):
+            supported_web_search_fields = {
+                "enable",
+                "search_context_size",
+                "allowed_domains",
+                "include_sources",
+                "include_raw_results",
+                "user_location",
+            }
+            config["web_search"] = {
+                key: value
+                for key, value in config["web_search"].items()
+                if key in supported_web_search_fields
+            }
         provider_type = config.get("provider_type")
         if isinstance(provider_type, str) and provider_type:
             return config

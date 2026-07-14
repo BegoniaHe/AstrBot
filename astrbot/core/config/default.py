@@ -1149,15 +1149,39 @@ CONFIG_METADATA_2 = {
                 "type": "list",
                 # provider sources templates
                 "config_template": {
-                    "OpenAI Compatible": {
-                        "id": "openai",
+                    "OpenAI Chat Completions": {
+                        "id": "openai_chat_completions",
                         "provider": "openai",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
                         "api_base": "https://api.openai.com/v1",
                         "timeout": 120,
+                        "proxy": "",
+                        "custom_headers": {},
+                    },
+                    "OpenAI Responses": {
+                        "id": "openai_responses",
+                        "provider": "openai",
+                        "type": "openai_responses",
+                        "provider_type": "chat_completion",
+                        "enable": True,
+                        "key": [],
+                        "api_base": "https://api.openai.com/v1",
+                        "timeout": 120,
+                        "responses_state_mode": "stateless",
+                        "store": False,
+                        "responses_background": False,
+                        "responses_background_poll_interval": 1,
+                        "responses_background_timeout": 600,
+                        "web_search": {
+                            "enable": False,
+                            "search_context_size": "medium",
+                            "allowed_domains": [],
+                            "include_sources": True,
+                            "include_raw_results": False,
+                        },
                         "proxy": "",
                         "custom_headers": {},
                     },
@@ -1212,7 +1236,7 @@ CONFIG_METADATA_2 = {
                     "Moonshot": {
                         "id": "moonshot",
                         "provider": "moonshot",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1224,7 +1248,7 @@ CONFIG_METADATA_2 = {
                     "MiniMax": {
                         "id": "minimax",
                         "provider": "minimax",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1287,7 +1311,7 @@ CONFIG_METADATA_2 = {
                     "DeepSeek": {
                         "id": "deepseek",
                         "provider": "deepseek",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1347,7 +1371,7 @@ CONFIG_METADATA_2 = {
                     "NVIDIA": {
                         "id": "nvidia",
                         "provider": "nvidia",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1359,7 +1383,7 @@ CONFIG_METADATA_2 = {
                     "Azure OpenAI": {
                         "id": "azure_openai",
                         "provider": "azure",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "api_version": "2024-05-01-preview",
@@ -1372,7 +1396,7 @@ CONFIG_METADATA_2 = {
                     "Ollama": {
                         "id": "ollama",
                         "provider": "ollama",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": ["ollama"],  # ollama 的 key 默认是 ollama
@@ -1384,7 +1408,7 @@ CONFIG_METADATA_2 = {
                     "LM Studio": {
                         "id": "lm_studio",
                         "provider": "lm_studio",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": ["lmstudio"],
@@ -1395,7 +1419,7 @@ CONFIG_METADATA_2 = {
                     "Gemini_OpenAI_API": {
                         "id": "google_gemini_openai",
                         "provider": "google",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1419,7 +1443,7 @@ CONFIG_METADATA_2 = {
                     "302.AI": {
                         "id": "302ai",
                         "provider": "302ai",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1431,7 +1455,7 @@ CONFIG_METADATA_2 = {
                     "SiliconFlow": {
                         "id": "siliconflow",
                         "provider": "siliconflow",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1443,7 +1467,7 @@ CONFIG_METADATA_2 = {
                     "PPIO": {
                         "id": "ppio",
                         "provider": "ppio",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1455,7 +1479,7 @@ CONFIG_METADATA_2 = {
                     "TokenPony": {
                         "id": "tokenpony",
                         "provider": "tokenpony",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1467,7 +1491,7 @@ CONFIG_METADATA_2 = {
                     "Compshare": {
                         "id": "compshare",
                         "provider": "compshare",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1479,7 +1503,7 @@ CONFIG_METADATA_2 = {
                     "ModelScope": {
                         "id": "modelscope",
                         "provider": "modelscope",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -1556,7 +1580,7 @@ CONFIG_METADATA_2 = {
                     "FastGPT": {
                         "id": "fastgpt",
                         "provider": "fastgpt",
-                        "type": "openai_chat_completion",
+                        "type": "openai_chat_completions",
                         "provider_type": "chat_completion",
                         "enable": True,
                         "key": [],
@@ -2070,6 +2094,70 @@ CONFIG_METADATA_2 = {
                                 "hint": "生成的最大词元（Tokens）数。",
                                 "type": "int",
                                 "default": 8192,
+                            },
+                        },
+                    },
+                    "responses_state_mode": {
+                        "description": "Responses 会话状态模式",
+                        "type": "string",
+                        "options": [
+                            "stateless",
+                            "previous_response_id",
+                            "conversation",
+                        ],
+                        "labels": [
+                            "无状态（本地重放）",
+                            "Previous response ID",
+                            "OpenAI Conversation",
+                        ],
+                        "hint": "无状态不会保存远程会话；后两项会在 OpenAI 保存状态。",
+                        "condition": {"type": "openai_responses"},
+                    },
+                    "store": {
+                        "description": "存储 Responses 状态",
+                        "type": "bool",
+                        "hint": "previous_response_id、conversation 和 background 必须启用。",
+                        "condition": {"type": "openai_responses"},
+                    },
+                    "responses_background": {
+                        "description": "Responses 后台模式",
+                        "type": "bool",
+                        "hint": "需要 store=true，且不能与 stateless 模式同时使用。",
+                        "condition": {"type": "openai_responses"},
+                    },
+                    "responses_background_poll_interval": {
+                        "description": "后台轮询间隔（秒）",
+                        "type": "float",
+                        "condition": {"type": "openai_responses"},
+                    },
+                    "responses_background_timeout": {
+                        "description": "后台超时（秒）",
+                        "type": "int",
+                        "condition": {"type": "openai_responses"},
+                    },
+                    "web_search": {
+                        "description": "OpenAI 原生 Web Search",
+                        "type": "object",
+                        "condition": {"type": "openai_responses"},
+                        "items": {
+                            "enable": {"description": "启用", "type": "bool"},
+                            "search_context_size": {
+                                "description": "搜索上下文大小",
+                                "type": "string",
+                                "options": ["low", "medium", "high"],
+                            },
+                            "allowed_domains": {
+                                "description": "允许域名",
+                                "type": "list",
+                                "items": {"type": "string"},
+                            },
+                            "include_sources": {
+                                "description": "返回完整来源",
+                                "type": "bool",
+                            },
+                            "include_raw_results": {
+                                "description": "返回原始搜索结果",
+                                "type": "bool",
                             },
                         },
                     },

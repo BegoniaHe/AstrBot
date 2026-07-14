@@ -437,6 +437,13 @@ class OpenApiService:
                         pass
                     continue
 
+                if msg_type == "refs":
+                    native_refs = result.get("data")
+                    if isinstance(native_refs, dict):
+                        refs = native_refs
+                    await send_json(result)
+                    continue
+
                 await send_json(result)
 
                 if msg_type == "plain":
@@ -470,10 +477,23 @@ class OpenApiService:
                         message_parts_to_save
                     )
                     try:
-                        refs = chat_bridge.extract_web_search_refs(
+                        extracted_refs = chat_bridge.extract_web_search_refs(
                             plain_text,
                             message_parts_to_save,
                         )
+                        if refs.get("used"):
+                            existing = {
+                                item.get("url")
+                                for item in extracted_refs.get("used", [])
+                                if isinstance(item, dict)
+                            }
+                            extracted_refs.setdefault("used", []).extend(
+                                item
+                                for item in refs["used"]
+                                if isinstance(item, dict)
+                                and item.get("url") not in existing
+                            )
+                        refs = extracted_refs
                     except Exception as exc:
                         logger.exception(
                             f"Open API WS failed to extract web search refs: {exc}",

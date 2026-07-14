@@ -2,7 +2,7 @@
   "provider": [
     {
       "id": "test-openai",
-      "type": "openai_chat_completion",
+      "type": "openai_chat_completions",
       "model": "gpt-4o-mini",
       "key": ["test-key"]
     }

@@ -21,6 +21,8 @@
     },
     "description": {
       "openai": "Поддерживаются все провайдеры, совместимые с OpenAI API.",
+      "openai_chat_completions": "Совместим с сервисами OpenAI /chat/completions.",
+      "openai_responses": "OpenAI /responses с нативными инструментами, состоянием и веб‑поиском.",
       "kimi_code": "Специальная интеграция Kimi CodingPlan / Kimi Code с отдельной совместимой адаптацией Anthropic API.",
       "vllm_rerank": "Также поддерживает Jina AI, Cohere, PPIO и другие.",
       "default": "Преобразование речи в текст"
@@ -103,6 +105,7 @@
     "fetchModels": "Загрузить список моделей",
     "saveSuccess": "Источник успешно сохранен",
     "saveError": "Ошибка сохранения источника",
+    "responsesBackgroundConflict": "Фоновый режим Responses требует store=true и режима состояния, отличного от stateless.",
     "deleteConfirm": "Вы уверены, что хотите удалить источник «{id}»? Все связанные конфигурации моделей будут удалены.",
     "deleteSuccess": "Источник удален",
     "deleteError": "Ошибка удаления",

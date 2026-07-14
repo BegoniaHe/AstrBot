@@ -10,6 +10,14 @@ class EmptyModelOutputError(AstrBotError):
     """Raised when the model response contains no usable assistant output."""
 
 
+class ProviderResponseError(AstrBotError):
+    """Raised when an upstream provider returns a terminal error response."""
+
+
+class MalformedToolCallError(ProviderResponseError):
+    """Raised when a provider returns a function call with invalid JSON arguments."""
+
+
 class KnowledgeBaseUploadError(AstrBotError):
     """Raised when knowledge base upload fails with a user-facing message."""
 

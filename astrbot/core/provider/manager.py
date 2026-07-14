@@ -362,9 +362,13 @@ class ProviderManager:
             ImportError: 如果提供商类型未知或无法导入对应模块，则抛出异常。
         """
         match type:
-            case "openai_chat_completion":
-                from .sources.openai_source import (
-                    ProviderOpenAIOfficial as ProviderOpenAIOfficial,
+            case "openai_chat_completions":
+                from .sources.openai_chat_completions_source import (
+                    ProviderOpenAIChatCompletions as ProviderOpenAIChatCompletions,
+                )
+            case "openai_responses":
+                from .sources.openai_responses_source import (
+                    ProviderOpenAIResponses as ProviderOpenAIResponses,
                 )
             case "longcat_chat_completion":
                 from .sources.longcat_source import ProviderLongCat as ProviderLongCat

@@ -783,10 +783,10 @@ class ProviderAnthropic(Provider):
         # tool calls result
         if tool_calls_result:
             if not isinstance(tool_calls_result, list):
-                context_query.extend(tool_calls_result.to_openai_messages())
+                context_query.extend(tool_calls_result.to_messages())
             else:
                 for tool_call_result in tool_calls_result:
-                    context_query.extend(tool_call_result.to_openai_messages())
+                    context_query.extend(tool_call_result.to_messages())
 
         system_prompt, new_messages = self._prepare_payload(context_query)
 
@@ -857,10 +857,10 @@ class ProviderAnthropic(Provider):
         # tool calls result
         if tool_calls_result:
             if not isinstance(tool_calls_result, list):
-                context_query.extend(tool_calls_result.to_openai_messages())
+                context_query.extend(tool_calls_result.to_messages())
             else:
                 for tool_call_result in tool_calls_result:
-                    context_query.extend(tool_call_result.to_openai_messages())
+                    context_query.extend(tool_call_result.to_messages())
 
         system_prompt, new_messages = self._prepare_payload(context_query)
 

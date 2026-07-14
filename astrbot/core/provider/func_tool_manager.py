@@ -948,13 +948,19 @@ class FunctionToolManager:
             )
             self._timeout_mismatch_warned = True
 
-    def openai_schema(self, omit_empty_parameter_field=False) -> list:
+    def openai_chat_completions_schema(self, omit_empty_parameter_field=False) -> list:
         """获得 OpenAI API 风格的**已经激活**的工具描述"""
         tools = [f for f in self.func_list if f.active]
         toolset = ToolSet(tools)
-        return toolset.openai_schema(
+        return toolset.openai_chat_completions_schema(
             omit_empty_parameter_field=omit_empty_parameter_field,
         )
+
+    def openai_responses_schema(self) -> list:
+        """Return active tools in the OpenAI Responses format."""
+        return ToolSet(
+            [f for f in self.func_list if f.active]
+        ).openai_responses_schema()
 
     def anthropic_schema(self) -> list:
         """获得 Anthropic API 风格的**已经激活**的工具描述"""

@@ -1,11 +1,11 @@
 from ..register import register_provider_adapter
-from .openai_source import ProviderOpenAIOfficial
+from .openai_chat_completions_source import ProviderOpenAIChatCompletions
 
 
 @register_provider_adapter(
     "longcat_chat_completion", "LongCat Chat Completion Provider Adapter"
 )
-class ProviderLongCat(ProviderOpenAIOfficial):
+class ProviderLongCat(ProviderOpenAIChatCompletions):
     def __init__(
         self,
         provider_config: dict,

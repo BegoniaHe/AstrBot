@@ -1249,6 +1249,48 @@
           }
         }
       },
+      "responses_state_mode": {
+        "description": "Responses state mode",
+        "hint": "Choose stateless replay, previous response ID, or an OpenAI Conversation.",
+        "labels": [
+          "Stateless (local replay)",
+          "Previous response ID",
+          "OpenAI Conversation"
+        ]
+      },
+      "store": {
+        "description": "Store Responses state",
+        "hint": "Required for previous_response_id, conversation, and background mode."
+      },
+      "responses_background": {
+        "description": "Responses background mode",
+        "hint": "Requires stored state and cannot be used with stateless mode."
+      },
+      "responses_background_poll_interval": {
+        "description": "Background poll interval (seconds)"
+      },
+      "responses_background_timeout": {
+        "description": "Background timeout (seconds)"
+      },
+      "web_search": {
+        "description": "OpenAI native web search",
+        "hint": "Configure the Responses web_search tool and returned citations.",
+        "enable": {
+          "description": "Enable"
+        },
+        "search_context_size": {
+          "description": "Search context size"
+        },
+        "allowed_domains": {
+          "description": "Allowed domains"
+        },
+        "include_sources": {
+          "description": "Include source details"
+        },
+        "include_raw_results": {
+          "description": "Include raw search results"
+        }
+      },
       "gpt_weights_path": {
         "description": "GPT model file path",
         "hint": "The .ckpt file. Use an absolute path without quotes. Leave empty to use the GPT_SoVITS built-in SoVITS model (recommended to change defaults in GPT_SoVITS)."

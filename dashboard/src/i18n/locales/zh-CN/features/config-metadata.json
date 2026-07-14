@@ -1245,6 +1245,44 @@
           }
         }
       },
+      "responses_state_mode": {
+        "description": "Responses 会话状态模式",
+        "hint": "可选择无状态重放、上一响应 ID 或 OpenAI Conversation。",
+        "labels": ["无状态（本地重放）", "上一响应 ID", "OpenAI Conversation"]
+      },
+      "store": {
+        "description": "存储 Responses 状态",
+        "hint": "previous_response_id、conversation 和后台模式必须启用。"
+      },
+      "responses_background": {
+        "description": "Responses 后台模式",
+        "hint": "需要保存状态，不能与无状态模式同时使用。"
+      },
+      "responses_background_poll_interval": {
+        "description": "后台轮询间隔（秒）"
+      },
+      "responses_background_timeout": {
+        "description": "后台超时（秒）"
+      },
+      "web_search": {
+        "description": "OpenAI 原生 Web Search",
+        "hint": "配置 Responses web_search 工具及返回的引用。",
+        "enable": {
+          "description": "启用"
+        },
+        "search_context_size": {
+          "description": "搜索上下文大小"
+        },
+        "allowed_domains": {
+          "description": "允许域名"
+        },
+        "include_sources": {
+          "description": "返回完整来源"
+        },
+        "include_raw_results": {
+          "description": "返回原始搜索结果"
+        }
+      },
       "gpt_weights_path": {
         "description": "GPT模型文件路径",
         "hint": "即“.ckpt”后缀的文件，请使用绝对路径，路径两端不要带双引号，不填则默认用GPT_SoVITS内置的SoVITS模型(建议直接在GPT_SoVITS中改默认模型)"

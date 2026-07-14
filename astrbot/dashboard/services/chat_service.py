@@ -778,6 +778,18 @@ class ChatService:
                         plain_text,
                         message_parts_to_save,
                     )
+                    if refs.get("used"):
+                        existing = {
+                            item.get("url")
+                            for item in extracted_refs.get("used", [])
+                            if isinstance(item, dict)
+                        }
+                        extracted_refs.setdefault("used", []).extend(
+                            item
+                            for item in refs["used"]
+                            if isinstance(item, dict)
+                            and item.get("url") not in existing
+                        )
                 except Exception as e:
                     logger.exception(
                         f"Failed to extract web search refs: {e}",
@@ -863,6 +875,14 @@ class ChatService:
                             }
                             yield f"data: {json.dumps(stats_info, ensure_ascii=False)}\n\n"
                             agent_stats = stats_info["data"]
+                            continue
+
+                        if msg_type == "refs":
+                            native_refs = result.get("data")
+                            if isinstance(native_refs, dict):
+                                refs = native_refs
+                            if not client_disconnected:
+                                yield f"data: {json.dumps(result, ensure_ascii=False)}\n\n"
                             continue
 
                         try:

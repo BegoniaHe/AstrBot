@@ -1,0 +1,560 @@
+import asyncio
+from types import SimpleNamespace
+
+import pytest
+
+import astrbot.core.provider.sources.openai_responses_source as openai_responses_module
+from astrbot.core.agent.message import ProviderMessageState
+from astrbot.core.agent.tool import FunctionTool, ToolSet
+from astrbot.core.exceptions import ProviderResponseError
+from astrbot.core.provider.sources.openai_responses_source import (
+    ProviderOpenAIResponses,
+)
+
+
+def _provider() -> ProviderOpenAIResponses:
+    provider = ProviderOpenAIResponses.__new__(ProviderOpenAIResponses)
+    provider.provider_config = {
+        "id": "responses",
+        "responses_state_mode": "stateless",
+        "store": False,
+    }
+    provider.model_name = "gpt-test"
+    return provider
+
+
+def test_responses_provider_is_direct_provider_subclass():
+    from astrbot.core.provider.provider import Provider
+
+    assert ProviderOpenAIResponses.__bases__ == (Provider,)
+
+
+def test_null_api_version_uses_regular_openai_client(monkeypatch):
+    created = []
+
+    def regular_client(**kwargs):
+        created.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(openai_responses_module, "AsyncOpenAI", regular_client)
+    monkeypatch.setattr(
+        openai_responses_module,
+        "AsyncAzureOpenAI",
+        lambda **_kwargs: pytest.fail("null api_version must not select Azure"),
+    )
+    monkeypatch.setattr(
+        openai_responses_module,
+        "create_proxy_client",
+        lambda *_args, **_kwargs: SimpleNamespace(),
+    )
+
+    ProviderOpenAIResponses(
+        {
+            "id": "responses",
+            "type": "openai_responses",
+            "model": "gpt-test",
+            "key": ["test-key"],
+            "api_version": None,
+        },
+        {},
+    )
+
+    assert created[0]["base_url"] is None
+
+
+def test_responses_tools_preserve_plugin_schema():
+    tool = FunctionTool(
+        name="weather",
+        description="Weather",
+        parameters={"type": "object", "properties": {"city": {"type": "string"}}},
+        handler=None,
+    )
+    schema = ToolSet([tool]).openai_responses_schema()
+    assert schema == [
+        {
+            "type": "function",
+            "name": "weather",
+            "description": "Weather",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+            },
+        }
+    ]
+
+
+def test_responses_schema_preserves_nested_optional_fields():
+    tool = FunctionTool(
+        name="send_message_to_user",
+        description="Send messages",
+        parameters={
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string"},
+                            "channel": {"type": "string"},
+                        },
+                    },
+                }
+            },
+        },
+        handler=None,
+    )
+
+    schema = ToolSet([tool]).openai_responses_schema()[0]
+
+    assert schema["parameters"] == {
+        "type": "object",
+        "properties": {
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "channel": {"type": "string"},
+                    },
+                },
+            }
+        },
+    }
+
+
+def test_responses_schema_keeps_free_form_object_schema():
+    tool = FunctionTool(
+        name="shell",
+        description="Run shell",
+        parameters={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                }
+            },
+        },
+        handler=None,
+    )
+
+    schema = ToolSet([tool]).openai_responses_schema()[0]
+
+    assert "strict" not in schema
+    assert "required" not in schema["parameters"]
+    assert schema["parameters"]["properties"]["environment"][
+        "additionalProperties"
+    ] == {"type": "string"}
+
+
+def test_native_web_search_uses_only_current_responses_tool_fields():
+    provider = _provider()
+    provider.provider_config["web_search"] = {
+        "enable": True,
+        "search_context_size": "high",
+        "allowed_domains": ["example.com"],
+        "user_location": {"type": "approximate", "country": "US"},
+        "include_sources": True,
+        "include_raw_results": True,
+    }
+
+    tools = provider._tools(None)
+    options = provider._request_options(
+        model="gpt-test",
+        items=[],
+        instructions="",
+        func_tool=None,
+        tool_choice="auto",
+        extra={},
+    )
+
+    assert tools == [
+        {
+            "type": "web_search",
+            "search_context_size": "high",
+            "filters": {"allowed_domains": ["example.com"]},
+            "user_location": {"type": "approximate", "country": "US"},
+        }
+    ]
+    assert options["include"] == [
+        "reasoning.encrypted_content",
+        "web_search_call.action.sources",
+        "web_search_call.results",
+    ]
+
+
+def test_responses_omits_boolean_reasoning_capability_but_keeps_reasoning_object():
+    provider = _provider()
+    provider.provider_config["reasoning"] = True
+
+    options = provider._request_options(
+        model="gpt-test",
+        items=[],
+        instructions="",
+        func_tool=None,
+        tool_choice="auto",
+        extra={},
+    )
+
+    assert "reasoning" not in options
+
+    provider.provider_config["reasoning"] = {"effort": "medium"}
+    options = provider._request_options(
+        model="gpt-test",
+        items=[],
+        instructions="",
+        func_tool=None,
+        tool_choice="auto",
+        extra={},
+    )
+
+    assert options["reasoning"] == {"effort": "medium"}
+
+
+def test_parse_responses_output_tools_usage_and_citations():
+    provider = _provider()
+    response = SimpleNamespace(
+        id="resp_1",
+        model="gpt-test",
+        status="completed",
+        incomplete_details=None,
+        usage=SimpleNamespace(
+            input_tokens=10,
+            output_tokens=4,
+            input_tokens_details=SimpleNamespace(cached_tokens=3),
+        ),
+        output=[
+            SimpleNamespace(
+                type="message",
+                content=[
+                    SimpleNamespace(
+                        type="output_text",
+                        text="hello",
+                        annotations=[
+                            SimpleNamespace(
+                                type="url_citation",
+                                url="https://example.com",
+                                title="Example",
+                                start_index=0,
+                                end_index=5,
+                            )
+                        ],
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                type="function_call",
+                call_id="call_1",
+                name="weather",
+                arguments='{"city":"Paris"}',
+                content=[],
+            ),
+            SimpleNamespace(
+                type="web_search_call",
+                action=SimpleNamespace(
+                    sources=[
+                        SimpleNamespace(
+                            url="https://source.example",
+                            title="Source",
+                            snippet="Source snippet",
+                        )
+                    ]
+                ),
+                content=[],
+            ),
+        ],
+    )
+
+    result = provider._parse(response)
+
+    assert result.completion_text == "hello"
+    assert result.tools_call_args == [{"city": "Paris"}]
+    assert result.usage.input_other == 7
+    assert result.citations[0].url == "https://example.com"
+    assert result.sources[0].url == "https://source.example"
+    assert result.provider_state.data["response_id"] == "resp_1"
+
+
+@pytest.mark.asyncio
+async def test_responses_reject_audio_input():
+    provider = _provider()
+    with pytest.raises(Exception, match="audio input"):
+        await provider.text_chat(audio_urls=["x.wav"])
+
+
+def _completed_response(*, response_id: str = "resp_1"):
+    return SimpleNamespace(
+        id=response_id,
+        model="gpt-test",
+        status="completed",
+        incomplete_details=None,
+        usage=SimpleNamespace(
+            input_tokens=2,
+            output_tokens=1,
+            input_tokens_details=SimpleNamespace(cached_tokens=0),
+        ),
+        output=[
+            SimpleNamespace(
+                type="message",
+                content=[
+                    SimpleNamespace(type="output_text", text="done", annotations=[])
+                ],
+            )
+        ],
+    )
+
+
+class _ResponsesClient:
+    def __init__(self, response):
+        self.response = response
+        self.create_calls = []
+        self.retrieve_calls = []
+        self.cancel_calls = []
+        self.conversation_creations = 0
+
+    async def create(self, **options):
+        self.create_calls.append(options)
+        return self.response
+
+    async def retrieve(self, response_id, **options):
+        self.retrieve_calls.append((response_id, options))
+        return self.response
+
+    async def cancel(self, response_id):
+        self.cancel_calls.append(response_id)
+        return self.response
+
+
+def _configured_provider(config: dict, client: _ResponsesClient):
+    provider = _provider()
+    provider.provider_config = {"id": "responses", **config}
+    provider.api_keys = ["key"]
+    provider._client_for = lambda _key: SimpleNamespace(
+        responses=client,
+        conversations=SimpleNamespace(create=provider_conversation_create(client)),
+    )
+    return provider
+
+
+def provider_conversation_create(client: _ResponsesClient):
+    async def create():
+        client.conversation_creations += 1
+        return SimpleNamespace(id="conv_1")
+
+    return create
+
+
+@pytest.mark.asyncio
+async def test_stateless_state_replays_input_safe_output_items():
+    provider = _provider()
+    replayed = [
+        {
+            "type": "reasoning",
+            "id": "rs_1",
+            "encrypted_content": "ciphertext",
+            "summary": [],
+            "status": "completed",
+        },
+        {
+            "type": "message",
+            "id": "msg_1",
+            "role": "assistant",
+            "content": [],
+            "status": "completed",
+        },
+    ]
+    state = ProviderMessageState(
+        provider_type="openai_responses",
+        provider_id="responses",
+        model="gpt-test",
+        data={"output_items": replayed},
+    )
+
+    items, _ = await provider._input_items(
+        [{"role": "assistant", "content": "ignored", "provider_state": state}],
+        "next",
+        None,
+        None,
+        "gpt-test",
+    )
+
+    assert items[:2] == [
+        {
+            "type": "reasoning",
+            "id": "rs_1",
+            "encrypted_content": "ciphertext",
+            "summary": [],
+        },
+        {"type": "message", "id": "msg_1", "role": "assistant", "content": []},
+    ]
+    assert replayed[0]["status"] == "completed"
+    assert items[2] == {
+        "role": "user",
+        "content": [{"type": "input_text", "text": "next"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_previous_response_id_sends_only_incremental_input():
+    client = _ResponsesClient(_completed_response(response_id="resp_2"))
+    provider = _configured_provider(
+        {"responses_state_mode": "previous_response_id", "store": True}, client
+    )
+    previous_user = {"role": "user", "content": "first"}
+    state = ProviderMessageState(
+        provider_type="openai_responses",
+        provider_id="responses",
+        model="gpt-test",
+        data={
+            "response_id": "resp_1",
+            "context_fingerprint": provider._fingerprint([previous_user]),
+        },
+    )
+
+    await provider.text_chat(
+        prompt="second",
+        contexts=[
+            previous_user,
+            {"role": "assistant", "content": "first answer", "provider_state": state},
+        ],
+    )
+
+    options = client.create_calls[0]
+    assert options["previous_response_id"] == "resp_1"
+    assert options["input"] == [
+        {"role": "user", "content": [{"type": "input_text", "text": "second"}]}
+    ]
+    assert options["store"] is True
+
+
+@pytest.mark.asyncio
+async def test_conversation_state_creates_and_attaches_conversation():
+    client = _ResponsesClient(_completed_response())
+    provider = _configured_provider(
+        {"responses_state_mode": "conversation", "store": True}, client
+    )
+
+    result = await provider.text_chat(prompt="hello")
+
+    assert client.conversation_creations == 1
+    assert client.create_calls[0]["conversation"] == "conv_1"
+    assert result.provider_state.data["conversation_id"] == "conv_1"
+
+
+@pytest.mark.asyncio
+async def test_background_polling_is_abortable_and_cancels_remote_response():
+    queued = SimpleNamespace(id="resp_background", status="queued")
+    client = _ResponsesClient(queued)
+    provider = _provider()
+    provider.provider_config.update(
+        {
+            "responses_background_timeout": 60,
+            "responses_background_poll_interval": 60,
+        }
+    )
+    signal = asyncio.Event()
+    task = asyncio.create_task(
+        provider._poll_background(SimpleNamespace(responses=client), queued, signal)
+    )
+    await asyncio.sleep(0)
+    signal.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert client.cancel_calls == ["resp_background"]
+
+
+@pytest.mark.asyncio
+async def test_background_timeout_cancels_remote_response():
+    queued = SimpleNamespace(id="resp_background", status="queued")
+    client = _ResponsesClient(queued)
+    provider = _provider()
+    provider.provider_config.update(
+        {
+            "responses_background_timeout": 0,
+            "responses_background_poll_interval": 1,
+        }
+    )
+
+    with pytest.raises(ProviderResponseError, match="timed out"):
+        await provider._poll_background(SimpleNamespace(responses=client), queued, None)
+    assert client.cancel_calls == ["resp_background"]
+
+
+class _EventStream:
+    def __init__(self, events):
+        self.events = iter(events)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.events)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
+@pytest.mark.asyncio
+async def test_stream_uses_call_id_for_function_argument_deltas_and_final_response():
+    final = _completed_response()
+    final.output.append(
+        SimpleNamespace(
+            type="function_call",
+            id="item_1",
+            call_id="call_1",
+            name="weather",
+            arguments='{"city":"Paris"}',
+            content=[],
+        )
+    )
+    stream = _EventStream(
+        [
+            SimpleNamespace(
+                type="response.output_item.added",
+                response_id="resp_1",
+                sequence_number=1,
+                item=SimpleNamespace(
+                    type="function_call",
+                    id="item_1",
+                    call_id="call_1",
+                    name="weather",
+                ),
+            ),
+            SimpleNamespace(
+                type="response.function_call_arguments.delta",
+                response_id="resp_1",
+                sequence_number=2,
+                item_id="item_1",
+                delta='{"city":',
+            ),
+            SimpleNamespace(
+                type="response.function_call_arguments.done",
+                response_id="resp_1",
+                sequence_number=3,
+                item_id="item_1",
+                output_index=0,
+                name="weather",
+                arguments='{"city":"Paris"}',
+            ),
+            SimpleNamespace(
+                type="response.completed",
+                response=final,
+                sequence_number=4,
+            ),
+        ]
+    )
+    client = _ResponsesClient(stream)
+    provider = _configured_provider({}, client)
+
+    responses = [item async for item in provider.text_chat_stream(prompt="weather")]
+
+    assert responses[0].tools_call_ids == ["call_1"]
+    assert responses[0].tools_call_name == ["weather"]
+    assert responses[0].tools_call_extra_content == {
+        "call_1": {"arguments_delta": '{"city":'}
+    }
+    assert responses[-1].tools_call_ids == ["call_1"]
+    assert responses[-1].tools_call_args == [{"city": "Paris"}]

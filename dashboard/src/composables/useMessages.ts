@@ -871,6 +871,13 @@ export function useMessages(options: UseMessagesOptions) {
         data && typeof data === 'object' ? { ...data } : { value: data };
       return;
     }
+    if (msgType === 'refs') {
+      markMessageStarted(botRecord);
+      if (data && typeof data === 'object') {
+        messageContent(botRecord).refs = data as ChatRefs;
+      }
+      return;
+    }
     if (msgType === 'error') {
       markMessageStarted(botRecord);
       appendPlain(botRecord, `\n\n${String(data)}`);

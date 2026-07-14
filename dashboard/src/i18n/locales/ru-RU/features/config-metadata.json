@@ -1245,6 +1245,48 @@
           }
         }
       },
+      "responses_state_mode": {
+        "description": "Режим состояния Responses",
+        "hint": "Выберите stateless, previous response ID или OpenAI Conversation.",
+        "labels": [
+          "Без состояния (локальное воспроизведение)",
+          "ID предыдущего ответа",
+          "OpenAI Conversation"
+        ]
+      },
+      "store": {
+        "description": "Хранить состояние Responses",
+        "hint": "Требуется для previous_response_id, conversation и фонового режима."
+      },
+      "responses_background": {
+        "description": "Фоновый режим Responses",
+        "hint": "Требует сохраняемого состояния и несовместим со stateless."
+      },
+      "responses_background_poll_interval": {
+        "description": "Интервал фонового опроса (секунды)"
+      },
+      "responses_background_timeout": {
+        "description": "Тайм-аут фоновой задачи (секунды)"
+      },
+      "web_search": {
+        "description": "Нативный веб‑поиск OpenAI",
+        "hint": "Настройки Responses web_search и возвращаемых ссылок.",
+        "enable": {
+          "description": "Включить"
+        },
+        "search_context_size": {
+          "description": "Размер контекста поиска"
+        },
+        "allowed_domains": {
+          "description": "Разрешённые домены"
+        },
+        "include_sources": {
+          "description": "Включать сведения об источниках"
+        },
+        "include_raw_results": {
+          "description": "Включать исходные результаты поиска"
+        }
+      },
       "gpt_weights_path": {
         "description": "Путь к файлу модели GPT",
         "hint": "Файл .ckpt. Используйте абсолютный путь без кавычек. Оставьте пустым для использования встроенной модели GPT_SoVITS."

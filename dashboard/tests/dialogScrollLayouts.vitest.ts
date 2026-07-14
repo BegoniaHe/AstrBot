@@ -117,7 +117,7 @@ describe('shared dialog scroll layouts', () => {
         data: [
           {
             id: 'openai-main',
-            type: 'openai_chat_completion',
+            type: 'openai_chat_completions',
             provider_type: 'chat_completion',
             model: 'gpt-4.1-mini',
           },

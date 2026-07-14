@@ -28,7 +28,7 @@ from astrbot import logger
 from astrbot.core.agent.message import ImageURLPart, TextPart, ThinkPart
 from astrbot.core.agent.tool import FunctionTool, ToolSet
 from astrbot.core.agent.tool_image_cache import tool_image_cache
-from astrbot.core.exceptions import EmptyModelOutputError
+from astrbot.core.exceptions import EmptyModelOutputError, ProviderResponseError
 from astrbot.core.message.components import Json
 from astrbot.core.message.message_event_result import (
     MessageChain,
@@ -189,7 +189,13 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
             parts.append(TextPart(text=llm_resp.completion_text))
         if len(parts) == 0:
             logger.warning("LLM returned empty assistant message with no tool calls.")
-        self.run_context.messages.append(Message(role="assistant", content=parts))
+        self.run_context.messages.append(
+            Message(
+                role="assistant",
+                content=parts,
+                provider_state=llm_resp.provider_state,
+            )
+        )
 
         try:
             await self.agent_hooks.on_agent_done(self.run_context, llm_resp)
@@ -491,6 +497,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                     candidate_id,
                 )
             self.provider = candidate
+            has_visible_stream_output = False
             try:
                 retrying = AsyncRetrying(
                     retry=retry_if_exception_type(EmptyModelOutputError),
@@ -504,20 +511,26 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                 )
 
                 async for attempt in retrying:
-                    has_stream_output = False
                     with attempt:
                         try:
                             async for resp in self._iter_llm_responses(
                                 include_model=idx == 0
                             ):
                                 if resp.is_chunk:
-                                    has_stream_output = True
+                                    has_visible_stream_output = (
+                                        has_visible_stream_output
+                                        or bool(
+                                            resp.completion_text
+                                            or resp.reasoning_content
+                                            or resp.result_chain
+                                        )
+                                    )
                                     yield resp
                                     continue
 
                                 if (
                                     resp.role == "err"
-                                    and not has_stream_output
+                                    and not has_visible_stream_output
                                     and (not is_last_candidate)
                                 ):
                                     last_err_response = resp
@@ -531,10 +544,16 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                                 yield resp
                                 return
 
-                            if has_stream_output:
+                            if has_visible_stream_output:
+                                yield LLMResponse(
+                                    role="err",
+                                    completion_text=(
+                                        "The model stream ended without a final response."
+                                    ),
+                                )
                                 return
                         except EmptyModelOutputError:
-                            if has_stream_output:
+                            if has_visible_stream_output:
                                 logger.warning(
                                     "Chat Model %s returned empty output after streaming started; skipping empty-output retry.",
                                     candidate_id,
@@ -547,7 +566,29 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                                     self.EMPTY_OUTPUT_RETRY_ATTEMPTS,
                                 )
                             raise
+            except ProviderResponseError as exc:
+                last_exception = exc
+                logger.warning(
+                    "Chat Model %s returned a terminal provider response: %s",
+                    candidate_id,
+                    exc,
+                )
+                break
             except Exception as exc:  # noqa: BLE001
+                if has_visible_stream_output:
+                    logger.warning(
+                        "Chat Model %s stream failed after visible output: %s",
+                        candidate_id,
+                        exc,
+                        exc_info=True,
+                    )
+                    yield LLMResponse(
+                        role="err",
+                        completion_text=(
+                            "The model stream was interrupted after partial output."
+                        ),
+                    )
+                    return
                 last_exception = exc
                 logger.warning(
                     "Chat Model %s request error: %s",
@@ -805,6 +846,29 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
         if not llm_resp.tools_call_name:
             await self._complete_with_assistant_response(llm_resp)
 
+        if llm_resp.citations or llm_resp.sources:
+            yield AgentResponse(
+                type="llm_sources",
+                data=AgentResponseData(
+                    chain=MessageChain(
+                        type="llm_sources",
+                        chain=[
+                            Json(
+                                data={
+                                    "citations": [
+                                        citation.__dict__
+                                        for citation in llm_resp.citations
+                                    ],
+                                    "sources": [
+                                        source.__dict__ for source in llm_resp.sources
+                                    ],
+                                }
+                            )
+                        ],
+                    )
+                ),
+            )
+
         # 返回 LLM 结果
         if llm_resp.reasoning_content:
             yield AgentResponse(
@@ -827,7 +891,6 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                     chain=MessageChain().message(llm_resp.completion_text),
                 ),
             )
-
         # 如果有工具调用，还需处理工具调用
         if llm_resp.tools_call_name:
             if self.tool_schema_mode == "skills_like":
@@ -909,15 +972,14 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                 parts = None
             tool_calls_result = ToolCallsResult(
                 tool_calls_info=AssistantMessageSegment(
-                    tool_calls=llm_resp.to_openai_to_calls_model(),
+                    tool_calls=llm_resp.to_function_tool_calls_model(),
                     content=parts,
+                    provider_state=llm_resp.provider_state,
                 ),
                 tool_calls_result=tool_call_result_blocks,
             )
             # record the assistant message with tool calls
-            self.run_context.messages.extend(
-                tool_calls_result.to_openai_messages_model()
-            )
+            self.run_context.messages.extend(tool_calls_result.to_message_models())
 
             # If there are cached images and the model supports image input,
             # append a user message with images so LLM can see them

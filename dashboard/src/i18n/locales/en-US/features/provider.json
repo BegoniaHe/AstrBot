@@ -21,6 +21,8 @@
     },
     "description": {
       "openai": "Supports all OpenAI API-style providers.",
+      "openai_chat_completions": "Compatible with OpenAI /chat/completions services.",
+      "openai_responses": "OpenAI /responses with native tools, state modes, and web search.",
       "kimi_code": "Dedicated Kimi CodingPlan / Kimi Code integration using a custom Anthropic API adapter.",
       "default": ""
     }
@@ -102,6 +104,7 @@
     "fetchModels": "Fetch Model List",
     "saveSuccess": "Provider source saved successfully",
     "saveError": "Failed to save provider source",
+    "responsesBackgroundConflict": "Responses background mode requires store=true and a non-stateless state mode.",
     "deleteConfirm": "Are you sure you want to delete provider source {id}? This will also delete all associated model configurations.",
     "deleteSuccess": "Provider source deleted successfully",
     "deleteError": "Failed to delete provider source",

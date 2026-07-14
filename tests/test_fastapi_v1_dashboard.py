@@ -605,7 +605,7 @@ def _build_fake_config() -> dict:
             "provider_sources": [
                 {
                     "id": "openai-source",
-                    "type": "openai_chat_completion",
+                    "type": "openai_chat_completions",
                     "provider_type": "chat_completion",
                     "api_base": "https://api.example.test/v1",
                     "key": ["test-key"],
@@ -1170,7 +1170,7 @@ async def test_v1_provider_source_rename_updates_provider_refs(
         json={
             "config": {
                 "id": "openai-renamed",
-                "type": "openai_chat_completion",
+                "type": "openai_chat_completions",
                 "provider_type": "chat_completion",
                 "api_base": "https://api.example.test/v1",
                 "key": ["test-key"],
@@ -1203,7 +1203,7 @@ async def test_v1_provider_source_rejects_legacy_top_level_id_field(
             "id": "openai-renamed",
             "config": {
                 "id": "openai-renamed",
-                "type": "openai_chat_completion",
+                "type": "openai_chat_completions",
                 "provider_type": "chat_completion",
             },
         },
@@ -1276,7 +1276,7 @@ async def test_v1_safe_provider_routes_accept_slash_ids(
     config["provider_sources"].append(
         {
             "id": source_id,
-            "type": "openai_chat_completion",
+            "type": "openai_chat_completions",
             "provider_type": "chat_completion",
             "api_base": "https://api.example.test/v1",
             "key": ["test-key"],
@@ -1398,7 +1398,7 @@ async def test_v1_provider_api_normalizes_provider_type_from_adapter_metadata(
         config_service.ProviderConfigService,
         "_resolve_provider_type_value",
         lambda _self, adapter_type: {
-            "openai_chat_completion": "chat_completion",
+            "openai_chat_completions": "chat_completion",
             "dify": "agent_runner",
         }.get(adapter_type),
     )

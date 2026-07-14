@@ -236,6 +236,10 @@ async def run_agent(
                         )
                         await astr_event.send(chain)
                     continue
+                elif resp.type == "llm_sources":
+                    if astr_event.get_platform_name() == "webchat":
+                        await astr_event.send(resp.data["chain"])
+                    continue
                 elif resp.type == "llm_result":
                     chain = resp.data["chain"]
                     if chain.type == "reasoning":

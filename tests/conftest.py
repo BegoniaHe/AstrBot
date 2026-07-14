@@ -169,7 +169,7 @@ def mock_provider():
     provider = MagicMock()
     provider.provider_config = {
         "id": "test-provider",
-        "type": "openai_chat_completion",
+        "type": "openai_chat_completions",
         "model": "gpt-4o-mini",
     }
     provider.get_model = MagicMock(return_value="gpt-4o-mini")

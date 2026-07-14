@@ -1,11 +1,11 @@
 from ..register import register_provider_adapter
-from .openai_source import ProviderOpenAIOfficial
+from .openai_chat_completions_source import ProviderOpenAIChatCompletions
 
 
 @register_provider_adapter(
     "xai_chat_completion", "xAI Chat Completion Provider Adapter"
 )
-class ProviderXAI(ProviderOpenAIOfficial):
+class ProviderXAI(ProviderOpenAIChatCompletions):
     def __init__(
         self,
         provider_config: dict,

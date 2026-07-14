@@ -53,7 +53,9 @@ def test_gemini_extract_reasoning_content_ignores_missing_parts():
 
     assert provider._extract_reasoning_content(SimpleNamespace(content=None)) == ""
     assert (
-        provider._extract_reasoning_content(SimpleNamespace(content=SimpleNamespace(parts=[])))
+        provider._extract_reasoning_content(
+            SimpleNamespace(content=SimpleNamespace(parts=[]))
+        )
         == ""
     )
 
@@ -198,8 +200,14 @@ def test_gemini_prepare_conversation_drops_leading_assistant_and_uses_placeholde
     assert isinstance(conversation[0], google_types.ModelContent)
     assert [part.text for part in conversation[0].parts] == ["", ""]
     assert logger_warning.call_count == 2
-    assert "Failed to decode google gemini thinking signature" in logger_warning.call_args_list[0].args[0]
-    assert "Text content is empty, added a space as placeholder." in logger_warning.call_args_list[1].args[0]
+    assert (
+        "Failed to decode google gemini thinking signature"
+        in logger_warning.call_args_list[0].args[0]
+    )
+    assert (
+        "Text content is empty, added a space as placeholder."
+        in logger_warning.call_args_list[1].args[0]
+    )
 
 
 @pytest.mark.asyncio
@@ -208,7 +216,9 @@ async def test_gemini_assemble_context_uses_placeholder_and_skips_failed_audio(
 ):
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
 
-    async def fake_resolve_media_ref_to_base64_data(ref: str, media_type: str, **kwargs):
+    async def fake_resolve_media_ref_to_base64_data(
+        ref: str, media_type: str, **kwargs
+    ):
         if media_type == "audio":
             raise RuntimeError("bad audio")
         return SimpleNamespace(
@@ -253,7 +263,9 @@ async def test_gemini_assemble_context_keeps_placeholder_when_all_media_resoluti
 ):
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
 
-    async def fake_resolve_media_ref_to_base64_data(ref: str, media_type: str, **kwargs):
+    async def fake_resolve_media_ref_to_base64_data(
+        ref: str, media_type: str, **kwargs
+    ):
         return None
 
     monkeypatch.setattr(
@@ -318,7 +330,9 @@ def test_gemini_process_content_parts_collects_reasoning_tool_calls_and_images()
         "lookup": {"google": {"thought_signature": thought_signature}}
     }
     assert llm_response.reasoning_signature == thought_signature
-    assert any(getattr(component.type, "value", None) == "Image" for component in chain.chain)
+    assert any(
+        getattr(component.type, "value", None) == "Image" for component in chain.chain
+    )
 
 
 @pytest.mark.parametrize(
@@ -346,7 +360,9 @@ def test_gemini_process_content_parts_rejects_safety_and_policy_blocks(
 def test_gemini_process_content_parts_allows_empty_candidate_when_validation_disabled():
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     llm_response = LLMResponse(role="assistant")
-    candidate = SimpleNamespace(content=None, finish_reason=google_types.FinishReason.STOP)
+    candidate = SimpleNamespace(
+        content=None, finish_reason=google_types.FinishReason.STOP
+    )
 
     chain = provider._process_content_parts(
         candidate,
@@ -400,7 +416,9 @@ async def test_gemini_query_stream_accumulates_text_and_reasoning(monkeypatch):
                 raise StopAsyncIteration from exc
 
     chunks = [
-        SimpleNamespace(candidates=[], text="", response_id="skip", usage_metadata=None),
+        SimpleNamespace(
+            candidates=[], text="", response_id="skip", usage_metadata=None
+        ),
         SimpleNamespace(
             candidates=[
                 SimpleNamespace(
@@ -450,7 +468,10 @@ async def test_gemini_query_stream_accumulates_text_and_reasoning(monkeypatch):
     responses = [
         response
         async for response in provider._query_stream(
-            {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "model": "gemini-test",
+            },
             tools=None,
         )
     ]
@@ -488,7 +509,9 @@ async def test_gemini_query_stream_raises_when_all_chunks_are_empty(monkeypatch)
                 raise StopAsyncIteration from exc
 
     chunks = [
-        SimpleNamespace(candidates=[], text="", response_id="skip-1", usage_metadata=None),
+        SimpleNamespace(
+            candidates=[], text="", response_id="skip-1", usage_metadata=None
+        ),
         SimpleNamespace(
             candidates=[SimpleNamespace(content=None, finish_reason=None)],
             text="",
@@ -517,7 +540,10 @@ async def test_gemini_query_stream_raises_when_all_chunks_are_empty(monkeypatch)
         _ = [
             response
             async for response in provider._query_stream(
-                {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+                {
+                    "messages": [{"role": "user", "content": "hello"}],
+                    "model": "gemini-test",
+                },
                 tools=None,
             )
         ]
@@ -596,7 +622,10 @@ def test_gemini_init_client_tracks_previous_http_client_on_set_key(monkeypatch):
     provider.set_key("key-b")
 
     assert provider.chosen_api_key == "key-b"
-    assert provider._stale_http_clients == [provider._http_client] or len(created_http_clients) == 1
+    assert (
+        provider._stale_http_clients == [provider._http_client]
+        or len(created_http_clients) == 1
+    )
     assert created_http_clients[0].kwargs == {
         "base_url": "https://gemini.example",
         "timeout": 30,
@@ -694,7 +723,9 @@ async def test_gemini_encode_image_bs64_raises_when_resolution_returns_none(
         lambda ref: f"desc:{ref}",
     )
 
-    with pytest.raises(RuntimeError, match="Failed to encode image data: desc:image-ref"):
+    with pytest.raises(
+        RuntimeError, match="Failed to encode image data: desc:image-ref"
+    ):
         await provider.encode_image_bs64("image-ref")
 
 
@@ -716,7 +747,9 @@ async def test_gemini_text_chat_retries_after_api_error_and_strips_no_save_flag(
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     provider.api_keys = ["key-a", "key-b"]
     provider.get_model = lambda: "gemini-test"
-    provider.assemble_context = AsyncMock(return_value={"role": "user", "content": "prompt"})
+    provider.assemble_context = AsyncMock(
+        return_value={"role": "user", "content": "prompt"}
+    )
     provider._ensure_message_to_dicts = lambda contexts: list(contexts)
     provider._handle_api_error = AsyncMock(side_effect=[True])
     expected = LLMResponse(role="assistant")
@@ -791,7 +824,7 @@ async def test_gemini_text_chat_expands_tool_call_result_lists():
         def __init__(self, name: str):
             self.name = name
 
-        def to_openai_messages(self):
+        def to_messages(self):
             return [{"role": "tool", "content": f"result-{self.name}"}]
 
     async def fake_query(payloads, func_tool, *, request_max_retries=None):
@@ -825,7 +858,9 @@ async def test_gemini_text_chat_stream_retries_after_api_error():
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     provider.api_keys = ["key-a", "key-b"]
     provider.get_model = lambda: "gemini-test"
-    provider.assemble_context = AsyncMock(return_value={"role": "user", "content": "prompt"})
+    provider.assemble_context = AsyncMock(
+        return_value={"role": "user", "content": "prompt"}
+    )
     provider._ensure_message_to_dicts = lambda contexts: list(contexts)
     provider._handle_api_error = AsyncMock(side_effect=[True])
     yielded = [
@@ -868,7 +903,9 @@ async def test_gemini_text_chat_stream_retries_with_tool_results_and_strips_no_s
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     provider.api_keys = ["key-a", "key-b"]
     provider.get_model = lambda: "gemini-test"
-    provider.assemble_context = AsyncMock(return_value={"role": "user", "content": "prompt"})
+    provider.assemble_context = AsyncMock(
+        return_value={"role": "user", "content": "prompt"}
+    )
     provider._ensure_message_to_dicts = lambda contexts: list(contexts)
     provider._handle_api_error = AsyncMock(side_effect=[True])
     yielded = [LLMResponse(role="assistant", is_chunk=False)]
@@ -878,7 +915,7 @@ async def test_gemini_text_chat_stream_retries_with_tool_results_and_strips_no_s
         def __init__(self, name: str) -> None:
             self.name = name
 
-        def to_openai_messages(self):
+        def to_messages(self):
             return [{"role": "tool", "content": f"result-{self.name}"}]
 
     async def fake_query_stream(payloads, func_tool, *, request_max_retries=None):
@@ -941,7 +978,10 @@ async def test_gemini_prepare_query_config_downgrades_stream_image_and_sets_tool
     assert config.response_modalities == ["TEXT"]
     assert config.tools is not None
     assert len(config.tools) == 4
-    assert config.tool_config.function_calling_config.mode is google_types.FunctionCallingConfigMode.ANY
+    assert (
+        config.tool_config.function_calling_config.mode
+        is google_types.FunctionCallingConfigMode.ANY
+    )
     assert config.thinking_config.thinking_budget == 32
     assert config.automatic_function_calling.disable is True
 
@@ -984,7 +1024,9 @@ async def test_gemini_prepare_query_config_normalizes_invalid_thinking_level(cap
 def test_gemini_process_content_parts_rejects_empty_candidate_content():
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     llm_response = LLMResponse(role="assistant")
-    candidate = SimpleNamespace(content=None, finish_reason=google_types.FinishReason.STOP)
+    candidate = SimpleNamespace(
+        content=None, finish_reason=google_types.FinishReason.STOP
+    )
 
     with pytest.raises(
         EmptyModelOutputError,
@@ -1074,7 +1116,10 @@ async def test_gemini_query_stream_returns_function_call_response_immediately(
     responses = [
         response
         async for response in provider._query_stream(
-            {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "model": "gemini-test",
+            },
             tools=None,
         )
     ]
@@ -1197,7 +1242,10 @@ async def test_gemini_query_raises_when_candidates_are_empty(monkeypatch):
 
     with pytest.raises(Exception, match="Gemini request failed: candidates is empty."):
         await provider._query(
-            {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "model": "gemini-test",
+            },
             tools=None,
         )
 
@@ -1229,7 +1277,10 @@ async def test_gemini_query_reraises_unrecognized_api_error(monkeypatch):
 
     with pytest.raises(APIError, match="unhandled provider failure"):
         await provider._query(
-            {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "model": "gemini-test",
+            },
             tools=None,
         )
 
@@ -1291,8 +1342,12 @@ async def test_gemini_query_recitation_retries_with_higher_temperature(monkeypat
     assert response.id == "resp-ok"
     assert response.completion_text == "done"
     assert provider._prepare_query_config.await_count == 2
-    assert provider._prepare_query_config.await_args_list[0].args[5] == pytest.approx(0.7)
-    assert provider._prepare_query_config.await_args_list[1].args[5] == pytest.approx(0.9)
+    assert provider._prepare_query_config.await_args_list[0].args[5] == pytest.approx(
+        0.7
+    )
+    assert provider._prepare_query_config.await_args_list[1].args[5] == pytest.approx(
+        0.9
+    )
 
 
 @pytest.mark.asyncio
@@ -1374,7 +1429,9 @@ async def test_gemini_query_stream_retries_after_capability_fallbacks(monkeypatc
                 SimpleNamespace(
                     candidates=[
                         SimpleNamespace(
-                            content=SimpleNamespace(parts=[google_types.Part(text="ok")]),
+                            content=SimpleNamespace(
+                                parts=[google_types.Part(text="ok")]
+                            ),
                             finish_reason=google_types.FinishReason.STOP,
                         )
                     ],
@@ -1461,7 +1518,9 @@ async def test_gemini_query_stream_final_tool_only_response_is_usable(monkeypatc
         SimpleNamespace(
             candidates=[
                 SimpleNamespace(
-                    content=SimpleNamespace(parts=[google_types.Part(text="ponder", thought=True)]),
+                    content=SimpleNamespace(
+                        parts=[google_types.Part(text="ponder", thought=True)]
+                    ),
                     finish_reason=None,
                 )
             ],
@@ -1505,7 +1564,10 @@ async def test_gemini_query_stream_final_tool_only_response_is_usable(monkeypatc
     responses = [
         response
         async for response in provider._query_stream(
-            {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "model": "gemini-test",
+            },
             tools=None,
         )
     ]
@@ -1547,7 +1609,10 @@ async def test_gemini_query_stream_reraises_unrecognized_api_error(monkeypatch):
         _ = [
             response
             async for response in provider._query_stream(
-                {"messages": [{"role": "user", "content": "hello"}], "model": "gemini-test"},
+                {
+                    "messages": [{"role": "user", "content": "hello"}],
+                    "model": "gemini-test",
+                },
                 tools=None,
             )
         ]
@@ -1560,7 +1625,9 @@ async def test_gemini_text_chat_stream_stops_when_error_handler_declines_retry()
     provider = ProviderGoogleGenAI.__new__(ProviderGoogleGenAI)
     provider.api_keys = ["key-a", "key-b"]
     provider.get_model = lambda: "gemini-test"
-    provider.assemble_context = AsyncMock(return_value={"role": "user", "content": "prompt"})
+    provider.assemble_context = AsyncMock(
+        return_value={"role": "user", "content": "prompt"}
+    )
     provider._ensure_message_to_dicts = lambda contexts: list(contexts)
     provider._handle_api_error = AsyncMock(return_value=False)
     stream_calls: list[dict] = []

@@ -47,6 +47,30 @@ def test_ensure_dashboard_platform_metadata_loaded_skips_import_when_registered(
     config_service._ensure_dashboard_platform_metadata_loaded()
 
 
+def test_provider_source_response_strips_removed_responses_web_search_fields():
+    service = config_service.ProviderConfigService(
+        SimpleNamespace(astrbot_config={}, provider_manager=SimpleNamespace())
+    )
+
+    normalized = service._ensure_provider_type(
+        {
+            "type": "openai_responses",
+            "web_search": {
+                "enable": True,
+                "allowed_domains": ["example.com"],
+                "blocked_domains": ["removed.example"],
+                "external_web_access": True,
+                "return_token_budget": "unlimited",
+            },
+        }
+    )
+
+    assert normalized["web_search"] == {
+        "enable": True,
+        "allowed_domains": ["example.com"],
+    }
+
+
 @pytest.mark.asyncio
 async def test_get_astrbot_config_loads_dashboard_platform_metadata(
     monkeypatch: pytest.MonkeyPatch,
@@ -358,7 +382,7 @@ def test_save_config_uses_plain_dict_snapshot_for_live_config(
 
     config = AstrBotConfig(config_path=str(config_path), default_config={})
     object.__setattr__(config, "_runtime_lock", threading.Lock())
-    config["provider_sources"] = [{"id": "demo", "type": "openai_chat_completion"}]
+    config["provider_sources"] = [{"id": "demo", "type": "openai_chat_completions"}]
 
     config_service.save_config(config, config, is_core=True)
 
@@ -392,7 +416,9 @@ async def test_delete_profile_clears_routing_entries_for_deleted_config() -> Non
 
 
 @pytest.mark.asyncio
-async def test_delete_profile_preserves_more_specific_routes_for_other_profiles() -> None:
+async def test_delete_profile_preserves_more_specific_routes_for_other_profiles() -> (
+    None
+):
     acm = SimpleNamespace(delete_conf=AsyncMock(return_value=True))
     ucr = SimpleNamespace(
         umop_to_conf_id={

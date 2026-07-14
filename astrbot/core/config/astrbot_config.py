@@ -65,7 +65,8 @@ class AstrBotConfig(dict):
                 True,
             )
         # 检查配置完整性，并插入
-        has_new = self.check_config_integrity(default_config, conf)
+        has_new = self._migrate_openai_chat_completions_type(conf)
+        has_new |= self.check_config_integrity(default_config, conf)
         if self._should_reset_dashboard_password(
             conf,
             stored_dashboard_password_change_required=(
@@ -79,6 +80,27 @@ class AstrBotConfig(dict):
             self.save_config()
 
         self.update(conf)
+
+    @staticmethod
+    def _migrate_openai_chat_completions_type(conf: dict) -> bool:
+        """Migrate the persisted OpenAI Chat Completions adapter identifier once."""
+        migrated = False
+        for key in ("provider_sources", "provider"):
+            configs = conf.get(key)
+            if not isinstance(configs, list):
+                continue
+            for config in configs:
+                if (
+                    isinstance(config, dict)
+                    and config.get("type") == "openai_chat_completion"
+                ):
+                    config["type"] = "openai_chat_completions"
+                    migrated = True
+        if migrated:
+            logger.info(
+                "Migrated OpenAI Chat Completions provider type to the current identifier."
+            )
+        return migrated
 
     def _resolve_default_config(
         self, default_config: dict, schema: dict | None

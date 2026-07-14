@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from astrbot.api.event import MessageChain
-from astrbot.api.message_components import File
+from astrbot.api.message_components import File, Json
 from astrbot.core.platform.sources.webchat import webchat_event
 from astrbot.core.platform.sources.webchat.message_parts_helper import (
     build_webchat_message_parts,
@@ -40,6 +40,68 @@ async def test_webchat_file_send_keeps_original_filename(tmp_path, monkeypatch):
     assert display_name == "report.txt"
     assert stored_name != display_name
     assert (attachments_dir / stored_name).exists()
+
+
+@pytest.mark.asyncio
+async def test_webchat_llm_sources_emit_deduplicated_refs_payload(monkeypatch):
+    queue = asyncio.Queue()
+    monkeypatch.setattr(
+        webchat_event.webchat_queue_mgr,
+        "get_or_create_back_queue",
+        lambda *_args: queue,
+    )
+
+    await webchat_event.WebChatMessageEvent._send(
+        "message-refs",
+        MessageChain(
+            type="llm_sources",
+            chain=[
+                Json(
+                    data={
+                        "citations": [
+                            {"url": "https://example.com", "title": "Citation"}
+                        ],
+                        "sources": [
+                            {
+                                "url": "https://example.com",
+                                "title": "Duplicate source",
+                            },
+                            {"url": "https://second.example", "snippet": "Source"},
+                        ],
+                    }
+                )
+            ],
+        ),
+        "webchat!user!conversation-1",
+    )
+
+    payload = await queue.get()
+    assert payload == {
+        "type": "refs",
+        "data": {
+            "used": [
+                {
+                    "url": "https://example.com",
+                    "title": "Citation",
+                    "snippet": None,
+                    "start_index": None,
+                    "end_index": None,
+                    "source_type": None,
+                },
+                {
+                    "url": "https://second.example",
+                    "title": None,
+                    "snippet": "Source",
+                    "start_index": None,
+                    "end_index": None,
+                    "source_type": None,
+                },
+            ]
+        },
+        "streaming": False,
+        "chain_type": "llm_sources",
+        "message_id": "message-refs",
+    }
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import copy
 import inspect
 import json
@@ -8,9 +9,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
 import httpx
-from openai import AsyncAzureOpenAI, AsyncOpenAI
-from openai._exceptions import NotFoundError
-from openai.lib.streaming.chat._completions import ChatCompletionStreamState
+from openai import AsyncAzureOpenAI, AsyncOpenAI, NotFoundError
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.completion_usage import CompletionUsage
@@ -26,7 +25,11 @@ from astrbot.core.agent.message import (
     TextPart,
 )
 from astrbot.core.agent.tool import ToolSet
-from astrbot.core.exceptions import EmptyModelOutputError
+from astrbot.core.exceptions import (
+    EmptyModelOutputError,
+    MalformedToolCallError,
+    ProviderResponseError,
+)
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.provider.entities import LLMResponse, TokenUsage, ToolCallsResult
 from astrbot.core.utils.media_utils import (
@@ -43,12 +46,120 @@ from astrbot.core.utils.string_utils import normalize_and_dedupe_strings
 from ..register import register_provider_adapter
 from .request_retry import retry_provider_request
 
+_request_api_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "openai_chat_completions_request_api_key", default=None
+)
+_abort_signal: contextvars.ContextVar[asyncio.Event | None] = contextvars.ContextVar(
+    "openai_chat_completions_abort_signal", default=None
+)
+
+
+async def _await_abortable(awaitable: Any) -> Any:
+    signal = _abort_signal.get()
+    if signal is None:
+        return await awaitable
+    task = asyncio.ensure_future(awaitable)
+    abort_task = asyncio.create_task(signal.wait())
+    done, _ = await asyncio.wait(
+        {task, abort_task}, return_when=asyncio.FIRST_COMPLETED
+    )
+    if abort_task in done:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        raise asyncio.CancelledError("OpenAI request aborted")
+    abort_task.cancel()
+    await asyncio.gather(abort_task, return_exceptions=True)
+    return await task
+
+
+class OpenAIChatStreamAccumulator:
+    """Public-SDK-independent accumulator for Chat Completions stream deltas."""
+
+    def __init__(self) -> None:
+        self.id = ""
+        self.model = ""
+        self.usage: Any = None
+        self.finish_reason: str | None = None
+        self.content = ""
+        self.reasoning = ""
+        self.refusal = ""
+        self.calls: dict[int, dict[str, str]] = {}
+
+    def add(self, chunk: ChatCompletionChunk) -> None:
+        self.id = chunk.id or self.id
+        self.model = chunk.model or self.model
+        if chunk.usage is not None:
+            self.usage = chunk.usage
+        if not chunk.choices:
+            return
+        choice = chunk.choices[0]
+        if choice.finish_reason is not None:
+            self.finish_reason = choice.finish_reason
+        delta = choice.delta
+        if delta is None:
+            return
+        content = delta.content
+        if isinstance(content, str):
+            self.content += content
+        elif isinstance(content, list):
+            self.content += "".join(
+                str(part.get("text", ""))
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            )
+        self.reasoning += getattr(delta, "reasoning_content", None) or ""
+        self.refusal += getattr(delta, "refusal", None) or ""
+        for position, call in enumerate(delta.tool_calls or []):
+            index = getattr(call, "index", None)
+            if index is None:
+                index = position
+            target = self.calls.setdefault(
+                index, {"id": "", "name": "", "arguments": ""}
+            )
+            target["id"] += getattr(call, "id", None) or ""
+            function = getattr(call, "function", None)
+            if function is not None:
+                target["name"] += getattr(function, "name", None) or ""
+                target["arguments"] += getattr(function, "arguments", None) or ""
+
+    def completion(self) -> ChatCompletion:
+        message: dict[str, Any] = {"role": "assistant", "content": self.content or None}
+        if self.reasoning:
+            message["reasoning_content"] = self.reasoning
+        if self.refusal:
+            message["refusal"] = self.refusal
+        if self.calls:
+            message["tool_calls"] = [
+                {
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {"name": call["name"], "arguments": call["arguments"]},
+                }
+                for _, call in sorted(self.calls.items())
+            ]
+        data: dict[str, Any] = {
+            "id": self.id or "stream",
+            "object": "chat.completion",
+            "created": 0,
+            "model": self.model or "unknown",
+            "choices": [
+                {"index": 0, "message": message, "finish_reason": self.finish_reason}
+            ],
+        }
+        if self.usage is not None:
+            data["usage"] = (
+                self.usage.model_dump()
+                if hasattr(self.usage, "model_dump")
+                else self.usage
+            )
+        return ChatCompletion.model_validate(data)
+
 
 @register_provider_adapter(
-    "openai_chat_completion",
-    "OpenAI API Chat Completion 提供商适配器",
+    "openai_chat_completions",
+    "OpenAI Chat Completions Provider Adapter",
 )
-class ProviderOpenAIOfficial(Provider):
+class ProviderOpenAIChatCompletions(Provider):
     _ERROR_TEXT_CANDIDATE_MAX_CHARS = 4096
 
     @classmethod
@@ -90,7 +201,7 @@ class ProviderOpenAIOfficial(Provider):
             if not text:
                 return
             candidates.append(
-                ProviderOpenAIOfficial._truncate_error_text_candidate(text)
+                ProviderOpenAIChatCompletions._truncate_error_text_candidate(text)
             )
 
         _append_candidate(str(error))
@@ -98,7 +209,7 @@ class ProviderOpenAIOfficial(Provider):
         body = getattr(error, "body", None)
         if isinstance(body, dict):
             err_obj = body.get("error")
-            body_text = ProviderOpenAIOfficial._safe_json_dump(
+            body_text = ProviderOpenAIChatCompletions._safe_json_dump(
                 {"error": err_obj} if isinstance(err_obj, dict) else body
             )
             _append_candidate(body_text)
@@ -344,14 +455,7 @@ class ProviderOpenAIOfficial(Provider):
     def _create_http_client(self, provider_config: dict) -> httpx.AsyncClient:
         """创建带代理的 HTTP 客户端"""
         proxy = provider_config.get("proxy", "")
-        httpx_module: Any = httpx
-        try:
-            from openai import _base_client as openai_base_client
-
-            httpx_module = getattr(openai_base_client, "httpx", httpx)
-        except ImportError:
-            pass
-        return create_proxy_client("OpenAI", proxy, httpx_module=httpx_module)
+        return create_proxy_client("OpenAI", proxy, httpx_module=httpx)
 
     def __init__(self, provider_config, provider_settings) -> None:
         super().__init__(provider_config, provider_settings)
@@ -369,7 +473,7 @@ class ProviderOpenAIOfficial(Provider):
             for key in self.custom_headers:
                 self.custom_headers[key] = str(self.custom_headers[key])
 
-        if "api_version" in provider_config:
+        if provider_config.get("api_version"):
             # Using Azure OpenAI API
             self.client = AsyncAzureOpenAI(
                 api_key=self.chosen_api_key,
@@ -403,6 +507,11 @@ class ProviderOpenAIOfficial(Provider):
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on"}
         return bool(value)
+
+    def _request_client(self):
+        """Return a request-scoped client only when a request selected a key."""
+        key = _request_api_key.get()
+        return self.client.with_options(api_key=key) if key is not None else self.client
 
     def _apply_provider_specific_request_overrides(
         self,
@@ -538,7 +647,7 @@ class ProviderOpenAIOfficial(Provider):
         if tools:
             model = payloads.get("model", "").lower()
             omit_empty_param_field = "gemini" in model
-            tool_list = tools.openai_schema(
+            tool_list = tools.openai_chat_completions_schema(
                 omit_empty_parameter_field=omit_empty_param_field,
             )
             if tool_list:
@@ -558,21 +667,38 @@ class ProviderOpenAIOfficial(Provider):
         # 读取并合并 custom_extra_body 配置
         custom_extra_body = self.provider_config.get("custom_extra_body", {})
         if isinstance(custom_extra_body, dict):
-            extra_body.update(custom_extra_body)
+            extra_body.update(
+                {
+                    key: value
+                    for key, value in custom_extra_body.items()
+                    if key
+                    not in {
+                        "messages",
+                        "model",
+                        "stream",
+                        "stream_options",
+                        "tools",
+                        "tool_choice",
+                    }
+                }
+            )
         self._apply_provider_specific_request_overrides(payloads, extra_body)
 
         model = payloads.get("model", "").lower()
 
         self._sanitize_assistant_messages(payloads)
 
-        completion = await retry_provider_request(
-            "OpenAI",
-            lambda: self.client.chat.completions.create(
-                **payloads,
-                stream=False,
-                extra_body=extra_body,
-            ),
-            max_attempts=request_max_retries,
+        client = self._request_client()
+        completion = await _await_abortable(
+            retry_provider_request(
+                "OpenAI",
+                lambda: client.chat.completions.create(
+                    **payloads,
+                    stream=False,
+                    extra_body=extra_body,
+                ),
+                max_attempts=request_max_retries,
+            )
         )
 
         if not isinstance(completion, ChatCompletion):
@@ -597,7 +723,7 @@ class ProviderOpenAIOfficial(Provider):
         if tools:
             model = payloads.get("model", "").lower()
             omit_empty_param_field = "gemini" in model
-            tool_list = tools.openai_schema(
+            tool_list = tools.openai_chat_completions_schema(
                 omit_empty_parameter_field=omit_empty_param_field,
             )
             if tool_list:
@@ -610,7 +736,21 @@ class ProviderOpenAIOfficial(Provider):
         # 读取并合并 custom_extra_body 配置
         custom_extra_body = self.provider_config.get("custom_extra_body", {})
         if isinstance(custom_extra_body, dict):
-            extra_body.update(custom_extra_body)
+            extra_body.update(
+                {
+                    key: value
+                    for key, value in custom_extra_body.items()
+                    if key
+                    not in {
+                        "messages",
+                        "model",
+                        "stream",
+                        "stream_options",
+                        "tools",
+                        "tool_choice",
+                    }
+                }
+            )
 
         to_del = []
         for key in payloads:
@@ -623,22 +763,29 @@ class ProviderOpenAIOfficial(Provider):
 
         self._sanitize_assistant_messages(payloads)
 
-        stream = await retry_provider_request(
-            "OpenAI",
-            lambda: self.client.chat.completions.create(
-                **payloads,
-                stream=True,
-                extra_body=extra_body,
-                stream_options={"include_usage": True},
-            ),
-            max_attempts=request_max_retries,
+        client = self._request_client()
+        stream = await _await_abortable(
+            retry_provider_request(
+                "OpenAI",
+                lambda: client.chat.completions.create(
+                    **payloads,
+                    stream=True,
+                    extra_body=extra_body,
+                    stream_options={"include_usage": True},
+                ),
+                max_attempts=request_max_retries,
+            )
         )
 
         llm_response = LLMResponse("assistant", is_chunk=True)
 
-        state = ChatCompletionStreamState()
+        state = OpenAIChatStreamAccumulator()
 
         async for chunk in stream:
+            if (signal := _abort_signal.get()) is not None and signal.is_set():
+                if aclose := getattr(stream, "aclose", None):
+                    await aclose()
+                raise asyncio.CancelledError("OpenAI stream aborted")
             choice = chunk.choices[0] if chunk.choices else None
             delta = choice.delta if choice else None
 
@@ -657,10 +804,7 @@ class ProviderOpenAIOfficial(Provider):
             # 例外：流末尾的 usage chunk（choices=[]，delta=None 但有 usage 数据）
             # 需要传给 state，否则最终 completion 会丢失 usage 信息
             if delta is not None or chunk.usage:
-                try:
-                    state.handle_chunk(chunk)
-                except Exception as e:
-                    logger.error("Saving chunk state error: " + str(e))
+                state.add(chunk)
             # logger.debug(f"chunk delta: {delta}")
             # handle the content delta
             reasoning = self._extract_reasoning_content(chunk)
@@ -684,18 +828,18 @@ class ProviderOpenAIOfficial(Provider):
                 # Workaround for some providers that only return usage in choices[].usage, e.g. MoonshotAI
                 # See https://github.com/AstrBotDevs/AstrBot/issues/6614
                 llm_response.usage = self._extract_usage(choice_usage)
-                state.current_completion_snapshot.usage = choice_usage
+                state.usage = choice_usage
             if _y:
                 yield llm_response
 
         try:
-            final_completion = state.get_final_completion()
+            final_completion = state.completion()
             llm_response = await self._parse_openai_completion(final_completion, tools)
             yield llm_response
         except Exception as e:
-            logger.error("get_final_completion error: " + str(e))
-            # 流式内容已通过 yield 发出，记录错误后正常结束即可
-            return
+            raise RuntimeError(
+                "Unable to construct OpenAI Chat Completions stream result"
+            ) from e
 
     def _extract_reasoning_content(
         self,
@@ -889,8 +1033,10 @@ class ProviderOpenAIOfficial(Provider):
                         try:
                             args = json.loads(tool_call.function.arguments)
                         except json.JSONDecodeError as e:
-                            logger.error(f"解析参数失败: {e}")
-                            args = {}
+                            raise MalformedToolCallError(
+                                "OpenAI returned malformed function arguments "
+                                f"for tool {tool_call.function.name!r} (call {tool_call.id!r})."
+                            ) from e
                     else:
                         args = tool_call.function.arguments
                     # Some API may return None for tools with no parameters
@@ -911,10 +1057,14 @@ class ProviderOpenAIOfficial(Provider):
             llm_response.tools_call_ids = tool_call_ids
             llm_response.tools_call_extra_content = tool_call_extra_content_dict
         # specially handle finish reason
+        llm_response.finish_reason = choice.finish_reason
+        llm_response.refusal = getattr(choice.message, "refusal", None)
         if choice.finish_reason == "content_filter":
-            raise Exception(
-                "API 返回的 completion 由于内容安全过滤被拒绝(非 AstrBot)。",
+            raise ProviderResponseError(
+                "OpenAI completion was blocked by content filtering."
             )
+        if choice.finish_reason in {"length", "max_tokens"}:
+            llm_response.incomplete_details = {"reason": "max_output_tokens"}
         has_text_output = bool((llm_response.completion_text or "").strip())
         has_reasoning_output = bool((llm_response.reasoning_content or "").strip())
         if (
@@ -930,7 +1080,6 @@ class ProviderOpenAIOfficial(Provider):
 
         llm_response.raw_completion = completion
         llm_response.id = completion.id
-
         llm_response.usage = (
             self._extract_usage(completion.usage) if completion.usage else TokenUsage()
         )
@@ -966,17 +1115,19 @@ class ProviderOpenAIOfficial(Provider):
         if system_prompt:
             context_query.insert(0, {"role": "system", "content": system_prompt})
 
-        for part in context_query:
-            if "_no_save" in part:
-                del part["_no_save"]
-
         # tool calls result
         if tool_calls_result:
             if isinstance(tool_calls_result, ToolCallsResult):
-                context_query.extend(tool_calls_result.to_openai_messages())
+                context_query.extend(tool_calls_result.to_messages())
             else:
                 for tcr in tool_calls_result:
-                    context_query.extend(tcr.to_openai_messages())
+                    context_query.extend(tcr.to_messages())
+
+        for part in context_query:
+            part.pop("_no_save", None)
+            # provider_state is AstrBot-internal continuation metadata. The
+            # Chat Completions wire protocol does not accept it.
+            part.pop("provider_state", None)
 
         if self._context_contains_image(context_query):
             context_query = await self._materialize_context_image_parts(context_query)
@@ -984,6 +1135,14 @@ class ProviderOpenAIOfficial(Provider):
         model = model or self.get_model()
 
         payloads = {"messages": context_query, "model": model}
+        internal_keys = {"abort_signal", "request_max_retries", "session_id"}
+        payloads.update(
+            {
+                key: copy.deepcopy(value)
+                for key, value in kwargs.items()
+                if key not in internal_keys and value is not None
+            }
+        )
 
         self._finally_convert_payload(payloads)
 
@@ -1204,22 +1363,29 @@ class ProviderOpenAIOfficial(Provider):
             payloads["tool_choice"] = tool_choice
 
         llm_response = None
-        max_retries = 10
+        max_retries = 3
         available_api_keys = self.api_keys.copy()
-        chosen_key = random.choice(available_api_keys)
+        chosen_key = random.choice(available_api_keys or [self.chosen_api_key or ""])
         image_fallback_used = False
 
         last_exception = None
         retry_cnt = 0
         for retry_cnt in range(max_retries):
             try:
-                self.client.api_key = chosen_key
-                llm_response = await self._query(
-                    payloads,
-                    func_tool,
-                    request_max_retries=request_max_retries,
-                )
-                break
+                key_token = _request_api_key.set(chosen_key)
+                abort_token = _abort_signal.set(kwargs.get("abort_signal"))
+                try:
+                    llm_response = await self._query(
+                        payloads,
+                        func_tool,
+                        request_max_retries=request_max_retries,
+                    )
+                    return llm_response
+                finally:
+                    _request_api_key.reset(key_token)
+                    _abort_signal.reset(abort_token)
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 last_exception = e
                 (
@@ -1244,7 +1410,7 @@ class ProviderOpenAIOfficial(Provider):
                 if success:
                     break
 
-        if retry_cnt == max_retries - 1 or llm_response is None:
+        if llm_response is None:
             logger.error(f"API 调用失败，重试 {max_retries} 次仍然失败。")
             if last_exception is None:
                 raise Exception("未知错误")
@@ -1282,24 +1448,42 @@ class ProviderOpenAIOfficial(Provider):
         if func_tool and not func_tool.empty():
             payloads["tool_choice"] = tool_choice
 
-        max_retries = 10
+        max_retries = 3
         available_api_keys = self.api_keys.copy()
-        chosen_key = random.choice(available_api_keys)
+        chosen_key = random.choice(available_api_keys or [self.chosen_api_key or ""])
         image_fallback_used = False
 
         last_exception = None
         retry_cnt = 0
+        yielded_visible_output = False
         for retry_cnt in range(max_retries):
             try:
-                self.client.api_key = chosen_key
-                async for response in self._query_stream(
-                    payloads,
-                    func_tool,
-                    request_max_retries=request_max_retries,
-                ):
-                    yield response
-                break
+                key_token = _request_api_key.set(chosen_key)
+                abort_token = _abort_signal.set(kwargs.get("abort_signal"))
+                try:
+                    async for response in self._query_stream(
+                        payloads,
+                        func_tool,
+                        request_max_retries=request_max_retries,
+                    ):
+                        if (
+                            response.completion_text
+                            or response.reasoning_content
+                            or response.tools_call_args
+                        ):
+                            yielded_visible_output = True
+                        yield response
+                    return
+                finally:
+                    _request_api_key.reset(key_token)
+                    _abort_signal.reset(abort_token)
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
+                if yielded_visible_output:
+                    raise RuntimeError(
+                        "OpenAI stream interrupted after output; it was not replayed."
+                    ) from e
                 last_exception = e
                 (
                     success,
@@ -1323,7 +1507,7 @@ class ProviderOpenAIOfficial(Provider):
                 if success:
                     break
 
-        if retry_cnt == max_retries - 1:
+        if last_exception is not None:
             logger.error(f"API 调用失败，重试 {max_retries} 次仍然失败。")
             if last_exception is None:
                 raise Exception("未知错误")
@@ -1349,13 +1533,13 @@ class ProviderOpenAIOfficial(Provider):
         return new_contexts
 
     def get_current_key(self) -> str:
-        return self.client.api_key
+        return getattr(self, "chosen_api_key", None) or ""
 
     def get_keys(self) -> list[str]:
         return self.api_keys
 
     def set_key(self, key) -> None:
-        self.client.api_key = key
+        self.chosen_api_key = str(key)
 
     async def assemble_context(
         self,

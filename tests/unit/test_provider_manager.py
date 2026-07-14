@@ -350,6 +350,20 @@ def test_dynamic_import_provider_unknown_type_returns_without_error():
     manager.dynamic_import_provider("unknown_provider_type")
 
 
+def test_dynamic_import_provider_registers_both_openai_protocols():
+    manager = _build_manager()
+
+    manager.dynamic_import_provider("openai_chat_completions")
+    manager.dynamic_import_provider("openai_responses")
+
+    assert provider_cls_map["openai_chat_completions"].cls_type.__name__ == (
+        "ProviderOpenAIChatCompletions"
+    )
+    assert provider_cls_map["openai_responses"].cls_type.__name__ == (
+        "ProviderOpenAIResponses"
+    )
+
+
 def test_get_provider_config_by_id_can_merge_provider_source():
     manager = _build_manager(
         {
@@ -635,7 +649,9 @@ async def test_load_provider_returns_cleanly_on_import_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_load_provider_returns_cleanly_on_unknown_dynamic_import_failure(monkeypatch):
+async def test_load_provider_returns_cleanly_on_unknown_dynamic_import_failure(
+    monkeypatch,
+):
     manager = _build_manager()
     monkeypatch.setattr(
         manager,
@@ -673,7 +689,9 @@ async def test_load_provider_wraps_type_mismatch(monkeypatch):
         ),
     )
 
-    with pytest.raises(Exception, match="实例化 fake_type_mismatch\\(mismatch\\) 提供商适配器失败"):
+    with pytest.raises(
+        Exception, match="实例化 fake_type_mismatch\\(mismatch\\) 提供商适配器失败"
+    ):
         await manager.load_provider(
             {
                 "id": "mismatch",
@@ -688,7 +706,9 @@ async def test_load_provider_wraps_type_mismatch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_clear_provider_overrides_remove_cached_and_persisted_entries(monkeypatch):
+async def test_clear_provider_overrides_remove_cached_and_persisted_entries(
+    monkeypatch,
+):
     manager = _build_manager()
     manager._session_provider_overrides = {
         "umo-1": {
@@ -985,7 +1005,9 @@ async def test_reload_terminates_removed_provider_and_auto_selects_remaining(
 
 
 @pytest.mark.asyncio
-async def test_reload_loads_enabled_provider_and_prunes_out_of_config_instances(monkeypatch):
+async def test_reload_loads_enabled_provider_and_prunes_out_of_config_instances(
+    monkeypatch,
+):
     manager = _build_manager(
         {
             "provider": [

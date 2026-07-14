@@ -194,6 +194,15 @@ class CheckpointData(BaseModel):
     id: str
 
 
+class ProviderMessageState(BaseModel):
+    """Serializable provider-specific state associated with one message."""
+
+    provider_type: str
+    provider_id: str
+    model: str | None = None
+    data: dict[str, Any]
+
+
 CHECKPOINT_ROLE = "_checkpoint"
 
 
@@ -210,6 +219,9 @@ class Message(BaseModel):
 
     tool_call_id: str | None = None
     """The ID of the tool call."""
+
+    provider_state: ProviderMessageState | None = None
+    """Provider state used only by the matching provider implementation."""
 
     _no_save: bool = PrivateAttr(default=False)
     _checkpoint_after: CheckpointData | None = PrivateAttr(default=None)
@@ -242,6 +254,8 @@ class Message(BaseModel):
             data.pop("tool_calls", None)
         if self.tool_call_id is None:
             data.pop("tool_call_id", None)
+        if self.provider_state is None:
+            data.pop("provider_state", None)
         return data
 
 

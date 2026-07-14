@@ -32,6 +32,10 @@ interface ProviderSourceItem extends GenericObject {
   templateKey?: string;
   isPlaceholder?: boolean;
   ollama_disable_thinking?: boolean;
+  responses_state_mode?: 'stateless' | 'previous_response_id' | 'conversation';
+  responses_background?: boolean;
+  store?: boolean;
+  web_search?: Record<string, unknown>;
 }
 
 interface ProviderItem extends GenericObject {
@@ -628,6 +632,16 @@ export function useProviderSources(options: UseProviderSourcesOptions) {
     if (!selectedProviderSource.value || !editableProviderSource.value)
       return false;
 
+    if (
+      editableProviderSource.value.type === 'openai_responses' &&
+      editableProviderSource.value.responses_background &&
+      (editableProviderSource.value.responses_state_mode === 'stateless' ||
+        !editableProviderSource.value.store)
+    ) {
+      showMessage(tm('providerSources.responsesBackgroundConflict'), 'error');
+      return false;
+    }
+
     savingSource.value = true;
     const originalId = String(
       selectedProviderSourceOriginalId.value ||
@@ -740,13 +754,19 @@ export function useProviderSources(options: UseProviderSourcesOptions) {
     let modalities: string[];
 
     if (!metadata) {
-      modalities = ['text', 'image', 'audio', 'tool_use'];
+      modalities =
+        selectedProviderSource.value?.type === 'openai_responses'
+          ? ['text', 'image', 'tool_use']
+          : ['text', 'image', 'audio', 'tool_use'];
     } else {
       modalities = ['text'];
       if (supportsImageInput(metadata)) {
         modalities.push('image');
       }
-      if (supportsAudioInput(metadata)) {
+      if (
+        selectedProviderSource.value?.type !== 'openai_responses' &&
+        supportsAudioInput(metadata)
+      ) {
         modalities.push('audio');
       }
       if (supportsToolCall(metadata)) {

@@ -73,6 +73,45 @@ class WebChatMessageEvent(AstrMessageEvent):
                     },
                 )
             elif isinstance(comp, Json):
+                if message.type == "llm_sources":
+                    raw_sources = comp.data if isinstance(comp.data, dict) else {}
+                    used: list[dict] = []
+                    used_by_url: dict[str, dict] = {}
+                    for item in [
+                        *(raw_sources.get("citations", []) or []),
+                        *(raw_sources.get("sources", []) or []),
+                    ]:
+                        if not isinstance(item, dict):
+                            continue
+                        url = item.get("url")
+                        if not isinstance(url, str) or not url:
+                            continue
+                        candidate = {
+                            "url": url,
+                            "title": item.get("title"),
+                            "snippet": item.get("snippet"),
+                            "start_index": item.get("start_index"),
+                            "end_index": item.get("end_index"),
+                            "source_type": item.get("source_type"),
+                        }
+                        existing = used_by_url.get(url)
+                        if existing is None:
+                            used_by_url[url] = candidate
+                            used.append(candidate)
+                            continue
+                        for key, value in candidate.items():
+                            if existing.get(key) is None and value is not None:
+                                existing[key] = value
+                    await web_chat_back_queue.put(
+                        {
+                            "type": "refs",
+                            "data": {"used": used},
+                            "streaming": streaming,
+                            "chain_type": message.type,
+                            "message_id": message_id,
+                        }
+                    )
+                    continue
                 await web_chat_back_queue.put(
                     {
                         "type": "plain",

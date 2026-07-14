@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import json
 from dataclasses import dataclass, field
@@ -6,12 +8,14 @@ from typing import Any
 from anthropic.types import Message as AnthropicMessage
 from google.genai.types import GenerateContentResponse
 from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.responses.response import Response as OpenAIResponse
 
 import astrbot.core.message.components as Comp
 from astrbot import logger
 from astrbot.core.agent.message import (
     AssistantMessageSegment,
     ContentPart,
+    ProviderMessageState,
     ToolCall,
     ToolCallMessageSegment,
     is_checkpoint_message,
@@ -67,14 +71,14 @@ class ToolCallsResult:
     tool_calls_result: list[ToolCallMessageSegment]
     """函数调用的结果"""
 
-    def to_openai_messages(self) -> list[dict]:
+    def to_messages(self) -> list[dict]:
         ret = [
             self.tool_calls_info.model_dump(),
             *[item.model_dump() for item in self.tool_calls_result],
         ]
         return ret
 
-    def to_openai_messages_model(
+    def to_message_models(
         self,
     ) -> list[AssistantMessageSegment | ToolCallMessageSegment]:
         return [
@@ -99,8 +103,8 @@ class ProviderRequest:
     """可用的函数工具"""
     contexts: list[dict] = field(default_factory=list)
     """
-    OpenAI 格式上下文列表。
-    参考 https://platform.openai.com/docs/api-reference/chat/create#chat-create-messages
+    Protocol-neutral conversation history. Providers map this internal message
+    representation to their upstream API format.
     """
     system_prompt: str = ""
     """系统提示词"""
@@ -309,7 +313,11 @@ class LLMResponse:
     """The signature of the reasoning content, if any."""
 
     raw_completion: (
-        ChatCompletion | GenerateContentResponse | AnthropicMessage | None
+        ChatCompletion
+        | OpenAIResponse
+        | GenerateContentResponse
+        | AnthropicMessage
+        | None
     ) = None
     """The raw completion response from the LLM provider."""
 
@@ -323,6 +331,13 @@ class LLMResponse:
     """The ID of the response. For chunked responses, it's the ID of the chunk; for non-chunked responses, it's the ID of the response."""
     usage: TokenUsage | None = None
     """The usage of the response. For chunked responses, it's the usage of the chunk; for non-chunked responses, it's the usage of the response."""
+    provider_state: ProviderMessageState | None = None
+    finish_reason: str | None = None
+    incomplete_details: dict[str, Any] | None = None
+    provider_error: dict[str, Any] | None = None
+    refusal: str | None = None
+    citations: list[LLMCitation] = field(default_factory=list)
+    sources: list[LLMSource] = field(default_factory=list)
 
     def __init__(
         self,
@@ -336,12 +351,20 @@ class LLMResponse:
         reasoning_content: str | None = None,
         reasoning_signature: str | None = None,
         raw_completion: ChatCompletion
+        | OpenAIResponse
         | GenerateContentResponse
         | AnthropicMessage
         | None = None,
         is_chunk: bool = False,
         id: str | None = None,
         usage: TokenUsage | None = None,
+        provider_state: ProviderMessageState | None = None,
+        finish_reason: str | None = None,
+        incomplete_details: dict[str, Any] | None = None,
+        provider_error: dict[str, Any] | None = None,
+        refusal: str | None = None,
+        citations: list[LLMCitation] | None = None,
+        sources: list[LLMSource] | None = None,
     ) -> None:
         """初始化 LLMResponse
 
@@ -379,6 +402,13 @@ class LLMResponse:
             self.id = id
         if usage is not None:
             self.usage = usage
+        self.provider_state = provider_state
+        self.finish_reason = finish_reason
+        self.incomplete_details = incomplete_details
+        self.provider_error = provider_error
+        self.refusal = refusal
+        self.citations = citations or []
+        self.sources = sources or []
 
     @property
     def completion_text(self):
@@ -398,8 +428,14 @@ class LLMResponse:
         else:
             self._completion_text = value
 
-    def to_openai_to_calls_model(self) -> list[ToolCall]:
-        """The same as to_openai_tool_calls but return pydantic model."""
+    def to_function_tool_calls_model(self) -> list[ToolCall]:
+        """Return the internal function-call message models."""
+        if not (
+            len(self.tools_call_args)
+            == len(self.tools_call_name)
+            == len(self.tools_call_ids)
+        ):
+            raise ValueError("Function tool call fields have mismatched lengths.")
         ret = []
         for idx, tool_call_arg in enumerate(self.tools_call_args):
             ret.append(
@@ -416,6 +452,22 @@ class LLMResponse:
                 ),
             )
         return ret
+
+
+@dataclass
+class LLMSource:
+    url: str
+    title: str | None = None
+    snippet: str | None = None
+    source_type: str | None = None
+
+
+@dataclass
+class LLMCitation:
+    url: str
+    title: str | None = None
+    start_index: int | None = None
+    end_index: int | None = None
 
 
 @dataclass

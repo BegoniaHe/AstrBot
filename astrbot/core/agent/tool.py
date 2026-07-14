@@ -166,8 +166,10 @@ class ToolSet:
         """Get the list of function tools."""
         return self.tools
 
-    def openai_schema(self, omit_empty_parameter_field: bool = False) -> list[dict]:
-        """Convert tools to OpenAI API function calling schema format."""
+    def openai_chat_completions_schema(
+        self, omit_empty_parameter_field: bool = False
+    ) -> list[dict]:
+        """Convert tools to the Chat Completions function-tool format."""
         result = []
         for tool in self.tools:
             func_def = {"type": "function", "function": {"name": tool.name}}
@@ -181,6 +183,25 @@ class ToolSet:
                     func_def["function"]["parameters"] = tool.parameters
 
             result.append(func_def)
+        return result
+
+    def openai_responses_schema(self) -> list[dict]:
+        """Convert tools to the flat Responses function-tool format.
+
+        Do not rewrite a plugin's JSON Schema to force strict mode. In
+        particular, changing optional properties into required ones changes a
+        tool's public contract. Responses can negotiate strict mode itself and
+        falls back to non-strict tool calling when a schema is incompatible.
+        """
+        result: list[dict] = []
+        for tool in self.tools:
+            item: dict[str, Any] = {"type": "function", "name": tool.name}
+            if tool.description:
+                item["description"] = tool.description
+            item["parameters"] = copy.deepcopy(
+                tool.parameters or {"type": "object", "properties": {}}
+            )
+            result.append(item)
         return result
 
     def anthropic_schema(self) -> list[dict]:

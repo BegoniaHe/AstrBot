@@ -563,6 +563,18 @@ class LiveChatService:
                         plain_text,
                         message_parts_to_save,
                     )
+                    if refs.get("used"):
+                        existing = {
+                            item.get("url")
+                            for item in extracted_refs.get("used", [])
+                            if isinstance(item, dict)
+                        }
+                        extracted_refs.setdefault("used", []).extend(
+                            item
+                            for item in refs["used"]
+                            if isinstance(item, dict)
+                            and item.get("url") not in existing
+                        )
                 except Exception as exc:
                     logger.exception(
                         f"[Live Chat] Failed to extract web search refs: {exc}",
@@ -636,6 +648,15 @@ class LiveChatService:
                         )
                     except Exception:
                         pass
+                    continue
+
+                if result_type == "refs":
+                    native_refs = result.get("data")
+                    if isinstance(native_refs, dict):
+                        refs = native_refs
+                    await self.send_chat_payload(
+                        session, {"ct": "chat", **result}, send_json
+                    )
                     continue
 
                 outgoing = {"ct": "chat", **result}
