@@ -299,7 +299,6 @@ class DeerFlowAgentRunner(BaseAgentRunner[TContext]):
             logger.error(f"DeerFlow request failed: {err_msg}", exc_info=True)
             yield await self._finish_with_error(err_msg)
 
-    @override
     def _extract_new_messages_from_values(
         self,
         values_messages: list[T.Any],

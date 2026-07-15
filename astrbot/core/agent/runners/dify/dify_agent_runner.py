@@ -91,7 +91,6 @@ class DifyAgentRunner(BaseAgentRunner[TContext]):
         finally:
             await self.api_client.close()
 
-    @override
     async def _upload_image_for_dify(
         self,
         image_url: str,

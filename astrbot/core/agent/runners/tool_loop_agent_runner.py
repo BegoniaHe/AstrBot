@@ -1057,7 +1057,10 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                 cached_images,
             )
 
-    async def step_until_done(self, max_step: int) -> T.AsyncGenerator[AgentResponse]:
+    @override
+    async def step_until_done(
+        self, max_step: int = 30
+    ) -> T.AsyncGenerator[AgentResponse]:
         """Process steps until the agent is done."""
         step_count = 0
         while not self.done() and step_count < max_step:
@@ -1141,7 +1144,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
                     resource.mimeType or ""
                 ).startswith("image/"):
                     image_data = resource.blob
-                    mime_type = resource.mimeType
+                    mime_type = resource.mimeType or mime_type
                 else:
                     result_parts.append(
                         "The tool has returned a data type that is not supported."

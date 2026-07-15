@@ -1,5 +1,6 @@
 import asyncio
 import random
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -203,7 +204,7 @@ class MisskeyPlatformAdapter(Platform):
         self,
         session: MessageSession,
         message_chain: MessageChain,
-    ) -> tuple[str, list[object]]:
+    ) -> tuple[str, Sequence[object]]:
         """Serialize text, add a recipient mention, and collect file components."""
         text, has_at_user = serialize_message_chain(message_chain.chain)
         session_id = session.session_id
@@ -219,18 +220,20 @@ class MisskeyPlatformAdapter(Platform):
         if len(text) > self.max_message_length:
             text = text[: self.max_message_length] + "..."
 
-        return text, [
+        file_components = [
             component
             for component in message_chain.chain
             if self._is_file_component(component)
         ][:MAX_FILE_UPLOAD_COUNT]
+        return text, file_components
 
     async def _upload_file_components(
         self,
-        components: list[object],
+        components: Sequence[object],
     ) -> tuple[list[str], list[str]]:
         """Upload file components and return Misskey IDs plus URL fallbacks."""
-        if not self.api or not components:
+        api = self.api
+        if not api or not components:
             return [], []
 
         from .misskey_utils import (
@@ -266,7 +269,7 @@ class MisskeyPlatformAdapter(Platform):
                         None,
                     )
                     if url_candidate:
-                        result = await self.api.upload_and_find_file(
+                        result = await api.upload_and_find_file(
                             str(url_candidate),
                             preferred_name,
                             folder_id=self.upload_folder,
@@ -275,7 +278,7 @@ class MisskeyPlatformAdapter(Platform):
                             return str(result["id"])
                     if local_path:
                         file_id = await upload_local_with_retries(
-                            self.api,
+                            api,
                             str(local_path),
                             preferred_name,
                             self.upload_folder,

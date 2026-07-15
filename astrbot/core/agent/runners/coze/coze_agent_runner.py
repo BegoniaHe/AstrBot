@@ -107,7 +107,6 @@ class CozeAgentRunner(BaseAgentRunner[TContext]):
         finally:
             await self.api_client.close()
 
-    @override
     async def _build_history_messages(self, session_id: str) -> list[dict]:
         """Convert manually supplied AstrBot history into Coze messages."""
         messages: list[dict] = []

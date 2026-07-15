@@ -112,7 +112,6 @@ class DashscopeAgentRunner(BaseAgentRunner[TContext]):
                 ),
             )
 
-    @override
     def _consume_sync_generator(
         self, response: T.Any, response_queue: queue.Queue
     ) -> None:
