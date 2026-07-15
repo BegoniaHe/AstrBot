@@ -673,6 +673,49 @@ class NapCatPlatformAdapter(Platform):
     ) -> None:
         await self.outbound.send_forward(session, component)
 
+    def _append_basic_outbound_segments(
+        self,
+        component: BaseMessageComponent,
+        segments: list[object],
+        fallback_parts: list[str],
+    ) -> bool:
+        """Convert text, mentions, replies, and expression components."""
+        if isinstance(component, Plain):
+            if component.text:
+                segments.append(self.client.text(component.text))
+                fallback_parts.append(component.text)
+            return True
+        if isinstance(component, AtAll):
+            segments.append(self.client.at_all())
+            fallback_parts.append("@all")
+            return True
+        if isinstance(component, At):
+            segments.append(self.client.at(component.qq, name=component.name))
+            fallback_parts.append(f"@{component.name or component.qq}")
+            return True
+        if isinstance(component, Reply):
+            segments.append(self.client.reply(component.id))
+            fallback_parts.append("[Reply]")
+            return True
+        if isinstance(component, Face):
+            segments.append(self.client.face(component.id))
+            fallback_parts.append("[Face]")
+            return True
+        if isinstance(component, MFace):
+            segments.append(
+                self.client.mface(
+                    emoji_package_id=component.emoji_package_id,
+                    emoji_id=component.emoji_id,
+                    key=component.key,
+                    summary=component.summary,
+                )
+            )
+            fallback_parts.append(
+                f"[MFace:{component.summary}]" if component.summary else "[MFace]"
+            )
+            return True
+        return False
+
     async def _build_outbound_message(
         self, message_chain: MessageChain
     ) -> str | list[object]:
@@ -680,44 +723,11 @@ class NapCatPlatformAdapter(Platform):
         fallback_parts: list[str] = []
 
         for component in message_chain.chain:
-            if isinstance(component, Plain):
-                if component.text:
-                    segments.append(self.client.text(component.text))
-                    fallback_parts.append(component.text)
-                continue
-
-            if isinstance(component, AtAll):
-                segments.append(self.client.at_all())
-                fallback_parts.append("@all")
-                continue
-
-            if isinstance(component, At):
-                segments.append(self.client.at(component.qq, name=component.name))
-                fallback_parts.append(f"@{component.name or component.qq}")
-                continue
-
-            if isinstance(component, Reply):
-                segments.append(self.client.reply(component.id))
-                fallback_parts.append("[Reply]")
-                continue
-
-            if isinstance(component, Face):
-                segments.append(self.client.face(component.id))
-                fallback_parts.append("[Face]")
-                continue
-
-            if isinstance(component, MFace):
-                segments.append(
-                    self.client.mface(
-                        emoji_package_id=component.emoji_package_id,
-                        emoji_id=component.emoji_id,
-                        key=component.key,
-                        summary=component.summary,
-                    )
-                )
-                fallback_parts.append(
-                    f"[MFace:{component.summary}]" if component.summary else "[MFace]"
-                )
+            if self._append_basic_outbound_segments(
+                component,
+                segments,
+                fallback_parts,
+            ):
                 continue
 
             if isinstance(component, Contact):
