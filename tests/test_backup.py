@@ -27,11 +27,11 @@ from astrbot.core.config.default import VERSION
 from astrbot.core.db.po import (
     ConversationV2,
 )
-from astrbot.core.utils.version_comparator import VersionComparator
 from astrbot.dashboard.services.backup_service import (
     generate_unique_filename,
     secure_filename,
 )
+from astrbot.utils.version_comparator import VersionComparator
 
 
 @pytest.fixture

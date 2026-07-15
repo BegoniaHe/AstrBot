@@ -1,3 +1,5 @@
+from astrbot.utils.version_comparator import VersionComparator
+
 from .basic import (
     check_astrbot_root,
     check_dashboard,
@@ -10,7 +12,6 @@ from .plugin import (
     install_local_plugin,
     manage_plugin,
 )
-from .version_comparator import VersionComparator
 
 __all__ = [
     "PluginStatus",

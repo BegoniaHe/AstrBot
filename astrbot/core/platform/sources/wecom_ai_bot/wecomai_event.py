@@ -13,6 +13,8 @@ from .wecomai_webhook import WecomAIBotWebhookClient
 
 
 class WecomAIBotMessageEvent(AstrMessageEvent):
+    requires_empty_completion = True
+
     """企业微信智能机器人消息事件"""
 
     STREAM_FLUSH_INTERVAL = 0.5

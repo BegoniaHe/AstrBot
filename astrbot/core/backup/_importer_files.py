@@ -3,9 +3,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from astrbot.core import logger
+from astrbot import logger
 from astrbot.core.utils.io import ensure_dir
-from astrbot.core.utils.version_comparator import VersionComparator
+from astrbot.utils.version_comparator import VersionComparator
 
 from .constants import get_backup_directories
 

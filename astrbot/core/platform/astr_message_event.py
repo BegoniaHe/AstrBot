@@ -70,6 +70,8 @@ class _LazyExtraValue:
 
 
 class AstrMessageEvent(abc.ABC):
+    requires_empty_completion = False
+
     @staticmethod
     def _resolve_route_target_id(
         message_obj: AstrBotMessage,

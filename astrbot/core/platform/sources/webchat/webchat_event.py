@@ -21,6 +21,8 @@ attachments_dir = os.path.join(get_astrbot_data_path(), "attachments")
 
 
 class WebChatMessageEvent(AstrMessageEvent):
+    requires_empty_completion = True
+
     def __init__(self, message_str, message_obj, platform_meta, session_id) -> None:
         super().__init__(message_str, message_obj, platform_meta, session_id)
         os.makedirs(attachments_dir, exist_ok=True)

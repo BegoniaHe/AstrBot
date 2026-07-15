@@ -12,8 +12,7 @@ import httpx
 import yaml
 
 from astrbot.core.utils.io import extract_zip_safely
-
-from .version_comparator import VersionComparator
+from astrbot.utils.version_comparator import VersionComparator
 
 
 class PluginStatus(StrEnum):

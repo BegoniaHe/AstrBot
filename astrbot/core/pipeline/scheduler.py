@@ -1,12 +1,8 @@
 from collections.abc import AsyncGenerator
 from time import time
 
-from astrbot.core import logger
+from astrbot import logger
 from astrbot.core.platform import AstrMessageEvent
-from astrbot.core.platform.sources.webchat.webchat_event import WebChatMessageEvent
-from astrbot.core.platform.sources.wecom_ai_bot.wecomai_event import (
-    WecomAIBotMessageEvent,
-)
 from astrbot.core.utils.active_event_registry import active_event_registry
 
 from .bootstrap import ensure_builtin_stages_registered
@@ -91,7 +87,7 @@ class PipelineScheduler:
             await self._process_stages(event)
 
             # 发送一个空消息, 以便于后续的处理
-            if isinstance(event, WebChatMessageEvent | WecomAIBotMessageEvent):
+            if event.requires_empty_completion:
                 await event.send(None)
 
             elapsed = time() - started_at

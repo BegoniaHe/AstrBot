@@ -85,3 +85,6 @@ venv/
 
 # Generic logs
 *.log
+
+# pyscn
+.pyscn/

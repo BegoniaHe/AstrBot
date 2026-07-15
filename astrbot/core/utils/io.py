@@ -20,8 +20,9 @@ import certifi
 import psutil
 from PIL import Image
 
+from astrbot.utils.version_comparator import VersionComparator
+
 from .astrbot_path import get_astrbot_data_path, get_astrbot_path, get_astrbot_temp_path
-from .version_comparator import VersionComparator
 
 logger = logging.getLogger("astrbot")
 

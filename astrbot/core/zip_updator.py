@@ -10,9 +10,9 @@ from typing import NoReturn
 import certifi
 import httpx
 
-from astrbot.core import logger
+from astrbot import logger
 from astrbot.core.utils.io import ensure_dir, on_error
-from astrbot.core.utils.version_comparator import VersionComparator
+from astrbot.utils.version_comparator import VersionComparator
 
 
 class ReleaseInfo:

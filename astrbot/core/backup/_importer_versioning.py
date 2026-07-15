@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from astrbot.core.config.default import VERSION
-from astrbot.core.utils.version_comparator import VersionComparator
+from astrbot.utils.version_comparator import VersionComparator
 
 
 @dataclass(frozen=True)

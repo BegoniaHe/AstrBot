@@ -1,3 +1,5 @@
+"""Semantic version comparison utilities."""
+
 import re
 from itertools import zip_longest
 from typing import cast
@@ -10,11 +12,10 @@ _SEMVER_RE = re.compile(
 class VersionComparator:
     @staticmethod
     def compare_version(v1: str, v2: str) -> int:
-        """根据 Semver 语义版本规范来比较版本号的大小。支持不仅局限于 3 个数字的版本号，并处理预发布标签。
+        """Compare version numbers according to Semver semantics.
 
-        参考: https://semver.org/lang/zh-CN/
-
-        返回 1 表示 v1 > v2，返回 -1 表示 v1 < v2，返回 0 表示 v1 = v2。
+        Supports versions with more than three numeric components and pre-release
+        identifiers. Returns 1 when v1 > v2, -1 when v1 < v2, and 0 otherwise.
         """
         normalized_v1 = VersionComparator._normalize_version(v1)
         normalized_v2 = VersionComparator._normalize_version(v2)

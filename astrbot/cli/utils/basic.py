@@ -23,8 +23,7 @@ async def check_dashboard(astrbot_root: Path) -> None:
     """Check if the dashboard is installed"""
     from astrbot.core.config.default import VERSION
     from astrbot.core.utils.io import download_dashboard, get_dashboard_version
-
-    from .version_comparator import VersionComparator
+    from astrbot.utils.version_comparator import VersionComparator
 
     try:
         dashboard_version = await get_dashboard_version()

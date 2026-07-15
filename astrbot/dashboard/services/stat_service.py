@@ -14,7 +14,7 @@ import aiohttp
 import psutil
 from sqlmodel import col, select
 
-from astrbot.core import DEMO_MODE, logger
+from astrbot import logger
 from astrbot.core.config import VERSION
 from astrbot.core.config.astrbot_config import AstrBotConfig
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
@@ -31,12 +31,12 @@ from astrbot.core.utils.auth_password import (
 )
 from astrbot.core.utils.io import get_dashboard_dist_version, get_dashboard_version
 from astrbot.core.utils.storage_cleaner import StorageCleaner
-from astrbot.core.utils.version_comparator import VersionComparator
 from astrbot.dashboard.password_state import (
     get_dashboard_password_hash,
     is_password_change_required,
     is_password_storage_upgraded,
 )
+from astrbot.utils.version_comparator import VersionComparator
 
 
 class StatServiceError(Exception):
@@ -53,10 +53,11 @@ class StatService:
         self.db_helper = db_helper
         self.core_lifecycle = core_lifecycle
         self.config = config
+        self.demo_mode = core_lifecycle.services.demo_mode
         self.storage_cleaner = StorageCleaner(config)
 
     async def restart_core(self) -> None:
-        if DEMO_MODE:
+        if self.demo_mode:
             raise StatServiceError(
                 "You are not permitted to do this operation in demo mode"
             )
@@ -77,7 +78,7 @@ class StatService:
             self.config,
         )
         if password_change_required:
-            return not DEMO_MODE
+            return not self.demo_mode
 
         storage_upgraded = await is_password_storage_upgraded(
             self.db_helper,
@@ -90,7 +91,7 @@ class StatService:
         password = get_dashboard_password_hash(self.config, upgraded=True)
         return (
             username == "astrbot" and is_default_dashboard_password(password)
-        ) and not DEMO_MODE
+        ) and not self.demo_mode
 
     async def get_version(self) -> dict:
         storage_upgraded = await is_password_storage_upgraded(
