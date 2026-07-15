@@ -6,6 +6,9 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   python:
     name: Python (ruff)
@@ -18,7 +21,7 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --locked
       - name: ruff format + check
         run: make check-py
 
@@ -54,7 +57,7 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --locked
       - name: Install root toolchain
         run: npm install
       - name: Check json/css/html

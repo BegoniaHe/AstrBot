@@ -1,7 +1,7 @@
 .PHONY: worktree worktree-add worktree-rm pr-test-neo pr-test-full pr-test-full-fast \
 	build build-all build-backend build-dashboard run run-backend run-dashboard \
 	stop stop-backend stop-dashboard clean status docs napcat-schema-ob11-event napcat-schema-ob11-event-normalized napcat-models-ob11-event napcat-models-ob11-event-src napcat-codegen napcat-test napcat-check quality quality-report \
-	quality-all quality-sync quality-pyright quality-bandit quality-audit quality-complexity quality-radon-cc quality-radon-mi \
+	quality-all quality-sync quality-pyright quality-bandit quality-audit quality-web-audit quality-complexity quality-radon-cc quality-radon-mi \
 	quality-report-all quality-report-pyright quality-report-bandit quality-report-audit quality-report-radon-cc quality-report-radon-mi \
 	check check-all format format-all test test-all \
 	check-py check-py-all check-py-format check-py-lint \
@@ -25,11 +25,11 @@ NAPCAT_MODELS_SOURCE_PATH ?= astrbot/core/platform/sources/napcat/generated/ob11
 PS ?= pwsh -NoProfile -NonInteractive -File
 PNPM := corepack pnpm
 NPX := npm exec --yes --
-QUALITY_TYPE_TARGETS := astrbot/api astrbot/cli astrbot/core/backup astrbot/core/config astrbot/core/knowledge_base astrbot/core/skills astrbot/utils
-QUALITY_SECURITY_TARGETS := astrbot/api astrbot/cli astrbot/core/backup astrbot/core/knowledge_base astrbot/core/skills astrbot/utils
+QUALITY_TYPE_TARGETS := astrbot
+QUALITY_SECURITY_TARGETS := astrbot
 CHECK_TARGETS := check-py check-web check-data check-md check-toml check-yaml check-shell check-ps check-docker
 FORMAT_TARGETS := format-py format-web format-data format-md format-toml format-yaml format-shell format-ps
-QUALITY_TARGETS := quality-pyright quality-bandit quality-audit quality-complexity quality-radon-cc quality-radon-mi
+QUALITY_TARGETS := quality-pyright quality-bandit quality-audit quality-web-audit quality-complexity quality-radon-cc quality-radon-mi
 QUALITY_REPORT_TARGETS := quality-report-pyright quality-report-bandit quality-report-audit quality-report-radon-cc quality-report-radon-mi
 CHECK_PY_TARGETS := check-py-format check-py-lint
 CHECK_WEB_TARGETS := check-web-build check-web-eslint check-web-smoke check-web-prettier
@@ -78,7 +78,7 @@ build: build-all
 build-all: build-backend build-dashboard
 
 build-backend:
-	uv sync
+	uv sync --locked
 
 build-dashboard:
 	cd $(DASHBOARD_DIR) && CI=true $(PNPM) install --no-frozen-lockfile
@@ -149,16 +149,20 @@ quality-all: $(QUALITY_TARGETS)
 	@echo "==> focused quality checks passed"
 
 quality-sync:
-	uv sync --group dev
+	uv sync --group dev --locked
 
 quality-pyright: quality-sync
 	uv run pyright --project pyrightconfig.quality.json
 
 quality-bandit: quality-sync
-	PYTHONIOENCODING=utf-8 uv run bandit -lll -iii -r $(QUALITY_SECURITY_TARGETS) -c pyproject.toml
+	PYTHONIOENCODING=utf-8 uv run bandit -ll -ii -r $(QUALITY_SECURITY_TARGETS) -c pyproject.toml
 
 quality-audit: quality-sync
-	uv run pip-audit
+	uv run pip-audit --strict
+
+quality-web-audit:
+	cd $(DASHBOARD_DIR) && $(PNPM) install --frozen-lockfile
+	cd $(DASHBOARD_DIR) && $(PNPM) audit --audit-level=low
 
 quality-complexity: quality-sync
 	uv run ruff check --select C901 --config "lint.mccabe.max-complexity=40" astrbot
@@ -179,10 +183,10 @@ quality-report-pyright: quality-sync
 	uv run pyright
 
 quality-report-bandit: quality-sync
-	PYTHONIOENCODING=utf-8 uv run bandit -lll -iii -r astrbot -c pyproject.toml
+	PYTHONIOENCODING=utf-8 uv run bandit -ll -ii -r astrbot -c pyproject.toml
 
 quality-report-audit: quality-sync
-	uv run pip-audit
+	uv run pip-audit --strict
 
 quality-report-radon-cc: quality-sync
 	uv run radon cc astrbot -s -n C

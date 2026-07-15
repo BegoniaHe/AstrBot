@@ -94,7 +94,7 @@ echo "==> Build dashboard: $RUN_DASHBOARD"
 
 if [[ "$RUN_SYNC" == true ]]; then
   echo "==> Syncing dependencies with uv"
-  uv sync --group dev
+  uv sync --group dev --locked
 fi
 
 echo "==> Preparing test directories"

@@ -11,6 +11,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke-test:
     name: Smoke test (${{ matrix.os }}, Python ${{ matrix.python-version }})
