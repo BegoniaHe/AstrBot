@@ -52,6 +52,11 @@ jobs:
       - name: Audit dependencies
         run: uv run pip-audit
 
+      - name: Enforce complexity baseline
+        run: >
+          uv run ruff check --select C901
+          --config "lint.mccabe.max-complexity=44" astrbot
+
       - name: Report complexity
         run: |
           uv run radon cc \
