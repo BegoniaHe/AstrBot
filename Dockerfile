@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.14-slim
+FROM python:3.14.6-slim
 WORKDIR /AstrBot
 
 # Enable pipefail so failures in install pipes abort the build.
@@ -13,12 +13,12 @@ ENV UV_INSTALL_DIR=/usr/local/bin \
     PATH=/usr/local/cargo/bin:${PATH} \
     XDG_BIN_HOME=/usr/local/bin \
     UV_LINK_MODE=copy \
-    SHFMT_VERSION=3.10.0 \
-    HADOLINT_VERSION=2.12.0 \
+    SHFMT_VERSION=3.13.1 \
+    HADOLINT_VERSION=2.14.0 \
     PLAYWRIGHT_VERSION=1.61.0 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     TYPST_VERSION=0.15.0 \
-    YQ_VERSION=4.47.2 \
+    YQ_VERSION=4.53.3 \
     QUARTO_VERSION=1.9.38 \
     PNPM_STORE_DIR=/pnpm/store \
     UV_CACHE_DIR=/root/.cache/uv \
@@ -170,11 +170,11 @@ RUN touch "${BASH_ENV}" \
     && echo '. "${BASH_ENV}"' >> ~/.bashrc \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh | PROFILE="${BASH_ENV}" bash \
     && source "${BASH_ENV}" \
-    && nvm install node \
-    && nvm alias default node \
+    && nvm install 24.15.0 \
+    && nvm alias default 24.15.0 \
     && npm install -g corepack \
     && corepack enable \
-    && corepack prepare pnpm@11.9.0 --activate \
+    && corepack prepare pnpm@11.13.0 --activate \
     && current_node_dir="$(dirname "$(dirname "$(nvm which current)")")" \
     && for tool in node npm npx corepack pnpm; do \
         if [[ -x "${current_node_dir}/bin/${tool}" ]]; then \
@@ -278,7 +278,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/root/.cache,sharing=locked \
     curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv --version \
-    && echo "3.14" > .python-version
+    && echo "3.14.6" > .python-version
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv pip install -r requirements.txt --no-cache-dir --system \
@@ -340,7 +340,7 @@ RUN arch="$(dpkg --print-architecture)" \
     esac \
     && mkdir -p /opt/microsoft/powershell/7 \
     && curl -fsSL \
-        "https://github.com/PowerShell/PowerShell/releases/download/v7.5.3/powershell-7.5.3-linux-${powershell_arch}.tar.gz" \
+        "https://github.com/PowerShell/PowerShell/releases/download/v7.6.3/powershell-7.6.3-linux-${powershell_arch}.tar.gz" \
         | tar -xz -C /opt/microsoft/powershell/7 \
     && chmod +x /opt/microsoft/powershell/7/pwsh \
     && ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \

@@ -15,11 +15,11 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.9
         with:
-          version: 10.28.2
+          version: 11.13.0
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '24.13.0'
+          node-version: '24.15.0'
           cache: 'pnpm'
           cache-dependency-path: docs/pnpm-lock.yaml
       - name: Install dependencies

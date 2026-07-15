@@ -53,12 +53,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.9
         with:
-          version: 10.28.2
+          version: 11.13.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '24.13.0'
+          node-version: '24.15.0'
           cache: 'pnpm'
           cache-dependency-path: dashboard/pnpm-lock.yaml
 
@@ -245,7 +245,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: '3.14.6'
 
       - name: Install uv
         shell: bash
