@@ -15,7 +15,7 @@ on:
         required: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-dashboard:
@@ -124,6 +124,8 @@ jobs:
     name: Publish GitHub Release
     if: github.repository == 'AstrBotDevs/AstrBot'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     needs:
       - build-dashboard
     steps:
