@@ -121,17 +121,11 @@ class DiscordPlatformEvent(AstrMessageEvent):
     async def send_streaming(
         self, generator: AsyncGenerator[MessageChain], use_fallback: bool = False
     ):
-        buffer = None
-        async for chain in generator:
-            if not buffer:
-                buffer = chain
-            else:
-                buffer.chain.extend(chain.chain)
-        if not buffer:
-            return await super().send_streaming(generator, use_fallback)
-        buffer.squash_plain()
-        await self.send(buffer)
-        return await super().send_streaming(generator, use_fallback)
+        return await self._send_buffered_streaming_response(
+            generator,
+            use_fallback,
+            record_empty=True,
+        )
 
     async def _get_channel(
         self,

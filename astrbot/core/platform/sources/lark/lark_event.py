@@ -921,24 +921,8 @@ class LarkMessageEvent(AstrMessageEvent):
             logger.debug(f"[Lark] 流式模式已关闭: {card_id}")
 
     async def _fallback_send_streaming(self, generator, use_fallback: bool = False):
-        """回退到非流式发送：缓冲全部文本后一次性发送，并保留父类副作用。"""
-        buffer = None
-        async for chain in generator:
-            if not buffer:
-                buffer = chain
-            else:
-                buffer.chain.extend(chain.chain)
-
-        if buffer:
-            buffer.squash_plain()
-            await self.send(buffer)
-
-        create_tracked_task(
-            _BACKGROUND_TASKS,
-            Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
-            name=f"metric:lark-fallback:{self.platform_meta.name}",
-        )
-        self._has_send_oper = True
+        """Fall back to one buffered message when CardKit is unavailable."""
+        return await self._send_buffered_streaming_response(generator, use_fallback)
 
     async def send_streaming(self, generator, use_fallback: bool = False):
         """使用 CardKit 流式卡片实现打字机效果。
@@ -974,7 +958,11 @@ class LarkMessageEvent(AstrMessageEvent):
                         text_changed.set()
 
         async def _consume_rest_and_fallback(gen, initial_text: str) -> None:
-            """Card creation failed; consume remaining chunks and send non-streaming."""
+            """Card creation failed; preserve the already-consumed text delta.
+
+            This remains local because the CardKit path has consumed part of the
+            current chain and intentionally ignores non-MessageChain values.
+            """
             nonlocal fallback_used
             fallback_used = True
             buffer = MessageChain().message(initial_text) if initial_text else None

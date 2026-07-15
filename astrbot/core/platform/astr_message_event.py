@@ -441,6 +441,38 @@ class AstrMessageEvent(abc.ABC):
             buffer = buffer[match.end() :]
         return buffer
 
+    async def _send_buffered_streaming_response(
+        self,
+        generator: AsyncGenerator[MessageChain],
+        use_fallback: bool = False,
+        *,
+        record_empty: bool = False,
+    ) -> PlatformSendResult | None:
+        """Buffer a stream into one message while preserving component order.
+
+        This is for adapters whose streaming fallback must submit the complete
+        message in one request. It deliberately does not use
+        :meth:`send_non_streaming_response`: that method may flush media before
+        later text when ``use_fallback`` is enabled.
+        """
+        message_buffer: MessageChain | None = None
+        async for chain in generator:
+            if message_buffer is None:
+                message_buffer = chain
+            else:
+                message_buffer.chain.extend(chain.chain)
+
+        if message_buffer is None:
+            if record_empty:
+                return await AstrMessageEvent.send_streaming(
+                    self, generator, use_fallback
+                )
+            return None
+
+        message_buffer.squash_plain()
+        await self.send(message_buffer)
+        return await AstrMessageEvent.send_streaming(self, generator, use_fallback)
+
     async def send_non_streaming_response(
         self,
         generator: AsyncGenerator[MessageChain],
@@ -458,23 +490,11 @@ class AstrMessageEvent(abc.ABC):
         rate limits; this shared path only owns stream consumption and metrics.
         """
         if not use_fallback:
-            message_buffer: MessageChain | None = None
-            async for chain in generator:
-                if message_buffer is None:
-                    message_buffer = chain
-                else:
-                    message_buffer.chain.extend(chain.chain)
-            if message_buffer is None:
-                if record_empty:
-                    return await AstrMessageEvent.send_streaming(
-                        self,
-                        generator,
-                        use_fallback,
-                    )
-                return None
-            message_buffer.squash_plain()
-            await self.send(message_buffer)
-            return await AstrMessageEvent.send_streaming(self, generator, use_fallback)
+            return await self._send_buffered_streaming_response(
+                generator,
+                use_fallback,
+                record_empty=record_empty,
+            )
 
         text_buffer = ""
         sent_any = False

@@ -705,6 +705,57 @@ class TestSendStreaming:
         assert astr_message_event._has_send_oper is True
 
     @pytest.mark.asyncio
+    async def test_buffered_streaming_response_preserves_component_order(
+        self, astr_message_event
+    ):
+        """Buffered fallbacks send one squashed chain and record once."""
+        mention = At(qq="user-1")
+
+        async def generator():
+            yield MessageChain([Plain("hello "), mention])
+            yield MessageChain([Plain("world")])
+
+        astr_message_event.send = AsyncMock()
+        with patch.object(
+            AstrMessageEvent,
+            "send_streaming",
+            AsyncMock(return_value="recorded"),
+        ) as record_send:
+            result = await astr_message_event._send_buffered_streaming_response(
+                generator()
+            )
+
+        assert result == "recorded"
+        astr_message_event.send.assert_awaited_once()
+        sent_chain = astr_message_event.send.await_args.args[0]
+        assert sent_chain.chain == [Plain("hello world"), mention]
+        record_send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_buffered_streaming_response_skips_empty_stream(
+        self, astr_message_event
+    ):
+        """An empty stream neither sends a message nor records a stream send."""
+
+        async def generator():
+            if False:
+                yield MessageChain()
+
+        astr_message_event.send = AsyncMock()
+        with patch.object(
+            AstrMessageEvent,
+            "send_streaming",
+            AsyncMock(return_value="recorded"),
+        ) as record_send:
+            result = await astr_message_event._send_buffered_streaming_response(
+                generator()
+            )
+
+        assert result is None
+        astr_message_event.send.assert_not_awaited()
+        record_send.assert_not_awaited()
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("chains", "use_fallback", "pattern", "expected_count"),
         [
