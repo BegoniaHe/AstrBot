@@ -524,7 +524,7 @@ class AstrBotDashboard:
         host = (
             os.environ.get("DASHBOARD_HOST")
             or os.environ.get("ASTRBOT_DASHBOARD_HOST")
-            or dashboard_config.get("host", "0.0.0.0")
+            or dashboard_config.get("host", "127.0.0.1")
         )
         enable = dashboard_config.get("enable", True)
         ssl_config = dashboard_config.get("ssl", {})
@@ -547,7 +547,7 @@ class AstrBotDashboard:
             return None
 
         logger.info("Starting WebUI at %s://%s:%s", scheme, host, port)
-        if host == "0.0.0.0":
+        if host == str(ipaddress.IPv4Address(0)):
             logger.info(
                 "WebUI listens on all interfaces. Check security. Set dashboard.host in data/cmd_config.json to change it.",
             )

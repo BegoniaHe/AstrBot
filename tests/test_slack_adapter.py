@@ -656,7 +656,7 @@ async def test_slack_run_waits_on_unified_webhook_mode(monkeypatch):
     assert len(webhook_clients) == 1
     assert webhook_clients[0][:4] == (
         "secret",
-        "0.0.0.0",
+        "127.0.0.1",
         3000,
         "/astrbot-slack-webhook/callback",
     )

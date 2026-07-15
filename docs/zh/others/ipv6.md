@@ -32,4 +32,4 @@ astrbot run
 # http://[ipv6地址]:6185
 ```
 
-AstrBot 默认监听地址为 `0.0.0.0`（仅 IPv4）。如需通过 IPv6 访问 WebUI，请在 `data/cmd_config.json` 中将 `dashboard.host` 手动改为 `::`（大多数系统上 `::` 会同时开启双栈，允许 IPv4/IPv6 一起访问），修改后重启 AstrBot 生效。
+AstrBot 默认监听地址为 `127.0.0.1`。如需通过 IPv6 或远程网络访问 WebUI，请在 `data/cmd_config.json` 中将 `dashboard.host` 手动改为 `::` 或相应的监听地址，修改后重启 AstrBot 生效。

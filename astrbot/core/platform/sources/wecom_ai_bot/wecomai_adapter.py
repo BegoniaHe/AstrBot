@@ -95,7 +95,7 @@ class WecomAIBotAdapter(Platform):
             "encoding_aes_key", self.config.get("wecomaibot_encoding_aes_key", "")
         )
         self.port = int(self.config["port"])
-        self.host = self.config.get("callback_server_host", "0.0.0.0")
+        self.host = self.config.get("callback_server_host", "127.0.0.1")
         self.bot_name = self.config.get("wecom_ai_bot_name", "")
         self.initial_respond_text = self.config.get(
             "wecomaibot_init_respond_text",

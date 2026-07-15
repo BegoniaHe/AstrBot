@@ -6,7 +6,7 @@ import os
 import pytest
 
 from astrbot.core.config.astrbot_config import AstrBotConfig, RateLimitStrategy
-from astrbot.core.config.default import DEFAULT_VALUE_MAP
+from astrbot.core.config.default import DEFAULT_CONFIG, DEFAULT_VALUE_MAP
 from astrbot.core.config.i18n_utils import ConfigMetadataI18n
 from astrbot.core.utils.auth_password import (
     DEFAULT_DASHBOARD_PASSWORD,
@@ -53,6 +53,22 @@ class TestRateLimitStrategy:
     def test_discard_value(self):
         """Test discard enum value."""
         assert RateLimitStrategy.DISCARD.value == "discard"
+
+
+def test_default_config_avoids_public_listener_addresses():
+    """Default configuration must not expose listeners on every interface."""
+    values: list[str] = []
+    pending = [DEFAULT_CONFIG]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+        elif isinstance(current, str):
+            values.append(current)
+
+    assert "0.0.0.0" not in values
 
 
 class TestAstrBotConfigLoad:

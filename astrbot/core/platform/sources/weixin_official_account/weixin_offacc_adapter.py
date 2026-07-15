@@ -40,7 +40,7 @@ class WeixinOfficialAccountServer:
     ) -> None:
         self.server = FastAPIWebhookServer("weixin-official-account-webhook")
         self.port = int(cast(int | str, config.get("port")))
-        self.callback_server_host = config.get("callback_server_host", "0.0.0.0")
+        self.callback_server_host = config.get("callback_server_host", "127.0.0.1")
         self.token = config.get("token")
         self.encoding_aes_key = config.get("encoding_aes_key")
         self.appid = config.get("appid")
