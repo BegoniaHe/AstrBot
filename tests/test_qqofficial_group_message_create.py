@@ -10,7 +10,6 @@ import pytest
 from botpy import ConnectionSession
 
 from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Video
 from astrbot.api.message_components import At, File, Image, Plain, Record, Reply, Video
 from astrbot.core.message.message_event_result import (
     MessageEventResult,
@@ -449,8 +448,12 @@ async def test_send_with_markdown_fallback_retries_streaming_newline_fix(monkeyp
             raise RuntimeError(QQOfficialMessageEvent.STREAM_MARKDOWN_NEWLINE_ERROR)
         return payload
 
-    monkeypatch.setattr(qqofficial_message_event, "_QQOFFICIAL_SEND_API_ERRORS", (RuntimeError,))
-    monkeypatch.setattr(qqofficial_message_event.botpy.errors, "ServerError", RuntimeError)
+    monkeypatch.setattr(
+        qqofficial_message_event, "_QQOFFICIAL_SEND_API_ERRORS", (RuntimeError,)
+    )
+    monkeypatch.setattr(
+        qqofficial_message_event.botpy.errors, "ServerError", RuntimeError
+    )
 
     result = await event._send_with_markdown_fallback(
         send_func=flaky_send,
@@ -475,8 +478,12 @@ async def test_send_with_markdown_fallback_downgrades_to_plain_content(monkeypat
             raise RuntimeError(QQOfficialMessageEvent.MARKDOWN_NOT_ALLOWED_ERROR)
         return payload
 
-    monkeypatch.setattr(qqofficial_message_event, "_QQOFFICIAL_SEND_API_ERRORS", (RuntimeError,))
-    monkeypatch.setattr(qqofficial_message_event.botpy.errors, "ServerError", RuntimeError)
+    monkeypatch.setattr(
+        qqofficial_message_event, "_QQOFFICIAL_SEND_API_ERRORS", (RuntimeError,)
+    )
+    monkeypatch.setattr(
+        qqofficial_message_event.botpy.errors, "ServerError", RuntimeError
+    )
 
     result = await event._send_with_markdown_fallback(
         send_func=flaky_send,
@@ -493,7 +500,9 @@ async def test_send_with_markdown_fallback_downgrades_to_plain_content(monkeypat
 async def test_post_c2c_message_drops_none_msg_id_and_stream_id():
     request = AsyncMock(return_value=None)
     event = QQOfficialMessageEvent.__new__(QQOfficialMessageEvent)
-    event._bot = SimpleNamespace(api=SimpleNamespace(_http=SimpleNamespace(request=request)))
+    event._bot = SimpleNamespace(
+        api=SimpleNamespace(_http=SimpleNamespace(request=request))
+    )
 
     result = await event.post_c2c_message(
         openid="friend-1",
@@ -523,14 +532,16 @@ async def test_split_message_chain_by_media_separates_each_additional_media_comp
     )
 
     assert len(chunks) == 2
-    assert [component.text for component in chunks[0].chain if isinstance(component, Plain)] == [
+    assert [
+        component.text for component in chunks[0].chain if isinstance(component, Plain)
+    ] == [
         "before ",
         "middle ",
     ]
     assert isinstance(chunks[0].chain[1], Image)
-    assert [component.text for component in chunks[1].chain if isinstance(component, Plain)] == [
-        "after"
-    ]
+    assert [
+        component.text for component in chunks[1].chain if isinstance(component, Plain)
+    ] == ["after"]
     assert isinstance(chunks[1].chain[0], File)
 
 
@@ -564,7 +575,9 @@ async def test_post_send_splits_send_buffer_and_clears_it_after_last_chunk():
 
 
 @pytest.mark.asyncio
-async def test_post_send_one_c2c_stream_downgrades_rich_media_to_non_stream(monkeypatch):
+async def test_post_send_one_c2c_stream_downgrades_rich_media_to_non_stream(
+    monkeypatch,
+):
     source = botpy.message.C2CMessage(
         None,
         "evt-1",
@@ -578,7 +591,9 @@ async def test_post_send_one_c2c_stream_downgrades_rich_media_to_non_stream(monk
     )
     event = QQOfficialMessageEvent.__new__(QQOfficialMessageEvent)
     event.message_obj = message_obj
-    event.send_buffer = MessageChain([Plain("hello"), Image.fromURL("https://img/1.png")])
+    event.send_buffer = MessageChain(
+        [Plain("hello"), Image.fromURL("https://img/1.png")]
+    )
     event.track_temporary_local_file = MagicMock()
     event.upload_group_and_c2c_image = AsyncMock(return_value={"file_uuid": "file-1"})
     event.upload_group_and_c2c_media = AsyncMock()
@@ -599,6 +614,153 @@ async def test_post_send_one_c2c_stream_downgrades_rich_media_to_non_stream(monk
     assert "stream" not in event.post_c2c_message.await_args.kwargs
     assert event.post_c2c_message.await_args.kwargs["media"] == {"file_uuid": "file-1"}
     parent_send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source", "api_method", "target_key", "target_value"),
+    [
+        (
+            botpy.message.GroupMessage(
+                None,
+                "evt-group",
+                {
+                    "id": "msg-group",
+                    "group_openid": "group-1",
+                    "author": {"member_openid": "member-1"},
+                },
+            ),
+            "post_group_message",
+            "group_openid",
+            "group-1",
+        ),
+        (
+            botpy.message.C2CMessage(
+                None,
+                "evt-c2c",
+                {"id": "msg-c2c", "author": {"user_openid": "user-1"}},
+            ),
+            "post_c2c_message",
+            "openid",
+            "user-1",
+        ),
+        (
+            botpy.message.Message(
+                None,
+                "evt-channel",
+                {"id": "msg-channel", "channel_id": "channel-1"},
+            ),
+            "post_message",
+            "channel_id",
+            "channel-1",
+        ),
+        (
+            botpy.message.DirectMessage(
+                None,
+                "evt-dm",
+                {"id": "msg-dm", "guild_id": "guild-1"},
+            ),
+            "post_dms",
+            "guild_id",
+            "guild-1",
+        ),
+    ],
+)
+async def test_post_send_one_routes_text_for_every_qq_message_source(
+    source,
+    api_method,
+    target_key,
+    target_value,
+):
+    api = SimpleNamespace(
+        post_group_message=AsyncMock(return_value={"id": "group-sent"}),
+        post_message=AsyncMock(return_value={"id": "channel-sent"}),
+        post_dms=AsyncMock(return_value={"id": "dm-sent"}),
+    )
+    event = QQOfficialMessageEvent.__new__(QQOfficialMessageEvent)
+    event._bot = SimpleNamespace(api=api)
+    event.message_obj = SimpleNamespace(raw_message=source, message_id="msg-1")
+    event.send_buffer = MessageChain([Plain("hello")], use_markdown_=False)
+    event.track_temporary_local_file = MagicMock()
+    event.post_c2c_message = AsyncMock(return_value={"id": "c2c-sent"})
+
+    with patch.object(AstrMessageEvent, "send", AsyncMock(return_value=None)):
+        await event._post_send_one(
+            event.send_buffer,
+            stream={"state": 10, "id": None},
+        )
+
+    sender = (
+        event.post_c2c_message
+        if api_method == "post_c2c_message"
+        else getattr(api, api_method)
+    )
+    if api_method == "post_c2c_message":
+        sent_kwargs = sender.await_args.kwargs
+        assert sent_kwargs["stream"] == {"state": 10, "id": None}
+        assert sent_kwargs["content"] == "hello\n"
+    else:
+        sent_kwargs = sender.await_args.kwargs
+        assert sent_kwargs[target_key] == target_value
+        if api_method == "post_group_message":
+            assert sent_kwargs["msg_type"] == 0
+            assert "msg_seq" in sent_kwargs
+        else:
+            assert "msg_type" not in sent_kwargs
+
+
+@pytest.mark.asyncio
+async def test_post_send_one_group_media_uses_group_target_and_last_media_wins(
+    monkeypatch,
+):
+    source = botpy.message.GroupMessage(
+        None,
+        "evt-group",
+        {
+            "id": "msg-group",
+            "group_openid": "group-1",
+            "author": {"member_openid": "member-1"},
+        },
+    )
+    event = QQOfficialMessageEvent.__new__(QQOfficialMessageEvent)
+    event._bot = SimpleNamespace(
+        api=SimpleNamespace(post_group_message=AsyncMock(return_value={"id": "sent"}))
+    )
+    event.message_obj = SimpleNamespace(raw_message=source, message_id="msg-1")
+    event.send_buffer = MessageChain([Plain("caption")])
+    event.track_temporary_local_file = MagicMock()
+    event.upload_group_and_c2c_image = AsyncMock(return_value="image-media")
+    event.upload_group_and_c2c_media = AsyncMock(
+        side_effect=["record-media", "video-media", "file-media"]
+    )
+
+    async def fake_parse(_message):
+        return (
+            "caption",
+            "base64://image",
+            None,
+            "voice.silk",
+            "video.mp4",
+            "file.txt",
+            "file.txt",
+        )
+
+    monkeypatch.setattr(QQOfficialMessageEvent, "_parse_to_qqofficial", fake_parse)
+    with patch.object(AstrMessageEvent, "send", AsyncMock(return_value=None)):
+        await event._post_send_one(event.send_buffer, stream={"state": 1})
+
+    event.upload_group_and_c2c_image.assert_awaited_once_with(
+        "base64://image",
+        event.IMAGE_FILE_TYPE,
+        group_openid="group-1",
+    )
+    assert event.upload_group_and_c2c_media.await_count == 3
+    for call in event.upload_group_and_c2c_media.await_args_list:
+        assert call.kwargs["group_openid"] == "group-1"
+    sent_kwargs = event._bot.api.post_group_message.await_args.kwargs
+    assert sent_kwargs["media"] == "file-media"
+    assert sent_kwargs["msg_type"] == 7
+    assert sent_kwargs["content"] == "caption"
 
 
 @pytest.mark.asyncio
@@ -643,7 +805,9 @@ async def test_send_streaming_c2c_break_ends_previous_segment_and_resets_state()
 
 
 @pytest.mark.asyncio
-async def test_send_streaming_c2c_throttled_updates_reuse_returned_message_id(monkeypatch):
+async def test_send_streaming_c2c_throttled_updates_reuse_returned_message_id(
+    monkeypatch,
+):
     source = botpy.message.C2CMessage(
         None,
         "evt-1",
@@ -695,6 +859,7 @@ async def test_send_streaming_non_c2c_batches_and_posts_once_at_end():
     event = QQOfficialMessageEvent.__new__(QQOfficialMessageEvent)
     event.message_obj = SimpleNamespace(raw_message=source)
     event.send_buffer = None
+
     async def fake_post_send():
         buffered = event.send_buffer
         event.send_buffer = None

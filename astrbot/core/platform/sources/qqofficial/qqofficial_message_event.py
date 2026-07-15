@@ -3,6 +3,7 @@ import base64
 import logging
 import os
 import random
+from dataclasses import dataclass
 from typing import cast
 
 import aiofiles
@@ -32,6 +33,27 @@ from astrbot.core.utils.media_utils import MediaResolver, file_uri_to_path, is_f
 
 class APIReturnNoneError(Exception):
     pass
+
+
+@dataclass(slots=True)
+class _QQOfficialMedia:
+    """Rich-media values extracted from one outgoing message chain."""
+
+    image_base64: str | None
+    image_path: str | None
+    record_file_path: str | None
+    video_file_source: str | None
+    file_source: str | None
+    file_name: str | None
+
+    def has_group_or_c2c_media(self) -> bool:
+        """Return whether this requires the v2 media upload API."""
+        return bool(
+            self.image_base64
+            or self.record_file_path
+            or self.video_file_source
+            or self.file_source
+        )
 
 
 def _patch_qq_botpy_formdata() -> None:
@@ -244,69 +266,9 @@ class QQOfficialMessageEvent(AstrMessageEvent):
 
         return ret
 
-    async def _post_send_one(
-        self,
-        message_to_send: MessageChain,
-        stream: dict | None = None,
-    ):
-        if not message_to_send:
-            return None
-
-        source = self.message_obj.raw_message
-
-        if not isinstance(
-            source,
-            botpy.message.Message
-            | botpy.message.GroupMessage
-            | botpy.message.DirectMessage
-            | botpy.message.C2CMessage,
-        ):
-            logger.warning(f"[QQOfficial] 不支持的消息源类型: {type(source)}")
-            return None
-
-        (
-            plain_text,
-            image_base64,
-            image_path,
-            record_file_path,
-            video_file_source,
-            file_source,
-            file_name,
-        ) = await QQOfficialMessageEvent._parse_to_qqofficial(message_to_send)
-        if record_file_path:
-            self.track_temporary_local_file(record_file_path)
-
-        # C2C 流式仅用于文本分片，富媒体时降级为普通发送，避免平台侧流式校验报错。
-        if stream and (
-            image_base64 or record_file_path or video_file_source or file_source
-        ):
-            logger.debug("[QQOfficial] 检测到富媒体，降级为非流式发送。")
-            stream = None
-
-        if (
-            not plain_text
-            and not image_base64
-            and not image_path
-            and not record_file_path
-            and not video_file_source
-            and not file_source
-        ):
-            return None
-
-        # QQ C2C 流式 API 说明：
-        # - 开始/中间分片（state=1）：增量追加内容，不需要 \n（加了会导致强制换行）
-        # - 最终分片（state=10）：结束流，content 必须以 \n 结尾（QQ API 要求）
-        if (
-            stream
-            and stream.get("state") == 10
-            and plain_text
-            and not plain_text.endswith("\n")
-        ):
-            plain_text = plain_text + "\n"
-
-        # 根据消息链的 use_markdown_ 标记决定发送模式
-        use_md = getattr(self.send_buffer, "use_markdown_", None)
-        if use_md is False:
+    def _build_base_payload(self, plain_text: str, source: object) -> dict:
+        """Build the common QQ payload before route-specific media handling."""
+        if getattr(self.send_buffer, "use_markdown_", None) is False:
             payload: dict = {
                 "content": plain_text,
                 "msg_type": 0,
@@ -318,175 +280,193 @@ class QQOfficialMessageEvent(AstrMessageEvent):
                 "msg_type": 2,
                 "msg_id": self.message_obj.message_id,
             }
-
         if not isinstance(source, botpy.message.Message | botpy.message.DirectMessage):
             payload["msg_seq"] = random.randint(1, 10000)
+        return payload
 
-        ret = None
+    @staticmethod
+    def _media_upload_target(source: object) -> dict[str, str] | None:
+        """Select the v2 upload target for group and C2C messages."""
+        if isinstance(source, botpy.message.GroupMessage):
+            if not source.group_openid:
+                logger.error("[QQOfficial] GroupMessage 缺少 group_openid")
+                return None
+            return {"group_openid": source.group_openid}
+        if isinstance(source, botpy.message.C2CMessage):
+            return {"openid": source.author.user_openid}
+        return None
 
-        match source:
-            case botpy.message.GroupMessage():
-                if not source.group_openid:
-                    logger.error("[QQOfficial] GroupMessage 缺少 group_openid")
-                    return None
+    @staticmethod
+    def _write_media_payload(payload: dict, media: Media, plain_text: str) -> None:
+        """Make an uploaded v2 media item the message payload body."""
+        payload["media"] = media
+        payload["msg_type"] = 7
+        payload.pop("markdown", None)
+        payload["content"] = plain_text or None
 
-                if image_base64:
-                    media = await self.upload_group_and_c2c_image(
-                        image_base64,
-                        self.IMAGE_FILE_TYPE,
-                        group_openid=source.group_openid,
-                    )
-                    payload["media"] = media
-                    payload["msg_type"] = 7
-                    payload.pop("markdown", None)
-                    payload["content"] = plain_text or None
-                if record_file_path:  # group record msg
-                    media = await self.upload_group_and_c2c_media(
-                        record_file_path,
-                        self.VOICE_FILE_TYPE,
-                        group_openid=source.group_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
-                if video_file_source:
-                    media = await self.upload_group_and_c2c_media(
-                        video_file_source,
-                        self.VIDEO_FILE_TYPE,
-                        group_openid=source.group_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
-                if file_source:
-                    media = await self.upload_group_and_c2c_media(
-                        file_source,
-                        self.FILE_FILE_TYPE,
-                        file_name=file_name,
-                        group_openid=source.group_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
+    async def _apply_group_or_c2c_media(
+        self,
+        payload: dict,
+        plain_text: str,
+        media: _QQOfficialMedia,
+        upload_target: dict[str, str],
+    ) -> None:
+        """Upload rich media in the established image-to-file priority order."""
+        if media.image_base64:
+            uploaded = await self.upload_group_and_c2c_image(
+                media.image_base64,
+                self.IMAGE_FILE_TYPE,
+                **upload_target,
+            )
+            self._write_media_payload(payload, uploaded, plain_text)
+
+        for source, file_type, file_name in (
+            (media.record_file_path, self.VOICE_FILE_TYPE, None),
+            (media.video_file_source, self.VIDEO_FILE_TYPE, None),
+            (media.file_source, self.FILE_FILE_TYPE, media.file_name),
+        ):
+            if not source:
+                continue
+            uploaded = await self.upload_group_and_c2c_media(
+                source,
+                file_type,
+                file_name=file_name,
+                **upload_target,
+            )
+            if uploaded:
+                self._write_media_payload(payload, uploaded, plain_text)
+
+    async def _send_c2c_payload(
+        self,
+        openid: str,
+        payload: dict,
+        plain_text: str,
+        stream: dict | None,
+    ):
+        """Send a C2C payload, passing stream data only to the v2 stream API."""
+        if stream:
+
+            async def send_func(retry_payload: dict):
+                return await self.post_c2c_message(
+                    openid=openid,
+                    **retry_payload,
+                    stream=stream,
+                )
+        else:
+
+            async def send_func(retry_payload: dict):
+                return await self.post_c2c_message(
+                    openid=openid,
+                    **retry_payload,
+                )
+
+        return await self._send_with_markdown_fallback(
+            send_func=send_func,
+            payload=payload,
+            plain_text=plain_text,
+            stream=stream,
+        )
+
+    async def _post_send_one(
+        self,
+        message_to_send: MessageChain,
+        stream: dict | None = None,
+    ):
+        if not message_to_send:
+            return None
+
+        source = self.message_obj.raw_message
+        if not isinstance(
+            source,
+            botpy.message.Message
+            | botpy.message.GroupMessage
+            | botpy.message.DirectMessage
+            | botpy.message.C2CMessage,
+        ):
+            logger.warning(f"[QQOfficial] 不支持的消息源类型: {type(source)}")
+            return None
+
+        plain_text, *media_values = await QQOfficialMessageEvent._parse_to_qqofficial(
+            message_to_send
+        )
+        media = _QQOfficialMedia(*media_values)
+        if media.record_file_path:
+            self.track_temporary_local_file(media.record_file_path)
+        if (
+            not plain_text
+            and not media.image_path
+            and not media.has_group_or_c2c_media()
+        ):
+            return None
+
+        if stream and media.has_group_or_c2c_media():
+            logger.debug("[QQOfficial] 检测到富媒体，降级为非流式发送。")
+            stream = None
+        if (
+            stream
+            and stream.get("state") == 10
+            and plain_text
+            and not plain_text.endswith("\n")
+        ):
+            plain_text += "\n"
+
+        payload = self._build_base_payload(plain_text, source)
+        if isinstance(source, botpy.message.GroupMessage | botpy.message.C2CMessage):
+            upload_target = self._media_upload_target(source)
+            if upload_target is None:
+                return None
+            await self._apply_group_or_c2c_media(
+                payload,
+                plain_text,
+                media,
+                upload_target,
+            )
+            if isinstance(source, botpy.message.GroupMessage):
                 ret = await self._send_with_markdown_fallback(
                     send_func=lambda retry_payload: self._bot.api.post_group_message(
-                        group_openid=source.group_openid,  # type: ignore
+                        group_openid=source.group_openid,
                         **retry_payload,
                     ),
                     payload=payload,
                     plain_text=plain_text,
                     stream=stream,
                 )
-
-            case botpy.message.C2CMessage():
-                if image_base64:
-                    media = await self.upload_group_and_c2c_image(
-                        image_base64,
-                        self.IMAGE_FILE_TYPE,
-                        openid=source.author.user_openid,
-                    )
-                    payload["media"] = media
-                    payload["msg_type"] = 7
-                    payload.pop("markdown", None)
-                    payload["content"] = plain_text or None
-                if record_file_path:  # c2c record
-                    media = await self.upload_group_and_c2c_media(
-                        record_file_path,
-                        self.VOICE_FILE_TYPE,
-                        openid=source.author.user_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
-                if video_file_source:
-                    media = await self.upload_group_and_c2c_media(
-                        video_file_source,
-                        self.VIDEO_FILE_TYPE,
-                        openid=source.author.user_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
-                if file_source:
-                    media = await self.upload_group_and_c2c_media(
-                        file_source,
-                        self.FILE_FILE_TYPE,
-                        file_name=file_name,
-                        openid=source.author.user_openid,
-                    )
-                    if media:
-                        payload["media"] = media
-                        payload["msg_type"] = 7
-                        payload.pop("markdown", None)
-                        payload["content"] = plain_text or None
-                if stream:
-                    ret = await self._send_with_markdown_fallback(
-                        send_func=lambda retry_payload: self.post_c2c_message(
-                            openid=source.author.user_openid,
-                            **retry_payload,
-                            stream=stream,
-                        ),
-                        payload=payload,
-                        plain_text=plain_text,
-                        stream=stream,
-                    )
-                else:
-                    ret = await self._send_with_markdown_fallback(
-                        send_func=lambda retry_payload: self.post_c2c_message(
-                            openid=source.author.user_openid,
-                            **retry_payload,
-                        ),
-                        payload=payload,
-                        plain_text=plain_text,
-                        stream=stream,
-                    )
+            else:
+                ret = await self._send_c2c_payload(
+                    source.author.user_openid,
+                    payload,
+                    plain_text,
+                    stream,
+                )
                 logger.debug(f"Message sent to C2C: {ret}")
-
-            case botpy.message.Message():
-                if image_path:
-                    payload["file_image"] = image_path
-                # Guild text-channel send API (/channels/{channel_id}/messages) does not use v2 msg_type.
-                payload.pop("msg_type", None)
-                ret = await self._send_with_markdown_fallback(
-                    send_func=lambda retry_payload: self._bot.api.post_message(
-                        channel_id=source.channel_id,
-                        **retry_payload,
-                    ),
-                    payload=payload,
-                    plain_text=plain_text,
-                    stream=stream,
-                )
-
-            case botpy.message.DirectMessage():
-                if image_path:
-                    payload["file_image"] = image_path
-                # Guild DM send API (/dms/{guild_id}/messages) does not use v2 msg_type.
-                payload.pop("msg_type", None)
-                ret = await self._send_with_markdown_fallback(
-                    send_func=lambda retry_payload: self._bot.api.post_dms(
-                        guild_id=source.guild_id,
-                        **retry_payload,
-                    ),
-                    payload=payload,
-                    plain_text=plain_text,
-                    stream=stream,
-                )
-
-            case _:
-                pass
+        elif isinstance(source, botpy.message.Message):
+            if media.image_path:
+                payload["file_image"] = media.image_path
+            payload.pop("msg_type", None)
+            ret = await self._send_with_markdown_fallback(
+                send_func=lambda retry_payload: self._bot.api.post_message(
+                    channel_id=source.channel_id,
+                    **retry_payload,
+                ),
+                payload=payload,
+                plain_text=plain_text,
+                stream=stream,
+            )
+        else:
+            if media.image_path:
+                payload["file_image"] = media.image_path
+            payload.pop("msg_type", None)
+            ret = await self._send_with_markdown_fallback(
+                send_func=lambda retry_payload: self._bot.api.post_dms(
+                    guild_id=source.guild_id,
+                    **retry_payload,
+                ),
+                payload=payload,
+                plain_text=plain_text,
+                stream=stream,
+            )
 
         await super().send(message_to_send)
-
         return ret
 
     async def _send_with_markdown_fallback(
