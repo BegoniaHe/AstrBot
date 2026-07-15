@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from astrbot import logger
 from astrbot.api import star
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
-from astrbot.core.provider.entities import ProviderType
-from astrbot.core.provider.provider import Provider
+from astrbot.api.provider import Provider, ProviderType
 from astrbot.core.utils.error_redaction import safe_error
 
 MODEL_LIST_CACHE_TTL_SECONDS_DEFAULT = 30.0

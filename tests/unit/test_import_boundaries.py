@@ -36,6 +36,11 @@ def test_import_boundaries_exclude_generated_files() -> None:
                 ".platform.sources." in module or ".provider.sources." in module
                 for module in modules
             )
+        if relative.startswith("astrbot/builtin_stars/"):
+            assert not any(
+                ".platform.sources." in module or ".provider.sources." in module
+                for module in modules
+            )
 
 
 def test_builtin_stars_may_depend_on_the_plugin_sdk() -> None:

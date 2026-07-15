@@ -6,6 +6,7 @@ from sqlmodel import col
 from astrbot import logger
 from astrbot.api import star
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
+from astrbot.api.platform import MessageType
 from astrbot.core.agent.runners.deerflow.constants import (
     DEERFLOW_AGENT_RUNNER_PROVIDER_ID_KEY,
     DEERFLOW_PROVIDER_TYPE,
@@ -14,7 +15,6 @@ from astrbot.core.agent.runners.deerflow.constants import (
 from astrbot.core.agent.runners.deerflow.deerflow_api_client import DeerFlowAPIClient
 from astrbot.core.db.po import ProviderStat
 from astrbot.core.platform.message_session import MessageSession
-from astrbot.core.platform.message_type import MessageType
 from astrbot.core.utils.active_event_registry import active_event_registry
 
 from .utils.rst_scene import RstScene
