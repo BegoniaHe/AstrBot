@@ -3,13 +3,13 @@ name: Dependency Review
 on:
   pull_request:
     paths:
-      - "pyproject.toml"
-      - "uv.lock"
-      - "package.json"
-      - "package-lock.json"
-      - "dashboard/package.json"
-      - "dashboard/pnpm-lock.yaml"
-      - ".github/workflows/**"
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'dashboard/package.json'
+      - 'dashboard/pnpm-lock.yaml'
+      - '.github/workflows/**'
 
 permissions:
   contents: read

@@ -1154,9 +1154,7 @@
     },
     "/api/v1/chat/runs/{run_id}/stream": {
       "get": {
-        "tags": [
-          "Chat"
-        ],
+        "tags": ["Chat"],
         "summary": "Resume an active webchat run as an SSE stream",
         "operationId": "resumeChatRun",
         "x-astrbot-scope": "chat",
