@@ -6,12 +6,16 @@
   Format files in place with Invoke-Formatter instead of linting.
 #>
 param(
-    [switch]$Fix
+    [switch]$Fix,
+    [switch]$Require
 )
 
 $ErrorActionPreference = 'Stop'
 
 if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+    if ($Require) {
+        throw 'PSScriptAnalyzer is required. Install it with: Install-Module PSScriptAnalyzer -Scope CurrentUser'
+    }
     Write-Host '==> [ps] PSScriptAnalyzer not installed, skipping'
     exit 0
 }

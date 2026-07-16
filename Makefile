@@ -1,9 +1,9 @@
-.PHONY: worktree worktree-add worktree-rm pr-test-neo pr-test-full pr-test-full-fast \
-	build build-all build-backend build-dashboard run run-backend run-dashboard \
+.PHONY: worktree worktree-add worktree-rm bootstrap doctor pr-test-neo pr-test-full pr-test-full-fast \
+	build build-all build-backend build-dashboard dev run run-backend run-dashboard \
 	stop stop-backend stop-dashboard clean status docs napcat-schema-ob11-event napcat-schema-ob11-event-normalized napcat-models-ob11-event napcat-models-ob11-event-src napcat-codegen napcat-test napcat-check quality quality-report \
 	quality-all quality-sync quality-pyright quality-bandit quality-audit quality-web-audit quality-complexity quality-radon-cc quality-radon-mi \
 	quality-report-all quality-report-pyright quality-report-bandit quality-report-audit quality-report-radon-cc quality-report-radon-mi \
-	check check-all format format-all test test-all \
+	check check-all check-all-platforms format format-all test test-all \
 	check-py check-py-all check-py-format check-py-lint \
 	check-web check-web-all check-web-build check-web-eslint check-web-smoke check-web-prettier \
 	check-data check-md check-md-all check-md-prettier check-md-markdownlint check-toml check-toml-all check-toml-format check-toml-lint check-yaml check-yaml-all check-yaml-prettier check-yaml-lint \
@@ -27,10 +27,9 @@ PNPM := corepack pnpm
 ROOT_NODE_BIN := ./node_modules/.bin
 PRETTIER := $(ROOT_NODE_BIN)/prettier
 TAPLO := $(ROOT_NODE_BIN)/taplo
+PYTHON ?= python3
 QUALITY_TYPE_TARGETS := astrbot
 QUALITY_SECURITY_TARGETS := astrbot
-CHECK_TARGETS := check-py check-web check-data check-md check-toml check-yaml check-shell check-ps check-docker
-FORMAT_TARGETS := format-py format-web format-data format-md format-toml format-yaml format-shell format-ps
 QUALITY_TARGETS := quality-pyright quality-bandit quality-audit quality-web-audit quality-complexity quality-radon-cc quality-radon-mi
 QUALITY_REPORT_TARGETS := quality-report-pyright quality-report-bandit quality-report-audit quality-report-radon-cc quality-report-radon-mi
 CHECK_PY_TARGETS := check-py-format check-py-lint
@@ -43,6 +42,23 @@ PARALLEL_JOBS ?= $(if $(NUMBER_OF_PROCESSORS),$(NUMBER_OF_PROCESSORS),4)
 HAS_JOBSERVER := $(findstring --jobserver-auth=,$(MAKEFLAGS))
 HAS_JOBS_FLAG := $(findstring -j,$(MAKEFLAGS))
 PARALLEL_SUBMAKE_FLAGS := $(if $(strip $(HAS_JOBSERVER) $(HAS_JOBS_FLAG)),,-j$(PARALLEL_JOBS)) --output-sync=target --no-print-directory
+
+ifeq ($(OS),Windows_NT)
+CHECK_TARGETS := check-py check-web check-data check-md check-toml check-yaml check-ps
+FORMAT_TARGETS := format-py format-web format-data format-md format-toml format-yaml format-ps
+DEV_RUNNER := $(PS) scripts/make_dev.ps1
+PR_TEST_NEO := $(PS) scripts/pr_test_env.ps1 -TestProfile neo
+PR_TEST_FULL := $(PS) scripts/pr_test_env.ps1 -TestProfile full
+PR_TEST_FULL_FAST := $(PS) scripts/pr_test_env.ps1 -TestProfile full -SkipSync -NoDashboard
+PYTHON := python
+else
+CHECK_TARGETS := check-py check-web check-data check-md check-toml check-yaml check-shell check-docker
+FORMAT_TARGETS := format-py format-web format-data format-md format-toml format-yaml format-shell
+DEV_RUNNER := bash scripts/make_dev.sh
+PR_TEST_NEO := bash scripts/pr_test_env.sh --profile neo
+PR_TEST_FULL := bash scripts/pr_test_env.sh --profile full
+PR_TEST_FULL_FAST := bash scripts/pr_test_env.sh --profile full --skip-sync --no-dashboard
+endif
 
 worktree:
 	@echo "Usage:"
@@ -67,13 +83,22 @@ endif
 	fi
 
 pr-test-neo:
-	@$(PS) scripts/pr_test_env.ps1 -TestProfile neo
+	@$(PR_TEST_NEO)
 
 pr-test-full:
-	@$(PS) scripts/pr_test_env.ps1 -TestProfile full
+	@$(PR_TEST_FULL)
 
 pr-test-full-fast:
-	@$(PS) scripts/pr_test_env.ps1 -TestProfile full -SkipSync -NoDashboard
+	@$(PR_TEST_FULL_FAST)
+
+doctor:
+	@$(PYTHON) scripts/doctor.py --strict
+
+bootstrap: doctor
+	uv sync --group dev --locked
+	corepack enable
+	corepack npm ci
+	cd $(DASHBOARD_DIR) && $(PNPM) install --frozen-lockfile
 
 build: build-all
 
@@ -87,52 +112,54 @@ build-dashboard:
 	cd $(DASHBOARD_DIR) && $(PNPM) build
 	uv run python scripts/sync_dashboard_dist.py
 
+dev: run-backend run-dashboard status
+
 run: build
 	@$(MAKE) --no-print-directory run-backend
 	@$(MAKE) --no-print-directory run-dashboard
 	@$(MAKE) --no-print-directory status
 
 run-backend:
-	@$(PS) scripts/make_dev.ps1 run-backend
+	@$(DEV_RUNNER) run-backend
 
 run-dashboard:
-	@$(PS) scripts/make_dev.ps1 run-dashboard
+	@$(DEV_RUNNER) run-dashboard
 
 stop: stop-dashboard stop-backend
 
 stop-backend:
-	@$(PS) scripts/make_dev.ps1 stop-backend
+	@$(DEV_RUNNER) stop-backend
 
 stop-dashboard:
-	@$(PS) scripts/make_dev.ps1 stop-dashboard
+	@$(DEV_RUNNER) stop-dashboard
 
 status:
-	@$(PS) scripts/make_dev.ps1 status
+	@$(DEV_RUNNER) status
 
 clean: stop
-	@$(PS) scripts/make_dev.ps1 clean
+	@$(DEV_RUNNER) clean
 
 docs:
 	cd $(DOCS_DIR) && $(PNPM) install
 	cd $(DOCS_DIR) && $(PNPM) run docs:dev
 
 napcat-schema-ob11-event:
-	@$(PS) scripts/napcat/generate_ob11_event_schema.ps1 -OutputDir $(NAPCAT_SCHEMA_OUTPUT_DIR)
+	@$(PYTHON) scripts/napcat/generate_ob11_event_schema.py --output-dir $(NAPCAT_SCHEMA_OUTPUT_DIR)
 
 napcat-schema-ob11-event-normalized: napcat-schema-ob11-event
-	@$(PS) scripts/napcat/normalize_ob11_event_schema.ps1 \
-		-SchemaPath $(NAPCAT_SCHEMA_OUTPUT_DIR)/ob11-all-event.schema.json \
-		-OutputPath $(NAPCAT_NORMALIZED_SCHEMA_PATH)
+	@$(PYTHON) scripts/napcat/normalize_ob11_event_schema.py \
+		--input $(NAPCAT_SCHEMA_OUTPUT_DIR)/ob11-all-event.schema.json \
+		--output $(NAPCAT_NORMALIZED_SCHEMA_PATH)
 
 napcat-models-ob11-event: napcat-schema-ob11-event-normalized
-	@$(PS) scripts/napcat/generate_ob11_event_models.ps1 \
-		-SchemaPath $(NAPCAT_NORMALIZED_SCHEMA_PATH) \
-		-OutputPath $(NAPCAT_MODELS_OUTPUT_PATH)
+	@$(PYTHON) scripts/napcat/generate_ob11_event_models.py \
+		--schema-path $(NAPCAT_NORMALIZED_SCHEMA_PATH) \
+		--output-path $(NAPCAT_MODELS_OUTPUT_PATH)
 
 napcat-models-ob11-event-src: napcat-schema-ob11-event-normalized
-	@$(PS) scripts/napcat/generate_ob11_event_models.ps1 \
-		-SchemaPath $(NAPCAT_NORMALIZED_SCHEMA_PATH) \
-		-OutputPath $(NAPCAT_MODELS_SOURCE_PATH)
+	@$(PYTHON) scripts/napcat/generate_ob11_event_models.py \
+		--schema-path $(NAPCAT_NORMALIZED_SCHEMA_PATH) \
+		--output-path $(NAPCAT_MODELS_SOURCE_PATH)
 
 napcat-codegen: napcat-models-ob11-event-src
 
@@ -203,7 +230,8 @@ quality-report-radon-mi: quality-sync
 # ---------------------------------------------------------------------------
 # Repo-wide formatting & linting
 #
-#   make check    verify every file type (CI-equivalent, no writes)
+#   make check    verify the Linux/macOS development toolchain (no writes)
+#   make check-all-platforms  also verify PowerShell scripts when pwsh is installed
 #   make format   auto-fix every file type
 #
 # Node tools (prettier, markdownlint-cli2, taplo) come from the root
@@ -217,6 +245,9 @@ check:
 
 check-all: $(CHECK_TARGETS)
 	@echo "==> all checks passed"
+
+check-all-platforms: check-all check-ps
+	@echo "==> all platform checks passed"
 
 format:
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) format-all
@@ -277,15 +308,15 @@ format-web:
 
 check-data:
 	@echo "==> [data] prettier --check json/html"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.json','*.jsonc','*.html' \
-		-ToolArgs '--check;--log-level;warn'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier \
+		--pattern '*.json' --pattern '*.jsonc' --pattern '*.html' -- \
+		--check --log-level warn
 
 format-data:
 	@echo "==> [data] prettier --write json/html"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.json','*.jsonc','*.html' \
-		-ToolArgs '--write;--log-level;warn'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier \
+		--pattern '*.json' --pattern '*.jsonc' --pattern '*.html' -- \
+		--write --log-level warn
 
 check-md:
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) check-md-all
@@ -294,24 +325,20 @@ check-md-all: $(CHECK_MD_TARGETS)
 
 check-md-prettier:
 	@echo "==> [md] prettier --check"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.md' \
-		-ToolArgs '--check;--log-level;warn'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier --pattern '*.md' -- \
+		--check --log-level warn
 
 check-md-markdownlint:
 	@echo "==> [md] markdownlint-cli2"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool markdownlint-cli2 \
-		-Patterns '*.md' \
-		-ToolArgs '--no-globs'
+	@$(PYTHON) scripts/run_tracked_node_tool.py markdownlint-cli2 --pattern '*.md' -- \
+		--no-globs
 
 format-md:
 	@echo "==> [md] prettier --write + markdownlint-cli2 --fix"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.md' \
-		-ToolArgs '--write;--log-level;warn'
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool markdownlint-cli2 \
-		-Patterns '*.md' \
-		-ToolArgs '--fix;--no-globs'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier --pattern '*.md' -- \
+		--write --log-level warn
+	@$(PYTHON) scripts/run_tracked_node_tool.py markdownlint-cli2 --pattern '*.md' -- \
+		--fix --no-globs
 
 check-toml:
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) check-toml-all
@@ -344,9 +371,8 @@ check-yaml-all: $(CHECK_YAML_TARGETS)
 
 check-yaml-prettier:
 	@echo "==> [yaml] prettier --check"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.yml','*.yaml' \
-		-ToolArgs '--check;--log-level;warn'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier \
+		--pattern '*.yml' --pattern '*.yaml' -- --check --log-level warn
 
 check-yaml-lint:
 	@echo "==> [yaml] yamllint"
@@ -354,9 +380,8 @@ check-yaml-lint:
 
 format-yaml:
 	@echo "==> [yaml] prettier --write"
-	@$(PS) scripts/run_tracked_node_tool.ps1 -Tool prettier \
-		-Patterns '*.yml','*.yaml' \
-		-ToolArgs '--write;--log-level;warn'
+	@$(PYTHON) scripts/run_tracked_node_tool.py prettier \
+		--pattern '*.yml' --pattern '*.yaml' -- --write --log-level warn
 
 check-shell:
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) check-shell-all
@@ -364,26 +389,23 @@ check-shell:
 check-shell-all: $(CHECK_SHELL_TARGETS)
 
 check-shell-shfmt:
-	@if command -v shfmt >/dev/null 2>&1; then \
-		echo "==> [shell] shfmt -d"; \
-		shfmt -d -i 2 -ci $$(git ls-files '*.sh'); \
-	else echo "==> [shell] shfmt not found, skipping (CI enforces)"; fi
+	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt is required; run 'make doctor' for setup guidance." >&2; exit 2; }
+	@echo "==> [shell] shfmt -d"
+	@shfmt -d -i 2 -ci $$(git ls-files '*.sh')
 
 check-shell-shellcheck:
-	@if command -v shellcheck >/dev/null 2>&1; then \
-		echo "==> [shell] shellcheck"; \
-		shellcheck -S style $$(git ls-files '*.sh'); \
-	else echo "==> [shell] shellcheck not found, skipping (CI enforces)"; fi
+	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck is required; run 'make doctor' for setup guidance." >&2; exit 2; }
+	@echo "==> [shell] shellcheck"
+	@shellcheck -S style $$(git ls-files '*.sh')
 
 format-shell:
-	@if command -v shfmt >/dev/null 2>&1; then \
-		echo "==> [shell] shfmt -w"; \
-		shfmt -w -i 2 -ci $$(git ls-files '*.sh'); \
-	else echo "==> [shell] shfmt not found, skipping"; fi
+	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt is required; run 'make doctor' for setup guidance." >&2; exit 2; }
+	@echo "==> [shell] shfmt -w"
+	@shfmt -w -i 2 -ci $$(git ls-files '*.sh')
 
 check-ps:
 	@echo "==> [ps] PSScriptAnalyzer"
-	@$(PS) scripts/lint_powershell.ps1
+	@$(PS) scripts/lint_powershell.ps1 -Require
 
 format-ps:
 	@echo "==> [ps] Invoke-Formatter"
@@ -391,15 +413,9 @@ format-ps:
 
 format-eol:
 	@echo "==> [eol] normalize tracked text files to LF"
-	@$(PS) scripts/normalize_line_endings.ps1
+	@$(PYTHON) scripts/normalize_line_endings.py
 
 check-docker:
-	@if command -v hadolint >/dev/null 2>&1; then \
-		echo "==> [docker] hadolint"; \
-		hadolint --config .hadolint.yaml Dockerfile; \
-	elif command -v docker >/dev/null 2>&1; then \
-		if docker info >/dev/null 2>&1; then \
-			echo "==> [docker] hadolint (via docker)"; \
-			MSYS_NO_PATHCONV=1 docker run --rm -i -v "$$(pwd)/.hadolint.yaml:/config.yaml" hadolint/hadolint hadolint --config //config.yaml - < Dockerfile; \
-		else echo "==> [docker] docker daemon unavailable, skipping (CI enforces)"; fi; \
-	else echo "==> [docker] hadolint/docker not found, skipping (CI enforces)"; fi
+	@command -v hadolint >/dev/null 2>&1 || { echo "hadolint is required; run 'make doctor' for setup guidance." >&2; exit 2; }
+	@echo "==> [docker] hadolint"
+	@hadolint --config .hadolint.yaml Dockerfile

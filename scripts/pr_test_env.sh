@@ -145,6 +145,14 @@ if [[ "$RUN_QUALITY" == true ]]; then
 fi
 
 echo "==> Running pytest"
+pytest_args=()
+if [[ -n "${PYTEST_ARGS:-}" ]]; then
+  while IFS= read -r -d '' argument; do
+    pytest_args+=("$argument")
+  done < <(
+    python3 -c 'import os, shlex, sys; sys.stdout.buffer.write(b"\0".join(arg.encode() for arg in shlex.split(os.environ["PYTEST_ARGS"])))'
+  )
+fi
 if [[ "$PROFILE" == "neo" ]]; then
   NEO_TESTS=(
     "tests/test_neo_skill_sync.py"
@@ -153,9 +161,9 @@ if [[ "$PROFILE" == "neo" ]]; then
     "tests/test_skill_manager_sandbox_cache.py"
     "tests/test_dashboard.py::test_neo_skills_routes"
   )
-  uv run pytest -q "${NEO_TESTS[@]}" "${PYTEST_ARGS:-}"
+  uv run pytest -q "${NEO_TESTS[@]}" "${pytest_args[@]}"
 else
-  uv run pytest --cov=. -v -o log_cli=true -o log_level=DEBUG "${PYTEST_ARGS:-}"
+  uv run pytest --cov=. -v -o log_cli=true -o log_level=DEBUG "${pytest_args[@]}"
 fi
 
 run_smoke_test() {
@@ -165,26 +173,28 @@ run_smoke_test() {
   fi
 
   local smoke_port="6185"
-  local smoke_log
+  local smoke_log smoke_err_log
   smoke_log="$(mktemp -t astrbot-smoke.XXXXXX.log)"
+  smoke_err_log="$(mktemp -t astrbot-smoke.XXXXXX.err.log)"
 
-  echo "==> Starting smoke test on http://localhost:${smoke_port}"
-  uv run main.py >"$smoke_log" 2>&1 &
+  echo "==> Starting smoke test on http://127.0.0.1:${smoke_port}"
+  uv run main.py >"$smoke_log" 2>"$smoke_err_log" &
   local app_pid=$!
 
   for _ in $(seq 1 60); do
-    if curl -sf "http://localhost:${smoke_port}" >/dev/null 2>&1; then
+    if curl -sf "http://127.0.0.1:${smoke_port}" >/dev/null 2>&1; then
       echo "==> Smoke test passed"
       kill "$app_pid" 2>/dev/null || true
       wait "$app_pid" 2>/dev/null || true
-      rm -f "$smoke_log"
+      rm -f "$smoke_log" "$smoke_err_log"
       return 0
     fi
 
     if ! kill -0 "$app_pid" 2>/dev/null; then
       echo "AstrBot process exited before becoming healthy." >&2
       tail -n 60 "$smoke_log" || true
-      rm -f "$smoke_log"
+      tail -n 60 "$smoke_err_log" || true
+      rm -f "$smoke_log" "$smoke_err_log"
       return 1
     fi
 
@@ -193,9 +203,10 @@ run_smoke_test() {
 
   echo "Smoke test failed: health endpoint did not become ready in time." >&2
   tail -n 60 "$smoke_log" || true
+  tail -n 60 "$smoke_err_log" || true
   kill "$app_pid" 2>/dev/null || true
   wait "$app_pid" 2>/dev/null || true
-  rm -f "$smoke_log"
+  rm -f "$smoke_log" "$smoke_err_log"
   return 1
 }
 

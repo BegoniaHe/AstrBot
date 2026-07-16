@@ -168,6 +168,7 @@ export default defineConfig({
             base: '/dev',
             collapsed: true,
             items: [
+              { text: 'Linux 开发环境', link: '/linux' },
               {
                 text: '插件开发',
                 base: '/dev/star',
@@ -408,6 +409,7 @@ export default defineConfig({
             base: '/en/dev',
             collapsed: true,
             items: [
+              { text: 'Linux Development', link: '/linux' },
               {
                 text: 'Plugin Development',
                 base: '/en/dev/star',

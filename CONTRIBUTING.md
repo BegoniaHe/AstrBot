@@ -28,11 +28,8 @@
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
-uv sync --group dev
-corepack enable
-cd dashboard
-corepack pnpm install
-cd ..
+make doctor
+make bootstrap
 pip install pre-commit
 pre-commit install
 ```
@@ -43,6 +40,7 @@ pre-commit install
 uv run main.py
 ruff format .
 ruff check .
+make dev
 make check
 make quality
 cd dashboard && corepack pnpm generate:api
@@ -77,6 +75,9 @@ make pr-test-full
 make pr-test-full-fast
 ```
 
+Linux contributors should follow [the Linux development guide](docs/zh/dev/linux.md)
+for system prerequisites, log locations, and native process management.
+
 ## English
 
 ### Repository Scope
@@ -105,11 +106,8 @@ Include:
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
-uv sync --group dev
-corepack enable
-cd dashboard
-corepack pnpm install
-cd ..
+make doctor
+make bootstrap
 pip install pre-commit
 pre-commit install
 ```
@@ -120,6 +118,7 @@ Common commands:
 uv run main.py
 ruff format .
 ruff check .
+make dev
 make check
 make quality
 cd dashboard && corepack pnpm generate:api
@@ -153,3 +152,6 @@ make pr-test-neo
 make pr-test-full
 make pr-test-full-fast
 ```
+
+Linux contributors should follow [the Linux development guide](docs/en/dev/linux.md)
+for system prerequisites, log locations, and native process management.

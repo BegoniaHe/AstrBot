@@ -168,12 +168,14 @@ AstrBot uses `ruff` for code formatting and linting.
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
-uv sync --group dev
-corepack enable
-cd dashboard && corepack pnpm install && cd ..
+make doctor
+make bootstrap
 pip install pre-commit
 pre-commit install
 ```
+
+For the complete Linux workflow, including tool installation, development
+servers, logs, checks, and NapCat code generation, see [Linux Development](docs/en/dev/linux.md).
 
 ## 🌍 Community
 

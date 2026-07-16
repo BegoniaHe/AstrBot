@@ -167,12 +167,14 @@ AstrBot 使用 `ruff` 进行代码格式化和检查。
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
-uv sync --group dev
-corepack enable
-cd dashboard && corepack pnpm install && cd ..
+make doctor
+make bootstrap
 pip install pre-commit
 pre-commit install
 ```
+
+Linux 下完整的工具安装、开发服务、日志、检查与 NapCat 代码生成流程请参阅
+[Linux 开发环境](docs/zh/dev/linux.md)。
 
 ## 🌍 社区
 

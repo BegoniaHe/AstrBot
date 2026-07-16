@@ -141,7 +141,7 @@ Write-Host "==> Run smoke test: $runSmoke"
 Write-Host "==> Build dashboard: $runDashboard"
 
 if ($runSync) {
-    Invoke-NativeCommand -Description "Syncing dependencies with uv" -FilePath "uv" -ArgumentList @("sync", "--group", "dev")
+    Invoke-NativeCommand -Description "Syncing dependencies with uv" -FilePath "uv" -ArgumentList @("sync", "--group", "dev", "--locked")
 }
 
 Write-Host "==> Preparing test directories"

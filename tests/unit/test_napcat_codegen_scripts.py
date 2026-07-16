@@ -1,6 +1,8 @@
 import importlib
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -13,6 +15,50 @@ def _load_module(module_name: str, relative_path: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _run_python_script(
+    script_relative_path: str, *args: str
+) -> subprocess.CompletedProcess[str]:
+    repo_root = Path(__file__).resolve().parents[2]
+    return subprocess.run(
+        [sys.executable, str(repo_root / script_relative_path), *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_generate_ob11_event_schema_python_rejects_empty_type_name():
+    proc = _run_python_script(
+        "scripts/napcat/generate_ob11_event_schema.py",
+        "--type-name",
+        "",
+    )
+
+    assert proc.returncode != 0
+    assert "TypeName must not be empty." in (proc.stderr or proc.stdout)
+
+
+def test_generate_ob11_event_models_python_rejects_same_input_and_output(
+    tmp_path: Path,
+):
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text('{"type":"object","properties":{}}', encoding="utf-8")
+
+    proc = _run_python_script(
+        "scripts/napcat/generate_ob11_event_models.py",
+        "--schema-path",
+        str(schema_path),
+        "--output-path",
+        str(schema_path),
+    )
+
+    assert proc.returncode != 0
+    assert "SchemaPath and OutputPath must be different." in (
+        proc.stderr or proc.stdout
+    )
 
 
 def test_normalize_ob11_event_schema_converts_integer_like_numeric_fields():
