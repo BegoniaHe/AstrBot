@@ -1,6 +1,7 @@
 """日志系统，统一将标准 logging 输出转发到 loguru。"""
 
 import asyncio
+import errno
 import logging
 import os
 import sys
@@ -98,21 +99,42 @@ class _SafeConsoleStream:
 
     def __init__(self, stream) -> None:
         self._stream = stream
+        self._broken_pipe = False
 
     def write(self, message: str) -> None:
+        if self._broken_pipe:
+            return
+
         try:
-            self._stream.write(message)
-        except UnicodeEncodeError:
-            encoding = getattr(self._stream, "encoding", None) or "utf-8"
-            safe_bytes = message.encode(encoding, errors="backslashreplace")
-            if hasattr(self._stream, "buffer"):
-                self._stream.buffer.write(safe_bytes)
-            else:
-                self._stream.write(safe_bytes.decode(encoding, errors="ignore"))
+            try:
+                self._stream.write(message)
+            except UnicodeEncodeError:
+                encoding = getattr(self._stream, "encoding", None) or "utf-8"
+                safe_bytes = message.encode(encoding, errors="backslashreplace")
+                if hasattr(self._stream, "buffer"):
+                    self._stream.buffer.write(safe_bytes)
+                else:
+                    self._stream.write(safe_bytes.decode(encoding, errors="ignore"))
+        except BrokenPipeError:
+            self._broken_pipe = True
+        except OSError as exc:
+            if exc.errno != errno.EPIPE:
+                raise
+            self._broken_pipe = True
 
     def flush(self) -> None:
+        if self._broken_pipe:
+            return
+
         if hasattr(self._stream, "flush"):
-            self._stream.flush()
+            try:
+                self._stream.flush()
+            except BrokenPipeError:
+                self._broken_pipe = True
+            except OSError as exc:
+                if exc.errno != errno.EPIPE:
+                    raise
+                self._broken_pipe = True
 
     def isatty(self) -> bool:
         if hasattr(self._stream, "isatty"):
