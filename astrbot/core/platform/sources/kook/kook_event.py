@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from astrbot import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.platform import AstrBotMessage, PlatformMetadata
 from astrbot.core.message.components import (
     At,
     AtAll,
@@ -19,7 +17,9 @@ from astrbot.core.message.components import (
     Reply,
     Video,
 )
-from astrbot.core.platform import MessageType
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrBotMessage, MessageType, PlatformMetadata
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from .kook_client import KookClient
 from .kook_types import (

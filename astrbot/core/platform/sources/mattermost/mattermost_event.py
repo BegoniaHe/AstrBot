@@ -2,8 +2,9 @@ import asyncio
 import re
 from collections.abc import AsyncGenerator
 
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.platform import Group, MessageMember
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import Group, MessageMember
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from .client import MattermostClient
 

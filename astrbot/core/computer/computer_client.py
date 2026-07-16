@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.skills.skill_manager import SANDBOX_SKILLS_ROOT, SkillManager
 from astrbot.core.star.context import Context
 from astrbot.core.utils.astrbot_path import (

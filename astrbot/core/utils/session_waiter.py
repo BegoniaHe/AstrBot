@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import astrbot.core.message.components as Comp
-from astrbot.core.platform import AstrMessageEvent
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 USER_SESSIONS: dict[str, SessionWaiter] = {}  # 存储 SessionWaiter 实例
 FILTERS: list[SessionFilter] = []  # 存储 SessionFilter 实例

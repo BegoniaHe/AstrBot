@@ -6,9 +6,9 @@ from typing import Any
 
 import aiohttp
 
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Reply, Video
+from astrbot import logger
+from astrbot.core.message.components import At, File, Image, Plain, Record, Reply, Video
+from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import detect_image_mime_type_async
 

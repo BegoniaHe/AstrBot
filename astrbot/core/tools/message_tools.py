@@ -9,7 +9,7 @@ from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 import astrbot.core.message.components as Comp
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext

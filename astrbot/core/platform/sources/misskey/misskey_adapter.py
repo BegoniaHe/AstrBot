@@ -4,16 +4,16 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-import astrbot.api.message_components as Comp
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.platform import (
+import astrbot.core.message.components as Comp
+from astrbot import logger
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.platform.send_result import PlatformSendResult
 
 from .misskey_api import MisskeyAPI

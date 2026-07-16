@@ -14,8 +14,8 @@ from astrbot.core.db import BaseDatabase
 from astrbot.core.knowledge_base.kb_mgr import KnowledgeBaseManager
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.persona_mgr import PersonaManager
-from astrbot.core.platform import PlatformSendResult
 from astrbot.core.platform.astr_message_event import AstrMessageEvent, MessageSession
+from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.core.platform_message_history_mgr import PlatformMessageHistoryManager
 from astrbot.core.provider.entities import LLMResponse, ProviderRequest, ProviderType
 from astrbot.core.provider.func_tool_manager import FunctionTool, FunctionToolManager

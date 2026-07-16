@@ -8,7 +8,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from astrbot.api import logger
+from astrbot import logger
 
 
 class WecomAIQueueMgr:

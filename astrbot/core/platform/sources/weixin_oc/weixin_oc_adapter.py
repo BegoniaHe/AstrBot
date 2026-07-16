@@ -14,17 +14,17 @@ from urllib.parse import quote
 import qrcode as qrcode_lib
 
 from astrbot import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import File, Image, Plain, Record, Reply, Video
-from astrbot.api.platform import (
+from astrbot.core.message.components import File, Image, Plain, Record, Reply, Video
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 from astrbot.core.utils.media_utils import (
     MEDIA_MIME_EXTENSIONS,

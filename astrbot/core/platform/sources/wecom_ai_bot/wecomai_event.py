@@ -3,9 +3,10 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import At, Image, Plain
+from astrbot import logger
+from astrbot.core.message.components import At, Image, Plain
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from .wecomai_api import WecomAIBotAPIClient
 from .wecomai_queue_mgr import WecomAIQueueMgr

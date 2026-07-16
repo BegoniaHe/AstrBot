@@ -5,10 +5,10 @@ import uuid
 from pathlib import Path
 from typing import Any, cast
 
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Video
-from astrbot.api.platform import (
+from astrbot import logger
+from astrbot.core.message.components import At, File, Image, Plain, Record, Video
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     Group,
     MessageMember,

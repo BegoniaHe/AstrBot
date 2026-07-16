@@ -194,7 +194,10 @@ quality-web-audit:
 	cd $(DASHBOARD_DIR) && $(PNPM) audit --audit-level=low
 
 quality-complexity: quality-sync
-	uv run ruff check --select C901 --config "lint.mccabe.max-complexity=40" astrbot
+	# Incremental ceiling: existing C901 debt stays visible in reports, while CI
+	# rejects newly introduced extreme-complexity functions without enabling C901
+	# at the project-wide 15 threshold yet.
+	uv run ruff check --select C901 --config "lint.mccabe.max-complexity=35" astrbot
 
 quality-radon-cc: quality-sync
 	uv run radon cc $(QUALITY_TYPE_TARGETS) -s -n C

@@ -427,7 +427,7 @@ def register_on_llm_request(**kwargs):
 
     Examples:
     ```py
-    from astrbot.api.provider import ProviderRequest
+    from astrbot.core.provider.entities import ProviderRequest
 
     @on_llm_request()
     async def test(self, event: AstrMessageEvent, req: ProviderRequest) -> None:
@@ -450,7 +450,7 @@ def register_on_llm_response(**kwargs):
 
     Examples:
     ```py
-    from astrbot.api.provider import LLMResponse
+    from astrbot.core.provider.entities import LLMResponse
 
     @on_llm_response()
     async def test(self, event: AstrMessageEvent, response: LLMResponse) -> None:
@@ -503,7 +503,7 @@ def register_on_agent_done(**kwargs):
     ```py
     from astrbot.core.agent.run_context import ContextWrapper
     from astrbot.core.astr_agent_context import AstrAgentContext
-    from astrbot.api.provider import LLMResponse
+    from astrbot.core.provider.entities import LLMResponse
 
     @on_agent_done()
     async def test(

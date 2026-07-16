@@ -14,10 +14,10 @@ from lark_oapi.api.im.v1 import (
 )
 from lark_oapi.api.im.v1.processor import P2ImMessageReceiveV1Processor
 
-import astrbot.api.message_components as Comp
+import astrbot.core.message.components as Comp
 from astrbot import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.platform import (
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,

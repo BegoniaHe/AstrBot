@@ -11,8 +11,7 @@ from telegram.error import BadRequest
 from telegram.ext import ExtBot
 
 from astrbot import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import (
+from astrbot.core.message.components import (
     At,
     File,
     Image,
@@ -21,7 +20,9 @@ from astrbot.api.message_components import (
     Reply,
     Video,
 )
-from astrbot.api.platform import AstrBotMessage, MessageType, PlatformMetadata
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrBotMessage, MessageType, PlatformMetadata
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.metrics import Metric
 from astrbot.core.utils.task_utils import create_tracked_task
 

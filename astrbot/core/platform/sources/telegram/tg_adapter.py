@@ -12,18 +12,18 @@ from telegram.error import Forbidden, InvalidToken, NetworkError
 from telegram.ext import ApplicationBuilder, ContextTypes, filters
 from telegram.ext import MessageHandler as TelegramMessageHandler
 
-import astrbot.api.message_components as Comp
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.platform import (
+import astrbot.core.message.components as Comp
+from astrbot import logger
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.star import star_map

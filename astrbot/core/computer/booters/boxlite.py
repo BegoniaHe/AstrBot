@@ -8,7 +8,7 @@ from shipyard import FileSystemComponent as ShipyardFileSystemComponent
 from shipyard.python import PythonComponent as ShipyardPythonComponent
 from shipyard.shell import ShellComponent as ShipyardShellComponent
 
-from astrbot.api import logger
+from astrbot import logger
 
 from ..olayer import FileSystemComponent, PythonComponent, ShellComponent
 from .base import ComputerBooter

@@ -9,9 +9,9 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Video
+from astrbot import logger
+from astrbot.core.message.components import At, File, Image, Plain, Record, Video
+from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.utils.media_utils import convert_audio_format
 
 

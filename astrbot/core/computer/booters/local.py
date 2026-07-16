@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.computer.file_read_utils import (
     detect_text_encoding,
     read_local_text_range_sync,

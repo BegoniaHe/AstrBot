@@ -25,9 +25,10 @@ from lark_oapi.api.im.v1 import (
 )
 
 from astrbot import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import At, File, Json, Plain, Record, Video
-from astrbot.api.message_components import Image as AstrBotImage
+from astrbot.core.message.components import At, File, Json, Plain, Record, Video
+from astrbot.core.message.components import Image as AstrBotImage
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.media_utils import (
     MediaResolver,
     convert_audio_to_opus,

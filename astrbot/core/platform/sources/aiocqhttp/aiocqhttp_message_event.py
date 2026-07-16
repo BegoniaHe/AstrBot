@@ -4,8 +4,7 @@ from collections.abc import AsyncGenerator
 
 from aiocqhttp import CQHttp, Event
 
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import (
+from astrbot.core.message.components import (
     At,
     BaseMessageComponent,
     File,
@@ -16,7 +15,9 @@ from astrbot.api.message_components import (
     Record,
     Video,
 )
-from astrbot.api.platform import Group, MessageMember
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import Group, MessageMember
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 
 class AiocqhttpMessageEvent(AstrMessageEvent):

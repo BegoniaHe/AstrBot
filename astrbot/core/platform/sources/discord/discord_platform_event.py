@@ -8,8 +8,8 @@ import discord
 from discord.types.interactions import ComponentInteractionData
 
 from astrbot import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import (
+from astrbot.core.message.components import (
+    At,
     BaseMessageComponent,
     ComponentType,
     File,
@@ -18,7 +18,9 @@ from astrbot.api.message_components import (
     Record,
     Reply,
 )
-from astrbot.api.platform import AstrBotMessage, At, PlatformMetadata
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrBotMessage, PlatformMetadata
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.media_utils import (
     MEDIA_MIME_EXTENSIONS,
     MediaResolver,

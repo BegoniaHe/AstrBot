@@ -14,7 +14,7 @@ from typing import Any
 import aiodocker
 import aiohttp
 
-from astrbot.api import logger
+from astrbot import logger
 
 # ---------------------------------------------------------------------------
 # Constants

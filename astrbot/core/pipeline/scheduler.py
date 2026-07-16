@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from time import time
 
 from astrbot import logger
-from astrbot.core.platform import AstrMessageEvent
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.active_event_registry import active_event_registry
 
 from .bootstrap import ensure_builtin_stages_registered

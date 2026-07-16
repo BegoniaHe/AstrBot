@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 # PyCryptodome is required by the upstream AES protocol implementation here.
 from Crypto.Cipher import AES  # nosec B413
 
-from astrbot.api import logger
+from astrbot import logger
 
 
 class AESCipher:

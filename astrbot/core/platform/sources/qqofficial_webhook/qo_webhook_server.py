@@ -9,7 +9,7 @@ from botpy import BotAPI, BotHttp, BotWebSocket, Client, ConnectionSession, Toke
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.platform.webhook_server import FastAPIWebhookServer
 
 from ..qqofficial.qqofficial_platform_adapter import _ensure_group_message_create_parser

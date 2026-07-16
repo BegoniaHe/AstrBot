@@ -8,7 +8,7 @@ from pathlib import PurePosixPath
 from time import monotonic
 from typing import cast
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.message.components import (
     RPS,
     Anonymous,

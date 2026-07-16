@@ -3,18 +3,26 @@ import json
 import re
 
 from astrbot import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, AtAll, Image, Plain
-from astrbot.api.platform import (
+from astrbot.core.message.components import (
+    At,
+    AtAll,
+    BaseMessageComponent,
+    File,
+    Image,
+    Plain,
+    Record,
+    Video,
+)
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
-from astrbot.core.message.components import BaseMessageComponent, File, Record, Video
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.utils.media_utils import MediaResolver
 
 from .kook_client import KookClient

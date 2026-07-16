@@ -11,9 +11,8 @@ from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
 from websockets.asyncio.client import ClientConnection, connect
 
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import (
+from astrbot import logger
+from astrbot.core.message.components import (
     At,
     File,
     Image,
@@ -21,15 +20,16 @@ from astrbot.api.message_components import (
     Record,
     Reply,
 )
-from astrbot.api.platform import (
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.utils.media_utils import MediaResolver
 
 if TYPE_CHECKING:

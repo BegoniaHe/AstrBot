@@ -14,11 +14,10 @@ from astrbot.core.utils.webhook_utils import (
 )
 
 from .astrbot_message import AstrBotMessage
+from .discovery import discover_platform_adapter
 from .message_session import MessageSession
 from .platform import Platform, PlatformStatus
-from .register import platform_cls_map
 from .send_result import PlatformSendResult
-from .sources.webchat.webchat_adapter import WebChatAdapter
 
 
 @dataclass
@@ -134,14 +133,18 @@ class PlatformManager:
             except Exception as e:
                 logger.error(f"初始化 {platform} 平台适配器失败: {e}")
 
-        # 网页聊天
-        webchat_inst = WebChatAdapter({}, self.settings, self.event_queue)
+        # 网页聊天 is built-in but follows the same lazy discovery boundary.
+        webchat_cls = discover_platform_adapter("webchat")
+        if webchat_cls is None:
+            raise RuntimeError("Built-in webchat platform adapter was not registered")
+        webchat_inst = webchat_cls({}, self.settings, self.event_queue)
         self._platform_insts.append(webchat_inst)
         self._start_platform_task("webchat", webchat_inst)
 
     async def load_platform(self, platform_config: dict) -> None:
         """实例化一个平台"""
         # 动态导入
+        cls_type: type | None = None
         try:
             if not platform_config["enable"]:
                 return
@@ -167,77 +170,7 @@ class PlatformManager:
                 platform_config["type"],
                 platform_config["id"],
             )
-            match platform_config["type"]:
-                case "aiocqhttp":
-                    from .sources.aiocqhttp.aiocqhttp_platform_adapter import (
-                        AiocqhttpAdapter,  # noqa: F401
-                    )
-                case "qq_official":
-                    from .sources.qqofficial.qqofficial_platform_adapter import (
-                        QQOfficialPlatformAdapter,  # noqa: F401
-                    )
-                case "qq_official_webhook":
-                    from .sources.qqofficial_webhook.qo_webhook_adapter import (
-                        QQOfficialWebhookPlatformAdapter,  # noqa: F401
-                    )
-                case "lark":
-                    from .sources.lark.lark_adapter import (
-                        LarkPlatformAdapter,  # noqa: F401
-                    )
-                case "dingtalk":
-                    from .sources.dingtalk.dingtalk_adapter import (
-                        DingtalkPlatformAdapter,  # noqa: F401
-                    )
-                case "telegram":
-                    from .sources.telegram.tg_adapter import (
-                        TelegramPlatformAdapter,  # noqa: F401
-                    )
-                case "wecom":
-                    from .sources.wecom.wecom_adapter import (
-                        WecomPlatformAdapter,  # noqa: F401
-                    )
-                case "wecom_ai_bot":
-                    from .sources.wecom_ai_bot.wecomai_adapter import (
-                        WecomAIBotAdapter,  # noqa: F401
-                    )
-                case "weixin_official_account":
-                    from .sources.weixin_official_account.weixin_offacc_adapter import (
-                        WeixinOfficialAccountPlatformAdapter,  # noqa: F401
-                    )
-                case "discord":
-                    from .sources.discord.discord_platform_adapter import (
-                        DiscordPlatformAdapter,  # noqa: F401
-                    )
-                case "misskey":
-                    from .sources.misskey.misskey_adapter import (
-                        MisskeyPlatformAdapter,  # noqa: F401
-                    )
-                case "weixin_oc":
-                    from .sources.weixin_oc.weixin_oc_adapter import (
-                        WeixinOCAdapter,  # noqa: F401
-                    )
-                case "slack":
-                    from .sources.slack.slack_adapter import SlackAdapter  # noqa: F401
-                case "satori":
-                    from .sources.satori.satori_adapter import (
-                        SatoriPlatformAdapter,  # noqa: F401
-                    )
-                case "line":
-                    from .sources.line.line_adapter import (
-                        LinePlatformAdapter,  # noqa: F401
-                    )
-                case "kook":
-                    from .sources.kook.kook_adapter import (
-                        KookPlatformAdapter,  # noqa: F401
-                    )
-                case "mattermost":
-                    from .sources.mattermost.mattermost_adapter import (
-                        MattermostPlatformAdapter,  # noqa: F401
-                    )
-                case "napcat":
-                    from .sources.napcat.napcat_platform_adapter import (
-                        NapCatPlatformAdapter,  # noqa: F401
-                    )
+            cls_type = discover_platform_adapter(platform_config["type"])
         except (ImportError, ModuleNotFoundError) as e:
             logger.error(
                 f"加载平台适配器 {platform_config['type']} 失败，原因：{e}。请检查依赖库是否安装。提示：可以在 管理面板->平台日志->安装Pip库 中安装依赖库。",
@@ -245,12 +178,11 @@ class PlatformManager:
         except Exception as e:
             logger.error(f"加载平台适配器 {platform_config['type']} 失败，原因：{e}。")
 
-        if platform_config["type"] not in platform_cls_map:
+        if cls_type is None:
             logger.error(
                 f"Platform adapter not found: {platform_config['type']}({platform_config['id']}).",
             )
             return
-        cls_type = platform_cls_map[platform_config["type"]]
         inst: Platform = cls_type(platform_config, self.settings, self.event_queue)
         inst.database = getattr(self, "database", None)
         inst.runtime_config = self.astrbot_config

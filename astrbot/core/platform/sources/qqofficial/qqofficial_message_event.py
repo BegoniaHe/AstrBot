@@ -24,10 +24,11 @@ from tenacity import (
     wait_exponential,
 )
 
-from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Video
-from astrbot.api.platform import AstrBotMessage, PlatformMetadata
+from astrbot import logger
+from astrbot.core.message.components import At, File, Image, Plain, Record, Video
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrBotMessage, PlatformMetadata
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.media_utils import MediaResolver, file_uri_to_path, is_file_uri
 
 

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from astrbot.api import logger
+from astrbot import logger
 
 from ..olayer import FileSystemComponent, GUIComponent, PythonComponent, ShellComponent
 from .base import ComputerBooter

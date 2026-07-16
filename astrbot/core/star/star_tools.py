@@ -4,11 +4,14 @@ import uuid
 from pathlib import Path
 from typing import ClassVar
 
-from astrbot.api.platform import AstrBotMessage, MessageMember, MessageType
 from astrbot.core.message.components import BaseMessageComponent
 from astrbot.core.message.message_event_result import MessageChain
-from astrbot.core.platform import AstrMessageEvent
-from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.astr_message_event import AstrMessageEvent, MessageSession
+from astrbot.core.platform.astrbot_message import (
+    AstrBotMessage,
+    MessageMember,
+    MessageType,
+)
 from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.core.star.context import Context
 from astrbot.core.star.star import star_map

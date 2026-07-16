@@ -2,8 +2,7 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING
 
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import (
+from astrbot.core.message.components import (
     At,
     BaseMessageComponent,
     File,
@@ -12,6 +11,8 @@ from astrbot.api.message_components import (
     Record,
     Video,
 )
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 if TYPE_CHECKING:  # pragma: no cover - typing helper
     from .weixin_oc_adapter import WeixinOCAdapter

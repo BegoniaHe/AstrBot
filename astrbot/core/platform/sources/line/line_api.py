@@ -8,7 +8,7 @@ from urllib.parse import unquote
 
 import aiohttp
 
-from astrbot.api import logger
+from astrbot import logger
 
 
 class LineAPIClient:

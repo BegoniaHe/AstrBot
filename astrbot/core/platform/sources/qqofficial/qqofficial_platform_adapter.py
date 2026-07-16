@@ -14,16 +14,24 @@ from botpy.connection import ConnectionState
 from botpy.gateway import BotWebSocket
 
 from astrbot import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import At, File, Image, Plain, Record, Reply, Video
-from astrbot.api.platform import (
+from astrbot.core.message.components import (
+    At,
+    BaseMessageComponent,
+    File,
+    Image,
+    Plain,
+    Record,
+    Reply,
+    Video,
+)
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
 )
-from astrbot.core.message.components import BaseMessageComponent
 from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.utils.media_utils import MediaResolver
 

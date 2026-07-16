@@ -10,10 +10,10 @@ from typing import Any, cast
 from aiocqhttp import CQHttp, Event
 from aiocqhttp.exceptions import ActionFailed
 
-from astrbot.api import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import *
-from astrbot.api.platform import (
+from astrbot import logger
+from astrbot.core.message.components import *
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,

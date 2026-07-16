@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from astrbot.core.platform import AstrMessageEvent
+    from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 
 class ActiveEventRegistry:

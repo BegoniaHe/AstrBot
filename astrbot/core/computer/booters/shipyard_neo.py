@@ -3,7 +3,7 @@ import os
 import shlex
 from typing import Any, cast
 
-from astrbot.api import logger
+from astrbot import logger
 
 from ..olayer import (
     BrowserComponent,

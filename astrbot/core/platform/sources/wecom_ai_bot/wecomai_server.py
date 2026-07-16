@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.platform.webhook_server import FastAPIWebhookServer
 
 from .wecomai_api import WecomAIBotAPIClient

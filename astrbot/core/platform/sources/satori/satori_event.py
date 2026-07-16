@@ -1,8 +1,7 @@
 from typing import TYPE_CHECKING
 
-from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import (
+from astrbot import logger
+from astrbot.core.message.components import (
     At,
     File,
     Forward,
@@ -14,7 +13,9 @@ from astrbot.api.message_components import (
     Reply,
     Video,
 )
-from astrbot.api.platform import AstrBotMessage, PlatformMetadata
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import AstrBotMessage, PlatformMetadata
+from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.media_utils import resolve_media_ref_to_base64_data
 
 if TYPE_CHECKING:

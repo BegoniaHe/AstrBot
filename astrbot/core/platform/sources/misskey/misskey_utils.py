@@ -2,8 +2,8 @@
 
 from typing import Any
 
-import astrbot.api.message_components as Comp
-from astrbot.api.platform import AstrBotMessage, MessageMember, MessageType
+import astrbot.core.message.components as Comp
+from astrbot.core.platform import AstrBotMessage, MessageMember, MessageType
 from astrbot.core.utils.media_utils import MediaResolver
 
 

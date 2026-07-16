@@ -7,17 +7,17 @@ from discord.abc import GuildChannel, Messageable, PrivateChannel
 from discord.channel import DMChannel
 
 from astrbot import logger
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import File, Image, Plain, Record
-from astrbot.api.platform import (
+from astrbot.core.message.components import File, Image, Plain, Record
+from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import (
     AstrBotMessage,
     MessageMember,
     MessageType,
     Platform,
     PlatformMetadata,
-    register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSession
+from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.star import star_map

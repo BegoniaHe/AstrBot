@@ -13,7 +13,7 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web.async_client import AsyncWebClient
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.platform.webhook_server import FastAPIWebhookServer
 
 

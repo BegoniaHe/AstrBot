@@ -13,7 +13,7 @@ except ImportError as e:
         "aiohttp and websockets are required for Misskey API. Please install them with: pip install aiohttp websockets",
     ) from e
 
-from astrbot.api import logger
+from astrbot import logger
 
 from .misskey_utils import FileIDExtractor
 

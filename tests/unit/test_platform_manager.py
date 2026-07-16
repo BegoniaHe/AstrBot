@@ -5,6 +5,7 @@ import pytest
 
 from astrbot.core.message.components import Plain
 from astrbot.core.message.message_event_result import MessageChain
+from astrbot.core.platform import discovery
 from astrbot.core.platform.manager import PlatformManager
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.send_result import PlatformSendResult
@@ -210,7 +211,9 @@ async def test_platform_manager_send_to_session_returns_failure_when_adapter_rai
     session = MessageSession.from_str("telegram:FriendMessage:chat-1")
     chain = MessageChain(chain=[Plain("hello")])
     platform = MagicMock()
-    platform.send_by_session = AsyncMock(side_effect=RuntimeError("adapter rejected payload"))
+    platform.send_by_session = AsyncMock(
+        side_effect=RuntimeError("adapter rejected payload")
+    )
     manager._find_inst_by_id = MagicMock(return_value=platform)
 
     result = await manager.send_to_session(session, chain)
@@ -256,3 +259,39 @@ def test_platform_manager_create_event_falls_back_to_platform_name() -> None:
     platform.create_event.assert_called_once()
     platform.commit_event.assert_called_once()
     assert platform.commit_event.call_args.args[0].is_wake is False
+
+
+def test_platform_discovery_imports_registered_builtin_adapter_once(monkeypatch):
+    adapter_type = "test-adapter"
+    module_name = "astrbot.core.platform.sources.test_adapter"
+    adapter = type("TestAdapter", (), {})
+    imported = []
+    monkeypatch.setattr(
+        discovery, "BUILTIN_PLATFORM_MODULES", {adapter_type: module_name}
+    )
+    monkeypatch.setattr(discovery, "platform_cls_map", {})
+
+    def import_module(name):
+        imported.append(name)
+        discovery.platform_cls_map[adapter_type] = adapter
+
+    monkeypatch.setattr(discovery.importlib, "import_module", import_module)
+
+    assert discovery.discover_platform_adapter(adapter_type) is adapter
+    assert discovery.discover_platform_adapter(adapter_type) is adapter
+    assert imported == [module_name]
+
+
+@pytest.mark.asyncio
+async def test_platform_manager_skips_disabled_and_unknown_platform(monkeypatch):
+    manager = _make_manager()
+    discover = MagicMock(return_value=None)
+    monkeypatch.setattr(
+        "astrbot.core.platform.manager.discover_platform_adapter", discover
+    )
+
+    await manager.load_platform({"enable": False, "id": "disabled", "type": "x"})
+    await manager.load_platform({"enable": True, "id": "unknown", "type": "x"})
+
+    assert discover.call_args_list == [(("x",), {})]
+    assert manager._platform_insts == []
