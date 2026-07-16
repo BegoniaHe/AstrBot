@@ -529,6 +529,7 @@ function setConfigTemplate(
     template = {
       transport: 'streamable_http',
       url: 'your mcp server url',
+      allow_private_network: false,
       headers: {},
       timeout: 5,
       sse_read_timeout: 300,
