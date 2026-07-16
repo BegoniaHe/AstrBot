@@ -82,7 +82,7 @@ class FakeRunner:
 
 
 @pytest.mark.asyncio
-async def test_run_agent_forwards_streaming_provider_error():
+async def test_run_agent_replaces_streaming_provider_error():
     error_text = "LLM response error: model was not found or permission was denied"
     runner = FakeRunner(
         [
@@ -98,7 +98,8 @@ async def test_run_agent_forwards_streaming_provider_error():
     chains = [chain async for chain in util.run_agent(runner)]
 
     assert len(chains) == 1
-    assert chains[0].get_plain_text() == error_text
+    assert chains[0].get_plain_text() == "Error occurred during AI execution."
+    assert error_text not in chains[0].get_plain_text()
 
 
 @pytest.mark.asyncio
@@ -113,6 +114,31 @@ async def test_run_agent_replaces_malformed_streaming_provider_error():
 
     assert len(chains) == 1
     assert chains[0].get_plain_text() == "Error occurred during AI execution."
+
+
+@pytest.mark.asyncio
+async def test_run_agent_replaces_non_streaming_provider_error():
+    provider_error = "https://provider.example/v1?api_key=provider-secret"
+    event = FakeEvent()
+    runner = FakeRunner(
+        [
+            SimpleNamespace(
+                type="err",
+                data={"chain": MessageChain().message(provider_error)},
+            )
+        ],
+        event=event,
+    )
+
+    chains = [chain async for chain in util.run_agent(runner)]
+
+    assert [chain.get_plain_text() for chain in chains] == [
+        "Error occurred during AI execution."
+    ]
+    assert event.result_history[0].get_plain_text() == (
+        "Error occurred during AI execution."
+    )
+    assert "provider-secret" not in chains[0].get_plain_text()
 
 
 class MultiStepRunner(FakeRunner):
@@ -327,8 +353,8 @@ async def test_run_agent_tool_result_status_send_failure_reports_execution_error
 ):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent()
     event.send.side_effect = RuntimeError("tool result status failed")
@@ -359,19 +385,22 @@ async def test_run_agent_tool_result_status_send_failure_reports_execution_error
 
     assert outputs == []
     assert len(event.result_history) == 1
-    assert "tool result status failed" in event.result_history[0].get_plain_text()
+    assert (
+        event.result_history[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     runner.agent_hooks.on_agent_done.assert_awaited_once()
     llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
     assert llm_response.role == "err"
-    assert "RuntimeError" in llm_response.completion_text
+    assert llm_response.completion_text == "Error occurred during AI execution."
 
 
 @pytest.mark.asyncio
 async def test_run_agent_converts_step_exception_to_error_result(monkeypatch):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent()
     runner = FakeRunner(RuntimeError("boom"), event=event)
@@ -380,11 +409,47 @@ async def test_run_agent_converts_step_exception_to_error_result(monkeypatch):
 
     assert outputs == []
     assert len(event.result_history) == 1
-    assert "RuntimeError" in event.result_history[0].get_plain_text()
+    assert (
+        event.result_history[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     runner.agent_hooks.on_agent_done.assert_awaited_once()
     llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
     assert llm_response.role == "err"
-    assert "boom" in llm_response.completion_text
+    assert llm_response.completion_text == "Error occurred during AI execution."
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error_text", "secret"),
+    [
+        ("Authorization: Bearer bearer-secret-token", "bearer-secret-token"),
+        ("api_key=api-secret-value", "api-secret-value"),
+        (
+            "https://provider.example/v1?access_token=query-secret&model=test",
+            "query-secret",
+        ),
+        ("ordinary provider failure", "ordinary provider failure"),
+    ],
+)
+async def test_run_agent_exception_details_never_reach_user_and_logs_redact_secrets(
+    monkeypatch,
+    error_text: str,
+    secret: str,
+):
+    logger_error = MagicMock()
+    monkeypatch.setattr(util.logger, "error", logger_error)
+    event = FakeEvent()
+    runner = FakeRunner(RuntimeError(error_text), event=event, streaming=True)
+
+    outputs = [chain async for chain in util.run_agent(runner)]
+
+    assert [chain.get_plain_text() for chain in outputs] == [
+        "Error occurred during AI execution."
+    ]
+    assert secret not in outputs[0].get_plain_text()
+    if secret != "ordinary provider failure":
+        assert secret not in str(logger_error.call_args_list)
 
 
 @pytest.mark.asyncio
@@ -425,8 +490,8 @@ async def test_run_agent_streaming_tool_call_status_send_failure_yields_break_th
 ):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent()
     event.send.side_effect = RuntimeError("tool status failed")
@@ -453,12 +518,12 @@ async def test_run_agent_streaming_tool_call_status_send_failure_yields_break_th
     assert len(outputs) == 2
     assert outputs[0].type == "break"
     assert outputs[0].chain == []
-    assert "tool status failed" in outputs[1].get_plain_text()
+    assert outputs[1].get_plain_text() == "Error occurred during AI execution."
     assert event.result_history == []
     runner.agent_hooks.on_agent_done.assert_awaited_once()
     llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
     assert llm_response.role == "err"
-    assert "RuntimeError" in llm_response.completion_text
+    assert llm_response.completion_text == "Error occurred during AI execution."
 
 
 @pytest.mark.asyncio
@@ -535,8 +600,8 @@ async def test_run_agent_tool_direct_result_send_failure_reports_execution_error
 ):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent()
     event.send.side_effect = RuntimeError("direct send failed")
@@ -550,11 +615,14 @@ async def test_run_agent_tool_direct_result_send_failure_reports_execution_error
 
     assert outputs == []
     assert len(event.result_history) == 1
-    assert "direct send failed" in event.result_history[0].get_plain_text()
+    assert (
+        event.result_history[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     runner.agent_hooks.on_agent_done.assert_awaited_once()
     llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
     assert llm_response.role == "err"
-    assert "RuntimeError" in llm_response.completion_text
+    assert llm_response.completion_text == "Error occurred during AI execution."
 
 
 @pytest.mark.asyncio
@@ -613,7 +681,7 @@ async def test_run_agent_max_step_disables_tools_and_injects_summary_prompt():
 async def test_run_agent_streaming_uses_persona_custom_error_message(monkeypatch):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
+        "get_agent_error_message",
         lambda event: "persona error",
     )
     event = FakeEvent()
@@ -633,7 +701,7 @@ async def test_run_agent_streaming_uses_persona_custom_error_message(monkeypatch
 async def test_run_agent_non_streaming_uses_persona_custom_error_message(monkeypatch):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
+        "get_agent_error_message",
         lambda event: "persona error",
     )
     event = FakeEvent()
@@ -877,7 +945,7 @@ async def test_simulated_stream_tts_closes_queue_when_text_queue_get_fails(monke
     assert await audio_queue.get() is None
     logger_error.assert_called_once()
     assert "[Live TTS Simulated] Critical Error" in logger_error.call_args.args[0]
-    assert logger_error.call_args.kwargs["exc_info"] is True
+    assert logger_error.call_args.args[1] == "queue failed"
 
 
 @pytest.mark.asyncio
@@ -928,8 +996,8 @@ async def test_run_agent_webchat_stats_send_failure_reports_execution_error(
 ):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent(platform_name="webchat")
     event.send.side_effect = RuntimeError("stats send failed")
@@ -943,11 +1011,14 @@ async def test_run_agent_webchat_stats_send_failure_reports_execution_error(
     assert [chain.get_plain_text() for chain in outputs] == ["done"]
     assert len(event.result_history) == 2
     assert event.result_history[0].get_plain_text() == "done"
-    assert "stats send failed" in event.result_history[1].get_plain_text()
+    assert (
+        event.result_history[1].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     runner.agent_hooks.on_agent_done.assert_awaited_once()
     llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
     assert llm_response.role == "err"
-    assert "RuntimeError" in llm_response.completion_text
+    assert llm_response.completion_text == "Error occurred during AI execution."
 
 
 @pytest.mark.asyncio
@@ -1155,8 +1226,8 @@ async def test_run_agent_webchat_tool_result_is_sent_directly():
 async def test_run_agent_ignores_hook_failure_when_step_raises(monkeypatch):
     monkeypatch.setattr(
         util,
-        "extract_persona_custom_error_message_from_event",
-        lambda event: None,
+        "get_agent_error_message",
+        lambda event: "Error occurred during AI execution.",
     )
     event = FakeEvent()
     runner = FakeRunner(RuntimeError("boom"), event=event)
@@ -1168,7 +1239,10 @@ async def test_run_agent_ignores_hook_failure_when_step_raises(monkeypatch):
 
     assert outputs == []
     assert len(event.result_history) == 1
-    assert "RuntimeError" in event.result_history[0].get_plain_text()
+    assert (
+        event.result_history[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     runner.agent_hooks.on_agent_done.assert_awaited_once()
 
 
@@ -1483,7 +1557,7 @@ async def test_run_live_agent_swallows_tts_stats_model_lookup_failure(monkeypatc
     assert outputs[0].type == "audio_chunk"
     event.send.assert_not_awaited()
     logger_error.assert_called_once()
-    assert "发送 TTS 统计信息失败" in logger_error.call_args.args[0]
+    assert "Failed to send TTS statistics" in logger_error.call_args.args[0]
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,7 @@ from astrbot.core.message.message_event_result import (
     ResultContentType,
 )
 from astrbot.core.persona_error_reply import (
+    DEFAULT_AGENT_ERROR_MESSAGE,
     resolve_event_conversation_persona_id,
     resolve_persona_custom_error_message,
     set_persona_custom_error_message_on_event,
@@ -39,6 +40,7 @@ from astrbot.core.provider.entities import (
 )
 from astrbot.core.star.star_handler import EventType
 from astrbot.core.utils.config_number import coerce_int_config
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.metrics import Metric
 from astrbot.core.utils.task_utils import create_tracked_task
 
@@ -53,7 +55,7 @@ AGENT_RUNNER_TYPE_KEY = {
 }
 THIRD_PARTY_RUNNER_ERROR_EXTRA_KEY = "_third_party_runner_error"
 STREAM_CONSUMPTION_CLOSE_TIMEOUT_SEC = 30
-RUNNER_NO_RESULT_FALLBACK_MESSAGE = "Agent Runner did not return any result."
+RUNNER_NO_RESULT_FALLBACK_MESSAGE = DEFAULT_AGENT_ERROR_MESSAGE
 RUNNER_NO_FINAL_RESPONSE_LOG = (
     "Agent Runner returned no final response, fallback to streamed error/result chain."
 )
@@ -81,23 +83,29 @@ async def run_third_party_agent(
                 if stream_to_general:
                     yield resp.data["chain"], False
             elif resp.type == "err":
-                yield resp.data["chain"], True
+                chain = resp.data.get("chain") if isinstance(resp.data, dict) else None
+                if isinstance(chain, MessageChain):
+                    logger.error(
+                        "Third-party agent returned an error: %s",
+                        safe_error("", chain.get_plain_text()),
+                    )
+                yield (
+                    MessageChain().message(
+                        custom_error_message or DEFAULT_AGENT_ERROR_MESSAGE
+                    ),
+                    True,
+                )
     except Exception as e:
-        logger.error(f"Third party agent runner error: {e}")
-        err_msg = custom_error_message
-        if not err_msg:
-            err_msg = (
-                f"Error occurred during AI execution.\n"
-                f"Error Type: {type(e).__name__} (3rd party)\n"
-                f"Error Message: {str(e)}"
-            )
+        logger.error("Third party agent runner error: %s", safe_error("", e))
+        err_msg = custom_error_message or DEFAULT_AGENT_ERROR_MESSAGE
         yield MessageChain().message(err_msg), True
 
 
 class _RunnerResultAggregator:
-    def __init__(self) -> None:
+    def __init__(self, error_message: str | None = None) -> None:
         self.merged_chain: list = []
         self.has_error = False
+        self.error_message = error_message or DEFAULT_AGENT_ERROR_MESSAGE
 
     def add_chunk(self, chain: MessageChain, is_error: bool) -> None:
         self.merged_chain.extend(chain.chain or [])
@@ -108,6 +116,9 @@ class _RunnerResultAggregator:
         self,
         final_resp: LLMResponse | None,
     ) -> tuple[list, bool]:
+        if final_resp and final_resp.role == "err":
+            return MessageChain().message(self.error_message).chain or [], True
+
         if not final_resp or not final_resp.result_chain:
             if self.merged_chain:
                 logger.warning(RUNNER_NO_FINAL_RESPONSE_LOG)
@@ -115,12 +126,12 @@ class _RunnerResultAggregator:
 
             logger.warning(RUNNER_NO_RESULT_LOG)
             fallback_error_chain = MessageChain().message(
-                RUNNER_NO_RESULT_FALLBACK_MESSAGE,
+                self.error_message,
             )
             return fallback_error_chain.chain or [], True
 
         final_chain = final_resp.result_chain.chain or []
-        is_runner_error = self.has_error or final_resp.role == "err"
+        is_runner_error = self.has_error
         return final_chain, is_runner_error
 
 
@@ -142,10 +153,10 @@ def _start_stream_watchdog(
             )
             try:
                 await close_runner_once()
-            except Exception:
+            except Exception as exc:
                 logger.warning(
-                    "Exception while closing third-party runner from stream watchdog.",
-                    exc_info=True,
+                    "Exception while closing third-party runner from stream watchdog: %s",
+                    safe_error("", exc),
                 )
 
     return asyncio.create_task(_watchdog())
@@ -161,7 +172,10 @@ async def _close_runner_if_supported(runner: BaseAgentRunner) -> None:
         if inspect.isawaitable(close_result):
             await close_result
     except Exception as e:
-        logger.warning(f"Failed to close third-party runner cleanly: {e}")
+        logger.warning(
+            "Failed to close third-party runner cleanly: %s",
+            safe_error("", e),
+        )
 
 
 class ThirdPartyAgentSubStage(Stage):
@@ -211,7 +225,10 @@ class ThirdPartyAgentSubStage(Stage):
                 conversation_persona_id=conversation_persona_id,
             )
         except Exception as e:
-            logger.debug("Failed to resolve persona custom error message: %s", e)
+            logger.debug(
+                "Failed to resolve persona custom error message: %s",
+                safe_error("", e),
+            )
             return None
 
     async def _handle_streaming_response(
@@ -223,7 +240,7 @@ class ThirdPartyAgentSubStage(Stage):
         close_runner_once: Callable[[], Awaitable[None]],
         mark_stream_consumed: Callable[[], None],
     ) -> AsyncGenerator[None]:
-        aggregator = _RunnerResultAggregator()
+        aggregator = _RunnerResultAggregator(custom_error_message)
         max_step = getattr(self, "max_step", 30)
 
         async def _stream_runner_chain() -> AsyncGenerator[MessageChain]:
@@ -271,7 +288,7 @@ class ThirdPartyAgentSubStage(Stage):
         stream_to_general: bool,
         custom_error_message: str | None,
     ) -> AsyncGenerator[None]:
-        aggregator = _RunnerResultAggregator()
+        aggregator = _RunnerResultAggregator(custom_error_message)
         max_step = getattr(self, "max_step", 30)
         async for chain, is_error in run_third_party_agent(
             runner,

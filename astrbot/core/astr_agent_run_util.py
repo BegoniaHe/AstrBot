@@ -1,7 +1,6 @@
 import asyncio
 import re
 import time
-import traceback
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -16,10 +15,11 @@ from astrbot.core.message.message_event_result import (
     ResultContentType,
 )
 from astrbot.core.persona_error_reply import (
-    extract_persona_custom_error_message_from_event,
+    get_agent_error_message,
 )
 from astrbot.core.provider.entities import LLMResponse
 from astrbot.core.provider.provider import TTSProvider
+from astrbot.core.utils.error_redaction import safe_error
 
 AgentRunner = ToolLoopAgentRunner[AstrAgentContext]
 
@@ -159,15 +159,14 @@ async def _handle_tool_event(
 
 
 def _get_streaming_error_chain(
-    resp, agent_runner: AgentRunner, stream_to_general: bool
+    resp,
+    agent_runner: AgentRunner,
+    stream_to_general: bool,
+    astr_event,
 ) -> MessageChain | None:
     if resp.type != "err" or not agent_runner.streaming or stream_to_general:
         return None
-    chain = resp.data.get("chain") if isinstance(resp.data, dict) else None
-    if isinstance(chain, MessageChain):
-        return chain
-    logger.error("Agent runner returned an error response without a message chain.")
-    return MessageChain().message("Error occurred during AI execution.")
+    return MessageChain().message(get_agent_error_message(astr_event))
 
 
 async def run_agent(
@@ -257,14 +256,22 @@ async def run_agent(
                     if stream_to_general and resp.type == "streaming_delta":
                         continue
                     error_chain = _get_streaming_error_chain(
-                        resp, agent_runner, stream_to_general
+                        resp,
+                        agent_runner,
+                        stream_to_general,
+                        astr_event,
                     )
                     if error_chain:
                         yield error_chain
                         continue
                     if stream_to_general or not agent_runner.streaming:
+                        response_chain = (
+                            MessageChain().message(get_agent_error_message(astr_event))
+                            if resp.type == "err"
+                            else resp.data["chain"]
+                        )
                         if can_buffer_llm_result and resp.type == "llm_result":
-                            buffered_llm_chains.append(resp.data["chain"])
+                            buffered_llm_chains.append(response_chain)
                             continue
                         content_typ = (
                             ResultContentType.LLM_RESULT
@@ -273,11 +280,11 @@ async def run_agent(
                         )
                         astr_event.set_result(
                             MessageEventResult(
-                                chain=resp.data["chain"].chain,
+                                chain=response_chain.chain,
                                 result_content_type=content_typ,
                             ),
                         )
-                        yield resp.data["chain"]
+                        yield response_chain
                         astr_event.clear_result()
                     elif resp.type == "streaming_delta":
                         chain = resp.data["chain"]
@@ -309,19 +316,11 @@ async def run_agent(
                     stop_watcher.cancel()
                 await asyncio.gather(stop_watcher, return_exceptions=True)
     except Exception as e:
-        logger.error(traceback.format_exc())
-
-        custom_error_message = extract_persona_custom_error_message_from_event(
-            astr_event
+        logger.error(
+            "Agent execution failed: %s",
+            safe_error("", e),
         )
-        if custom_error_message:
-            err_msg = custom_error_message
-        else:
-            err_msg = (
-                f"Error occurred during AI execution.\n"
-                f"Error Type: {type(e).__name__}\n"
-                f"Error Message: {str(e)}"
-            )
+        err_msg = get_agent_error_message(astr_event)
 
         error_llm_response = LLMResponse(
             role="err",
@@ -331,8 +330,11 @@ async def run_agent(
             await agent_runner.agent_hooks.on_agent_done(
                 agent_runner.run_context, error_llm_response
             )
-        except Exception:
-            logger.exception("Error in on_agent_done hook")
+        except Exception as hook_error:
+            logger.error(
+                "Error in on_agent_done hook: %s",
+                safe_error("", hook_error),
+            )
 
         if agent_runner.streaming:
             yield MessageChain().message(err_msg)
@@ -461,7 +463,7 @@ async def run_live_agent(
             yield chain
 
     except Exception as e:
-        logger.error(f"[Live Agent] 运行时发生错误: {e}", exc_info=True)
+        logger.error("[Live Agent] runtime error: %s", safe_error("", e))
     finally:
         # 清理任务
         if not feeder_task.done():
@@ -495,7 +497,7 @@ async def run_live_agent(
                 )
             )
     except Exception as e:
-        logger.error(f"发送 TTS 统计信息失败: {e}")
+        logger.error("Failed to send TTS statistics: %s", safe_error("", e))
 
 
 async def _run_agent_feeder(
@@ -555,7 +557,7 @@ async def _run_agent_feeder(
             await text_queue.put(buffer)
 
     except Exception as e:
-        logger.error(f"[Live Agent Feeder] Error: {e}", exc_info=True)
+        logger.error("[Live Agent Feeder] Error: %s", safe_error("", e))
     finally:
         # 发送结束信号
         await text_queue.put(None)
@@ -570,7 +572,7 @@ async def _safe_tts_stream_wrapper(
     try:
         await tts_provider.get_audio_stream(text_queue, audio_queue)
     except Exception as e:
-        logger.error(f"[Live TTS Stream] Error: {e}", exc_info=True)
+        logger.error("[Live TTS Stream] Error: %s", safe_error("", e))
     finally:
         await audio_queue.put(None)
 
@@ -607,11 +609,12 @@ async def _simulated_stream_tts(
                     await audio_queue.put((text, audio_data))
             except Exception as e:
                 logger.error(
-                    f"[Live TTS Simulated] Error processing text '{text[:20]}...': {e}"
+                    "[Live TTS Simulated] Error processing text: %s",
+                    safe_error("", e),
                 )
                 # 继续处理下一句
 
     except Exception as e:
-        logger.error(f"[Live TTS Simulated] Critical Error: {e}", exc_info=True)
+        logger.error("[Live TTS Simulated] Critical Error: %s", safe_error("", e))
     finally:
         await audio_queue.put(None)

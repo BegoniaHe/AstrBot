@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from typing import Any
 
 PERSONA_CUSTOM_ERROR_MESSAGE_EXTRA_KEY = "persona_custom_error_message"
+DEFAULT_AGENT_ERROR_MESSAGE = "Error occurred during AI execution."
 
 
 def normalize_persona_custom_error_message(value: object) -> str | None:
@@ -30,6 +31,14 @@ def extract_persona_custom_error_message_from_event(event: Any) -> str | None:
         return normalize_persona_custom_error_message(raw_message)
     except Exception:
         return None
+
+
+def get_agent_error_message(event: Any) -> str:
+    """Return a persona override or the stable user-safe fallback."""
+    return (
+        extract_persona_custom_error_message_from_event(event)
+        or DEFAULT_AGENT_ERROR_MESSAGE
+    )
 
 
 def set_persona_custom_error_message_on_event(

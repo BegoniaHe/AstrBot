@@ -462,8 +462,14 @@ async def test_run_third_party_agent_filters_streaming_and_formats_exceptions():
         )
     ]
 
-    assert streamed == [("chunk", False), ("bad", True)]
-    assert general_only == [("final", False), ("bad", True)]
+    assert streamed == [
+        ("chunk", False),
+        ("Error occurred during AI execution.", True),
+    ]
+    assert general_only == [
+        ("final", False),
+        ("Error occurred during AI execution.", True),
+    ]
 
     error_runner = FakeThirdPartyRunner(step_exception=RuntimeError("runner boom"))
     fallback = [
@@ -474,6 +480,12 @@ async def test_run_third_party_agent_filters_streaming_and_formats_exceptions():
         )
     ]
     assert fallback == [("custom failure", True)]
+
+    generic_fallback = [
+        (chain.get_plain_text(), is_error)
+        async for chain, is_error in third_party.run_third_party_agent(error_runner)
+    ]
+    assert generic_fallback == [("Error occurred during AI execution.", True)]
 
 
 def test_runner_result_aggregator_prefers_final_response_and_has_fallbacks():
@@ -489,6 +501,31 @@ def test_runner_result_aggregator_prefers_final_response_and_has_fallbacks():
     assert MessageChain(chain=final_chain).get_plain_text() == "final answer"
     assert is_error is True
 
+    provider_error_chain, provider_error = aggregator.finalize(
+        LLMResponse(
+            role="err",
+            completion_text="https://provider.example?api_key=secret",
+            result_chain=MessageChain().message("Bearer secret-token"),
+        ),
+    )
+    assert (
+        MessageChain(chain=provider_error_chain).get_plain_text()
+        == "Error occurred during AI execution."
+    )
+    assert provider_error is True
+
+    missing_chain_error, missing_chain_is_error = aggregator.finalize(
+        LLMResponse(
+            role="err",
+            completion_text="api_key=provider-secret",
+        ),
+    )
+    assert (
+        MessageChain(chain=missing_chain_error).get_plain_text()
+        == "Error occurred during AI execution."
+    )
+    assert missing_chain_is_error is True
+
     missing_final_chain, missing_is_error = aggregator.finalize(None)
     assert MessageChain(chain=missing_final_chain).get_plain_text() == "partial"
     assert missing_is_error is True
@@ -500,6 +537,15 @@ def test_runner_result_aggregator_prefers_final_response_and_has_fallbacks():
         == third_party.RUNNER_NO_RESULT_FALLBACK_MESSAGE
     )
     assert fallback_is_error is True
+
+    custom_empty_aggregator = third_party._RunnerResultAggregator("persona failure")
+    custom_fallback_chain, custom_fallback_is_error = custom_empty_aggregator.finalize(
+        None
+    )
+    assert MessageChain(chain=custom_fallback_chain).get_plain_text() == (
+        "persona failure"
+    )
+    assert custom_fallback_is_error is True
 
 
 @pytest.mark.asyncio
@@ -541,7 +587,10 @@ async def test_handle_non_streaming_response_uses_final_runner_error_result(
         event.result_history[-1].result_content_type
         == ResultContentType.AGENT_RUNNER_ERROR
     )
-    assert event.result_history[-1].get_plain_text() == "runner failed"
+    assert (
+        event.result_history[-1].get_plain_text()
+        == "Error occurred during AI execution."
+    )
 
 
 @pytest.mark.asyncio
@@ -1616,9 +1665,7 @@ async def test_internal_process_skips_empty_messages_without_provider_request(
     stage.unsupported_streaming_strategy = "turn_off"
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="   ", message_components=[])
 
@@ -1655,9 +1702,7 @@ async def test_internal_process_accepts_non_text_messages_with_reply_or_media(
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(
         message_str="   ",
@@ -1718,9 +1763,7 @@ async def test_internal_process_stops_when_follow_up_ticket_was_consumed(monkeyp
     stage.unsupported_streaming_strategy = "turn_off"
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="follow up")
     capture = SimpleNamespace(ticket=SimpleNamespace(seq=3))
@@ -1762,9 +1805,7 @@ async def test_internal_process_sends_error_message_and_finalizes_follow_up_on_e
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = SimpleNamespace()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     capture = SimpleNamespace(ticket=SimpleNamespace(seq=4))
@@ -1790,7 +1831,7 @@ async def test_internal_process_sends_error_message_and_finalizes_follow_up_on_e
     )
     monkeypatch.setattr(
         internal,
-        "extract_persona_custom_error_message_from_event",
+        "get_agent_error_message",
         lambda _event: "custom internal failure",
     )
     finalize = AsyncMock()
@@ -1825,9 +1866,7 @@ async def test_internal_process_finalizes_follow_up_when_waiting_hook_blocks(
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     capture = SimpleNamespace(ticket=SimpleNamespace(seq=9))
@@ -1871,9 +1910,7 @@ async def test_internal_process_sends_llm_error_message_when_build_returns_none(
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -1896,7 +1933,10 @@ async def test_internal_process_sends_llm_error_message_when_build_returns_none(
 
     assert yielded == []
     event.send.assert_awaited_once()
-    assert event.send.await_args.args[0].get_plain_text() == "provider unavailable"
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
 
 
@@ -1913,9 +1953,7 @@ async def test_internal_process_build_none_finalizes_follow_up_capture(monkeypat
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -1948,7 +1986,10 @@ async def test_internal_process_build_none_finalizes_follow_up_capture(monkeypat
 
     assert yielded == []
     event.send.assert_awaited_once()
-    assert event.send.await_args.args[0].get_plain_text() == "provider unavailable"
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     finalize.assert_awaited_once_with(
         capture,
         activated=True,
@@ -1971,9 +2012,7 @@ async def test_internal_process_skips_send_when_build_returns_none_without_llm_e
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
 
@@ -2011,9 +2050,7 @@ async def test_internal_process_closes_reset_coro_when_llm_request_hook_blocks(
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     reset_coro = MagicMock()
@@ -2062,9 +2099,7 @@ async def test_internal_process_llm_request_hook_block_finalizes_follow_up_captu
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     capture = SimpleNamespace(ticket=SimpleNamespace(seq=12))
@@ -2126,9 +2161,7 @@ async def test_internal_process_stops_when_waiting_hook_blocks(monkeypatch):
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
 
@@ -2158,9 +2191,7 @@ async def test_internal_process_continues_when_send_typing_fails(monkeypatch):
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -2186,7 +2217,10 @@ async def test_internal_process_continues_when_send_typing_fails(monkeypatch):
 
     assert yielded == []
     event.send.assert_awaited_once()
-    assert event.send.await_args.args[0].get_plain_text() == "provider unavailable"
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
     logger_warning.assert_called()
 
@@ -2204,9 +2238,7 @@ async def test_internal_process_swallows_stop_typing_failures(monkeypatch):
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     event.stop_typing.side_effect = RuntimeError("stop typing failed")
@@ -2237,9 +2269,7 @@ async def test_internal_process_sends_error_for_blocked_provider_api_base(monkey
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner()
@@ -2278,7 +2308,10 @@ async def test_internal_process_sends_error_for_blocked_provider_api_base(monkey
     assert yielded == []
     register_runner.assert_not_called()
     event.send.assert_awaited_once()
-    assert "因安全原因被拦截" in event.send.await_args.args[0].get_plain_text()
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
 
 
@@ -2319,9 +2352,7 @@ async def test_internal_process_streaming_sets_finish_result_from_final_response
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner(final_resp=final_resp, done=True)
@@ -2396,9 +2427,7 @@ async def test_internal_process_turns_streaming_into_general_when_platform_lacks
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     event.platform_meta.support_streaming_message = False
@@ -2462,9 +2491,7 @@ async def test_internal_process_awaits_reset_before_running_agent(monkeypatch):
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner()
@@ -2530,9 +2557,7 @@ async def test_internal_process_live_mode_sets_stream_and_saves_history(monkeypa
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context("tts-provider")
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context("tts-provider"))
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -2613,9 +2638,7 @@ async def test_internal_process_live_mode_skips_history_when_runner_not_done(
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -2684,9 +2707,7 @@ async def test_internal_process_live_mode_skips_history_when_event_stopped_witho
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context("tts-provider")
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context("tts-provider"))
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -2756,9 +2777,7 @@ async def test_internal_process_live_mode_saves_history_when_event_stopped_but_r
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context("tts-provider")
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context("tts-provider"))
     )
     event = FakeInternalProcessEvent(
         message_str="hello",
@@ -2830,9 +2849,7 @@ async def test_internal_process_skips_history_save_when_event_stopped_without_ab
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello", stopped=True)
     runner = FakeInternalRunner(aborted=False)
@@ -2893,9 +2910,7 @@ async def test_internal_process_saves_history_when_event_stopped_but_runner_abor
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello", stopped=True)
     runner = FakeInternalRunner(aborted=True)
@@ -2956,9 +2971,7 @@ async def test_internal_process_unregisters_runner_and_sends_error_when_history_
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner()
@@ -2997,8 +3010,8 @@ async def test_internal_process_unregisters_runner_and_sends_error_when_history_
     monkeypatch.setattr(internal.Metric, "upload", AsyncMock())
     monkeypatch.setattr(
         internal,
-        "extract_persona_custom_error_message_from_event",
-        lambda _event: None,
+        "get_agent_error_message",
+        lambda _event: "Error occurred during AI execution.",
     )
 
     yielded = [item async for item in stage.process(event, provider_wake_prefix="ask")]
@@ -3009,7 +3022,10 @@ async def test_internal_process_unregisters_runner_and_sends_error_when_history_
     unregister_runner.assert_called_once_with(event.unified_msg_origin, runner)
     save_to_history.assert_awaited_once()
     event.send.assert_awaited_once()
-    assert "history failed" in event.send.await_args.args[0].get_plain_text()
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
 
 
@@ -3028,9 +3044,7 @@ async def test_internal_process_sends_error_when_stats_task_creation_fails_befor
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner()
@@ -3074,8 +3088,8 @@ async def test_internal_process_sends_error_when_stats_task_creation_fails_befor
     monkeypatch.setattr(internal.asyncio, "create_task", fail_create_task)
     monkeypatch.setattr(
         internal,
-        "extract_persona_custom_error_message_from_event",
-        lambda _event: None,
+        "get_agent_error_message",
+        lambda _event: "Error occurred during AI execution.",
     )
 
     yielded = [item async for item in stage.process(event, provider_wake_prefix="ask")]
@@ -3085,7 +3099,10 @@ async def test_internal_process_sends_error_when_stats_task_creation_fails_befor
     register_runner.assert_called_once_with(event.unified_msg_origin, runner)
     unregister_runner.assert_called_once_with(event.unified_msg_origin, runner)
     event.send.assert_awaited_once()
-    assert "schedule stats failed" in event.send.await_args.args[0].get_plain_text()
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
 
 
@@ -3104,9 +3121,7 @@ async def test_internal_process_sends_error_when_metric_task_creation_fails_afte
     stage.conv_manager = SimpleNamespace(update_conversation=AsyncMock())
     stage.main_agent_cfg = object()
     stage.ctx = SimpleNamespace(
-        plugin_manager=SimpleNamespace(
-            context=_internal_plugin_context()
-        )
+        plugin_manager=SimpleNamespace(context=_internal_plugin_context())
     )
     event = FakeInternalProcessEvent(message_str="hello")
     runner = FakeInternalRunner()
@@ -3158,8 +3173,8 @@ async def test_internal_process_sends_error_when_metric_task_creation_fails_afte
     monkeypatch.setattr(internal.asyncio, "create_task", fail_on_second_create_task)
     monkeypatch.setattr(
         internal,
-        "extract_persona_custom_error_message_from_event",
-        lambda _event: None,
+        "get_agent_error_message",
+        lambda _event: "Error occurred during AI execution.",
     )
 
     yielded = [item async for item in stage.process(event, provider_wake_prefix="ask")]
@@ -3170,7 +3185,10 @@ async def test_internal_process_sends_error_when_metric_task_creation_fails_afte
     register_runner.assert_called_once_with(event.unified_msg_origin, runner)
     unregister_runner.assert_called_once_with(event.unified_msg_origin, runner)
     event.send.assert_awaited_once()
-    assert "schedule metric failed" in event.send.await_args.args[0].get_plain_text()
+    assert (
+        event.send.await_args.args[0].get_plain_text()
+        == "Error occurred during AI execution."
+    )
     event.stop_typing.assert_awaited_once()
 
 

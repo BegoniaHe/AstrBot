@@ -25,7 +25,7 @@ from astrbot.core.message.message_event_result import (
     ResultContentType,
 )
 from astrbot.core.persona_error_reply import (
-    extract_persona_custom_error_message_from_event,
+    get_agent_error_message,
 )
 from astrbot.core.pipeline.stage import Stage
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
@@ -34,6 +34,7 @@ from astrbot.core.provider.entities import (
     ProviderRequest,
 )
 from astrbot.core.star.star_handler import EventType
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.metrics import Metric
 from astrbot.core.utils.session_lock import session_lock_manager
 from astrbot.core.utils.task_utils import create_tracked_task
@@ -160,10 +161,8 @@ class InternalAgentSubStage(Stage):
             max_quoted_fallback_images=settings.get("max_quoted_fallback_images", 20),
         )
 
-    async def _send_llm_error_message(
-        self, event: AstrMessageEvent, message: object
-    ) -> None:
-        await event.send(MessageChain().message(str(message)))
+    async def _send_llm_error_message(self, event: AstrMessageEvent) -> None:
+        await event.send(MessageChain().message(get_agent_error_message(event)))
 
     async def _finalize_agent_response(
         self,
@@ -264,8 +263,8 @@ class InternalAgentSubStage(Stage):
             try:
                 typing_requested = True
                 await event.send_typing()
-            except Exception:
-                logger.warning("send_typing failed", exc_info=True)
+            except Exception as exc:
+                logger.warning("send_typing failed: %s", safe_error("", exc))
             if await call_event_hook(event, EventType.OnWaitingLLMRequestEvent):
                 return
 
@@ -289,13 +288,8 @@ class InternalAgentSubStage(Stage):
                     )
 
                     if build_result is None:
-                        if llm_error_message := event.get_extra(
-                            LLM_ERROR_MESSAGE_EXTRA_KEY
-                        ):
-                            await self._send_llm_error_message(
-                                event,
-                                llm_error_message,
-                            )
+                        if event.get_extra(LLM_ERROR_MESSAGE_EXTRA_KEY):
+                            await self._send_llm_error_message(event)
                         return
 
                     agent_runner = build_result.agent_runner
@@ -308,15 +302,10 @@ class InternalAgentSubStage(Stage):
                         if host in api_base:
                             logger.warning(
                                 "Blocked provider API base for safety policy. api_base=%s, blocked_host=%s",
-                                api_base,
+                                safe_error("", api_base),
                                 host,
                             )
-                            error_message = (
-                                f"LLM 请求失败：Provider API base `{api_base}` "
-                                "因安全原因被拦截，请更换可用的 AI 提供商。"
-                            )
-                            logger.error(error_message)
-                            await self._send_llm_error_message(event, error_message)
+                            await self._send_llm_error_message(event)
                             return
 
                     stream_to_general = (
@@ -456,20 +445,17 @@ class InternalAgentSubStage(Stage):
                         unregister_active_runner(event.unified_msg_origin, agent_runner)
 
         except Exception as e:
-            logger.error(f"Error occurred while processing agent: {e}")
-            custom_error_message = extract_persona_custom_error_message_from_event(
-                event
+            logger.error(
+                "Error occurred while processing agent: %s",
+                safe_error("", e),
             )
-            error_text = custom_error_message or (
-                f"Error occurred while processing agent request: {e}"
-            )
-            await event.send(MessageChain().message(error_text))
+            await event.send(MessageChain().message(get_agent_error_message(event)))
         finally:
             if typing_requested:
                 try:
                     await event.stop_typing()
-                except Exception:
-                    logger.warning("stop_typing failed", exc_info=True)
+                except Exception as exc:
+                    logger.warning("stop_typing failed: %s", safe_error("", exc))
             if follow_up_capture:
                 await finalize_follow_up_capture(
                     follow_up_capture,
@@ -592,8 +578,7 @@ class InternalAgentSubStage(Stage):
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "Failed to schedule runtime/memory postprocess: %s",
-                exc,
-                exc_info=True,
+                safe_error("", exc),
             )
 
 
@@ -648,7 +633,7 @@ async def _record_internal_agent_stats(
             agent_type="internal",
         )
     except Exception as e:
-        logger.warning("Persist provider stats failed: %s", e, exc_info=True)
+        logger.warning("Persist provider stats failed: %s", safe_error("", e))
 
 
 async def _run_runtime_memory_postprocess(
@@ -674,8 +659,7 @@ async def _run_runtime_memory_postprocess(
                 logger.error(
                     "Persona runtime postprocess failed for umo=%s: %s",
                     event.unified_msg_origin,
-                    exc,
-                    exc_info=True,
+                    safe_error("", exc),
                 )
 
     if memory_manager is not None:
@@ -689,6 +673,5 @@ async def _run_runtime_memory_postprocess(
             logger.error(
                 "Memory writeback enqueue failed for umo=%s: %s",
                 event.unified_msg_origin,
-                exc,
-                exc_info=True,
+                safe_error("", exc),
             )
