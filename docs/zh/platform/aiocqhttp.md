@@ -1,86 +1,80 @@
 # 接入 OneBot v11 协议实现
 
+AstrBot 的 `OneBot v11`（`aiocqhttp`）平台使用**反向 WebSocket**：AstrBot 启动 WebSocket 服务，OneBot 实现作为客户端连接 AstrBot。
+
 > [!TIP]
-> 如果你接入的是 AstrBot 内置的独立 `napcat` 平台，请优先查看 [NapCat](/platform/napcat)。
+> 如果使用 NapCat，优先选择 AstrBot 内置的独立 [NapCat](/platform/napcat) 平台。它使用 AstrBot -> NapCat 的正向 WebSocket，配置和连接状态更直接。本页适用于必须使用通用 OneBot v11 反向 WebSocket 的实现。
 
-OneBot 是一个**聊天机器人应用接口标准**，旨在统一不同聊天平台上的机器人应用开发接口。
+常见 OneBot v11 实现包括：
 
-AstrBot 支持接入所有适配了 OneBotv11 反向 Websockets（AstrBot 做服务器端）的机器人协议端。
+- [NapCat](https://github.com/NapNeko/NapCatQQ)（QQ）
+- [OneDisc](https://github.com/ITCraftDevelopmentTeam/OneDisc)（Discord）
+- [Tele-KiraLink](https://github.com/Echomirix/Tele-KiraLink)（Telegram）
 
-下文给出一些常见的 OneBot v11 协议实现端项目。
+## 1. 在 AstrBot 中创建平台
 
-- [NapCat](https://github.com/NapNeko/NapCatQQ) (连接到 QQ)
-- [OneDisc](https://github.com/ITCraftDevelopmentTeam/OneDisc) (连接到 Discord)
-- [Tele-KiraLink](https://github.com/Echomirix/Tele-KiraLink) (连接到 Telegram)
+1. 打开 AstrBot WebUI，进入 `机器人`。
+2. 点击 `+ 创建机器人`，选择 `OneBot v11`。
+3. 填写配置并保存。
 
-请参阅对应的协议实现端项目的部署文档。
+主要字段：
 
-对于 Napcat 项目，请参考下文的 `附录：部署 Napcat`
+- `id`：平台实例的唯一 ID。
+- `enable`：启用平台。
+- `ws_reverse_host`：AstrBot WebSocket 服务的**本地监听地址**，默认 `127.0.0.1`。
+- `ws_reverse_port`：监听端口，默认 `6199`。
+- `ws_reverse_token`：反向 WebSocket 鉴权 token。强烈建议配置，并在 OneBot 实现端使用相同值。
 
-## 1. 配置 OneBot v11
+### 正确理解 `ws_reverse_host`
 
-1. 进入 AstrBot 的 WebUI
-2. 点击左边栏 `机器人`
-3. 然后在右边的界面中，点击 `+ 创建机器人`
-4. 选择 `OneBot v11`
+`ws_reverse_host` 不是让 OneBot 客户端填写的目标地址：
 
-在出现的表单中，填写：
+- AstrBot 与 OneBot 实现在同一台主机上时，保持 `127.0.0.1` 最安全。
+- OneBot 实现在另一个容器、Pod 或主机上时，AstrBot 才需要监听可达接口。通常设为 `0.0.0.0`，也可以使用指定网卡地址。
+- `0.0.0.0` 是监听通配地址，不能作为 OneBot 客户端的连接目标。
 
-- ID(id)：随意填写，仅用于区分不同的消息平台实例。
-- 启用(enable): 勾选。
-- 反向 WebSocket 主机地址：请填写你的机器的 IP 地址，一般情况下请直接填写 `0.0.0.0`
-- 反向 WebSocket 端口：填写一个端口，默认为 `6199`。
-- 反向 Websocket Token：只有当协议实现端的网络配置中配置了 token 才需填写。
+> [!CAUTION]
+> 监听 `0.0.0.0` 后，请用防火墙或容器/集群网络限制来源，并设置 `ws_reverse_token`。不要把未鉴权的 OneBot WebSocket 直接暴露到公网。
 
-点击 `保存`。
+## 2. 配置 OneBot 实现
 
-## 2. 配置协议实现端
+在 OneBot 实现中创建反向 WebSocket 客户端，目标路径是：
 
-请参阅对应的协议实现端项目的部署文档。
+```text
+ws://<AstrBot可达地址>:6199/ws
+```
 
-一些注意点：
+常见地址：
 
-1. 协议实现端需要支持 `反向 WebSocket` 实现，及 AstrBot 端作为服务端，实现端作为客户端。
-2. `反向 WebSocket` 的 URL 为 `ws(s)://<your-host>:6199/ws`。
+- 同一主机：`ws://127.0.0.1:6199/ws`
+- 同一 Docker 网络，AstrBot 服务名为 `astrbot`：`ws://astrbot:6199/ws`
+- 不同主机：`ws://<AstrBot主机IP或域名>:6199/ws`
+
+如果跨越不可信网络，请通过受保护的内网或 TLS 反向代理使用 `wss://`，不要只依赖端口公开。OneBot 实现端的 token 必须与 `ws_reverse_token` 一致。
 
 ## 3. 验证
 
-前往 AstrBot WebUI `控制台`，如果出现 `aiocqhttp(OneBot v11) 适配器已连接。` 蓝色的日志，说明连接成功。如果没有，若干秒后出现`aiocqhttp 适配器已被关闭` 则为连接超时（失败），请检查配置是否正确。
+进入 AstrBot WebUI 的 `控制台`。看到以下日志表示连接成功：
 
-## 附录：部署 Napcat
-
-### 通过一键启动脚本部署
-
-推荐采用这种方式部署。
-
-#### Windows
-
-看这篇文章：[NapCat.Shell - Win手动启动教程](https://napneko.github.io/guide/boot/Shell#napcat-shell-win%E6%89%8B%E5%8A%A8%E5%90%AF%E5%8A%A8%E6%95%99%E7%A8%8B)
-
-#### Linux
-
-看这篇文章：[NapCat.Installer - Linux一键使用脚本(支持Ubuntu 20+/Debian 10+/Centos9)](https://napneko.github.io/guide/boot/Shell#napcat-installer-linux%E4%B8%80%E9%94%AE%E4%BD%BF%E7%94%A8%E8%84%9A%E6%9C%AC-%E6%94%AF%E6%8C%81ubuntu-20-debian-10-centos9)
-
-> [!TIP]
-> **Napcat WebUI 在哪打开**：
-> 在 napcat 的日志里会显示 WebUI 链接。
->
-> 如果是 linux 命令行一键部署的napcat：`docker log <账号>`。
->
-> Docker部署的 NapCat：`docker logs napcat`。
-
-## 通过 Docker Compose 部署
-
-如果您希望直接使用当前仓库提供的一键联动方案，请优先使用仓库根目录的 `compose-with-napcat.yml`：
-
-```bash
-git clone https://github.com/Xero-Team/AstrBot.git
-cd AstrBot
-NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose -f compose-with-napcat.yml up -d --build
+```text
+aiocqhttp(OneBot v11) 适配器已连接。
 ```
 
-部署完毕之后，可以去 NapCat 的 WebUI（默认端口 `6099`）中新增 OneBot 连接实例：点击 `网络配置 -> 新建 -> WebSockets 客户端`，勾选 `启用`，URL 填写 `ws://astrbot:6199/ws`。如果您不是使用上述联动 compose，而是分开部署，请再改成 `ws://宿主机IP:6199/ws`。
+如果没有连接日志，请依次检查：
 
-心跳间隔和重连间隔可以改为 `1000`（1 秒）。点击保存，然后去 AstrBot WebUI 的控制台中检查是否连接成功，出现 `aiocqhttp(OneBot v11) 适配器已连接` 日志即代表成功。
+- OneBot 实现是否启用了**反向** WebSocket 客户端。
+- 客户端目标地址是否能从其所在网络访问 AstrBot，而不是误填 `0.0.0.0`。
+- AstrBot 是否监听了正确接口，容器端口或防火墙是否放行。
+- 两端 token 是否一致。
 
-如果您对部署、网络配置不了解，请千万不要在公网暴露 Napcat 的端口。
+## NapCat 与仓库 Compose
+
+仓库根目录的 `compose-with-napcat.yml` 当前设置了 NapCat `MODE=astrbot`。NapCat 会在每次启动时写入一个反向 WebSocket 客户端，目标是：
+
+```text
+ws://astrbot:6199/ws
+```
+
+如果保留此模式，请在 AstrBot 中创建 `OneBot v11` 平台，将 `ws_reverse_host` 设为 `0.0.0.0`、端口设为 `6199`。由于两个容器在同一个内部网络中，不需要向宿主机发布 `6199`。NapCat 的 `MODE` 模板会在每次启动时重写配置且默认 token 为空；如需持久化 token，请按 [Docker 部署](/deploy/astrbot/docker) 中的说明先移除模板模式。
+
+如果希望使用推荐的独立 `NapCat` 平台，请在 Compose 中把 `MODE=astrbot` 改为 `MODE=ws`。然后创建 `NapCat` 平台，将 `ws_url` 填为 `ws://napcat:3001`。同一个 NapCat 实例只选择其中一种连接方式。

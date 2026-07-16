@@ -19,7 +19,7 @@ Locale file names use WebUI locales, such as `zh-CN.json` and `en-US.json`. Each
 When the current locale has no translation, a field is missing, or the locale file does not exist, AstrBot falls back to the default text:
 
 - Plugin names, card short descriptions, and descriptions fall back to `display_name`, `short_desc`, and `desc` in `metadata.yaml`.
-- Configuration text falls back to `description`, `hint`, and `labels` in `_conf_schema.json`.
+- Configuration text falls back to `description` and `hint` in `_conf_schema.json`.
 
 ## Metadata
 
@@ -68,14 +68,13 @@ Corresponding `.astrbot-plugin/i18n/zh-CN.json`:
       "hint": "是否启用这个插件。"
     },
     "mode": {
-      "description": "模式",
-      "labels": ["快速", "安全"]
+      "description": "模式"
     }
   }
 }
 ```
 
-`options` are stored configuration values and should usually not be translated. Use `labels` for select display text.
+`options` are stored configuration values and must not be translated. The current i18n resolver reliably returns strings only and cannot translate a `labels` array. Keep select `labels` directly in `_conf_schema.json`, or use the stored values as display text for now.
 
 ## Plugin Dashboard Pages
 
@@ -149,8 +148,7 @@ Here is an English translation example for a real configuration:
     },
     "output_level": {
       "description": "SSE delivery level",
-      "hint": "silence: permission requests only; simple: plain text messages and system events; summary: recent N messages when a task completes; detail: all messages in real time",
-      "labels": ["Silence", "Simple", "Summary", "Detail"]
+      "hint": "silence: permission requests only; simple: plain text messages and system events; summary: recent N messages when a task completes; detail: all messages in real time"
     }
   }
 }
@@ -158,4 +156,6 @@ Here is an English translation example for a real configuration:
 
 ## Constraints
 
-Plugin internationalization only reads the `.astrbot-plugin/i18n` directory. Locale files must use nested JSON objects; dot-key flat entries are not supported.
+Plugin internationalization reads only `.astrbot-plugin/i18n`. Locale files must use nested JSON objects; dot-key flat entries are not supported. The runtime skips a locale file when it exceeds 1 MiB, has an empty or longer-than-32-character locale name, contains invalid JSON, or has a non-object root.
+
+Use strings for translated leaf values. Arrays and objects are not stable WebUI translation values today; in particular, do not override a `labels` array in a locale file.

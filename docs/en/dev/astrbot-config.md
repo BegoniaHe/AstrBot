@@ -1,562 +1,219 @@
----
-outline: deep
----
+# AstrBot Configuration Reference
 
-# AstrBot Configuration File
+AstrBot configuration evolves with Providers, platform adapters, and Agent capabilities. This page documents the current stable groups, defaults, and operational boundaries instead of maintaining a hand-copied “complete default configuration.”
 
-## data/cmd_config.json
+The authoritative code is:
 
-AstrBot's configuration file is a JSON format file. AstrBot reads this file at startup and initializes based on the settings within. Its path is `data/cmd_config.json`.
+- defaults: `DEFAULT_CONFIG` in `astrbot/core/config/default.py`;
+- WebUI field metadata: `CONFIG_METADATA_3` and `CONFIG_METADATA_3_SYSTEM` in the same file;
+- loading, integrity checks, and password migration: `astrbot/core/config/astrbot_config.py`.
 
-> AstrBot supports multiple configuration files. `data/cmd_config.json` serves as the default configuration `default`. Other configuration files you create in the WebUI are stored in the `data/config/` directory, starting with `abconf_`.
+## File locations and loading behavior
 
-The default AstrBot configuration is as follows:
+The default profile is stored at `data/cmd_config.json` under the runtime root. With `ASTRBOT_ROOT` set, it becomes `$ASTRBOT_ROOT/data/cmd_config.json`.
 
-```jsonc
+Additional profiles created in the WebUI are stored as `data/config/abconf_<uuid>.json`. Profile-to-message-session bindings are maintained by the configuration manager; do not move a binding by renaming files.
+
+The files are parsed with Python's standard JSON parser and must therefore be **strict JSON**:
+
+- use `true` and `false` for booleans;
+- do not add comments;
+- do not use trailing commas;
+- quote keys and strings with double quotes.
+
+At startup, AstrBot recursively inserts missing current defaults, fixes key order, and removes unknown keys that are not present in the current default structure. Adding an unsupported field manually does not extend the configuration model.
+
+> [!TIP]
+> Prefer the WebUI: profile settings are under **Config**, model and Provider records under **Providers**, adapter instances under **Platforms**, and process-wide settings are grouped under **Settings**. If you edit JSON directly, keep a copy and restart AstrBot afterward.
+
+## Top-level structure
+
+| Key                                               | Purpose                                                                                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `config_version`                                  | Current core configuration version, default `2`. Do not downgrade it manually.                                                    |
+| `platform_settings`                               | Cross-platform receive, send, allowlist, rate-limit, and segmented-reply behavior.                                                |
+| `provider_sources`                                | Provider endpoints and credentials, maintained by the Providers page.                                                             |
+| `provider`                                        | Concrete chat, STT, TTS, embedding, rerank, and other model instances.                                                            |
+| `provider_settings`                               | Agent, default-model, Persona, retrieval, context, and tool behavior for this profile.                                            |
+| `subagent_orchestrator`                           | SubAgent handoff orchestration.                                                                                                   |
+| `provider_stt_settings` / `provider_tts_settings` | Default speech-to-text and text-to-speech models and switches.                                                                    |
+| `provider_ltm_settings`                           | Group-context, image-caption, and proactive-reply settings under a historical name; it is not the Alkaid long-term-memory switch. |
+| `content_safety`                                  | Built-in keyword checks and optional external content-safety checks.                                                              |
+| `dashboard`                                       | WebUI listening, authentication, rate limiting, TOTP, and TLS.                                                                    |
+| `platform` / `platform_specific`                  | Adapter instances and platform-specific behavior for Lark, Telegram, Discord, and others.                                         |
+| Other top-level keys                              | Administrators, T2I, proxy, logging, timezone, plugins, knowledge base, Trace, and metrics.                                       |
+
+Object layouts inside `provider_sources`, `provider`, and `platform` come from the currently registered type templates. Do not copy old objects from documentation. Create them in the WebUI and inspect the saved result if necessary. A model references its source through `provider_source_id`; use the WebUI when renaming or deleting a source so references are updated together.
+
+## `platform_settings`
+
+| Key                                         | Default                                | Meaning                                                                                                                                     |
+| ------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unique_session`                            | `false`                                | Split separate sessions for members inside a group.                                                                                         |
+| `rate_limit`                                | `60` seconds / `30` messages / `stall` | Wait (`stall`) or discard (`discard`) when the limit is exceeded.                                                                           |
+| `enable_id_white_list`                      | `true`                                 | Enable the ID allowlist; the two `wl_ignore_admin_*` fields control administrator bypass.                                                   |
+| `reply_prefix`                              | `""`                                   | Prefix added to replies.                                                                                                                    |
+| `reply_with_mention` / `reply_with_quote`   | `false`                                | Mention the sender or quote the source message when supported by the adapter.                                                               |
+| `forward_threshold`                         | `1500`                                 | Long-reply forwarding threshold on platforms that support forwarded messages.                                                               |
+| `segmented_reply`                           | See current defaults                   | Non-streaming segmentation, timing, and cleanup rules.                                                                                      |
+| `path_mapping`                              | `[]`                                   | Map paths from a platform container into paths AstrBot can read, using `source:target`. This is still used by the receive/respond pipeline. |
+| `friend_message_needs_wake_prefix`          | `false`                                | Require a wake prefix in direct messages.                                                                                                   |
+| `ignore_bot_self_message` / `ignore_at_all` | `false`                                | Ignore the bot's own messages or mass mentions.                                                                                             |
+
+Example path mapping:
+
+```json
 {
-    "config_version": 2,
-    "platform_settings": {
-        "unique_session": False,
-        "rate_limit": {
-            "time": 60,
-            "count": 30,
-            "strategy": "stall",  # stall, discard
-        },
-        "reply_prefix": "",
-        "forward_threshold": 1500,
-        "enable_id_white_list": True,
-        "id_whitelist": [],
-        "id_whitelist_log": True,
-        "wl_ignore_admin_on_group": True,
-        "wl_ignore_admin_on_friend": True,
-        "reply_with_mention": False,
-        "reply_with_quote": False,
-        "path_mapping": [],
-        "segmented_reply": {
-            "enable": False,
-            "only_llm_result": True,
-            "interval_method": "random",
-            "interval": "1.5,3.5",
-            "log_base": 2.6,
-            "words_count_threshold": 150,
-            "regex": ".*?[。？！~…]+|.+$",
-            "content_cleanup_rule": "",
-        },
-        "no_permission_reply": True,
-        "empty_mention_waiting": True,
-        "empty_mention_waiting_need_reply": True,
-        "friend_message_needs_wake_prefix": False,
-        "ignore_bot_self_message": False,
-        "ignore_at_all": False,
-    },
-    "provider": [],
-    "provider_settings": {
-        "enable": True,
-        "default_provider_id": "",
-        "default_image_caption_provider_id": "",
-        "image_caption_prompt": "Please describe the image using Chinese.",
-        "provider_pool": ["*"],  # "*" means use all available providers
-        "wake_prefix": "",
-        "web_search": False,
-        "websearch_provider": "tavily",
-        "websearch_tavily_key": [],
-        "websearch_bocha_key": [],
-        "websearch_brave_key": [],
-        "websearch_exa_key": [],
-        "web_search_link": False,
-        "display_reasoning_text": False,
-        "identifier": False,
-        "group_name_display": False,
-        "datetime_system_prompt": True,
-        "default_personality": "default",
-        "persona_pool": ["*"],
-        "prompt_prefix": "{{prompt}}",
-        "max_context_length": -1,
-        "dequeue_context_length": 1,
-        "streaming_response": False,
-        "show_tool_use_status": False,
-        "streaming_segmented": False,
-        "max_agent_step": 30,
-        "tool_call_timeout": 120,
-    },
-    "provider_stt_settings": {
-        "enable": False,
-        "provider_id": "",
-    },
-    "provider_tts_settings": {
-        "enable": False,
-        "provider_id": "",
-        "dual_output": False,
-        "use_file_service": False,
-    },
-    "provider_ltm_settings": {
-        "group_icl_enable": False,
-        "group_message_max_cnt": 300,
-        "image_caption": False,
-        "active_reply": {
-            "enable": False,
-            "method": "possibility_reply",
-            "possibility_reply": 0.1,
-            "whitelist": [],
-        },
-    },
-    "content_safety": {
-        "also_use_in_response": False,
-        "internal_keywords": {"enable": True, "extra_keywords": []},
-        "baidu_aip": {"enable": False, "app_id": "", "api_key": "", "secret_key": ""},
-    },
-    "admins_id": ["astrbot"],
-    "t2i": False,
-    "t2i_word_threshold": 150,
-    "t2i_use_file_service": False,
-    "t2i_active_template": "base",
-    "http_proxy": "",
-    "no_proxy": ["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"],
-    "dashboard": {
-        "enable": True,
-        "username": "astrbot",
-        "password": "<your_password_md5>",
-        "jwt_secret": "",
-        "host": "127.0.0.1",
-        "port": 6185,
-    },
-    "platform": [],
-    "platform_specific": {
-        # Platform-specific settings: categorized by platform, then by feature group
-        "lark": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["Typing"]},
-        },
-        "telegram": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["✍️"]},
-        },
-        "discord": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["🤔"]},
-        },
-    },
-    "wake_prefix": ["/"],
-    "log_level": "INFO",
-    "trace_enable": False,
-    "pip_install_arg": "",
-    "pypi_index_url": "https://mirrors.aliyun.com/pypi/simple/",
-    "timezone": "Asia/Shanghai",
-    "callback_api_base": "",
-    "plugin_set": ["*"],  # "*" means use all available plugins, empty list means none
+  "platform_settings": {
+    "path_mapping": [
+      "/app/.config/QQ:/var/lib/docker/volumes/napcat_data/_data"
+    ]
+  }
 }
 ```
 
-## Field Details
+This is a partial illustration and must not replace the complete file. Because Windows drive letters contain a colon, configure mappings in the WebUI and validate them against real platform events.
 
-### `config_version`
+## `provider_settings`
 
-Configuration version, do not modify.
+### Provider selection and retries
 
-### `platform_settings`
+- `enable` enables AI Provider processing and defaults to `true`.
+- `default_provider_id` selects the default chat model.
+- `fallback_chat_models` lists chat-model IDs tried in order after the primary model fails.
+- `request_max_retries` is the per-model maximum retry count and defaults to `5`. Fallback and retries are separate layers.
+- `provider_pool` limits Providers available to this profile; `["*"]` means all.
+- `default_image_caption_provider_id` and `image_caption_prompt` create descriptions for flows that cannot consume images directly.
 
-General settings for message platform adapters.
+API keys are sensitive configuration. Never commit a real `cmd_config.json`, screenshots, logs, or backups. Logs and Trace data can also contain Provider IDs, request errors, and tool output.
 
-#### `platform_settings.unique_session`
+### Persona, prompts, and sessions
 
-Whether to enable session isolation. Default is `false`. When enabled, each person's conversation context in groups or channels is independent.
+- `default_personality` selects the default Persona ID.
+- `persona_pool` limits selectable Personas; `["*"]` means all.
+- `prompt_prefix` is the user-prompt template. Keep `{{prompt}}` if the original input must be included.
+- profile-level `wake_prefix` is distinct from the top-level global command/wake-prefix list.
+- `identifier`, `group_name_display`, and `datetime_system_prompt` add user identity, group name, or current time to the prompt.
 
-#### `platform_settings.rate_limit`
+See [Personas](../use/persona) for selection priority and permission semantics.
 
-Strategy when message rate exceeds limits. `time` is the window, `count` is the number of messages, and `strategy` is the limit strategy. `stall` means wait, `discard` means drop.
+### Context management
 
-#### `platform_settings.reply_prefix`
+| Key                              | Default                         | Meaning                                                                       |
+| -------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `context_limit_reached_strategy` | `llm_compress`                  | `llm_compress` or `truncate_by_turns`.                                        |
+| `llm_compress_keep_recent_ratio` | `0.15`                          | Exact recent-context token ratio, clamped to `0`–`0.3`.                       |
+| `llm_compress_provider_id`       | `""`                            | Empty means the chat model active for the current session.                    |
+| `llm_compress_instruction`       | Built-in five-point instruction | Summary prompt.                                                               |
+| `max_context_length`             | `-1`                            | Conversation turns kept before compression; `-1` disables this turn limit.    |
+| `dequeue_context_length`         | `1`                             | Turns removed per turn-based truncation pass.                                 |
+| `fallback_max_context_tokens`    | Runtime default `128000`        | Fallback window when neither model config nor built-in metadata supplies one. |
 
-Fixed prefix string when replying to messages. Default is empty.
+See [Automatic Context Compression](../use/context-compress) for the full behavior.
 
-#### `platform_settings.forward_threshold`
+### Agent Runner and tools
 
-> Currently only applicable to the QQ platform adapter.
+- `agent_runner_type` selects the built-in `local` Agent or a configured Dify, Coze, DashScope, or DeerFlow runner.
+- `*_agent_runner_provider_id` selects the Provider record for an external runner.
+- `max_agent_step` defaults to `30` and also applies to current SubAgent executions.
+- `tool_call_timeout` is the per-tool timeout in seconds, default `120`.
+- `tool_schema_mode` uses `full` schemas or the lighter two-stage `skills_like` mode.
+- `show_tool_use_status` / `show_tool_call_result` expose tool state and a result preview to users.
+- `buffer_intermediate_messages` combines intermediate text during non-streaming multi-step runs.
+- `sanitize_context_by_modalities` removes unsupported modalities and tool structures according to the current model, changing the history seen by that model.
+- `proactive_capability.add_cron_tools` exposes proactive/Cron tools to the local Agent.
+- `file_extract` is experimental document extraction currently templated for the Moonshot API.
 
-Message forwarding threshold. When the reply content exceeds a certain number of characters, the bot will fold the message into a QQ group "forwarded message" to prevent spamming.
+### Streaming
 
-#### `platform_settings.enable_id_white_list`
+- `streaming_response` enables Provider streaming.
+- `unsupported_streaming_strategy` uses `realtime_segmenting` on platforms without native streaming or `turn_off` to disable streaming for that response.
 
-Whether to enable the ID whitelist. Default is `true`. When enabled, only messages from IDs in the whitelist will be processed.
+The old `provider_settings.streaming_segmented` field has been removed. Do not add it back.
 
-#### `platform_settings.id_whitelist`
+### Computer Use and sandboxing
 
-ID whitelist. If filled, only message events from the specified IDs will be processed. Empty means the whitelist filter is not enabled. You can use the `/sid` command to get the session ID on a platform.
+- `computer_use_runtime` is `none`, `local`, or `sandbox` and defaults to `none`.
+- `computer_use_require_admin` defaults to `true`, restricting computer tools to AstrBot administrators.
+- `sandbox.booter` selects `shipyard_neo` or `cua`; related fields store endpoint, token, profile, TTL, or CUA OS, telemetry, and local/cloud settings.
 
-Session IDs can also be found in AstrBot logs; when a message fails the whitelist, an INFO level log is output, e.g., `aiocqhttp:GroupMessage:547540978`.
+Local mode operates directly on the AstrBot host and belongs only in a trusted environment. A sandbox is not an authorization boundary by itself; continue to restrict administrators, Persona tools, and external network access.
 
-#### `platform_settings.id_whitelist_log`
+### Search and images
 
-Whether to print logs for messages that fail the ID whitelist. Default is `true`.
+`web_search`, `websearch_provider`, and provider-specific keys configure built-in web search; `web_search_link` controls link output. Enter keys through the WebUI.
 
-#### `platform_settings.wl_ignore_admin_on_group` & `platform_settings.wl_ignore_admin_on_friend`
+`image_compress_enabled` and `image_compress_options.max_size/quality` control image compression before model requests. `max_quoted_fallback_images` and `quoted_message_parser` limit quoted and forwarded-message expansion to prevent unbounded fetching.
 
-- `wl_ignore_admin_on_group`: Whether group messages from admins bypass the ID whitelist. Default is `true`.
+## SubAgents, speech, and knowledge base
 
-- `wl_ignore_admin_on_friend`: Whether private messages from admins bypass the ID whitelist. Default is `true`.
+- `subagent_orchestrator.main_enable` enables handoffs.
+- `remove_main_duplicate_tools` removes only tools that overlap between the main Agent and SubAgents; it defaults to `false`.
+- `router_system_prompt` and `agents` define routing and SubAgents. Maintain them through the dedicated page; see [SubAgent Orchestration](../use/subagent).
+- `provider_stt_settings` controls STT and its default model.
+- `provider_tts_settings` controls the TTS model, dual output, file service, and a `0`–`1` trigger probability.
+- `kb_names`, `kb_fusion_top_k`, and `kb_final_top_k` select default knowledge bases and retrieval counts.
+- `kb_agentic_mode` exposes knowledge-base retrieval as a model-controlled tool.
 
-#### `platform_settings.reply_with_mention`
+Alkaid [Long-term Memory](../use/long-term-memory) currently has no enable/disable configuration. Do not treat `provider_ltm_settings` as its switch.
 
-Whether to @ mention the user when replying. Default is `false`.
+## WebUI and authentication
 
-#### `platform_settings.reply_with_quote`
+Important `dashboard` defaults:
 
-Whether to quote the user's message when replying. Default is `false`.
+| Key                      | Default     | Meaning                                                                                                                          |
+| ------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `enable`                 | `true`      | Enable the WebUI/API.                                                                                                            |
+| `username`               | `astrbot`   | Initial username.                                                                                                                |
+| `host`                   | `127.0.0.1` | Listen on loopback only. Remote access requires an explicit `0.0.0.0` or interface binding plus firewall/reverse-proxy controls. |
+| `port`                   | `6185`      | HTTP(S) listening port.                                                                                                          |
+| `trust_proxy_headers`    | `false`     | Trust `X-Forwarded-For` / `X-Real-IP` only behind a controlled reverse proxy.                                                    |
+| `auth_rate_limit.enable` | `true`      | Rate-limit login, TOTP, and other authentication endpoints.                                                                      |
+| `totp.enable`            | `false`     | Require WebUI TOTP two-factor authentication.                                                                                    |
+| `ssl.enable`             | `false`     | Terminate TLS in AstrBot using the certificate, key, and optional CA path fields.                                                |
 
-#### `platform_settings.path_mapping`
-
-_This configuration item is deprecated._
-
-List of path mappings. Used to replace file paths in messages. Each mapping item contains `from` and `to` fields, indicating that `from` in the message path is replaced with `to`.
-
-#### `platform_settings.segmented_reply`
-
-Segmented reply settings.
-
-- `enable`: Whether to enable segmented replies. Default is `false`.
-- `only_llm_result`: Whether to only segment replies generated by the LLM. Default is `true`.
-- `interval_method`: Method for segmentation intervals. Options are `random` and `log`. Default is `random`.
-- `interval`: Interval time for segmentation. For `random`, fill in two comma-separated numbers representing min and max intervals (seconds). For `log`, fill in one number representing the log base. Default is `"1.5,3.5"`.
-- `log_base`: Log base, only applicable when `interval_method` is `log`. Default is `2.6`.
-- `words_count_threshold`: Character limit for segmented replies. Only messages shorter than this value will be segmented; longer messages will be sent directly (unsegmented). Default is `150`.
-- `regex`: Used to split a message. By default, it splits based on punctuation like periods and question marks. `re.findall(r'<regex>', text)`. Default is `".*?[。？！~…]+|.+$"`.
-- `content_cleanup_rule`: Removes specified content from segments. Supports regex. For example, `[。？！]` will remove all periods, question marks, and exclamation points. `re.sub(r'<regex>', '', text)`.
-
-#### `platform_settings.no_permission_reply`
-
-Whether to reply with a "no permission" prompt when a user lacks authority. Default is `true`.
-
-#### `platform_settings.empty_mention_waiting`
-
-Whether to enable the empty @ waiting mechanism. Default is `true`. When enabled, if a user sends a message containing only an @ mention of the bot, the bot waits for the user to send the next message within 60 seconds and merges the two for processing. This is particularly useful on platforms that don't support sending @ and voice/images simultaneously.
-
-#### `platform_settings.empty_mention_waiting_need_reply`
-
-In the above item (`empty_mention_waiting`), if waiting is triggered, enabling this will make the bot immediately generate an LLM reply. Otherwise, it just waits without replying. Default is `true`.
-
-#### `platform_settings.friend_message_needs_wake_prefix`
-
-Whether private messages on platforms require a wake prefix. Default is `false`. When enabled, users must use a wake prefix to trigger a bot response in private chats.
-
-#### `platform_settings.ignore_bot_self_message`
-
-Whether to ignore messages sent by the bot itself. Default is `false`. When enabled, the bot won't process its own messages, preventing infinite loops on some platforms.
-
-#### `platform_settings.ignore_at_all`
-
-Whether to ignore @all messages. Default is `false`. When enabled, the bot won't respond to messages containing @all.
-
-### `provider`
-
-> This item only takes effect in `data/cmd_config.json`; AstrBot does not read this from configuration files in the `data/config/` directory.
-
-List of configured model service provider settings.
-
-### `provider_settings`
-
-General settings for LLM providers.
-
-#### `provider_settings.enable`
-
-Whether to enable LLM chat. Default is `true`.
-
-#### `provider_settings.default_provider_id`
-
-Default conversation model provider ID. Must be a provider ID already configured in the `provider` list. If empty, the first provider in the list is used.
-
-#### `provider_settings.default_image_caption_provider_id`
-
-Default image captioning model provider ID. Must be a provider ID already configured in the `provider` list. If empty, image captioning is disabled.
-
-This means when a user sends an image, AstrBot uses this provider to generate a text description, which is then used as part of the conversation context. This is useful when the conversation model doesn't support multimodal input.
-
-#### `provider_settings.image_caption_prompt`
-
-Prompt template for image captioning. Default is `"Please describe the image using Chinese."`.
-
-#### `provider_settings.provider_pool`
-
-_This configuration item is not yet in actual use._
-
-#### `provider_settings.wake_prefix`
-
-Extra trigger condition for LLM chat. For example, if `chat` is filled, messages must start with `/chat` to trigger LLM chat, where `/` is the bot's wake prefix. This is a measure to prevent abuse.
-
-#### `provider_settings.web_search`
-
-Whether to enable AstrBot's built-in web search capability. Default is `false`. When enabled, the LLM may automatically search the web and answer based on the content.
-
-#### `provider_settings.websearch_provider`
-
-Web search provider type. Default is `tavily`. Currently supports `tavily`, `baidu_ai_search`, `bocha`, `brave`, `exa`, and `firecrawl`.
-
-- `tavily`: Uses the Tavily search engine.
-- `baidu_ai_search`: Uses Baidu AI Search (MCP).
-- `bocha`: Uses the BoCha search engine.
-- `brave`: Uses Brave Search API.
-- `exa`: Uses the Exa search engine.
-- `firecrawl`: Uses the Firecrawl Search API.
-
-#### `provider_settings.websearch_tavily_key`
-
-API Key list for the Tavily search engine. Required when using `tavily` as the web search provider.
-
-#### `provider_settings.websearch_bocha_key`
-
-API Key list for the BoCha search engine. Required when using `bocha` as the web search provider.
-
-#### `provider_settings.websearch_brave_key`
-
-API Key list for the Brave search engine. Required when using `brave` as the web search provider.
-
-#### `provider_settings.websearch_exa_key`
-
-API Key list for the Exa search engine. Required when using `exa` as the web search provider.
-
-#### `provider_settings.websearch_firecrawl_key`
-
-API Key list for the Firecrawl search engine. Required when using `firecrawl` as the web search provider.
-
-#### `provider_settings.web_search_link`
-
-Whether to prompt the model to include links to search results in the reply. Default is `false`.
-
-#### `provider_settings.display_reasoning_text`
-
-Whether to display the model's reasoning process in the reply. Default is `false`.
-
-#### `provider_settings.identifier`
-
-Whether to prepend the group member's name to the prompt so the model better understands the group chat state. Default is `false`. Enabling this slightly increases token usage.
-
-#### `provider_settings.group_name_display`
-
-Whether to let the model know the name of the group it's in. Default is `false`. This currently only takes effect in the QQ platform adapter.
-
-#### `provider_settings.datetime_system_prompt`
-
-Whether to include the current machine date and time in the system prompt. Default is `true`.
-
-#### `provider_settings.default_personality`
-
-ID of the default personality to use. Configure personalities in the WebUI.
-
-#### `provider_settings.persona_pool`
-
-_This configuration item is not yet in actual use._
-
-#### `provider_settings.prompt_prefix`
-
-User prompt. You can use `{{prompt}}` as a placeholder for user input. If no placeholder is provided, it's prepended to the user input.
-
-#### `provider_settings.max_context_length`
-
-When the conversation context exceeds this number, the oldest parts are discarded. One round of chat counts as 1. -1 means no limit.
-
-#### `provider_settings.dequeue_context_length`
-
-The number of conversation rounds to discard each time the `max_context_length` limit is triggered.
-
-#### `provider_settings.streaming_response`
-
-Whether to enable streaming responses. Default is `false`. When enabled, the model's reply is sent to the user in real-time with a typewriter effect. This only takes effect on WebChat, Telegram, and Lark platforms.
-
-#### `provider_settings.show_tool_use_status`
-
-Whether to show tool usage status. Default is `false`. When enabled, the model displays the tool name and input parameters when using a tool.
-
-#### `provider_settings.streaming_segmented`
-
-Whether platforms that don't support streaming responses should fall back to segmented replies. Default is `false`. This means if streaming is enabled but the platform doesn't support it, segmented multiple replies are used instead.
-
-#### `provider_settings.max_agent_step`
-
-Limit on the maximum number of Agent steps. Default is `30`. Each tool call by the model counts as one step.
-
-#### `provider_settings.tool_call_timeout`
-
-Maximum timeout for tool calls (seconds), default is `120` seconds.
-
-#### `provider_stt_settings`
-
-General settings for Speech-to-Text (STT) providers.
-
-#### `provider_stt_settings.enable`
-
-Whether to enable STT services. Default is `false`.
-
-#### `provider_stt_settings.provider_id`
-
-STT provider ID. Must be an STT provider ID already configured in the `provider` list.
-
-#### `provider_tts_settings`
-
-General settings for Text-to-Speech (TTS) providers.
-
-#### `provider_tts_settings.enable`
-
-Whether to enable TTS services. Default is `false`.
-
-#### `provider_tts_settings.provider_id`
-
-TTS provider ID. Must be a TTS provider ID already configured in the `provider` list.
-
-#### `provider_tts_settings.dual_output`
-
-Whether to enable dual output. Default is `false`. When enabled, the bot sends both text and voice messages.
-
-#### `provider_tts_settings.use_file_service`
-
-Whether to enable the file service. Default is `false`. When enabled, the bot provides the output voice file as an external HTTP link to the message platform. This depends on the `callback_api_base` configuration.
-
-#### `provider_ltm_settings`
-
-General settings for group chat context awareness providers.
-
-#### `provider_ltm_settings.group_icl_enable`
-
-Whether to enable group chat context awareness. Default is `false`. When enabled, the bot records group chat conversations to better understand context.
-
-The context content is placed in the conversation's system prompt.
-
-#### `provider_ltm_settings.group_message_max_cnt`
-
-Maximum number of group chat messages to record. Default is `300`. Messages exceeding this count are discarded.
-
-#### `provider_ltm_settings.image_caption`
-
-Whether to record images in group chats and automatically generate text descriptions using an image captioning model. Default is `false`. This depends on the `provider_settings.default_image_caption_provider_id` configuration. Use with caution as it can significantly increase API calls and token usage.
-
-#### `provider_ltm_settings.active_reply`
-
-- `enable`: Whether to enable active replies. Default is `false`.
-- `method`: Method for active replies. Option is `possibility_reply`.
-- `possibility_reply`: Probability of an active reply. Default is `0.1`. Only applicable when `method` is `possibility_reply`.
-- `whitelist`: ID whitelist for active replies. Only IDs in this list will trigger active replies. Empty means no whitelist filter. You can use the `/sid` command to get the session ID on a platform.
-
-### `content_safety`
-
-Content safety settings.
-
-#### `content_safety.also_use_in_response`
-
-Whether to also perform content safety checks on LLM replies. Default is `false`. When enabled, bot-generated replies also undergo safety checks to prevent inappropriate content.
-
-#### `content_safety.internal_keywords`
-
-Internal keyword detection settings.
-
-- `enable`: Whether to enable internal keyword detection. Default is `true`.
-- `extra_keywords`: List of extra keywords, supports regex. Default is empty.
-
-#### `content_safety.baidu_aip`
-
-Baidu AI content moderation settings.
-
-- `enable`: Whether to enable Baidu AI content moderation. Default is `false`.
-- `app_id`: App ID for Baidu AI content moderation.
-- `api_key`: API Key for Baidu AI content moderation.
-- `secret_key`: Secret Key for Baidu AI content moderation.
-
-> [!TIP]
-> To enable Baidu AI content moderation, please `pip install baidu-aip` first.
-
-### `admins_id`
-
-List of administrator IDs. Additionally, you can use `/op` and `/deop` commands to add or remove admins.
-
-### `t2i`
-
-Whether to enable Text-to-Image (T2I) functionality. Default is `false`. When enabled, if a user's message exceeds a certain character count, the bot renders the message as an image to improve readability and prevent spamming. Supports Markdown rendering.
-
-### `t2i_word_threshold`
-
-Character threshold for T2I. Default is `150`. When a message exceeds this count, the bot renders it as an image.
-
-### `t2i_use_file_service`
-
-Whether to expose local rendered images through the file service. Default is `false`. When enabled, the bot provides rendered images as external HTTP links to the message platform. This depends on the `callback_api_base` configuration.
-
-Text-to-image rendering uses local Playwright Chromium. After installing from source or with `uv tool`, install the browser once with `astrbot install-browser`.
-
-### `http_proxy`
-
-HTTP proxy. E.g., `http://localhost:7890`.
-
-### `no_proxy`
-
-List of addresses that bypass the proxy. Default is `["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"]`.
-
-### `dashboard`
-
-AstrBot WebUI configuration.
-
-Please do not change the `password` value arbitrarily. It is an `md5` encoded password generated from the random initial password. Check the startup logs for that initial password on first run, then change it in the control panel.
-
-- `enable`: Whether to enable the AstrBot WebUI. Default is `true`.
-- `username`: Username for the AstrBot WebUI.
-- `password`: Password for the AstrBot WebUI. It is initialized from a random password generated on first startup (logged at startup). Do not modify directly unless you know what you are doing.
-- `jwt_secret`: JWT secret key. AstrBot generates this randomly at initialization. Do not modify unless you know what you are doing.
-- `host`: Address the AstrBot WebUI listens on. Default is `127.0.0.1`; set it to `0.0.0.0` only when remote access is required.
-- `port`: Port the AstrBot WebUI listens on. Default is `6185`.
-
-### `platform`
-
-> This item only takes effect in `data/cmd_config.json`; AstrBot does not read this from configuration files in the `data/config/` directory.
-
-List of configured AstrBot message platform adapter settings.
-
-### `platform_specific`
-
-Platform-specific settings. Categorized by platform, then by feature group.
-
-#### `platform_specific.<platform>.pre_ack_emoji`
-
-When enabled, AstrBot sends a pre-reply emoji before requesting the LLM to inform the user that the request is being processed. This currently only takes effect in the Lark and Telegram platform adapters.
-
-##### lark
-
-- `enable`: Whether to enable pre-reply emojis for Lark messages. Default is `false`.
-- `emojis`: List of pre-reply emojis. Default is `["Typing"]`. Refer to [Emoji Documentation](https://open.feishu.cn/document/server-docs/im-v1/message-reaction/emojis-introduce) for emoji names.
-
-##### telegram
-
-- `enable`: Whether to enable pre-reply emojis for Telegram messages. Default is `false`.
-- `emojis`: List of pre-reply emojis. Default is `["✍️"]`. Telegram only supports a fixed set of reactions; refer to [reactions.txt](https://gist.github.com/Soulter/3f22c8e5f9c7e152e967e8bc28c97fc9).
-
-##### discord
-
-- `enable`: Whether to enable pre-reply emojis for Discord messages. Default is `false`.
-- `emojis`: List of pre-reply emojis. Default is `["🤔"]`. Refer to [Discord Reaction FAQ](https://support.discord.com/hc/en-us/articles/12102061808663-Reactions-and-Super-Reactions-FAQ).
-
-### `wake_prefix`
-
-Wake prefix. Default is `/`. When a message starts with `/`, AstrBot is awakened.
-
-> [!TIP]
-> If the awakened session is not in the ID whitelist, AstrBot will not respond.
-
-### `log_level`
-
-Log level. Default is `INFO`. Can be set to `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
-
-### `trace_enable`
-
-Whether to enable trace recording. Default is `false`. When enabled, AstrBot records execution traces, which can be viewed on the Trace page of the admin panel.
-
-### `pip_install_arg`
-
-Arguments for `pip install`. E.g., `-i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple`.
-
-### `pypi_index_url`
-
-PyPI index URL. Default is `https://mirrors.aliyun.com/pypi/simple/`.
-
-### `timezone`
-
-Timezone setting. Please fill in an IANA timezone name, such as Asia/Shanghai. If empty, the system default timezone is used. See all timezones at: [IANA Time Zone Database](https://data.iana.org/time-zones/tzdb-2021a/zone1970.tab).
-
-### `callback_api_base`
-
-Base address for the AstrBot API. Used for file services, plugin callbacks, etc. E.g., `http://example.com:6185`. Default is empty, meaning file services and plugin callbacks are disabled.
-
-### `plugin_set`
-
-List of enabled plugins. `*` means all available plugins are enabled. Default is `["*"]`.
+Passwords are stored as PBKDF2 hashes in `pbkdf2_password`. `password` is a migration-era hash field. Never write plaintext into either field or manually exchange hashes. To recover access, run:
+
+```bash
+uv run astrbot run --reset-password
+```
+
+The source entry point also accepts `uv run main.py --reset-password`. Startup logs print the new temporary password and require it to be changed after login.
+
+## System, logging, and response decoration
+
+- `admins_id` lists AstrBot administrator IDs; use `/sid` to inspect a platform ID.
+- `t2i` and `t2i_word_threshold` render long **output results** as images. `t2i_active_template` is maintained by the template manager.
+- `t2i_use_file_service` publishes rendered output through a file-token URL and requires a correct `callback_api_base`.
+- `http_proxy` / `no_proxy` configure outbound HTTP proxying and bypasses.
+- `log_level` and `log_file_*` control console and rotating file logs.
+- `trace_enable` is the Trace collection switch; `trace_log_*` controls its separate rotating file.
+- `temp_dir_max_size` limits `data/temp` in MiB and defaults to `1024`; a background task removes older files when the limit is exceeded.
+- `timezone` is an IANA timezone and defaults to `Asia/Shanghai`.
+- `callback_api_base` is the externally reachable base used to build callback and file URLs. It does not change the listening address.
+- `plugin_set` limits plugins for the profile; `["*"]` means all and an empty list means none.
+- `disable_builtin_commands` and `disable_metrics` disable built-in commands or metric collection.
+
+## Process-level environment overrides
+
+Only a small set of startup values have environment overrides. There is no general configuration-key-to-environment-variable mapping.
+
+| Environment variable                                                                                     | Purpose                                                                                                          |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ASTRBOT_ROOT`                                                                                           | Relocate the runtime root.                                                                                       |
+| `DASHBOARD_HOST` / `ASTRBOT_DASHBOARD_HOST`                                                              | Override the WebUI bind address.                                                                                 |
+| `DASHBOARD_PORT` / `ASTRBOT_DASHBOARD_PORT`                                                              | Override the WebUI port.                                                                                         |
+| `DASHBOARD_SSL_ENABLE` / `ASTRBOT_DASHBOARD_SSL_ENABLE`                                                  | Override direct WebUI TLS.                                                                                       |
+| `DASHBOARD_SSL_CERT`, `DASHBOARD_SSL_KEY`, `DASHBOARD_SSL_CA_CERTS`, and their `ASTRBOT_`-prefixed forms | Override TLS files.                                                                                              |
+| `ASTRBOT_DASHBOARD_INITIAL_PASSWORD`                                                                     | Supply the initial password during first initialization or an explicit reset; password validation still applies. |
+
+Publishing container port `6185` does not override loopback binding. Set the host as well; see [Docker Deployment](../deploy/astrbot/docker).
+
+## Configuration change checklist
+
+1. Confirm that the key exists in the current `DEFAULT_CONFIG` and WebUI metadata.
+2. Change it in the WebUI, or stop AstrBot before editing strict JSON.
+3. Never expose credentials, TOTP secrets, JWT secrets, or access tokens in issues, logs, or diffs.
+4. After restart, inspect logs for removed fields, Provider load failures, or adapter reload failures.
+5. Retest network boundaries after changing binding, proxy headers, TLS, Computer Use, MCP, or callback URLs.
+6. Validate the default Provider, Persona, plugin pool, and message-session bindings for every profile; the default profile does not automatically represent all profiles.

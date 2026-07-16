@@ -1,183 +1,177 @@
-# FAQ
+# 常见问题
 
-## 管理面板相关
+## WebUI 与账号
 
-### 当管理面板打开时遇到 404 错误
+### 打开 WebUI 显示 404 或空白页
 
-在 [release](https://github.com/Xero-Team/AstrBot/releases) 页面下载管理面板 ZIP 资源，解压到 `AstrBot/data` 下，然后重启 AstrBot。如果还不行，再尝试重启电脑。
-
-### 首次登录的默认账号和随机密码
-
-首次启动时，WebUI 的默认账号为 `astrbot`，默认密码会随机生成，不会写死为固定值。请在启动日志中查找以下内容并使用日志中的随机初始密码登录：
-
-```text
-[00:27:40.590] [Core] [INFO] [dashboard.server:523]:
- ✨✨✨
-  AstrBot vX.Y.Z WebUI is ready
-
-   ➜  Local: http://localhost:6185
-   ➜  Initial username: astrbot
-   ➜  Initial password: UiYVpZxnW8k22IWqf0ru5pOy
-   ➜  Change it after logging in
- ✨✨✨
-Set dashboard.host in data/cmd_config.json to enable remote access.
-```
-
-其中的 `UiYVpZxnW8k22IWqf0ru5pOy` 只是这次启动打印出来的初始密码示例。在使用初始密码登录后，会自动进入设置账户环节。
-
-### 管理面板的密码忘记了
-
-如果你忘记了 AstrBot 管理面板的密码，你可以直接使用CLI工具`astrbot password`来更改密码
-
-另外，你也可以在 `AstrBot/data/cmd_config.json` 配置文件中找到 `"dashboard"` 字段，如下：
-
-```json
-  "dashboard": {
-    "enable": true,
-    "username": "astrbot",
-    "password": "81e0c3dxxxxxxxxxxx78862e78",
-    "pbkdf2_password": "pbkdf2_sha256$600000$1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "password_storage_upgraded": true,
-    "password_change_required": true,
-    "jwt_secret": "5e1b0280bcxxxxxxxxxxxxxxxxf4a",
-    "host": "127.0.0.1",
-    "port": 6185,
-    "disable_access_log": true,
-    "ssl": {
-      "enable": false,
-      "cert_file": "",
-      "key_file": "",
-      "ca_certs": ""
-    }
-  },
-```
-
-删除 `username`, `password`, `pbkdf2_password`, `password_storage_upgraded`, `password_change_required`, `jwt_secret` 六个字段（连同值一起），然后保存。上述片段修改类似如下：
-
-```json
-  "dashboard": {
-    "enable": true,
-    "host": "127.0.0.1",
-    "port": 6185,
-    "disable_access_log": true,
-    "ssl": {
-      "enable": false,
-      "cert_file": "",
-      "key_file": "",
-      "ca_certs": ""
-    }
-  },
-```
-
-重启后 AstrBot 将会自动生成随机的密码以及固定的用户名 `astrbot`，请在日志查看。
-
-### 升级 AstrBot 后密码正确但无法登录
-
-如果你确认管理面板密码正确，但升级 AstrBot 后仍然无法登录，可能是旧版 WebUI 静态文件缓存与新版后端不兼容。
-
-解决方案：
-
-1. 停止 AstrBot。
-2. 删除 AstrBot 的 `data` 目录下的 `dist` 文件夹，即 `AstrBot/data/dist`。
-3. 重新启动 AstrBot。
-4. 访问管理面板后按 `Ctrl+Shift+R` 或 `Ctrl+F5`（macOS 用户请按 `Cmd+Shift+R`）强制刷新页面。
-
-重启后，AstrBot 会重新加载或下载匹配当前版本的 WebUI 文件。
-
-## AstrBot 使用相关
-
-### 如何让 AstrBot 控制我的 Mac / Windows / Linux 电脑？
-
-1. 在 AstrBot WebUI 的 `配置 -> 普通配置` 中，找到 `使用电脑能力`，运行环境选择 `local`。
-2. 在 `配置 -> 其他配置` 中，找到 `管理员 ID 列表`，添加你的用户 ID（可以通过 `/sid` 指令获取）。
-3. 右下角保存配置
-
-> [!TIP]
-> AstrBot 为了安全起见，运行环境选择 `local` 时，默认仅允许 AstrBot 管理员使用电脑能力。
-> 运行环境可以选择 `sandbox`，此时所有用户都可以使用电脑能力（在一个隔离的沙箱中）。详情请看 [AstrBot 沙箱环境](/use/astrbot-agent-sandbox.md)
-
-### 通过 AstrBot 桌面客户端安装的 AstrBot，data 目录在哪？
-
-在家目录下的 `.astrbot` 目录下。
-
-- Windows: `C:\Users\你的用户名\.astrbot`
-- MacOS / Linux: `/Users/你的用户名/.astrbot` 或者 `/home/你的用户名/.astrbot`
-
-### 通过 AstrBot Launcher 安装的 AstrBot，data 目录在哪？
-
-AstrBot Launcher 属于外部工具，`data` 目录位置取决于你使用的 Launcher 实现。
-
-当前常见的可视化 Launcher 一般会把数据放在家目录下的 `.astrbot_launcher` 目录中：
-
-- Windows: `C:\Users\你的用户名\.astrbot_launcher`
-- MacOS / Linux: `/Users/你的用户名/.astrbot_launcher` 或者 `/home/你的用户名/.astrbot_launcher`
-
-如果你使用的是其他外部 Launcher 变体，请以对应 Launcher 的说明或实际启动目录为准。
-
-### 机器人在群聊无法聊天
-
-1. 群聊情况下，由于防止消息泛滥，不会对每条监听到的消息都回复，请尝试 @ 机器人或者使用唤醒词来聊天，比如默认的 `/`，输入 `/你好`。
-
-### 没有权限操作管理员指令
-
-1. `/name, /provider, /dashboard_update, /op, /deop, /persona, /llm, /plugin, /model, /groupnew` 等是默认的管理员指令。可以通过 `/sid` 指令得到用户的 ID，然后在 `配置` -> `其他配置` 中添加到管理员 ID 名单中。
-
-### 本地渲染 Markdown 图片（t2i）时中文乱码
-
-可以在当前启用的 t2i 模板 CSS 中自定义字体，例如设置 `font-family: 'Maple Mono', 'Noto Sans CJK SC', sans-serif;`。
-
-推荐 [Maple Mono](https://github.com/subframe7536/maple-font) 字体。
-
-### API 返回的 completion 无法解析
-
-这是由于供应商的 API 返回了空文本，尝试以下步骤：
-
-1. 检查 API Key 是否仍然有效
-2. 检查是否达到 API 调用限制或配额
-3. 检查网络连接
-4. 尝试 `reset`
-5. 降低最大对话次数设置
-6. 切换使用同一供应商的其他模型，或不同供应商的模型
-
-## 插件相关
-
-### 插件安装不上
-
-1. 插件通过 GitHub 安装，在国内访问 GitHub 确实有时候连不上。可以挂代理，然后进入 `其他配置` -> `HTTP 代理` 设置代理，或者直接下载插件压缩包后上传。
-
-### 安装插件后报错 `No module named 'xxx'`
-
-![image](https://files.astrbot.app/docs/source/images/faq/image.png)
-
-这个是因为插件依赖的库没有被正常安装。一般情况下，AstrBot 会在安装好插件后自动为插件安装依赖库，如果出现了以下情况可能造成安装失败：
-
-1. 网络问题导致依赖库无法下载
-2. 插件作者没有填写 `requirements.txt` 文件
-3. Python 版本不兼容
-
-解决方法：
-
-结合报错信息，参考插件的 README 手动安装依赖库。你可以在 AstrBot WebUI 的 `平台日志` -> `安装 Pip 库` 中安装依赖库。
-
-![image](https://files.astrbot.app/docs/source/images/faq/image-1.png)
-
-如果发现插件作者没有填写 `requirements.txt` 文件，请在插件仓库提交 Issue，提醒作者补充。
-
-## OneBot v11 实现端 NapCat 连接相关
-
-### 我明明按照文档的步骤做了，为什么 NapCat 连不上 Astrbot？
-
-1. 如果你两个**全都**是使用 Docker 部署，请尝试在终端运行：
+当前 fork 不发布独立的预构建 Dashboard 资源。源码部署需要使用当前 checkout 构建前端并同步到后端静态目录：
 
 ```bash
-sudo docker network create newnet           # 创建新网络
-sudo docker network connect newnet astrbot
-sudo docker network connect newnet napcat   # 让两个容器连到一起
-sudo docker restart astrbot
-sudo docker restart napcat                  # 重启容器
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
 ```
 
-运行无报错则回到 NapCat 的 WebUI，网络配置中，将你之前填写的 `ws://127.0.0.1:6199/ws` 修改为 `ws://astrbot:6199/ws`。
+然后重启 AstrBot，并用 `Ctrl+Shift+R` / `Ctrl+F5`（macOS 使用 `Cmd+Shift+R`）强制刷新。不要下载上游版本的 Dashboard 覆盖当前 fork；API 和页面可能不匹配。
 
-2. 如果只有 NapCat 是 Docker 部署，请将 NapCat 的 WebUI 网络配置中的 `ws://127.0.0.1:6199/ws` 修改为 `ws://宿主机IP:6199/ws`（宿主机 IP 请自行搜索如何查看）。
-3. 如果都不是 Docker 部署，则请将 NapCat 的 WebUI 网络配置中的 `ws://127.0.0.1:6199/ws` 修改为 `ws://localhost:6199/ws` 或 `ws://127.0.0.1:6199/ws`。
+### 首次登录账号和密码是什么
+
+默认用户名是 `astrbot`。首次启动会生成随机强密码并打印在启动日志中：
+
+```text
+➜  Initial username: astrbot
+➜  Initial password: <本次启动生成的密码>
+➜  Change it after logging in
+```
+
+不存在固定的默认密码。使用初始密码登录后应立即修改；不要把包含密码的启动日志公开。
+
+### 忘记 WebUI 密码
+
+在源码 checkout 中执行：
+
+```bash
+uv run astrbot run --reset-password
+```
+
+也可以使用：
+
+```bash
+uv run main.py --reset-password
+```
+
+重启过程会生成新密码并打印到日志。不要手工删除 `pbkdf2_password`、`jwt_secret` 或向配置文件写入明文密码。
+
+### 为什么从服务器 IP 无法访问
+
+WebUI 默认只监听 `127.0.0.1:6185`。把浏览器中的 `localhost` 替换为服务器 IP 并不会改变监听地址。
+
+临时允许远程连接：
+
+::: code-group
+
+```bash [Linux / macOS]
+ASTRBOT_DASHBOARD_HOST=0.0.0.0 uv run main.py
+```
+
+```powershell [Windows PowerShell]
+$env:ASTRBOT_DASHBOARD_HOST = '0.0.0.0'
+uv run main.py
+```
+
+:::
+
+也可以把 `data/cmd_config.json` 中的 `dashboard.host` 改为 `0.0.0.0`。这会监听所有 IPv4 接口，必须同时配置主机防火墙，并优先通过受信任的 HTTPS 反向代理暴露。只有代理会覆盖客户端伪造的转发头时才启用 `dashboard.trust_proxy_headers`。
+
+Docker 发布 `6185` 端口也需要这个监听覆盖，详见 [Docker 部署](./deploy/astrbot/docker)。
+
+## 运行目录与更新
+
+### `data` 目录在哪里
+
+运行根目录默认是启动 AstrBot 时的当前工作目录，运行数据位于 `<root>/data`。源码仓库根目录执行 `uv run main.py` 时通常就是 `AstrBot/data`。
+
+设置 `ASTRBOT_ROOT` 后，数据位于 `$ASTRBOT_ROOT/data`。配置、SQLite 数据库、插件、Skills、知识库、临时文件和备份都可能在这里，升级前应整体备份。
+
+当前 fork 不提供独立 Desktop 或 Launcher 部署；外部启动器的目录布局不属于本仓库保证范围。
+
+### 如何更新源码部署
+
+先停止 AstrBot 并备份 `data/`，然后：
+
+```bash
+git pull --ff-only
+uv sync --locked
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
+
+更新前阅读 `changelogs/` 中跨越的版本和当前未发布提交。不要使用 `uv tool upgrade astrbot` 更新本 fork；PyPI 上的 `astrbot` 是上游包。
+
+## Agent、权限与输出
+
+### 群聊中机器人不回复
+
+为避免群消息泛滥，默认需要 @ 机器人或使用唤醒前缀，例如 `/你好`。同时检查：
+
+- 当前配置档是否绑定到该消息会话；
+- 平台和 Provider 是否启用；
+- 白名单、管理员绕过和限流；
+- `ignore_at_all`、机器人自身消息过滤及平台权限。
+
+### 管理员指令提示无权限
+
+使用 `/sid` 查看当前用户 ID，然后在当前配置档的管理员 ID 列表中添加。配置档可能按平台、群或私聊分别绑定，修改默认配置档不一定影响当前会话。
+
+### 如何使用电脑能力
+
+在 **配置 → Agent Computer Use** 中选择：
+
+- `local`：直接操作 AstrBot 主机，只适合可信环境；
+- `sandbox`：使用配置的 Shipyard Neo 或 CUA 沙箱；
+- `none`：关闭，默认值。
+
+`computer_use_require_admin` 默认是 `true`，对 local 和 sandbox 都要求 AstrBot 管理员。沙箱提供运行隔离，但不会自动取消用户授权门禁。详见 [使用电脑能力](./use/computer) 和 [Agent 沙箱](./use/astrbot-agent-sandbox)。
+
+### T2I 中文乱码
+
+在当前启用的本地 T2I 模板 CSS 中配置已安装的中文字体，例如：
+
+```css
+font-family: 'Maple Mono', 'Noto Sans CJK SC', sans-serif;
+```
+
+可参考 [Maple Mono](https://github.com/subframe7536/maple-font)。容器内也必须实际安装对应字体。
+
+### Provider 返回空内容
+
+依次检查：
+
+1. API Key 权限、余额和限额；
+2. API Base 与模型 ID 是否完全匹配；
+3. 模型是否支持当前图片、工具调用或 reasoning 格式；
+4. 代理、DNS、TLS 和请求超时；
+5. Provider 测试结果和服务端原始错误；
+6. fallback 模型是否来自真正独立的端点。
+
+不要用关闭 TLS 验证的方式“修复”连接。必要时重置会话或降低历史轮数，并参考 [上下文压缩](./use/context-compress)。
+
+## 插件
+
+### 插件安装失败
+
+GitHub 网络不可用时，可以配置出站 HTTP 代理，或下载可信插件压缩包后从 WebUI 上传。不要安装来源不明的压缩包；插件在 AstrBot 进程中运行，拥有其 Python 权限。
+
+### 安装后出现 `No module named 'xxx'`
+
+常见原因是网络错误、插件缺少 `requirements.txt`，或依赖不支持 Python 3.14。先查看安装日志和插件 README。源码开发环境中可以在 checkout 内用 `uv` 安装和调试；生产环境不要用全局 `pip` 混入不受管理的依赖。
+
+如果插件声明缺失，应向插件作者报告，而不是长期手工维护无法复现的依赖状态。
+
+## NapCat / OneBot v11
+
+### 推荐的新部署：NapCat 正向 WebSocket
+
+使用独立 **NapCat** 平台适配器，让 AstrBot 主动连接 NapCat：
+
+1. NapCat 启动正向 WebSocket 服务，容器镜像使用 `MODE=ws` 时默认监听 `0.0.0.0:3001`。
+2. AstrBot 的 NapCat 平台地址填写：
+   - 同一 Docker 网络：`ws://napcat:3001`；
+   - 同一主机、非容器：`ws://127.0.0.1:3001`；
+   - 跨主机：使用 NapCat 主机的受保护地址，并配置防火墙和 token。
+3. `127.0.0.1` 在容器内只代表当前容器，不能指向另一个容器。
+
+先从 AstrBot 容器检查 DNS、TCP 端口和 NapCat 日志。`0.0.0.0` 是服务端绑定地址，不能写成客户端连接目标。
+
+### 什么时候使用 6199 反向 WebSocket
+
+`6199/ws` 属于通用 **OneBot v11（aiocqhttp）** 反向 WebSocket 路径，不是独立 NapCat 适配器的推荐连接方式。
+
+保留 `MODE=astrbot` 的旧 compose 组合时，NapCat 会连接 `ws://astrbot:6199/ws`；AstrBot 必须使用 OneBot v11 平台，并在跨容器时把 `ws_reverse_host` 绑定为 `0.0.0.0`。两端都在同一主机进程时才可使用 loopback。
+
+不要同时配置同一个 NapCat 实例的正向和反向路径，否则可能产生重复事件。完整说明见 [NapCat](./platform/napcat) 与 [OneBot v11](./platform/aiocqhttp)。

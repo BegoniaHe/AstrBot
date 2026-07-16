@@ -1,181 +1,193 @@
 # 使用 Kubernetes 部署 AstrBot
 
+仓库中的 Kubernetes 清单提供单副本部署和故障后自动重建 Pod 的能力，但不是多副本高可用方案。AstrBot 当前使用 SQLite 和本地持久化状态；两套 Deployment 都固定为 `replicas: 1` 并使用 `Recreate` 策略，请勿直接扩展副本数。
+
 > [!WARNING]
-> 通过 Kubernetes (K8s) 可以将 AstrBot 以高可用的方式部署在集群环境中，当出现故障时可以自动拉起恢复。
->
-> 由于 AstrBot 当前使用 SQLite 数据库，此部署方案不支持多副本水平扩展。同时，若采用 Sidecar 模式，NapCat 的登录状态持久化需要您特别关注。
->
-> 以下教程默认您的环境已安装并配置好 `kubectl`，且能够连接到您的 K8s 集群。
+> `k8s/**/02-deployment.yaml` 中的 AstrBot 镜像仍是上游占位值 `soulter/astrbot:latest`，而且没有覆盖 WebUI 的默认环回监听。应用清单前，必须先构建并替换为当前 fork 的镜像，同时加入 `ASTRBOT_DASHBOARD_HOST=0.0.0.0`。不要直接原样执行全部清单。
 
-## 准备工作
+## 前置条件
 
-在开始之前，请确保您的 Kubernetes 集群满足以下条件：
+- `kubectl` 已连接到目标集群。
+- 集群节点可以从你的镜像仓库拉取镜像。
+- 集群有适合这些 PVC 的 StorageClass；用 `kubectl get storageclass` 检查。
+- Sidecar 清单中的 `astrbot-data-shared-pvc` 请求 `ReadWriteMany`（RWX）。如果默认存储不支持 RWX，请先修改 `storageClassName` 或提供合适的 PV。
+- 清单将宿主机 `/etc/localtime` 作为 `hostPath` 挂载，因而面向具有该文件的 Linux 节点；其他节点环境需要先调整挂载。
 
-1. **拥有默认的 StorageClass**：用于动态创建 `PersistentVolumeClaim` (PVC)。您可以通过 `kubectl get sc` 查看。如果没有，您需要手动创建 `PersistentVolume` (PV) 或安装相应的存储插件 (如 `nfs-client-provisioner`)。
-2. **网络访问**：确保您的集群节点可以从您指定的镜像仓库拉取 AstrBot 镜像，并能拉取 NapCat / BusyBox 等依赖镜像。
+## 部署前必须修改清单
 
-## 部署方式
+### 1. 构建并推送当前 fork 镜像
 
-我们提供两种部署方案：
-
-- **集成部署 (Sidecar 模式)**：将 AstrBot 和 NapCat 部署在同一个 Pod 中，推荐用于 QQ 个人号。
-- **独立部署**：只部署 AstrBot，适用于其他平台或您希望独立管理 NapCat 的场景。
-
----
-
-### 方式一：和 NapCatQQ 一起部署 (Sidecar)
-
-此方式位于 `k8s/astrbot_with_napcat` 目录。
-
-#### 1. 部署
-
-```bash
-# 1. 创建命名空间
-kubectl apply -f k8s/astrbot_with_napcat/00-namespace.yaml
-
-# 2. 创建持久化存储卷
-# 注意：astrbot-data-shared-pvc 需要 ReadWriteMany (RWX) 访问模式。
-# 如果您的集群不支持 RWX，您需要配置 NFS 等共享存储，并修改 01-pvc.yaml 中的 storageClassName。
-kubectl apply -f k8s/astrbot_with_napcat/01-pvc.yaml
-
-# 3. 部署应用
-kubectl apply -f k8s/astrbot_with_napcat/02-deployment.yaml
-```
-
-#### 2. 暴露服务 (二选一)
-
-- **方式 A: NodePort**
-
-  ```bash
-  kubectl apply -f k8s/astrbot_with_napcat/03-service-nodeport.yaml
-  ```
-
-  服务将通过节点 IP 和一个由 Kubernetes 自动分配的端口暴露。您可以通过以下命令查看端口：
-
-  ```bash
-  kubectl get svc -n astrbot-ns
-  ```
-
-  在输出中找到 `astrbot-webui-svc` 和 `napcat-web-svc` 的 `PORT(S)` 列，格式为 `<内部端口>:<NodePort端口>/TCP`。例如 `8080:30185/TCP`，则访问地址为 `http://<NodeIP>:30185`。
-
-- **方式 B: LoadBalancer**
-
-  如果您的集群支持 `LoadBalancer` 类型的服务 (通常在云厂商的 K8s 服务中提供)，可以使用此方式。
-
-  ```bash
-  kubectl apply -f k8s/astrbot_with_napcat/04-service-loadbalancer.yaml
-  ```
-
-  执行后，通过 `kubectl get svc -n astrbot-ns` 查看分配到的外部 IP (EXTERNAL-IP)。
-
-#### 3. 配置连接
-
-由于 AstrBot 和 NapCat 在同一个 Pod 中，它们可以通过 `localhost` 直接通信。
-
-1. **在 AstrBot 中添加消息平台：**
-   - 进入 AstrBot WebUI，选择 `机器人` -> `添加`。
-   - **选择消息平台类别**: `napcat`
-   - **机器人名称**: `napcat` (或自定义)
-   - **NapCat WebSocket 地址**: `ws://localhost:3001`
-   - **NapCat Token**: 仅在 NapCat WebSocket 开启鉴权时填写
-   - 保存配置。
-
-2. **在 NapCat 中确认 OneBot v11 正向 WebSocket 服务已开启：**
-   - 默认示例可直接使用 `ws://localhost:3001`
-   - 如果配置了鉴权 token，AstrBot 侧要填写同一个值
-
----
-
-### 方式二：只部署 AstrBot (通用方式)
-
-此方式位于 `k8s/astrbot` 目录。
-
-#### 1. 部署
-
-```bash
-# 1. 创建命名空间
-kubectl apply -f k8s/astrbot/00-namespace.yaml
-
-# 2. 创建持久化存储卷
-kubectl apply -f k8s/astrbot/01-pvc.yaml
-
-# 3. 部署应用
-kubectl apply -f k8s/astrbot/02-deployment.yaml
-```
-
-#### 2. 暴露服务 (二选一)
-
-- **方式 A: NodePort**
-
-  ```bash
-  kubectl apply -f k8s/astrbot/03-service-nodeport.yaml
-  ```
-
-  服务将通过节点 IP 和一个由 Kubernetes 自动分配的端口暴露。您可以通过以下命令查看端口：
-
-  ```bash
-  kubectl get svc -n astrbot-standalone-ns
-  ```
-
-  在输出中找到 `astrbot-webui-svc` 的 `PORT(S)` 列，格式为 `<内部端口>:<NodePort端口>/TCP`。例如 `8080:30185/TCP`，则访问地址为 `http://<NodeIP>:30185`。
-
-- **方式 B: LoadBalancer**
-
-  ```bash
-  kubectl apply -f k8s/astrbot/04-service-loadbalancer.yaml
-  ```
-
-  执行后，通过 `kubectl get svc -n astrbot-standalone-ns` 查看分配到的外部 IP (EXTERNAL-IP)。
-
----
-
-## 高级配置
-
-### AstrBot 镜像准备
-
-当前 fork 不发布官方 Kubernetes 镜像。部署到集群前，请先自行构建 AstrBot 镜像并推送到你的镜像仓库，然后修改对应 `02-deployment.yaml` 中的 `image` 字段。
-
-示例：
+在仓库根目录执行：
 
 ```bash
 docker build -t <your-registry>/astrbot:<tag> .
 docker push <your-registry>/astrbot:<tag>
 ```
 
-然后在 `k8s/astrbot/02-deployment.yaml` 或 `k8s/astrbot_with_napcat/02-deployment.yaml` 中替换为：
+使用不可变的版本或提交标签，不要在生产环境依赖会漂移的 `latest`。
+
+在你准备使用的 Deployment 中，将：
+
+```yaml
+image: soulter/astrbot:latest
+```
+
+替换为：
 
 ```yaml
 image: <your-registry>/astrbot:<tag>
 ```
 
-NapCat 如需使用镜像代理或自建镜像，可按同样方式调整其 `image` 字段。
+对应文件是：
 
-### 沙盒运行环境
+- 独立部署：`k8s/astrbot/02-deployment.yaml`
+- NapCat Sidecar：`k8s/astrbot_with_napcat/02-deployment.yaml` 中名为 `astrbot` 的容器
 
-当前仓库提供的 Kubernetes 清单并没有内置独立的集群内沙盒运行时配置。
+私有仓库还需要按集群规范配置 `imagePullSecrets`。
 
-如果您需要 Agent 沙盒 / Computer Use 能力，请改为参考当前的 [Agent 沙盒环境](/use/astrbot-agent-sandbox.md) 文档，并单独部署所选运行时；不要再沿用已移除的旧 Docker 代码执行器工作流。
+### 2. 允许 Service 访问 WebUI
+
+WebUI 默认监听 `127.0.0.1`。在同一个 AstrBot 容器的 `env` 列表中加入：
+
+```yaml
+env:
+  - name: TZ
+    value: 'Asia/Shanghai'
+  - name: ASTRBOT_DASHBOARD_HOST
+    value: '0.0.0.0'
+```
+
+否则 Service 虽然会把流量转发到容器端口 `6185`，AstrBot 仍不会在 Pod 网络接口上接受连接。
+
+> [!CAUTION]
+> 对外暴露 WebUI 后，请配合 Ingress/反向代理启用 HTTPS，限制来源地址，并使用强密码和 TOTP。`LoadBalancer` 或 `NodePort` 不应在无访问控制时直接面向公网。
+
+### 3. Sidecar 部署改用 NapCat 正向 WebSocket
+
+`k8s/astrbot_with_napcat/02-deployment.yaml` 当前为 NapCat 设置了 `MODE=astrbot`，该模式会写入目标为 `ws://astrbot:6199/ws` 的反向 WebSocket 客户端。它不适合本页使用独立 `NapCat` 平台的同 Pod 配置。
+
+在 Sidecar Deployment 中将：
+
+```yaml
+- name: MODE
+  value: 'astrbot'
+```
+
+改为：
+
+```yaml
+- name: MODE
+  value: 'ws'
+```
+
+这样 NapCat 会启动监听端口 `3001` 的正向 WebSocket 服务，供同 Pod 的 AstrBot 主动连接。
+
+`MODE` 会在 NapCat 每次启动时重写 `onebot11.json`，模板 token 为空。如果需要自定义 token，可先让 Pod 用 `MODE=ws` 启动并生成 PVC 中的配置，再从 Deployment 删除 `MODE`，随后在 NapCat WebUI 中设置 token；不要把敏感 token 直接提交到清单。
+
+## 方式一：AstrBot + NapCat Sidecar
+
+该方案位于 `k8s/astrbot_with_napcat/`，两个容器位于同一个 Pod。
+
+完成上面的镜像、监听地址和 NapCat 模式修改后执行：
+
+```bash
+kubectl apply -f k8s/astrbot_with_napcat/00-namespace.yaml
+kubectl apply -f k8s/astrbot_with_napcat/01-pvc.yaml
+kubectl apply -f k8s/astrbot_with_napcat/02-deployment.yaml
+```
+
+确认 Pod 就绪：
+
+```bash
+kubectl get pods -n astrbot-ns
+```
+
+### 暴露服务
+
+NodePort 和 LoadBalancer 二选一。
+
+NodePort：
+
+```bash
+kubectl apply -f k8s/astrbot_with_napcat/03-service-nodeport.yaml
+kubectl get svc astrbot-service-nodeport -n astrbot-ns
+```
+
+Sidecar NodePort 清单没有固定 `nodePort`，集群会分别为内部端口 `6099`（NapCat WebUI）和 `6185`（AstrBot WebUI）自动分配端口。以 `kubectl get svc` 输出的 `PORT(S)` 为准，通过 `http://<NodeIP>:<分配到的NodePort>` 访问。
+
+LoadBalancer：
+
+```bash
+kubectl apply -f k8s/astrbot_with_napcat/04-service-loadbalancer.yaml
+kubectl get svc astrbot-service-lb -n astrbot-ns
+```
+
+等待 `EXTERNAL-IP` 分配完成，再使用端口 `6185` 或由外部负载均衡器映射后的端口访问 AstrBot。
+
+### 配置 NapCat 连接
+
+AstrBot 与 NapCat 共享 Pod 网络命名空间。在 AstrBot WebUI 中创建 `NapCat` 平台，并填写：
+
+- `ws_url`：`ws://localhost:3001`
+- `token`：仅当 NapCat 正向 WebSocket 开启鉴权时填写，且两端保持一致
+
+无需为这个 Pod 内连接创建额外 Service 或 NodePort。
+
+## 方式二：只部署 AstrBot
+
+该方案位于 `k8s/astrbot/`。完成镜像和监听地址修改后执行：
+
+```bash
+kubectl apply -f k8s/astrbot/00-namespace.yaml
+kubectl apply -f k8s/astrbot/01-pvc.yaml
+kubectl apply -f k8s/astrbot/02-deployment.yaml
+kubectl get pods -n astrbot-standalone-ns
+```
+
+### 暴露服务
+
+NodePort：
+
+```bash
+kubectl apply -f k8s/astrbot/03-service-nodeport.yaml
+kubectl get svc astrbot-standalone-nodeport -n astrbot-standalone-ns
+```
+
+独立部署的 NodePort 是清单中明确固定的：
+
+- AstrBot WebUI：内部端口 `6185` -> NodePort `30185`
+- OneBot v11 反向 WebSocket：内部端口 `6199` -> NodePort `30199`
+
+因此 WebUI 地址通常是 `http://<NodeIP>:30185`。如果集群策略不允许这两个 NodePort，请先修改清单。
+
+端口 `30199` 只是 Service 映射；只有创建 OneBot v11 平台并将 `ws_reverse_host` 显式设为 `0.0.0.0` 后，Pod 外的 OneBot 客户端才能连接。请同时设置 token，并避免向整个公网开放该端口。
+
+LoadBalancer：
+
+```bash
+kubectl apply -f k8s/astrbot/04-service-loadbalancer.yaml
+kubectl get svc astrbot-standalone-lb -n astrbot-standalone-ns
+```
+
+该 Service 暴露内部端口 `6185` 和 `6199`。如果不需要远程 OneBot 反向 WebSocket，建议从 Service 清单删除 `6199`。
 
 ## 查看日志
 
-- **Sidecar 部署模式:**
+Sidecar 部署：
 
-  ```bash
-  # 查看 AstrBot 日志
-  kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c astrbot
+```bash
+kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c astrbot
+kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c napcat
+```
 
-  # 查看 NapCat 日志
-  kubectl logs -f -n astrbot-ns deployment/astrbot-stack -c napcat
-  ```
+独立部署：
 
-- **独立部署模式:**
+```bash
+kubectl logs -f -n astrbot-standalone-ns deployment/astrbot-standalone
+```
 
-  ```bash
-  kubectl logs -f -n astrbot-standalone-ns deployment/astrbot-standalone
-  ```
+首次登录使用 AstrBot 日志中打印的随机密码，默认用户名为 `astrbot`。
 
-## 🎉 大功告成
+## Agent 沙盒
 
-部署并暴露服务后，您就可以通过相应的 IP 和端口访问 AstrBot 管理面板了。
-
-> 首次登录请使用启动日志中打印的随机初始密码（用户名通常为 `astrbot`）。登录后请立即修改密码。
+这些清单不包含独立的集群内 Agent 沙盒运行时。如果需要相关能力，请参考 [Agent 沙盒环境](/use/astrbot-agent-sandbox)，并单独部署和保护所选运行时。

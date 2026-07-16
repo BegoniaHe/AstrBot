@@ -45,11 +45,11 @@ A configuration dialog will appear. Keep it open and continue with the steps bel
 For callback URL:
 
 - If unified mode is enabled, AstrBot generates a unique webhook callback URL after save. Copy it from logs or bot card in WebUI.
-- If unified mode is disabled, use `http://<your-public-server-ip>:6195/callback/command`.
+- If unified mode is disabled, use an HTTPS reverse-proxied URL such as `https://<your-domain>/callback/command`.
 
 ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-> If unified mode is enabled, forward external requests to AstrBot port `6185`; otherwise forward to configured adapter port (default `6195`).
+> If unified mode is enabled, forward external requests to AstrBot port `6185`; otherwise forward to the configured adapter port (default `6195`). In standalone mode, `callback_server_host` defaults to `127.0.0.1`; change it to `0.0.0.0` or a specific reachable interface only when the proxy runs in another container or host.
 
 Back in WeCom Customer Service callback settings, click `Complete`. If successful, status shows completed.
 
@@ -96,11 +96,11 @@ Open: <https://work.weixin.qq.com/wework_admin/frame#apps>
 For callback URL:
 
 - If unified mode is enabled, use the generated unique callback URL from logs or bot card.
-- If unified mode is disabled, use `http://<your-public-server-ip>:6195/callback/command`.
+- If unified mode is disabled, use an HTTPS reverse-proxied URL such as `https://<your-domain>/callback/command`.
 
 ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-> If unified mode is enabled, forward to port `6185`; otherwise forward to configured adapter port (default `6195`).
+> If unified mode is enabled, forward to port `6185`; otherwise forward to the configured adapter port (default `6195`). In standalone mode, `callback_server_host` defaults to `127.0.0.1`; change it to `0.0.0.0` or a specific reachable interface only when the proxy runs in another container or host.
 
 7. Configure trusted enterprise IP in WeCom.
 
@@ -120,11 +120,11 @@ In WeCom Workbench, open the app you just created and send `/help`.
 
 If AstrBot replies, integration is successful.
 
-## Reverse Proxy (Custom API Base)
+## Custom Outbound API Base (`api_base_url`)
 
-AstrBot supports custom WeCom endpoint (`api_base_url`) for environments without stable public IP.
+`api_base_url` controls the base URL used for **outbound API requests from AstrBot to WeCom**. Its default is `https://qyapi.weixin.qq.com/cgi-bin/`. Keep the default in normal deployments; change it only when using a trusted API gateway or proxy.
 
-Set your custom endpoint in `api_base_url`.
+It does not change WeCom's inbound callback URL, publish a port, configure DNS, or provide a public tunnel. If you do not have a stable public endpoint, use Unified Webhook with a reverse proxy/tunnel or deploy AstrBot behind a stable public ingress. Do not enter the callback URL in `api_base_url`.
 
 ## Voice Input
 

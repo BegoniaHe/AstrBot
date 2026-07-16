@@ -1,97 +1,142 @@
 # MCP
 
-MCP (Model Context Protocol) is a new open standard protocol for establishing secure bidirectional connections between large language models and data sources. Simply put, it extracts function tools as independent services, allowing AstrBot to remotely invoke these function tools via the MCP protocol, which then return results to AstrBot.
+MCP (Model Context Protocol) connects AstrBot Agents to independent tool servers. The current implementation supports stdio, SSE, and Streamable HTTP. Create, test, enable, and remove servers from **Plugins → MCP** in WebUI.
 
-![image](https://files.astrbot.app/docs/source/images/function-calling/image3.png)
+## Choose a Transport
 
-AstrBot supports the MCP protocol, so you can add multiple MCP servers and use function tools exposed by those servers.
+| Transport       | Use case                                                       | Key fields                    |
+| --------------- | -------------------------------------------------------------- | ----------------------------- |
+| stdio           | AstrBot starts a child process on the host or in its container | `command`, `args`, `env`      |
+| Streamable HTTP | Current remote MCP HTTP transport                              | `transport`, `url`, `headers` |
+| SSE             | Remote servers that still expose the older SSE transport       | `transport`, `url`, `headers` |
 
-![image](https://files.astrbot.app/docs/source/images/function-calling/image2.png)
+Remote configurations must declare `transport`. A configuration without `url` is treated as stdio.
 
-## Initial Configuration
+## Runtime Tools
 
-MCP servers are typically launched using `uv` or `npm`, so you need to install these two tools.
+For source deployments, install the server's launcher in the same environment that runs AstrBot. The repository Dockerfile already includes Node.js 24, npm/npx, Corepack/pnpm, and uv. Do not follow older instructions that reinstall Node inside an image built from this checkout.
 
-For `uv`, you can install it directly via pip. Quick installation via AstrBot WebUI:
+Install host-side server dependencies according to that MCP server's documentation. AstrBot does not interpret `command` through a shell, so do not use `bash -c`, `env ...`, pipes, or redirection.
 
-![image](https://files.astrbot.app/docs/en/use/image.png)
+## stdio Configuration
 
-Just enter `uv`.
-
-If you're deploying AstrBot with Docker, you can also execute the following command for quick installation:
-
-```bash
-docker exec astrbot python -m pip install uv
-```
-
-If you're deploying AstrBot from source, please install it within the created virtual environment.
-
-For `npm`, you need to install `node`.
-
-If you're deploying AstrBot from source or using one-click installation, please refer to [Download Node.js](https://nodejs.org/en/download) to download to your local machine.
-
-If you're using Docker to deploy AstrBot, you need to install `node` in the container (future AstrBot Docker images will include `node` by default). Please execute the following commands:
-
-```bash
-sudo docker exec -it astrbot /bin/bash
-apt update && apt install curl -y
-export NVM_NODEJS_ORG_MIRROR=http://nodejs.org/dist
-# Download and install nvm:
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
-\. "$HOME/.nvm/nvm.sh"
-nvm install 22
-# Verify version:
-node -v
-nvm current
-npm -v
-npx -v
-```
-
-After installing `node`, you need to restart `AstrBot` to apply the new environment variables.
-
-## Installing MCP Servers
-
-If you're deploying AstrBot with Docker, please install MCP servers in the data directory.
-
-### An Example
-
-I want to install an MCP server for querying papers on Arxiv and found this repository: [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server). Referring to its README,
-
-We extract the necessary information:
+For example, start a Python MCP package with `uvx`:
 
 ```json
 {
-  "command": "uv",
-  "args": ["tool", "run", "arxiv-mcp-server", "--storage-path", "data/arxiv"]
+  "command": "uvx",
+  "args": ["arxiv-mcp-server", "--storage-path", "data/arxiv"],
+  "env": {
+    "ARXIV_API_TOKEN": "replace-with-secret"
+  }
 }
 ```
 
-If the MCP server you need requires environment variables to configure something (e.g. access token), you could use the command-line tool `env`:
+`env` must be a JSON object whose keys and values are strings. Do not use `env` as the command:
 
 ```json
 {
-  "command": "env",
-  "args": [
-    "XXX_RESOURCE_FROM=local",
-    "XXX_API_URL=https://xxx.com",
-    "XXX_API_TOKEN=sk-xxxxx",
-    "uv",
-    "tool",
-    "run",
-    "xxx-mcp-server",
-    "--storage-path",
-    "data/res"
-  ]
+  "env": {
+    "RESOURCE_FROM": "local",
+    "API_URL": "https://api.example.com",
+    "API_TOKEN": "replace-with-secret"
+  }
 }
 ```
 
-Configure it in the AstrBot WebUI:
+Do not expose tokens in screenshots, public issues, or plugin repositories. Reconnect or restart the MCP server after changing its environment.
 
-![image](https://files.astrbot.app/docs/en/use/image-2.png)
+### stdio Security Rules
 
-That's it.
+The default launcher allowlist is:
 
-Reference links:
+- `python`, `python3`, `py`
+- `node`, `npx`, `npm`, `pnpm`, `yarn`
+- `bun`, `bunx`, `deno`
+- `uv`, `uvx`
 
-1. Learn how to use MCP here: [Model Context Protocol](https://modelcontextprotocol.io/introduction)
-2. Get commonly used MCP servers here: [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers/blob/main/README.md#what-is-mcp), [Model Context Protocol servers](https://github.com/modelcontextprotocol/servers), [MCP.so](https://mcp.so)
+Shells, PowerShell, `curl`, `wget`, SSH, destructive file commands, and shutdown commands are denied. `command` cannot contain line breaks or shell metacharacters. Python `-c` and JavaScript eval/print modes are also rejected.
+
+Only when you fully trust another launcher should you set `ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS`. It is a comma-separated **replacement list**, not an addition to the defaults:
+
+::: code-group
+
+```bash [Linux / macOS]
+export ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS='python,python3,node,npx,uv,uvx,my-launcher'
+```
+
+```powershell [Windows PowerShell]
+$env:ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS = 'python,python3,node,npx,uv,uvx,my-launcher'
+```
+
+:::
+
+Expanding this list allows AstrBot to start more local programs and should be treated as a code-execution permission change.
+
+## Streamable HTTP
+
+```json
+{
+  "transport": "streamable_http",
+  "url": "https://mcp.example.com/mcp",
+  "allow_private_network": false,
+  "headers": {
+    "Authorization": "Bearer replace-with-secret"
+  },
+  "timeout": 5,
+  "sse_read_timeout": 300,
+  "session_read_timeout": 60,
+  "terminate_on_close": true
+}
+```
+
+- `timeout` covers connection and ordinary HTTP operations.
+- `sse_read_timeout` controls remote stream reads.
+- `session_read_timeout` controls MCP session reads.
+- `terminate_on_close` asks the remote server to terminate the session when closing.
+
+## SSE
+
+```json
+{
+  "transport": "sse",
+  "url": "https://mcp.example.com/sse",
+  "allow_private_network": false,
+  "headers": {},
+  "timeout": 5,
+  "sse_read_timeout": 300,
+  "session_read_timeout": 60
+}
+```
+
+Prefer Streamable HTTP for new services. Choose SSE only when the server explicitly exposes an SSE endpoint.
+
+## Private-Network Protection
+
+Remote MCP rejects localhost, loopback, private, link-local, multicast, reserved, and unspecified addresses by default. HTTP redirects are also rejected. These checks reduce SSRF and redirect-bypass risk.
+
+To connect to a LAN or same-host server that you control, explicitly opt in:
+
+```json
+{
+  "transport": "streamable_http",
+  "url": "http://127.0.0.1:8000/mcp",
+  "allow_private_network": true
+}
+```
+
+> [!WARNING]
+> `allow_private_network` bypasses the target-address restriction. Enable it only for a fixed, trusted endpoint. Do not let ordinary users control the URL, headers, or this flag.
+
+Inside a container, `127.0.0.1` refers to the AstrBot container itself. Use a service name such as `http://mcp-server:8000/mcp` for another service on the same Compose network, and still make an explicit trust decision about private-network access.
+
+## Troubleshooting
+
+1. Use the WebUI test action first and inspect connection errors and server stderr.
+2. If stdio reports that a command is not allowed, use a supported launcher instead of a shell wrapper.
+3. If a command is missing, make sure it is on the AstrBot process's `PATH`; host and container installations are separate.
+4. If a remote address is rejected, check whether DNS resolves it to a private range. Enable `allow_private_network` only for a trusted service.
+5. 3xx responses are not followed; configure the final MCP endpoint directly.
+6. Retest and enable the server after editing it. ModelScope sync enables only successfully synchronized servers.
+
+Reference: [official MCP documentation](https://modelcontextprotocol.io/).

@@ -1,110 +1,97 @@
 # Session Control
 
-Why do we need session control? Consider a Chinese idiom chain game plugin where a user or group needs to have multiple conversations with the bot rather than a one-time command. This is when session control becomes necessary.
+Session control is useful for workflows that need several consecutive inputs
+without sending every step to the LLM, such as surveys, games, or guided
+configuration.
 
-```txt
-User: /idiom-chain
-Bot: Please send an idiom
-User: One horse takes the lead (一马当先)
-Bot: Foresight (先见之明)
-User: Keen observation (明察秋毫)
-...
-```
-
-AstrBot provides out-of-the-box session control functionality:
-
-Import:
-
-```py
-import astrbot.api.message_components as Comp
-from astrbot.core.utils.session_waiter import (
-    session_waiter,
-    SessionController,
-)
-```
-
-Code within the handler can be written as follows:
+The public SDK exports `session_waiter` and `SessionController` from
+`astrbot.api.util`:
 
 ```python
-from astrbot.api.event import filter, AstrMessageEvent
-
-@filter.command("idiom-chain")
-async def handle_empty_mention(self, event: AstrMessageEvent):
-    """Idiom chain game implementation"""
-    try:
-        yield event.plain_result("Please send an idiom~")
-
-        # How to use the session controller
-        @session_waiter(timeout=60, record_history_chains=False) # Register a session controller with a 60-second timeout, without recording message history
-        async def empty_mention_waiter(controller: SessionController, event: AstrMessageEvent):
-            idiom = event.message_str # The idiom sent by the user, e.g., "one horse takes the lead"
-
-            if idiom == "exit":   # If the user wants to exit the idiom chain game by typing "exit"
-                await event.send(event.plain_result("Exited the idiom chain game~"))
-                controller.stop()    # Stop the session controller, which will end immediately.
-                return
-
-            if len(idiom) != 4:   # If the user's input is not a 4-character idiom
-                await event.send(event.plain_result("The idiom must be four characters~"))  # Send a reply, cannot use yield
-                return
-                # Exit the current method without executing subsequent logic, but the session is not interrupted; subsequent user input will still enter the current session
-
-            # ...
-            message_result = event.make_result()
-            message_result.chain = [Comp.Plain("Foresight")] # import astrbot.api.message_components as Comp
-            await event.send(message_result) # Send a reply, cannot use yield
-
-            controller.keep(timeout=60, reset_timeout=True) # Reset timeout to 60s. If not reset, it will continue the previous timeout countdown.
-
-            # controller.stop() # Stop the session controller, which will end immediately.
-            # If history chains are recorded, you can retrieve them via controller.get_history_chains()
-
-        try:
-            await empty_mention_waiter(event)
-        except TimeoutError as _: # When timeout occurs, the session controller will raise TimeoutError
-            yield event.plain_result("You timed out!")
-        except Exception as e:
-            yield event.plain_result("An error occurred, please contact the administrator: " + str(e))
-        finally:
-            event.stop_event()
-    except Exception as e:
-        logger.error("handle_empty_mention error: " + str(e))
+import astrbot.api.message_components as Comp
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.util import SessionController, session_waiter
 ```
 
-Once the session controller is activated, messages subsequently sent by that sender will first be processed by the `empty_mention_waiter` function you defined above, until the session controller is stopped or times out.
+This example waits for subsequent messages in the same session after receiving
+`/idiom-chain`:
+
+```python
+@filter.command("idiom-chain")
+async def idiom_chain(self, event: AstrMessageEvent):
+    yield event.plain_result('Send a four-character idiom, or "exit" to stop.')
+
+    @session_waiter(timeout=60, record_history_chains=False)
+    async def waiter(
+        controller: SessionController,
+        next_event: AstrMessageEvent,
+    ) -> None:
+        idiom = next_event.message_str.strip()
+
+        if idiom == "exit":
+            await next_event.send(
+                next_event.plain_result("Idiom chain ended.").chain
+            )
+            controller.stop()
+            return
+
+        if len(idiom) != 4:
+            await next_event.send(
+                next_event.plain_result(
+                    "The idiom must contain four characters. Try again."
+                ).chain
+            )
+            controller.keep(timeout=60, reset_timeout=True)
+            return
+
+        result = next_event.make_result()
+        result.chain = [Comp.Plain("先见之明")]
+        await next_event.send(result.chain)
+
+        # Wait for another message and restart the 60-second timeout.
+        controller.keep(timeout=60, reset_timeout=True)
+
+    try:
+        await waiter(event)
+    except TimeoutError:
+        yield event.plain_result("The session timed out.")
+    except Exception:
+        logger.exception("Idiom-chain session failed")
+        yield event.plain_result(
+            "The session ended unexpectedly. Contact the administrator."
+        )
+    finally:
+        event.stop_event()
+```
+
+The waiter already handles a subsequent event, so it cannot use `yield`.
+Send results with `await next_event.send(...)` instead. The
+`await waiter(event)` call remains pending until `controller.stop()`, a
+timeout, or an exception from the handler.
+
+## Default Session Key
+
+The default session filter uses `event.unified_msg_origin` as its key, not only
+`sender_id`. This string identifies the platform instance and corresponding
+conversation. Only later events that produce the same
+`unified_msg_origin` enter the active waiter.
+
+Internal extension types such as `SessionFilter` are not exported from
+`astrbot.api.util`. Plugins should not import
+`astrbot.core.utils.session_waiter` to customize the key; internal interfaces
+may change with the core implementation.
 
 ## SessionController
 
-Used by developers to control whether a session should end, and to retrieve message history chains.
+- `keep(timeout, reset_timeout=True)` keeps waiting and restarts the specified
+  timeout from now.
+- `keep(timeout, reset_timeout=False)` adds `timeout` to, or subtracts it from,
+  the remaining time. A resulting timeout at or below zero ends the session.
+- `stop()` ends the session immediately.
+- `get_history_chains()` returns recorded message chains. Subsequent inputs are
+  recorded only when the decorator uses `record_history_chains=True`.
 
-- keep(): Keep this session alive
-  - timeout (float): Required. Session timeout duration.
-  - reset_timeout (bool): When set to True, it resets the timeout; timeout must be > 0, if <= 0 the session ends immediately. When set to False, it maintains the original timeout; new timeout = remaining timeout + timeout (can be < 0)
-- stop(): End this session
-- get_history_chains() -> List[List[Comp.BaseMessageComponent]]: Retrieve message history chains
-
-## Custom Session ID Filter
-
-By default, the AstrBot session controller uses `sender_id` (the sender's ID) as the identifier for distinguishing different sessions. If you want to treat an entire group as one session, you need to customize the session ID filter.
-
-```py
-import astrbot.api.message_components as Comp
-from astrbot.core.utils.session_waiter import (
-    session_waiter,
-    SessionFilter,
-    SessionController,
-)
-
-# Using the handler from above
-# ...
-class CustomFilter(SessionFilter):
-    def filter(self, event: AstrMessageEvent) -> str:
-        return event.get_group_id() if event.get_group_id() else event.unified_msg_origin
-
-await empty_mention_waiter(event, session_filter=CustomFilter()) # Pass in session_filter here
-# ...
-```
-
-After this setup, when a user in a group sends a message, the session controller will treat the entire group as one session, and messages from other users in the group will also be considered part of the same session.
-
-You can even use this feature to enable team-based activities within groups!
+When a wait times out, `await waiter(event)` raises `TimeoutError`. Handle
+timeouts and other errors at the outer level, and stop any other long-running
+tasks created by the plugin in `terminate()`.

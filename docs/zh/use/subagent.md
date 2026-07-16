@@ -1,57 +1,71 @@
-# Agent Handsoff 与 Subagent
+# Agent Handoff 与子代理编排
 
-SubAgent 编排是 AstrBot 提供的一种高级 Agent 组织方式。它允许你将复杂的任务分解给多个专门的子 Agent（SubAgent）来完成，从而降低主 Agent 的 Prompt 长度，提高任务执行的成功率。
+子代理编排允许主 Agent 通过 `transfer_to_<name>` 工具把一个明确任务交给专门的子 Agent。它适合把搜索、文件处理或某个业务域的工具收拢到独立角色中，同时让主 Agent 继续负责理解用户意图和组织最终回复。
 
-目前这是一个**实验性功能**，尚未稳定。
+此功能目前标记为**实验性**，建议先在非关键配置档中验证模型、工具权限和成本。
 
-![](https://files.astrbot.app/docs/source/images/subagent/image.png)
+![子代理编排页面](https://files.astrbot.app/docs/source/images/subagent/image.png)
 
-## 动机
+## 当前工作方式
 
-在传统的架构中，所有的工具（Tools）都直接挂载在主 Agent 上。当工具数量较多时，会带来以下问题：
+启用编排后：
 
-1. **Prompt 爆炸**：主 Agent 需要在 System Prompt 中包含所有工具的描述，导致上下文占用过多。
-2. **调用失误**：面对大量工具，LLM 容易混淆工具用途或产生错误的调用参数。
-3. **逻辑复杂**：主 Agent 既要负责对话，又要负责组织和调用大量工具，负担过重。
+1. 主 Agent 保留自己原本可用的工具，并额外挂载每个已启用子 Agent 的 `transfer_to_*` handoff 工具。
+2. 主 Agent 根据 handoff 工具描述决定是否委派，并传入任务说明；需要时还可传递图片引用，或把耗时任务作为后台任务执行。
+3. 子 Agent 使用自己的系统提示词、开场对话、模型和工具集运行。
+4. 同步任务的结果会返回主 Agent，由主 Agent 继续对话；后台任务完成后会重新唤醒主 Agent，以便通知用户。
 
-通过 SubAgent 编排，主 Agent 仅负责与用户对话以及**任务委派**。具体的工具调用由专门的 SubAgent 负责。
+![Handoff 流程](https://files.astrbot.app/docs/source/images/subagent/1.png)
 
-## 工作原理
+> [!IMPORTANT]
+> 启用子代理并不会自动移除主 Agent 的业务工具。只有同时开启“主 LLM 去重重复工具”时，系统才会从主 Agent 工具集中隐藏已经分配给子 Agent 的同名工具。未重叠的主 Agent 工具仍然保留。
 
-1. **主 Agent 委派**：开启 SubAgent 模式后，主 Agent 只能看到一系列名为 `transfer_to_<subagent_name>` 的委派工具。
-2. **任务移交**：当主 Agent 认为需要执行某项任务时，它会调用对应的委派工具，将任务描述传递给 SubAgent。
-3. **子 Agent 执行**：SubAgent 接收到任务后，使用其挂载的工具进行操作，并将结果整理后回传给主 Agent。
-4. **结果反馈**：主 Agent 收到 SubAgent 的执行结果，继续与用户对话。
+## 配置步骤
 
-![](https://files.astrbot.app/docs/source/images/subagent/1.png)
+在 WebUI 左侧打开 **子代理编排**。
 
-## 配置方法
+### 1. 准备 Persona
 
-在 AstrBot WebUI 中，点击左侧导航栏的 **SubAgent 编排**。
+当前页面要求每个子 Agent 绑定一个 Persona。子 Agent 会从 Persona 读取：
 
-### 1. 启用 SubAgent 模式
+- 系统提示词；
+- 开场对话；
+- 工具列表。Persona 的工具值为“全部工具”时，子 Agent 会获得当前已启用的全部普通工具和适用的 Computer 工具，但不会获得其他 `transfer_to_*` 工具。
 
-在页面顶部开启“启用 SubAgent 编排”。
+Persona 的 Skills 和自定义错误回复目前不会作为独立的子 Agent 配置继承。请把子 Agent 必需的行为规则写入 Persona 的系统提示词，并只授权完成职责所需的工具。
 
-### 2. 创建 SubAgent
+### 2. 新增子 Agent
 
-点击“新增 SubAgent”按钮：
+点击“新增子代理”，填写：
 
-- **Agent 名称**：用于生成委派工具名（如 `transfer_to_weather`）。建议使用英文小写和下划线。
-- **选择 Persona**：选择一个预设的 Persona，即人格，作为该子 Agent 的基础性格、行为指导和可以使用的 Tools 集合。你可以在“人格设定”页面创建和管理 Persona。
-- **对主 LLM 的描述**：这段描述会告诉主 Agent 这个子 Agent 擅长做什么，以便主 Agent 准确委派。
-- **分配工具**：选择该子 Agent 可以调用的工具。
-- **Provider 覆盖（可选）**：你可以为特定的子 Agent 指定不同的模型提供商。例如，主 Agent 使用 GPT-4o，而负责简单查询的子 Agent 使用 GPT-4o-mini 以节省成本。
+- **Agent 名称**：必须以小写英文字母开头，只能包含小写字母、数字和下划线，并且全局唯一。例如 `web_search` 会生成 `transfer_to_web_search`。
+- **Chat Provider（可选）**：覆盖该子 Agent 使用的聊天模型。留空时跟随当前会话的模型解析结果。
+- **Persona**：提供提示词、开场对话和工具权限。
+- **对主 LLM 的描述**：直接成为 handoff 工具描述。应说明何时委派、输入需要包含什么、会返回什么，不要复制冗长的 Persona 提示词。
 
-## 最佳实践
+保存后可以在卡片预览中确认主 Agent 将看到的工具名称和描述。单个子 Agent 也可以独立停用。
 
-- **职责单一**：每个 SubAgent 应该只负责一类相关的任务（如：搜索、文件处理、智能家居控制）。
-- **清晰的描述**：给主 Agent 的描述应当简洁明了，突出该子 Agent 的核心能力。
-- **分层管理**：对于极其复杂的任务，可以考虑多级委派（如果需要）。
+### 3. 决定是否工具去重
 
-## 已知问题
+默认关闭工具去重，适合逐步试用：主 Agent 既可以直接调用工具，也可以委派。
 
-SubAgent 系统目前是**实验性功能**，未稳定。
+打开“主 LLM 去重重复工具”后，凡是出现在已启用子 Agent 工具集中的同名工具都会从主 Agent 隐藏。这样能减少主 Agent 的工具 schema，但会让对应能力依赖 handoff。启用前应确认：
 
-1. 目前无法隔离人格的 Skills。
-2. 子 Agent 的对话历史暂时不会被保存。
+- 子 Agent 描述足以让模型稳定路由；
+- Persona 没有意外选择“全部工具”；
+- 关键工具在子 Agent 的模型上可正常调用。
+
+## 设计建议
+
+- 每个子 Agent 保持单一、可判断的职责，例如“查找公开资料并返回带来源摘要”。
+- 描述中写清边界，避免多个子 Agent 都声称能处理同一类任务。
+- 为低风险、结构化任务选择较小模型；对复杂推理或多工具任务再使用能力更强的模型。
+- 工具按最小权限分配，特别是 Shell、文件写入、浏览器和外部系统操作工具。
+- 当前编排是主 Agent 到子 Agent 的一层 handoff；子 Agent 工具集中会排除 handoff 工具，不应按多级递归委派来设计。
+
+## 当前限制
+
+- 功能仍为实验性，配置和行为可能继续调整。
+- 子 Agent 不保存为独立会话历史；每次 handoff 根据本次输入、Persona 开场对话和工具执行构建上下文。
+- Persona Skills 目前不会隔离并继承到子 Agent。
+- 子 Agent 使用配置档中的全局 `max_agent_step`、流式响应和工具超时等运行设置，没有单独的 step 上限。

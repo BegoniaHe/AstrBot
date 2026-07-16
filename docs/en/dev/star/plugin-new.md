@@ -2,103 +2,106 @@
 outline: deep
 ---
 
-# AstrBot Plugin Development Guide 🌠
+# AstrBot Plugin Development Guide
 
-Welcome to the AstrBot Plugin Development Guide! This section will guide you through developing AstrBot plugins. Before we begin, we hope you have the following foundational knowledge:
+AstrBot plugins, also called Stars, are Python packages loaded into the AstrBot
+process. A plugin should depend only on the public SDK under `astrbot.api`. Do
+not import internal objects from `astrbot.core`, concrete platform adapters, or
+provider implementations.
 
-1. Some experience with Python programming.
-2. Some experience with Git and GitHub.
+## Prepare the Environment
 
-## Environment Setup
-
-### Obtain the Plugin Template
-
-1. Open the AstrBot plugin template: [helloworld](https://github.com/Soulter/helloworld)
-2. Click `Use this template` in the upper right corner
-3. Then click `Create new repository`.
-4. Fill in your plugin name in the `Repository name` field. Plugin naming conventions:
-   - Recommended to start with `astrbot_plugin_`;
-   - Must not contain spaces;
-   - Keep all letters lowercase;
-   - Keep it concise.
-5. Click `Create repository` in the lower right corner.
-
-### Clone the Project Locally
-
-Clone both the AstrBot main project and the plugin repository you just created to your local machine.
+This repository and its plugins target Python 3.14+. Prepare an AstrBot source
+checkout first:
 
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
-mkdir -p AstrBot/data/plugins
-cd AstrBot/data/plugins
-git clone <your-plugin-repository-url>
+cd AstrBot
+make doctor
+make bootstrap
 ```
 
-Then, use `VSCode` to open the `AstrBot` project. Navigate to the `data/plugins/<your-plugin-name>` directory.
+Keep the plugin in a separate Git repository outside the AstrBot checkout, then
+link it into `data/plugins/` with an editable install:
 
-Update the `metadata.yaml` file with your plugin's metadata information.
+```bash
+uv run astrbot plug install --editable ../astrbot_plugin_example
+uv run main.py
+```
 
-> [!WARNING]
-> Please make sure to modify this file, as AstrBot relies on the `metadata.yaml` file to recognize plugin metadata.
+An editable install creates a directory symlink, so source changes do not need
+to be copied repeatedly. On Windows, enable Developer Mode or run with the
+permissions required to create that link.
 
-### Set Plugin Logo (Optional)
+A minimal plugin layout is:
 
-You can add a `logo.png` file in the plugin directory as the plugin's logo. Please maintain an aspect ratio of 1:1, with a recommended size of 256x256.
+```text
+astrbot_plugin_example/
+  metadata.yaml
+  main.py
+  README.md
+  requirements.txt  # Only needed for third-party dependencies
+```
+
+## Plugin Metadata
+
+`metadata.yaml` must contain `name`, `desc`, `version`, and `author`:
+
+```yaml
+name: astrbot_plugin_example
+desc: A minimal AstrBot plugin
+version: 0.1.0
+author: Your Name
+repo: https://github.com/your-org/astrbot_plugin_example
+```
+
+`name` is used both as a Python module name and as the installed plugin
+directory. It must therefore:
+
+- be a valid Python identifier and not a Python keyword such as `class` or
+  `from`;
+- contain no slash, backslash, hyphen, space, or other invalid identifier
+  character;
+- preferably use a lowercase `astrbot_plugin_<name>` form, with the repository
+  directory using the same name.
+
+For example, `astrbot_plugin_weather` is valid, while
+`astrbot-plugin-weather` and `astrbot/plugin/weather` are not. AstrBot rejects
+a plugin that omits a required field or has an invalid `name`.
+
+### Display Information (Optional)
+
+`display_name` is the readable name shown in the WebUI and plugin marketplace.
+`short_desc` is the one-line card description and falls back to `desc` when
+omitted:
+
+```yaml
+display_name: Example Plugin
+short_desc: Describe the plugin in one line.
+```
+
+Names and descriptions can also follow the WebUI language. See
+[Plugin Internationalization](./guides/plugin-i18n).
+
+### Logo (Optional)
+
+Place `logo.png` in the plugin root to provide a logo. A 1:1 aspect ratio and a
+256×256 image are recommended.
 
 ![Plugin logo example](https://files.astrbot.app/docs/source/images/plugin/plugin_logo.png)
 
-### Plugin Display Name (Optional)
-
-You can modify (or add) the `display_name` field in the `metadata.yaml` file to serve as the plugin's display name in scenarios like the plugin marketplace, making it easier for users to read.
-
-Plugin display names and descriptions can follow the WebUI language. See [Plugin Internationalization](./guides/plugin-i18n).
-
-### Plugin Short Description (Optional)
-
-You can add a `short_desc` field to `metadata.yaml` as the short description shown on plugin marketplace cards. Keep it to a concise one-sentence summary. If it is not provided, cards fall back to `desc`.
-
-```yaml
-short_desc: A one-line summary of your plugin.
-```
-
-### Bundle Skills with a Plugin (Optional)
-
-Plugins can provide a `skills/` directory. After AstrBot loads the plugin, valid Skills inside that directory are automatically included in the Skill Manager, with their source shown as the plugin.
-
-For multiple Skills, use this structure:
-
-```text
-your_plugin/
-  metadata.yaml
-  main.py
-  skills/
-    web-search-helper/
-      SKILL.md
-    report-writer/
-      SKILL.md
-```
-
-If `skills/` itself is one Skill, you can also place `SKILL.md` directly under it:
-
-```text
-your_plugin/
-  skills/
-    SKILL.md
-```
-
-In that case, the Skill name uses the plugin directory name. Plugin-provided Skills are managed by the plugin and appear as read-only sources in the WebUI Skills page. They can be enabled or disabled, but cannot be deleted or edited from Local Skills. When the plugin is uninstalled or updated, its bundled Skills change with the plugin files.
-
 ### Declare Supported Platforms (Optional)
 
-You can add a `support_platforms` field (`list[str]`) to `metadata.yaml` to declare which platform adapters your plugin supports. The WebUI plugin page will display this field.
+`support_platforms` is a list of platform adapter IDs displayed by the WebUI:
 
 ```yaml
 support_platforms:
+  - webchat
   - telegram
   - discord
 ```
 
-The values in `support_platforms` must be keys from `ADAPTER_NAME_2_TYPE`. Currently supported:
+The currently recognized IDs are:
 
 - `aiocqhttp`
 - `qq_official`
@@ -119,52 +122,106 @@ The values in `support_platforms` must be keys from `ADAPTER_NAME_2_TYPE`. Curre
 - `line`
 - `matrix`
 - `mattermost`
+- `webchat`
 
-### Declare AstrBot Version Range (Optional)
+This field declares compatibility; it does not automatically prevent handlers
+from receiving other platforms. Use public event filters when a runtime
+restriction is required.
 
-You can add an `astrbot_version` field in `metadata.yaml` to declare the required AstrBot version range for your plugin. The format follows dependency specifiers in `pyproject.toml` (PEP 440), and must not include a `v` prefix.
+### Declare an AstrBot Version Range (Optional)
+
+`astrbot_version` uses a PEP 440 version specifier without a `v` prefix:
 
 ```yaml
-astrbot_version: '>=4.16,<5'
+astrbot_version: '>=4.26,<5'
 ```
 
-Examples:
+AstrBot normally blocks the plugin when the running version does not satisfy
+the constraint. The WebUI install flow can explicitly override that warning,
+so plugin code should still avoid relying on undeclared internal behavior.
 
-- `>=4.17.0`
-- `>=4.16,<5`
-- `~=4.17`
+### Bundle Skills (Optional)
 
-If you only want to declare a minimum version, use:
+A plugin can provide a `skills/` directory. AstrBot registers valid Skills
+inside it as read-only sources managed by that plugin:
 
-- `>=4.17.0`
+```text
+astrbot_plugin_example/
+  metadata.yaml
+  main.py
+  skills/
+    web-search-helper/
+      SKILL.md
+    report-writer/
+      SKILL.md
+```
 
-If the current AstrBot version does not satisfy this range, the plugin will be blocked from loading with a compatibility error.
-In the WebUI installation flow, you can choose to "Ignore Warning and Install" to bypass this check.
+If `skills/` itself is one Skill, place `skills/SKILL.md` directly inside it.
+Plugin-provided Skills can be enabled or disabled in the WebUI, but they cannot
+be edited or deleted as Local Skills. They change with the plugin files when
+the plugin is updated or removed.
 
-### Debugging Plugins
+## Minimal Plugin
 
-AstrBot uses a runtime plugin injection mechanism. Therefore, when debugging plugins, you need to start the AstrBot main application.
+The plugin class in `main.py` inherits from the public `Star` class and accepts
+a `Context`:
 
-You can use AstrBot's hot reload feature to streamline the development process.
+```python
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.star import Context, Star
 
-After modifying the plugin code, you can find your plugin in the AstrBot WebUI's plugin management section, click the `...` button in the upper right corner, and select `Reload Plugin`.
 
-If the plugin fails to load due to code errors or other reasons, you can also click **"Try one-click reload fix"** in the error prompt on the admin panel to reload it.
+class ExamplePlugin(Star):
+    def __init__(self, context: Context):
+        super().__init__(context)
 
-### Plugin Dependency Management
+    async def initialize(self) -> None:
+        """Called after the plugin is loaded and activated."""
+        logger.info("ExamplePlugin initialized")
 
-Currently, AstrBot manages plugin dependencies using pip's built-in `requirements.txt` file. If your plugin requires third-party libraries, please be sure to create a `requirements.txt` file in the plugin directory and list the dependencies used, to prevent Module Not Found errors when users install your plugin.
+    @filter.command("hello")
+    async def hello(self, event: AstrMessageEvent):
+        """Reply with a greeting."""
+        yield event.plain_result(f"Hello, {event.get_sender_name()}!")
 
-> For the complete format of `requirements.txt`, please refer to the [pip official documentation](https://pip.pypa.io/en/stable/reference/requirements-file-format/).
+    async def terminate(self) -> None:
+        """Called when the plugin stops, reloads, or AstrBot shuts down."""
+        logger.info("ExamplePlugin terminated")
+```
+
+Use `initialize()` to create runtime resources such as clients or tasks.
+`terminate()` must release them by cancelling background work, closing HTTP
+clients, and releasing file handles. Do not replace explicit lifecycle cleanup
+with the deprecated destructor path.
+
+## Debug the Plugin
+
+After changing plugin code, open the plugin menu in the WebUI and select
+**Reload Plugin**. If loading fails, inspect the startup log or the error shown
+on the management page, fix the code, and use the one-click reload action.
+
+The first two handler parameters must be `self` and `event`. Business logic may
+live in other modules in the plugin package, but event handlers themselves must
+be registered on the plugin class.
+
+## Dependencies and Data
+
+Add `requirements.txt` to the plugin root when third-party packages are needed.
+Those packages must support Python 3.14; do not add compatibility branches for
+Python 3.10–3.13.
+
+Do not write persistent data into the plugin source directory because an update
+or reinstall can replace it. Use `StarTools.get_data_dir()` as described in
+[Plugin Storage](./guides/storage).
 
 ## Development Principles
 
-Thank you for contributing to the AstrBot ecosystem. Please follow these principles when developing plugins, which are also good programming practices:
-
-- Features must be tested.
-- Include comprehensive comments.
-- Store persistent data in the `data` directory, not in the plugin's own directory, to prevent data loss when updating/reinstalling the plugin.
-- Implement robust error handling mechanisms; don't let a single error crash the plugin.
-- Before committing, please use the [ruff](https://docs.astral.sh/ruff/) tool to format your code.
-- Do not use the `requests` library for network requests; use asynchronous network request libraries such as `aiohttp` or `httpx`.
-- If you're extending functionality for an existing plugin, please prioritize submitting a PR to that plugin rather than creating a separate one (unless the original plugin author has stopped maintaining it).
+- Test features and regressions.
+- Use only the public plugin interfaces under `astrbot.api`.
+- Give long-lived tasks, clients, and files an explicit termination path.
+- Use asynchronous HTTP clients such as `aiohttp` or `httpx`; do not call
+  synchronous `requests` inside the event loop.
+- Run Ruff formatting and checks before committing Python code.
+- Prefer contributing an extension to an existing plugin unless it is no
+  longer maintained.

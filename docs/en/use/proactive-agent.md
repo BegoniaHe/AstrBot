@@ -35,20 +35,26 @@ You can view and manage all future tasks by clicking **Future Tasks** in the lef
 
 ### Supported Platforms
 
-Scheduling tasks is supported on all platforms. However, due to some platforms not providing APIs for proactive message pushing, only the following platforms support AstrBot proactively pushing results to users:
+Tasks can be created from any platform session, but the result can be delivered back only through adapters that implement proactive sending. Current built-in adapters include:
 
 - Telegram
-- OneBot (QQ)
+- OneBot v11 (aiocqhttp and NapCat)
 - Slack
 - Feishu (Lark)
 - Discord
 - Misskey
 - Satori
+- KOOK
+- LINE
+- Mattermost
 - DingTalk
 - WeCom (application mode only; customer service mode is not supported)
 - WeCom Smart Bot
+- Personal WeChat
 - WebChat
 - QQ Official Bot (WebSocket and Webhook)
+
+This list follows the built-in adapters that currently provide a concrete `send_by_session()` implementation; metadata alone is not sufficient to prove delivery support. Platform APIs, permissions, reply windows, and stored session routing still apply. For example, WeCom Smart Bot needs an outbound message-push Webhook, Personal WeChat needs a valid session context token, and QQ Official Bot needs usable cached session state. WeChat Official Account is not listed because its adapter explicitly rejects proactive sends. Plugin-provided adapters must implement `send_by_session()` themselves.
 
 ## Sending Multimedia Messages
 

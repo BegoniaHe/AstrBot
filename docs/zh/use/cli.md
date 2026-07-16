@@ -1,169 +1,132 @@
 # CLI 指令
 
-AstrBot CLI 用于初始化实例、启动 AstrBot、修改常用配置和管理插件。
+AstrBot CLI 用于初始化运行目录、启动 AstrBot、修改常用配置和管理插件。当前 fork 不发布独立 PyPI 包，因此本页假设你已经按[源码部署](/deploy/astrbot/cli)完成 `uv sync`，并在仓库根目录执行命令。
 
-如果你使用 `uv` 安装：
-
-```bash
-uv tool install astrbot --python 3.14
-```
-
-`uv` 会生成 `astrbot` 可执行文件，并把它放到 `PATH` 中。可以用下面的命令确认路径：
-
-::: code-group
-
-```bash [Linux / macOS]
-which astrbot
-```
-
-```powershell [Windows]
-where.exe astrbot
-```
-
-:::
-
-> [!TIP]
-> 下面的命令都需要在 AstrBot 工作目录中执行。
-
-## 快速开始
-
-第一次部署时先初始化目录，再启动 AstrBot：
+下文表格用 `astrbot` 表示命令名；在源码 checkout 中请使用完整前缀：
 
 ```bash
-astrbot init
-astrbot run
+uv run astrbot --help
 ```
-
-`astrbot init` 会在当前目录创建 AstrBot 所需的数据目录和配置文件。初始化完成后，后续启动只需要执行 `astrbot run`。
 
 ## 顶层指令
 
-| 指令                | 用途                                |
-| ------------------- | ----------------------------------- |
-| `astrbot init`      | 初始化当前目录为 AstrBot 工作目录。 |
-| `astrbot run`       | 在前台启动 AstrBot。                |
-| `astrbot conf`      | 查看或修改常用配置项。              |
-| `astrbot password`  | 交互式修改 WebUI 登录密码。         |
-| `astrbot plug`      | 创建、安装、更新、删除或搜索插件。  |
-| `astrbot help`      | 查看 CLI 帮助。                     |
-| `astrbot --version` | 查看 AstrBot CLI 版本。             |
+| 指令                      | 用途                                       |
+| ------------------------- | ------------------------------------------ |
+| `astrbot init`            | 将当前目录初始化为 CLI runtime root。      |
+| `astrbot run`             | 在前台启动 AstrBot。                       |
+| `astrbot install-browser` | 安装本地文转图所需的 Playwright Chromium。 |
+| `astrbot conf`            | 查看或修改常用配置项。                     |
+| `astrbot password`        | 交互式修改 WebUI 登录密码。                |
+| `astrbot plug`            | 创建、安装、更新、删除或搜索插件。         |
+| `astrbot help`            | 查看 CLI 帮助。                            |
+| `astrbot --version`       | 查看 CLI 版本。                            |
 
-## 启动 AstrBot
+## 初始化与启动
 
-```bash
-astrbot run
-```
-
-常用选项：
-
-| 选项                | 用途                                                  |
-| ------------------- | ----------------------------------------------------- |
-| `-p, --port <PORT>` | 指定 WebUI 端口。                                     |
-| `-r, --reload`      | 启用插件自动重载，适合插件开发调试。                  |
-| `--reset-password`  | 启动时重置 WebUI 初始密码，并在启动日志中打印新密码。 |
-
-示例：
+CLI 模式第一次运行时：
 
 ```bash
-astrbot run --port 6185
-astrbot run --reload
-astrbot run --reset-password
+uv run astrbot init
+uv run astrbot run
 ```
 
-如果你忘记了 WebUI 登录密码，可以在 AstrBot 工作目录中执行：
+`init` 会创建 `.astrbot` 标记、`data/` 子目录并检查 Dashboard。直接使用 `uv run main.py` 的源码启动流程不要求这个标记。
+
+`run` 常用选项：
+
+| 选项                | 用途                                 |
+| ------------------- | ------------------------------------ |
+| `-p, --port <PORT>` | 临时覆盖 WebUI 端口。                |
+| `-r, --reload`      | 启用插件自动重载。                   |
+| `--reset-password`  | 启动时重置随机初始密码并打印到日志。 |
 
 ```bash
-astrbot run --reset-password
+uv run astrbot run --port 6185
+uv run astrbot run --reload
+uv run astrbot run --reset-password
 ```
 
-AstrBot 会在启动时重新生成初始密码，并在启动日志中打印。登录后请立即在 WebUI 中修改密码。
+CLI 没有远程监听快捷参数。远程访问仍需设置 `dashboard.host` 或 `ASTRBOT_DASHBOARD_HOST`，详见 [WebUI](/use/webui)。
 
-使用源码方式直接启动时，也可以执行：
+源码入口也支持密码重置：
 
 ```bash
-python main.py --reset-password
+uv run main.py --reset-password
 ```
+
+## 本地文转图浏览器
+
+启用 T2I 或插件 HTML 渲染前执行一次：
+
+```bash
+uv run astrbot install-browser
+```
+
+该命令调用当前 Python 环境中的 Playwright 安装 Chromium。它不会启动 AstrBot。
 
 ## 配置
 
-`astrbot conf` 用于查看和修改常用配置项。
-
 ```bash
-astrbot conf get
-astrbot conf get dashboard.port
-astrbot conf set dashboard.port 6185
+uv run astrbot conf get
+uv run astrbot conf get dashboard.port
+uv run astrbot conf set dashboard.port 6185
 ```
 
-支持的配置项：
+CLI 支持的常用键包括 `timezone`、`log_level`、`dashboard.port`、`dashboard.username`、`dashboard.password` 和 `callback_api_base`。修改密码时会写入当前密码哈希，不要手工生成 MD5 值。
 
-| 配置项               | 说明                                                        |
-| -------------------- | ----------------------------------------------------------- |
-| `timezone`           | 时区，例如 `Asia/Shanghai`。                                |
-| `log_level`          | 日志等级：`DEBUG`、`INFO`、`WARNING`、`ERROR`、`CRITICAL`。 |
-| `dashboard.port`     | WebUI 端口。                                                |
-| `dashboard.username` | WebUI 用户名。                                              |
-| `dashboard.password` | WebUI 密码。                                                |
-| `callback_api_base`  | 回调 API 基础地址，需要以 `http://` 或 `https://` 开头。    |
-
-修改密码时会自动写入新版密码哈希：
+也可以使用专门的交互式命令：
 
 ```bash
-astrbot conf set dashboard.password "new-password"
-```
-
-也可以使用专门的交互式密码指令：
-
-```bash
-astrbot password
-astrbot password --username admin
+uv run astrbot password
+uv run astrbot password --username admin
 ```
 
 ## 插件
 
-`astrbot plug` 用于管理 `data/plugins` 下的插件。
-
-| 指令                          | 用途                                         |
-| ----------------------------- | -------------------------------------------- |
-| `astrbot plug list`           | 查看已安装插件。                             |
-| `astrbot plug list --all`     | 同时显示未安装插件。                         |
-| `astrbot plug search <QUERY>` | 搜索插件。                                   |
-| `astrbot plug install <NAME>` | 安装插件。                                   |
-| `astrbot plug update [NAME]`  | 更新指定插件；不传名称时更新所有可更新插件。 |
-| `astrbot plug remove <NAME>`  | 删除已安装插件。                             |
-| `astrbot plug new <NAME>`     | 基于模板创建新插件。                         |
-
-安装或更新插件时可以使用 GitHub 代理：
-
 ```bash
-astrbot plug install example-plugin --proxy https://gh-proxy.example.com/
-astrbot plug update --proxy https://gh-proxy.example.com/
+uv run astrbot plug list
+uv run astrbot plug list --all
+uv run astrbot plug search <QUERY>
+uv run astrbot plug install <MARKET_NAME>
+uv run astrbot plug update [NAME]
+uv run astrbot plug remove <NAME>
+uv run astrbot plug new <NAME>
 ```
 
-创建新插件会交互式询问作者、描述、版本和仓库地址：
+### 从本地目录安装
+
+v4.26.3 之后，CLI 支持直接复制本地插件目录：
 
 ```bash
-astrbot plug new my-plugin
+uv run astrbot plug install ../my-plugin
+```
+
+插件目录必须包含 `metadata.yaml`，其中 `name` 必须是合法的单目录名，并且目标 `data/plugins/<name>` 不得已存在。
+
+开发时可以使用 editable 模式创建目录链接，使源目录修改立即可见：
+
+```bash
+uv run astrbot plug install --editable ../my-plugin
+# 等价短选项
+uv run astrbot plug install -e ../my-plugin
+```
+
+editable 模式依赖操作系统的符号链接能力和权限；发布或迁移实例时不要把这个链接当成完整插件副本。
+
+### 代理
+
+市场安装或更新可以传入 GitHub 代理：
+
+```bash
+uv run astrbot plug install example-plugin --proxy https://gh-proxy.example.com/
+uv run astrbot plug update --proxy https://gh-proxy.example.com/
 ```
 
 ## 帮助
 
-查看全部 CLI 帮助：
-
 ```bash
-astrbot help
-```
-
-查看指定指令帮助：
-
-```bash
-astrbot help run
-astrbot run --help
-astrbot help conf
-astrbot plug --help
-```
-
-查看版本：
-
-```bash
-astrbot --version
+uv run astrbot help
+uv run astrbot help run
+uv run astrbot plug --help
+uv run astrbot --version
 ```

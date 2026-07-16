@@ -1,93 +1,110 @@
-# Deploy AstrBot from Source Code
+# Deploy AstrBot from Source
 
-> [!WARNING]
-> You are deploying this project directly from source code. This tutorial requires you to have some technical background.
->
-> This tutorial assumes Python `3.14+` is already installed on your device.
+> [!IMPORTANT]
+> This fork does not currently publish an independent PyPI package or prebuilt Dashboard release. To run the backend and WebUI from this repository, install from the checkout and build the Dashboard locally.
 
-## Download/Clone Repository
+## Prerequisites
 
-If you have `git` installed on your computer, you can download the source code with the following command:
+- Git
+- `uv`
+- Node.js 24.15.0
+- Corepack
+
+Package metadata requires Python 3.14 or later. The checkout pins Python 3.14.6 in `.python-version`; `uv` can download that version when its managed-Python support is enabled.
+
+## Clone the Repository
 
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
-# The above code will pull the latest commit of the source code, if you need to pull the latest stable release version of the source code, you can use the following command:
-# git clone --depth=1 --branch $(git ls-remote --tags --sort='-v:refname' https://github.com/Xero-Team/AstrBot.git | head -n1 | awk -F/ '{print $3}') https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 
-If you don't have `git` installed, please download and install it first.
+The default branch follows current development. Read the latest files under `changelogs/` and choose a commit to pin for your deployment. This fork does not yet have a release-tag sequence that deployments can rely on.
 
-Alternatively, download the source code directly from GitHub and extract it:
-
-![image](https://files.astrbot.app/docs/source/images/cli/image.png)
-
-## Install Dependencies and Run
-
-::: details 【🥳Recommended】Use `uv` to Manage Dependencies
-
-> If `uv` is not installed, please refer to [Installing uv](https://docs.astral.sh/uv/getting-started/installation/) for installation.
-
-2. Execute in terminal (in the AstrBot directory)
+## Install Backend Dependencies
 
 ```bash
-uv sync
-uv run astrbot install-browser  # Required only when using local text-to-image rendering
+uv sync --locked
+```
+
+`--locked` prevents installation from silently rewriting `uv.lock`, keeping the checkout on the reviewed dependency resolution.
+
+## Build the Current Dashboard
+
+```bash
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
+
+Do not skip this step and rely on an automatically downloaded upstream Dashboard. Upstream static assets are not guaranteed to match this fork's FastAPI routes and frontend features.
+
+## Optional: Install the Local T2I Browser
+
+Run this once only if you enable local text-to-image or plugin HTML rendering:
+
+```bash
+uv run astrbot install-browser
+```
+
+## Start AstrBot
+
+```bash
 uv run main.py
 ```
 
-If you have already synced the environment and only want to restart quickly, you can use:
+After dependencies are synchronized, skip the startup sync check with:
 
 ```bash
 uv run --no-sync main.py
 ```
 
-:::
+First startup creates `data/`, generates a random initial WebUI password, and prints the credentials in the log. The default username is `astrbot`; WebUI listens only on `127.0.0.1:6185`.
 
-::: details Install Dependencies with Python Built-in venv
+## Remote Access
 
-In the AstrBot source code directory, run the following command in the terminal:
+Replacing `localhost` with a server IP in the browser does not expose the service. Loopback is the secure default. For remote access, explicitly edit `data/cmd_config.json`:
 
-> If on Windows and you downloaded and extracted the source code directly, please open the extracted folder and enter in the address bar:
-> ![image](https://files.astrbot.app/docs/source/images/cli/image-1.png)
-
-```bash
-python -m venv .venv
+```json
+{
+  "dashboard": {
+    "host": "0.0.0.0",
+    "port": 6185
+  }
+}
 ```
 
-The above steps will create and activate a virtual environment (to avoid disrupting your local Python environment).
+You can also override the bind address for one process:
 
-Next, install the dependencies with the following command, which may take some time:
+::: code-group
 
-Execute on Mac/Linux/WSL:
-
-```bash
-source .venv/bin/activate
-python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-python -m playwright install chromium  # Required only when using local text-to-image rendering
-python main.py
+```bash [Linux / macOS]
+ASTRBOT_DASHBOARD_HOST=0.0.0.0 uv run main.py
 ```
 
-Execute on Windows:
-
-```bash
-.venv\Scripts\activate
-python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-python -m playwright install chromium  # Required only when using local text-to-image rendering
-python main.py
+```powershell [Windows PowerShell]
+$env:ASTRBOT_DASHBOARD_HOST = '0.0.0.0'
+uv run main.py
 ```
 
 :::
 
-## 🎉 All Done
+`0.0.0.0` listens on every IPv4 interface. Configure the host firewall and preferably expose AstrBot through a trusted HTTPS reverse proxy. Enable `dashboard.trust_proxy_headers` only when that proxy overwrites client-supplied `X-Forwarded-For` and `X-Real-IP` headers.
 
-If everything goes well, you will see logs printed by AstrBot.
+## Update the Checkout
 
-If there are no errors, AstrBot will print the WebUI URL and the initial credentials in the startup logs. By default the WebUI is available at `http://localhost:6185`.
+Stop AstrBot, then run:
 
-> [!TIP]
-> If you are deploying AstrBot on a server, you need to replace `localhost` with your server's IP address.
->
-> New users must use the random password printed in the startup logs to log in for the first time. Use the username shown in the logs (usually `astrbot`) and change it after first login.
+```bash
+git pull --ff-only
+uv sync --locked
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
 
-Next, you need to deploy any messaging platform to use AstrBot on that platform.
+Back up `data/` and read the intervening changelogs before updating. Do not use `uv tool upgrade astrbot` for this fork; that command targets the upstream PyPI package.

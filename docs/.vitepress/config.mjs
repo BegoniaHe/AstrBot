@@ -4,7 +4,7 @@ import { head } from './config/head';
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: 'AstrBot',
-  description: 'AstrBot',
+  description: 'Documentation for the current Xero-Team AstrBot fork',
   head: head,
 
   rewrites: {
@@ -16,7 +16,6 @@ export default defineConfig({
   },
 
   lastUpdated: true,
-  ignoreDeadLinks: true,
 
   locales: {
     root: {
@@ -43,10 +42,9 @@ export default defineConfig({
             base: '/deploy',
             collapsed: false,
             items: [
-              { text: '包管理器部署', link: '/astrbot/package' },
+              { text: '源码部署', link: '/astrbot/cli' },
               { text: 'Docker 部署', link: '/astrbot/docker' },
               { text: 'Kubernetes 部署', link: '/astrbot/kubernetes' },
-              { text: '手动部署', link: '/astrbot/cli' },
             ],
           },
           {
@@ -150,6 +148,8 @@ export default defineConfig({
               { text: '内置指令', link: '/command' },
               { text: '工具使用 Tools', link: '/function-calling' },
               { text: '技能 Skills', link: '/skills' },
+              { text: 'Persona 人格设定', link: '/persona' },
+              { text: '长期记忆', link: '/long-term-memory' },
               { text: '使用电脑能力', link: '/computer' },
               { text: 'SubAgent 编排', link: '/subagent' },
               { text: '主动型 Agent 能力', link: '/proactive-agent' },
@@ -168,6 +168,8 @@ export default defineConfig({
             base: '/dev',
             collapsed: true,
             items: [
+              { text: '项目架构', link: '/architecture' },
+              { text: '源码开发', link: '/development' },
               { text: 'Linux 开发环境', link: '/linux' },
               {
                 text: '插件开发',
@@ -189,7 +191,6 @@ export default defineConfig({
                   { text: '会话控制器', link: '/guides/session-control' },
                   { text: '杂项', link: '/guides/other' },
                   { text: '发布插件', link: '/plugin-publish' },
-                  { text: '插件指南（旧）', link: '/plugin' },
                 ],
               },
               {
@@ -221,7 +222,6 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '异常诊断', link: '/diagnostics' },
-              { text: '自部署文转图', link: '/self-host-t2i' },
               {
                 text: '插件下载不了?试试自建 GitHub 加速服务',
                 link: '/github-proxy',
@@ -248,12 +248,12 @@ export default defineConfig({
         },
         editLink: {
           pattern:
-            'https://github.com/AstrBotdevs/AstrBot/edit/master/docs/:path',
+            'https://github.com/Xero-Team/AstrBot/edit/master/docs/:path',
           text: '发现文档有问题？在 GitHub 上编辑此页',
         },
         logo: '/logo_prod.png',
         socialLinks: [
-          { icon: 'github', link: 'https://github.com/AstrBotDevs/AstrBot' },
+          { icon: 'github', link: 'https://github.com/Xero-Team/AstrBot' },
         ],
       },
     },
@@ -281,10 +281,9 @@ export default defineConfig({
             base: '/en/deploy',
             collapsed: false,
             items: [
-              { text: 'Package Manager', link: '/astrbot/package' },
+              { text: 'Source Deployment', link: '/astrbot/cli' },
               { text: 'Docker', link: '/astrbot/docker' },
               { text: 'Kubernetes', link: '/astrbot/kubernetes' },
-              { text: 'Manual', link: '/astrbot/cli' },
             ],
           },
           {
@@ -390,7 +389,9 @@ export default defineConfig({
               { text: 'Plugins', link: '/plugin' },
               { text: 'Built-in Commands', link: '/command' },
               { text: 'Tool Use', link: '/function-calling' },
-              { text: 'Anthropic Skills', link: '/skills' },
+              { text: 'Skills', link: '/skills' },
+              { text: 'Personas', link: '/persona' },
+              { text: 'Long-term Memory', link: '/long-term-memory' },
               { text: 'Computer Use', link: '/computer' },
               { text: 'SubAgent Orchestration', link: '/subagent' },
               { text: 'Proactive Tasks', link: '/proactive-agent' },
@@ -409,6 +410,8 @@ export default defineConfig({
             base: '/en/dev',
             collapsed: true,
             items: [
+              { text: 'Architecture', link: '/architecture' },
+              { text: 'Source Development', link: '/development' },
               { text: 'Linux Development', link: '/linux' },
               {
                 text: 'Plugin Development',
@@ -464,10 +467,7 @@ export default defineConfig({
             text: 'Others',
             base: '/en/others',
             collapsed: true,
-            items: [
-              { text: 'Diagnostics', link: '/diagnostics' },
-              { text: 'Self-hosted HTML to Image', link: '/self-host-t2i' },
-            ],
+            items: [{ text: 'Diagnostics', link: '/diagnostics' }],
           },
           {
             text: 'Open Source Summer',
@@ -489,12 +489,12 @@ export default defineConfig({
         },
         editLink: {
           pattern:
-            'https://github.com/AstrBotdevs/AstrBot/edit/master/docs/:path',
+            'https://github.com/Xero-Team/AstrBot/edit/master/docs/:path',
           text: 'Edit this page on GitHub',
         },
         logo: '/logo_prod.png',
         socialLinks: [
-          { icon: 'github', link: 'https://github.com/AstrBotDevs/AstrBot' },
+          { icon: 'github', link: 'https://github.com/Xero-Team/AstrBot' },
         ],
       },
     },

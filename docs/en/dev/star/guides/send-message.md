@@ -1,130 +1,141 @@
 # Sending Messages
 
-## Passive Messages
+## Passive Replies
 
-Passive messages refer to the bot responding to messages reactively.
+An event handler can return one or more message results with `yield`:
 
 ```python
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
+from astrbot.api.event import AstrMessageEvent, filter
+
+
+@filter.command("hello")
+async def hello(self, event: AstrMessageEvent):
     yield event.plain_result("Hello!")
-    yield event.plain_result("你好！")
-
-    yield event.image_result("path/to/image.jpg") # Send an image
-    yield event.image_result("https://example.com/image.jpg") # Send an image from URL, must start with http or https
+    yield event.image_result("path/to/image.jpg")
+    yield event.image_result("https://example.com/image.jpg")
 ```
 
-## Active Messages
+Local paths are resolved on the host or in the container running AstrBot. Image
+URLs must start with `http://` or `https://`. Whether a message type can be
+delivered still depends on the platform adapter.
 
-Active messages refer to the bot proactively pushing messages. Some platforms may not support active message sending.
+## Proactive Messages
 
-For scheduled tasks or when you don't want to send messages immediately, you can use `event.unified_msg_origin` to get a string and store it, then use `self.context.send_message(unified_msg_origin, chains)` to send messages when needed.
+A scheduled task or another delayed workflow can save
+`event.unified_msg_origin` and later call `Context.send_message()` for the same
+session:
 
 ```python
-from astrbot.api.event import MessageChain
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
-    umo = event.unified_msg_origin
-    message_chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
-    await self.context.send_message(event.unified_msg_origin, message_chain)
+
+@filter.command("remember-me")
+async def remember_me(self, event: AstrMessageEvent):
+    session = event.unified_msg_origin
+    chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
+
+    send_result = await self.context.send_message(session, chain)
+    if not send_result.success:
+        logger.warning(
+            "Message delivery failed: %s",
+            send_result.error_message or "unknown error",
+        )
+
+    yield event.plain_result("Proactive delivery was attempted.")
 ```
 
-With this feature, you can store the `unified_msg_origin` and send messages when needed.
+`Context.send_message()` returns a `PlatformSendResult` with `platform_id`,
+`success`, `target`, `message_count`, and `error_message`. A missing adapter or
+an adapter send exception produces `success=False`; an invalid session string
+raises `ValueError`. Not every platform supports proactive delivery. QQ
+Official Bot requires usable locally cached session state, while the WeChat
+Official Account adapter currently rejects proactive sends. Check
+`send_result` and provide a fallback for platform limitations.
 
-> [!TIP]
-> About unified_msg_origin.
-> `unified_msg_origin` is a string that records the unique ID of a session. AstrBot uses it to identify which messaging platform and which session it belongs to. This allows messages to be sent to the correct session when using `send_message`. For more about MessageChain, see the next section.
+`unified_msg_origin` is AstrBot's unified session identifier and contains the
+information needed to locate a platform instance and conversation. Treat a
+stored value as user data; do not expose it in public logs or to untrusted
+clients.
 
-## Rich Media Messages
+## Rich-Media Chains
 
-AstrBot supports sending rich media messages such as images, audio, videos, etc. Use `MessageChain` to construct messages.
+Build an ordered chain with the public message components:
 
 ```python
 import astrbot.api.message_components as Comp
+from astrbot.api.event import AstrMessageEvent, filter
 
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
+
+@filter.command("picture")
+async def picture(self, event: AstrMessageEvent):
     chain = [
-        Comp.At(qq=event.get_sender_id()), # Mention the message sender
-        Comp.Plain("Check out this image:"),
-        Comp.Image.fromURL("https://example.com/image.jpg"), # Send image from URL
-        Comp.Image.fromFileSystem("path/to/image.jpg"), # Send image from local file system
-        Comp.Plain("This is an image.")
+        Comp.At(qq=event.get_sender_id()),
+        Comp.Plain("Look at this image:"),
+        Comp.Image.fromURL("https://example.com/image.jpg"),
+        Comp.Image.fromFileSystem("path/to/image.jpg"),
+        Comp.Plain("Components are sent in list order."),
     ]
     yield event.chain_result(chain)
 ```
 
-The above constructs a `message chain`, which will ultimately send a message containing both images and text while preserving the order.
+Some platforms split or degrade unsupported components. OneBot adapters may
+also trim leading and trailing whitespace from plain-text segments. If that
+whitespace is essential, place a zero-width space (`\u200b`) at the boundary.
 
-> [!TIP]
-> In the aiocqhttp message adapter, for messages of type `plain`, the `strip()` method is used during sending to remove spaces and line breaks. You can add zero-width spaces `\u200b` before and after the message to resolve this issue.
-
-Similarly,
-
-**File**
-
-```py
-Comp.File(file="path/to/file.txt", name="file.txt") # Not supported by some platforms
-```
-
-**Audio Record**
-
-```py
-path = "path/to/record.wav" # Currently only accepts wav format, please convert other formats yourself
-Comp.Record(file=path, url=path)
-```
-
-**Video**
-
-```py
-path = "path/to/video.mp4"
-Comp.Video.fromFileSystem(path=path)
-Comp.Video.fromURL(url="https://example.com/video.mp4")
-```
-
-## Sending Video Messages
+### Files
 
 ```python
-from astrbot.api.event import filter, AstrMessageEvent
-
-@filter.command("test")
-async def test(self, event: AstrMessageEvent):
-    from astrbot.api.message_components import Video
-    # fromFileSystem requires the user's protocol client and bot to be on the same system.
-    video = Video.fromFileSystem(
-        path="test.mp4"
-    )
-    # More universal approach
-    video = Video.fromURL(
-        url="https://example.com/video.mp4"
-    )
-    yield event.chain_result([video])
+Comp.File(name="file.txt", file="path/to/file.txt")
 ```
 
-![Sending video messages](https://files.astrbot.app/docs/source/images/plugin/db93a2bb-671c-4332-b8ba-9a91c35623c2.png)
+File messages are not supported by every platform.
 
-## Sending Group Forward Messages
+### Audio Records
 
-> Most platforms do not support this message type. Current support: OneBot v11
+```python
+Comp.Record.fromFileSystem("path/to/record.wav")
+Comp.Record.fromURL("https://example.com/record.mp3")
+Comp.Record.fromBase64(encoded_audio)
+```
 
-You can send group forward messages as follows.
+The `Record` component is not globally restricted to WAV input. AstrBot
+resolves or converts audio where needed, but usable formats depend on the target
+adapter and the runtime media toolchain. WAV is usually the safest
+cross-platform input.
 
-```py
-from astrbot.api.event import filter, AstrMessageEvent
+### Video
 
-@filter.command("test")
-async def test(self, event: AstrMessageEvent):
-    from astrbot.api.message_components import Node, Plain, Image
+```python
+Comp.Video.fromFileSystem("path/to/video.mp4")
+Comp.Video.fromURL("https://example.com/video.mp4")
+```
+
+A local file must exist in the AstrBot runtime environment. The target platform
+must also support the URL and video format.
+
+## Group Forward Messages
+
+Forward nodes are not a general cross-platform component and are currently
+intended primarily for OneBot v11:
+
+```python
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.message_components import Image, Node, Plain
+
+
+@filter.command("forward-demo")
+async def forward_demo(self, event: AstrMessageEvent):
     node = Node(
-        uin=905617992,
-        name="Soulter",
+        uin="10001",
+        name="Example User",
         content=[
-            Plain("hi"),
-            Image.fromFileSystem("test.jpg")
-        ]
+            Plain("Hello"),
+            Image.fromFileSystem("test.jpg"),
+        ],
     )
     yield event.chain_result([node])
 ```
 
-![Sending group forward messages](https://files.astrbot.app/docs/source/images/plugin/image-4.png)
+Check adapter support before using this component on another platform, and
+provide a plain-text or other fallback when it is unavailable.

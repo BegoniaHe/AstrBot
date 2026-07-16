@@ -1,57 +1,71 @@
-# Agent Handoff and SubAgent
+# Agent Handoffs and SubAgent Orchestration
 
-SubAgent Orchestration is an advanced agent organization method provided by AstrBot. It allows you to decompose complex tasks into multiple specialized SubAgents, reducing the Main Agent's prompt length and improving task execution success rates.
+SubAgent orchestration lets the main Agent delegate a well-defined task to a specialized Agent through a `transfer_to_<name>` tool. It is useful for grouping search, file-processing, or domain-specific tools behind focused roles while the main Agent continues to interpret the request and compose the final response.
 
-This is currently an **experimental feature** and not yet stable.
+The feature is currently marked **experimental**. Validate model behavior, tool permissions, and cost in a non-critical profile first.
 
-![](https://files.astrbot.app/docs/source/images/subagent/image.png)
+![SubAgent orchestration page](https://files.astrbot.app/docs/source/images/subagent/image.png)
 
-## Motivation
+## How it currently works
 
-In traditional architectures, all tools are directly mounted on the Main Agent. When there are many tools, several issues arise:
+When orchestration is enabled:
 
-1. **Prompt Bloat**: The Main Agent must include descriptions for all tools in its System Prompt, consuming excessive context.
-2. **Execution Errors**: With a large number of tools, the LLM may confuse tool purposes or generate incorrect parameters.
-3. **Complexity**: The Main Agent is overburdened with both conversation and the organization/invocation of numerous tools.
+1. The main Agent keeps its existing tools and additionally receives a `transfer_to_*` handoff tool for every enabled SubAgent.
+2. The main Agent decides whether to delegate from the handoff description. It passes a task description and can also pass image references or launch a longer task in the background.
+3. The SubAgent runs with its own system prompt, opening dialogue, model, and tool set.
+4. A synchronous result is returned to the main Agent so it can continue the conversation. A background handoff wakes the main Agent again after completion so the user can be notified.
 
-With SubAgent Orchestration, the Main Agent is only responsible for user interaction and **task delegation**. Actual tool execution is handled by specialized SubAgents.
+![Handoff flow](https://files.astrbot.app/docs/source/images/subagent/1.png)
 
-## How It Works
-
-1. **Main Agent Delegation**: When SubAgent mode is enabled, the Main Agent only sees a series of delegation tools named `transfer_to_<subagent_name>`.
-2. **Task Handoff**: When the Main Agent determines a task needs execution, it calls the corresponding delegation tool, passing the task description to the SubAgent.
-3. **SubAgent Execution**: The SubAgent receives the task, performs operations using its assigned tools, and returns the organized results to the Main Agent.
-4. **Feedback**: The Main Agent receives the results and continues the conversation with the user.
-
-![](https://files.astrbot.app/docs/source/images/subagent/1.png)
+> [!IMPORTANT]
+> Enabling SubAgents does not automatically remove domain tools from the main Agent. Tools assigned to SubAgents are hidden from the main tool set only when **Deduplicate main LLM tools** is also enabled. Main-Agent tools that do not overlap remain available.
 
 ## Configuration
 
-In the AstrBot WebUI, click **SubAgents** in the left navigation bar.
+Open **SubAgents** in the WebUI sidebar.
 
-### 1. Enable SubAgent Mode
+### 1. Prepare a Persona
 
-Toggle "Enable SubAgent Orchestration" at the top of the page.
+The current UI requires each SubAgent to be bound to a Persona. The SubAgent reads these Persona fields:
 
-### 2. Create a SubAgent
+- system prompt;
+- opening dialogue;
+- tool list. When the Persona means “all tools,” the SubAgent receives all currently active regular tools and applicable Computer tools, but not other `transfer_to_*` tools.
 
-Click the "Add SubAgent" button:
+Persona Skills and the custom error reply are not currently inherited as isolated SubAgent settings. Put required behavioral rules in the Persona system prompt and grant only the tools needed for that role.
 
-- **Agent Name**: Used to generate the delegation tool name (e.g., `transfer_to_weather`). Use lowercase and underscores.
-- **Select Persona**: Choose a preset Persona, which defines the SubAgent's basic character, behavioral guidance, and the Tools collection it can use. You can create and manage Personas on the "Persona Settings" page.
-- **Description for Main LLM**: This description tells the Main Agent what this SubAgent is good at, ensuring accurate delegation.
-- **Assign Tools**: Select the tools this SubAgent can invoke.
-- **Provider Override (Optional)**: You can specify different model providers for specific SubAgents. For example, the Main Agent could use GPT-4o, while a simple query SubAgent uses GPT-4o-mini to save costs.
+### 2. Add a SubAgent
 
-## Best Practices
+Select **Add SubAgent** and configure:
 
-- **Single Responsibility**: Each SubAgent should handle one category of related tasks (e.g., search, file processing, smart home control).
-- **Clear Descriptions**: Descriptions for the Main Agent should be concise and highlight the SubAgent's core capabilities.
-- **Layered Management**: For extremely complex tasks, consider multi-level delegation if necessary.
+- **Agent name**: must start with a lowercase ASCII letter and contain only lowercase letters, digits, and underscores. It must also be globally unique. For example, `web_search` creates `transfer_to_web_search`.
+- **Chat Provider (optional)**: overrides the chat model used by this SubAgent. When empty, AstrBot follows the provider resolved for the current session.
+- **Persona**: supplies the prompt, opening dialogue, and tool permissions.
+- **Description for the main LLM**: becomes the handoff tool description. State when to delegate, what input is required, and what the Agent returns; do not copy a long Persona prompt here.
 
-## Known Issues
+After saving, use the card preview to verify the tool name and description shown to the main Agent. Individual SubAgents can be disabled independently.
 
-SubAgent orchestration is currently an **experimental feature** and not yet stable.
+### 3. Decide whether to deduplicate tools
 
-1. Skills of personas cannot be isolated at this time.
-2. SubAgent conversation histories are not currently saved.
+Deduplication is off by default, which is useful during rollout: the main Agent can either call a tool directly or delegate the task.
+
+With **Deduplicate main LLM tools** enabled, every same-named tool assigned to an enabled SubAgent is removed from the main Agent. This reduces the main tool schema but makes that capability depend on a handoff. Before enabling it, verify that:
+
+- each SubAgent description gives the model a reliable routing signal;
+- no Persona accidentally grants all tools;
+- critical tools work with the model selected for the SubAgent.
+
+## Design guidance
+
+- Give each SubAgent one responsibility that is easy to recognize, such as “research public sources and return a cited summary.”
+- State boundaries clearly so several SubAgents do not all claim the same class of task.
+- Use a smaller model for low-risk, structured work and a stronger model for complex reasoning or multi-tool work.
+- Apply least privilege, especially for shell, file-write, browser, and external-system tools.
+- Current orchestration is a single handoff layer from the main Agent. Handoff tools are excluded from a SubAgent's tool set, so do not design for recursive multi-level delegation.
+
+## Current limitations
+
+- The feature is experimental and its configuration and behavior may continue to change.
+- SubAgents do not persist separate conversation histories. Each handoff builds context from that invocation, the Persona's opening dialogue, and tool results.
+- Persona Skills are not currently isolated and inherited by SubAgents.
+- SubAgents use profile-wide settings such as `max_agent_step`, streaming behavior, and tool timeout; there is no separate per-SubAgent step limit.

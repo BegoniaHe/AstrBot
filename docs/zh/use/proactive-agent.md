@@ -35,20 +35,26 @@ AstrBot 引入了主动 Agent（Proactive Agent）系统，使 AstrBot 不仅能
 
 ### 支持的平台
 
-“定时任务”的设置支持所有平台，然而，由于部分平台没有开放主动消息推送的 API，因此只有以下平台支持 AstrBot 主动向用户推送结果：
+“定时任务”可以在任意平台会话中创建，但只有实现了主动发送的适配器才能在任务执行后把结果推回原会话。当前内置适配器包括：
 
 - Telegram
-- OneBot v11
+- OneBot v11（aiocqhttp 与 NapCat）
 - Slack
 - 飞书 (Lark)
 - Discord
 - Misskey
 - Satori
+- KOOK
+- LINE
+- Mattermost
 - 钉钉 (DingTalk)
 - 企业微信（应用模式；客服模式不支持）
 - 企业微信智能机器人
+- 个人微信
 - WebChat
 - QQ 官方机器人（WebSocket 及 Webhook）
+
+上述清单以当前内置适配器是否具体实现 `send_by_session()` 为准；仅凭元数据不能证明消息一定能够送达。具体行为仍受平台 API、权限、回复窗口和已保存会话路由限制。例如，企业微信智能机器人需要配置出站消息推送 Webhook，个人微信需要目标会话仍有有效的 context token，QQ 官方机器人需要可用的本地缓存会话状态。微信公众号不在清单中，因为其适配器会明确拒绝主动发送。插件提供的平台适配器则需要自行实现 `send_by_session()`。
 
 ## 多媒体消息的发送
 

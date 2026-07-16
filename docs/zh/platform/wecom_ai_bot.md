@@ -1,75 +1,89 @@
-# 接入企业微信智能机器人平台
+# 接入企业微信智能机器人
 
-企业微信智能机器人是企业微信官方推出的 AI 友好的机器人平台，可在单聊或群聊（企业微信内部群）中直接使用，并且支持流式传输。
+企业微信智能机器人可用于企业内部单聊和群聊，并支持流式回复。AstrBot 提供两种连接模式：
 
-## 支持的基本消息类型
+- **长连接（默认、推荐）**：AstrBot 主动连接企业微信，不需要公网 IP、域名或入站 Webhook。
+- **Webhook 回调**：企业微信主动请求 AstrBot，需要公网可达的 HTTPS 地址。
 
-| 消息类型 | 是否支持接收 | 是否支持发送 | 备注                             |
-| -------- | ------------ | ------------ | -------------------------------- |
-| 文本     | 是           | 是           |                                  |
-| 图片     | 是           | 是           | 仅限配置了消息推送 Webhook URL。 |
-| 语音     | 否           | 是           | 仅限配置了消息推送 Webhook URL。 |
-| 视频     | 否           | 是           | 仅限配置了消息推送 Webhook URL。 |
-| 文件     | 否           | 是           | 仅限配置了消息推送 Webhook URL。 |
+新建 `企业微信智能机器人` 平台时，当前模板默认选择 `long_connection`。除非企业网络或现有配置要求 Webhook，否则优先使用长连接。
 
-主动消息推送：支持，但需要配置消息推送 Webhook URL。
+## 消息能力
 
-## 配置智能机器人
+| 消息类型 | 接收 | 发送 | 说明                                   |
+| -------- | ---- | ---- | -------------------------------------- |
+| 文本     | 是   | 是   | 支持流式回复。                         |
+| 图片     | 是   | 是   | 发送图片需要配置消息推送 Webhook URL。 |
+| 语音     | 否   | 是   | 发送语音需要配置消息推送 Webhook URL。 |
+| 视频     | 否   | 是   | 发送视频需要配置消息推送 Webhook URL。 |
+| 文件     | 否   | 是   | 发送文件需要配置消息推送 Webhook URL。 |
 
-1. 登录到[企业微信后台](https://work.weixin.qq.com/wework_admin)。
+主动消息推送也需要配置消息推送 Webhook URL。这里的“消息推送 Webhook”是 AstrBot 向企业微信群机器人发消息的**出站**地址，与企业微信向 AstrBot 推送事件的入站回调不是同一个概念。
 
-2. 在左侧导航栏中，点击 `管理工具`，找到 `智能机器人`，点击进入，然后点击创建机器人。
+## 方式一：长连接（推荐）
 
-![管理工具-智能机器人](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-1.png)
+### 1. 在企业微信创建机器人
 
-3. 在创建智能机器人页面下方找到并点击 `API模式创建`。填写机器人名称、头像等基本信息。Token、EncodingAESKey 请点击 `随机获取` 按钮生成。生成之后，先不要点击创建，接下来将配置 AstrBot。
+1. 登录[企业微信管理后台](https://work.weixin.qq.com/wework_admin)。
+2. 进入 `管理工具` -> `智能机器人`，创建 API 模式机器人。
+3. 在机器人的长连接配置中取得 `BotID` 和 `Secret`。请像密码一样保管 Secret。
 
-![创建智能机器人账号](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image.png)
+企业微信后台的具体文字可能随版本变化；需要的是长连接凭证，而不是 Webhook 回调模式使用的 Token 和 EncodingAESKey。
 
-## 配置 AstrBot
+### 2. 在 AstrBot 创建平台
 
-1. 进入 AstrBot 的管理面板，点击左侧栏 `机器人`，然后点击 `+ 创建机器人`，选择 `企业微信智能机器人`，进入配置页面。
+1. 打开 AstrBot WebUI，进入 `机器人`。
+2. 点击 `+ 创建机器人`，选择 `企业微信智能机器人`。
+3. 保持连接模式为 `长连接`（`long_connection`）。
+4. 填写：
+   - `wecom_ai_bot_name`：与企业微信中的机器人名称一致。
+   - `wecomaibot_ws_bot_id`：企业微信提供的 BotID。
+   - `wecomaibot_ws_secret`：企业微信提供的 Secret。
+5. 保存平台配置。
 
-![新增适配器](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-2.png)
+`wecomaibot_ws_url` 默认为 `wss://openws.work.weixin.qq.com`，心跳间隔默认为 30 秒，通常无需修改。
 
-2. 在弹出的配置项中将 `企业微信智能机器人的名字`、`token`、`encoding_aes_key` 从上一步创建智能机器人时填写的值复制粘贴到对应的输入框中。ID 可以随意填写，用于区分不同的消息平台实例。`port` 默认为 `6198`，可以根据需要修改，但请确保该端口未被占用。请保持 `统一 Webhook 模式 (unified_webhook_mode)` 为开启状态。点击 `保存`。
+长连接模式不启动本地回调服务器，也不使用 `unified_webhook_mode`、Token、EncodingAESKey 或回调端口。AstrBot 所在网络只需能够主动访问企业微信的 WebSocket 服务。
 
-3. 回到企业微信智能机器人创建页面，填写 `URL`：
+### 3. 验证
 
-   - 如果开启了 `统一 Webhook 模式`，点击保存之后，AstrBot 将会自动为你生成唯一的 Webhook 回调链接，你可以在日志中或者 WebUI 的机器人页的卡片上找到，将该链接填入 `URL` 处。
+在 AstrBot `控制台` 中确认出现长连接启动/连接日志，然后在企业微信中向机器人发送消息。若无法连接，重点检查 BotID、Secret、服务器出站网络、代理和 TLS 检查，而不是检查入站端口。
 
-   ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
+## 方式二：Webhook 回调
 
-   - 如果没有开启 `统一 Webhook 模式`，填写 `http://IP:port/webhook/wecom-ai-bot`，其中 `IP` 替换为你的 AstrBot 服务器的公网 IP 地址，`port` 替换为上一步填写的端口号。
+只有明确需要回调方式时才使用本节。
 
-> 建议有能力的用户自行配置域名和反向代理，将请求转发到 AstrBot 所在服务器的 `6185` 端口（如果开启了统一 Webhook 模式）或配置指定的端口（如果没有开启统一 Webhook 模式），并使用 HTTPS 协议。如果没有域名，也可以使用 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/)。
+### 1. 准备公网回调入口
 
-4. 点击 `创建` 按钮，如果一切无误，将进入智能机器人详情页面。如果报错 `服务没有正确响应，请确认后重试`，请检查 AstrBot 的配置、服务器防火墙端口放行规则等。
+1. 为 AstrBot 准备公网可达的 HTTPS 域名。
+2. 将反向代理转发到 AstrBot WebUI 端口 `6185`。
+3. 在 WebUI 的 `设置` -> `常规` 中填写 `对外可达的回调接口地址`，例如 `https://astrbot.example.com`。
 
-![创建智能机器人详情页面](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-3.png)
+如果 AstrBot 运行在 Docker 或 Kubernetes 中，还必须让 WebUI 监听容器/Pod 网络接口；参见对应部署文档。不要只发布端口而保留 `127.0.0.1` 监听。
 
-5. [可选，推荐] 配置企业微信消息推送 Webhook URL。默认情况下，企业微信智能机器人只能在用户主动发送消息时被动回复消息。如果希望实现机器人主动消息推送功能，可以配置企业微信的消息推送 Webhook URL。只需要在企业微信内部群中，点击群设置 - 消息推送，创建一个推送机器人，然后将下方生成的 Webhook URL 填入配置中即可。企业微信智能机器人本身只支持图片和文本消息类型；如果配置了该选项，在发送其他类型消息（如视频、音频、文件）时，AstrBot 将调用消息推送接口发送消息。**强烈建议配置该选项以获得更完整的消息类型支持。**
+### 2. 配置企业微信和 AstrBot
 
-6. [可选，推荐] 企业微信智能机器人只支持对用户的一个消息回复最多一个消息气泡。如果您希望机器人发送更复杂的消息（例如连续发送多条消息、包含图片或文件的消息等），您可打开 「仅使用 Webhook 发送消息」。这将仅使用 Webhook 方式发送消息，绕过企业微信智能机器人的回复限制。**如果您不需要类似企业微信智能机器人那样的打字机效果，强烈建议您打开此选项。**此选项需要您配置第 5 步中的消息推送 Webhook URL。
+1. 在企业微信管理后台创建 API 模式智能机器人，选择 Webhook/回调连接方式，并生成 Token 和 EncodingAESKey。
+2. 在 AstrBot 创建 `企业微信智能机器人`，将连接模式改为 `webhook`。
+3. 填写机器人名称、`wecomaibot_token` 和 `wecomaibot_encoding_aes_key`，并保持 `unified_webhook_mode` 开启。
+4. 保存后，从 AstrBot 日志或 WebUI 机器人卡片复制为该实例生成的唯一回调 URL。
+5. 将该 URL 填入企业微信机器人的回调地址并完成验证。
 
-## 使用智能机器人
+![统一 Webhook 回调地址](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-### 将机器人添加到群聊
+统一 Webhook 模式复用 AstrBot 的 `6185` 端口，不需要单独开放 `6198`。
 
-在企业微信客户端的企业内部群中，点击添加成员，点击智能机器人，找到刚刚创建的智能机器人，点击添加即可。
+如果关闭统一 Webhook，适配器才会启动独立服务器，路径为 `/webhook/wecom-ai-bot`，默认端口为 `6198`，默认监听地址为 `127.0.0.1`。远程回调时还必须把 `callback_server_host` 改为 `0.0.0.0` 或指定可达接口，并单独保护、转发该端口；通常不建议这样部署。
 
-![点击添加成员](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-4.png)
+## 可选：配置消息推送 Webhook
 
-![添加成功](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-5.png)
+企业微信智能机器人的直接回复能力受消息类型和回复窗口限制。若需要图片、语音、视频、文件、连续多条消息或主动推送：
 
-### 使用机器人
+1. 在企业微信内部群的群设置中创建“消息推送”机器人。
+2. 将生成的 URL 填入 AstrBot 的 `msg_push_webhook_url`。
+3. 如果希望所有回复都经该地址发送，启用 `only_use_webhook_url_to_send`。
 
-在单聊或群聊中，直接发送消息即可与机器人进行对话。
+该 URL 包含敏感 key，不要写入日志、截图或公开配置。它可以同时配合长连接和入站 Webhook 模式使用。
 
-如果您需要类似实时打字机的效果，请确保在 AstrBot 中开启了 `流式回复` 功能。
+## 使用机器人
 
-![流式回复](https://files.astrbot.app/docs/source/images/wecom_ai_bot/image-6.png)
-
-## 帮助与支持
-
-如您在配置或使用过程中遇到问题，或需要其他企业支持服务，可发送邮件至 [community@astrbot.app](mailto:community@astrbot.app)。
+在企业微信内部群中通过 `添加成员` -> `智能机器人` 添加已创建的机器人，也可以直接进入单聊。需要打字机效果时，请在 AstrBot 中启用流式回复。

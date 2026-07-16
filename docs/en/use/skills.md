@@ -53,7 +53,7 @@ Skills serve as operation manuals for Agents and often include executable Python
 Currently, AstrBot provides two execution environments:
 
 - Local — The Agent runs in your AstrBot runtime environment. **Use with caution: this allows the Agent to execute arbitrary code in your environment, which may pose security risks.**
-- Sandbox — The Agent runs inside an isolated sandbox environment. **You must enable AstrBot sandbox mode first.** See: /use/astrbot-agent-sandbox. If sandbox mode is not enabled, Skills will not be passed to the Agent.
+- Sandbox — The Agent runs inside an isolated sandbox environment. **You must enable AstrBot sandbox mode first.** See [Agent Sandbox Environment](/en/use/astrbot-agent-sandbox). If sandbox mode is not enabled, Skills will not be passed to the Agent.
 
 You can select the default execution environment on the `Config` page under "Computer Use".
 

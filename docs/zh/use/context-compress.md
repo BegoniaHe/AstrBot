@@ -1,40 +1,54 @@
 # 上下文压缩
 
-AstrBot 内置了自动上下文压缩功能。
+AstrBot 会在本地 Agent Runner 的上下文接近模型窗口上限时自动整理历史消息，避免请求因为上下文过长而失败。默认策略是使用 LLM 总结较早的历史，并原样保留最近的对话。
 
-![alt text](https://files.astrbot.app/docs/source/images/context-compress/image.png)
+![上下文压缩设置](https://files.astrbot.app/docs/source/images/context-compress/image.png)
 
-AstrBot 会在对话上下文达到**使用的对话模型上下文窗口的最大长度的 82% 时**，自动对上下文进行压缩，以确保在不丢失关键信息的情况下，尽可能多地保留对话内容。
+## 什么时候触发
 
-## 压缩策略
+每个 Agent step 在请求模型前都会检查上下文；这也包括工具执行完成后进入下一次模型调用的步骤。估算的上下文 token 数超过模型窗口的 **82%** 时才会触发压缩。
 
-目前有两种压缩策略
+窗口大小按以下顺序确定：
 
-1. 按照对话轮数截断。这种策略会简单地删除最早的对话内容，直到上下文长度符合要求。您可以指定一次性丢弃的对话轮数，默认为 1 轮。这种策略为**默认策略**。
-2. 由 LLM 压缩上下文。这种策略会调用您指定的模型本身来总结和压缩对话内容，从而保留更多的关键信息。您可以指定压缩时使用的对话模型，如果不选择，将会自动回退到 “按照对话轮数截断” 策略。您可以设置压缩时保留最近对话轮数，默认为 4。您还可以自定义压缩时的提示词。默认提示词为：
+1. 使用模型配置中的 `max_context_tokens`。
+2. 如果该值未设置或不大于 0，尝试从内置模型元数据获取。
+3. 如果仍无法识别，使用 `provider_settings.fallback_max_context_tokens`，默认值为 `128000`。
 
-```text
-Based on our full conversation history, produce a concise summary of key takeaways and/or project progress.
-1. Systematically cover all core topics discussed and the final conclusion/outcome for each; clearly highlight the latest primary focus.
-2. If any tools were used, summarize tool usage (total call count) and extract the most valuable insights from tool outputs.
-3. If there was an initial user goal, state it first and describe the current progress/status.
-4. Write the summary in the user's language.
-```
+因此，自定义模型 ID 或代理服务使用的模型名无法被自动识别时，最好在模型配置中填写准确的 `max_context_tokens`。过大的值可能导致请求先被服务商拒绝，过小的值则会过早压缩。
 
-在压缩一轮之后，AstrBot 会二次检查当前上下文长度是否符合要求。如果仍然不符合要求，则会采用对半砍策略，即将当前上下文内容砍掉一半，直到符合要求为止。
+![模型上下文窗口设置](https://files.astrbot.app/docs/source/images/context-compress/image1.png)
 
-- AstrBot 会在每次对话请求前调用压缩器进行检查。
-- 当前版本下 AstrBot 不会在工具调用过程中进行上下文压缩，未来我们会支持这一功能，敬请期待。
+## 两种策略
 
-## ‼️ 重要：模型上下文窗口设置
+在配置档的 Provider 设置中，通过 `context_limit_reached_strategy` 选择策略。
 
-默认情况下，当您添加模型时，AstrBot 会自动根据模型的 id，从 [MODELS.DEV](https://models.dev/) 提供的接口中获取模型的上下文窗口大小。但由于模型种类繁多，部分提供商甚至会修改模型的 id，因此 AstrBot 不能自动推断出您所添加的模型的上下文窗口大小。
+### `llm_compress`：LLM 摘要（默认）
 
-您可以手动在模型配置中设置模型的上下文窗口大小，参考下图：
+AstrBot 把较早的完整对话轮次交给压缩模型生成摘要，再把摘要与最近的原始轮次组合成新的上下文。
 
-![alt text](https://files.astrbot.app/docs/source/images/context-compress/image1.png)
+- `llm_compress_provider_id`：指定用于摘要的聊天模型。留空时使用当前会话正在使用的模型。
+- `llm_compress_keep_recent_ratio`：按压缩前 token 数计算、原样保留最近上下文的比例，默认 `0.15`。该值会限制在 `0` 到 `0.3` 之间，并按完整对话轮次保留；不会从轮次中间截断。最新的活动用户请求也会尽量原样保留。
+- `llm_compress_instruction`：自定义摘要指令。
 
-> [!NOTE]
-> 如果没有看到上图中的配置项，请您删除该模型，然后重新添加模型即可。
+默认指令要求摘要覆盖：
 
-当模型上下文窗口大小被设置为 0 时，在每次请求时，AstrBot 仍会自动从 MODELS.DEV 获取模型的上下文窗口大小。如果仍为 0，则这次请求不会启用上下文压缩功能。
+1. 所有核心主题、结论和当前主要焦点；
+2. 工具调用次数及最有价值的工具输出；
+3. 已读取且后续仍可能使用的文件、文档、代码和路径；
+4. 用户的初始目标以及当前进度；
+5. 使用用户的语言输出，并在任务仍进行时给出最新结果和下一步。
+
+如果指定的压缩模型不可用，AstrBot 会尝试当前会话模型；如果没有可用模型，则使用按轮次截断。摘要调用失败或摘要后仍超过阈值时，运行时还会执行截断保护，确保后续模型请求不会持续携带过大的上下文。
+
+### `truncate_by_turns`：按轮次截断
+
+此策略不额外调用 LLM，而是从最早的完整对话轮次开始移除。`dequeue_context_length` 控制每次至少丢弃多少轮，默认值为 `1`。它速度快且没有额外模型费用，但早期细节会直接丢失。
+
+## 最大对话轮数
+
+`max_context_length` 是独立于 token 阈值的轮数限制：
+
+- `-1`：不按轮数强制限制，这是默认值；
+- 正整数：在 token 压缩前先只保留最近的对应轮数。
+
+如果同时设置轮数限制和 token 压缩，轮数限制会先执行。对长时间运行、工具输出较多的任务，通常建议保持 `llm_compress`，并为模型填写准确的上下文窗口；只有在希望完全避免摘要调用时才改用按轮次截断。

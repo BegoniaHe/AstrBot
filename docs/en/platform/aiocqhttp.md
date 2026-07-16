@@ -1,65 +1,80 @@
-# Connect OneBot v11 Protocol Implementations
+# Connect a OneBot v11 Implementation
+
+AstrBot's `OneBot v11` (`aiocqhttp`) platform uses a **reverse WebSocket**: AstrBot starts the WebSocket server, and the OneBot implementation connects to it as a client.
 
 > [!TIP]
-> If you are using AstrBot's built-in standalone `napcat` platform, see [NapCat](/en/platform/napcat) first.
+> For NapCat, prefer AstrBot's dedicated [NapCat](/en/platform/napcat) platform. It uses a forward AstrBot -> NapCat WebSocket and exposes clearer configuration and connection state. This page is for implementations that specifically need the generic OneBot v11 reverse WebSocket.
 
-OneBot is a standardized bot application interface designed to unify bot development across different chat platforms, so developers can write business logic once and use it on multiple platforms.
+Common OneBot v11 implementations include:
 
-AstrBot supports all client implementations that implement OneBot v11 reverse WebSocket (AstrBot acts as the server).
+- [NapCat](https://github.com/NapNeko/NapCatQQ) for QQ
+- [OneDisc](https://github.com/ITCraftDevelopmentTeam/OneDisc) for Discord
+- [Tele-KiraLink](https://github.com/Echomirix/Tele-KiraLink) for Telegram
 
-Common OneBot v11 implementation projects are listed below:
+## 1. Create the Platform in AstrBot
 
-- [NapCat](https://github.com/NapNeko/NapCatQQ)
-- [OneDisc](https://github.com/ITCraftDevelopmentTeam/OneDisc)
-- [Tele-KiraLink](https://github.com/Echomirix/Tele-KiraLink)
+1. Open the AstrBot WebUI and go to `Bots`.
+2. Click `+ Create Bot` and select `OneBot v11`.
+3. Fill in the configuration and save it.
 
-Please refer to each implementation project's deployment documentation.
+Important fields:
 
-## 1. Configure OneBot v11
+- `id`: unique platform instance ID.
+- `enable`: enables the platform.
+- `ws_reverse_host`: the **local bind address** of AstrBot's WebSocket server; default `127.0.0.1`.
+- `ws_reverse_port`: listener port; default `6199`.
+- `ws_reverse_token`: reverse WebSocket authentication token. Configure one and use the same value in the OneBot implementation.
 
-1. Open AstrBot's WebUI
-2. Click `Bots` in the left sidebar
-3. In the right panel, click `+ Create Bot`
-4. Select `OneBot v11`
+### Understand `ws_reverse_host`
 
-Fill in the form:
+`ws_reverse_host` is not the destination entered in the OneBot client:
 
-- ID (`id`): any value, used only to distinguish instances of different platforms.
-- Enable (`enable`): check it.
-- Reverse WebSocket host: fill your machine IP, usually `0.0.0.0`.
-- Reverse WebSocket port: choose any port, default is `6199`.
-- Reverse WebSocket token: fill this only when the implementation-side network configuration has a token set.
+- Keep `127.0.0.1` when AstrBot and the OneBot implementation run on the same host.
+- Only bind a reachable interface when the client runs in another container, Pod, or host. This is commonly `0.0.0.0`, or a specific interface address.
+- `0.0.0.0` is a wildcard bind address and is never a valid client destination.
 
-Click `Save`.
+> [!CAUTION]
+> After binding `0.0.0.0`, restrict source access with a firewall or container/cluster network policy and configure `ws_reverse_token`. Never expose an unauthenticated OneBot WebSocket directly to the public internet.
 
-## 2. Configure the protocol implementation side
+## 2. Configure the OneBot Implementation
 
-Please refer to each protocol implementation project's deployment documentation.
+Create a reverse WebSocket client in the OneBot implementation. Its target path is:
 
-Notes:
+```text
+ws://<reachable-AstrBot-address>:6199/ws
+```
 
-1. The implementation must support `Reverse WebSocket`, with AstrBot acting as the server and the implementation client as the client.
-2. The reverse WebSocket URL is `ws(s)://<your-host>:6199/ws`.
+Common examples:
+
+- same host: `ws://127.0.0.1:6199/ws`
+- same Docker network, with AstrBot service name `astrbot`: `ws://astrbot:6199/ws`
+- different host: `ws://<AstrBot-host-IP-or-domain>:6199/ws`
+
+Across an untrusted network, use a protected private network or a TLS reverse proxy with `wss://`; do not rely on an open port alone. The client token must match `ws_reverse_token`.
 
 ## 3. Verify
 
-Go to AstrBot WebUI `Console`. If a blue log appears saying `aiocqhttp(OneBot v11) adapter connected.`, the connection is successful.
-If after a few seconds you see `aiocqhttp adapter has been closed`, it means the connection timed out (failed). Please double-check your configuration.
+Open `Console` in the AstrBot WebUI. This log indicates a successful connection:
 
-## Appendix: Deploy NapCat with Docker Compose
-
-If you want a repo-managed AstrBot + NapCat setup, use the `compose-with-napcat.yml` file shipped at this repository root:
-
-```bash
-git clone https://github.com/Xero-Team/AstrBot.git
-cd AstrBot
-NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose -f compose-with-napcat.yml up -d --build
+```text
+aiocqhttp(OneBot v11) 适配器已连接。
 ```
 
-After the containers are up, create a WebSocket client in NapCat WebUI and point it to:
+If it does not appear, check that:
+
+- the OneBot implementation enabled a **reverse** WebSocket client;
+- its target is reachable from its own network and is not incorrectly set to `0.0.0.0`;
+- AstrBot is bound to the correct interface and the container port or firewall permits the connection;
+- the tokens match.
+
+## NapCat and the Repository Compose Stack
+
+The root `compose-with-napcat.yml` currently sets NapCat `MODE=astrbot`. On every startup, NapCat writes a reverse WebSocket client that targets:
 
 ```text
 ws://astrbot:6199/ws
 ```
 
-If AstrBot and NapCat are deployed separately, use `ws://<host-ip>:6199/ws` instead.
+If you keep this mode, create `OneBot v11` in AstrBot and set `ws_reverse_host` to `0.0.0.0` and port `6199`. The containers share an internal network, so port `6199` does not need to be published to the host. NapCat's `MODE` template rewrites its configuration on every startup and has an empty token by default; follow [Docker Deployment](/en/deploy/astrbot/docker) to remove the template mode before persisting a token.
+
+To use the recommended dedicated `NapCat` platform instead, change `MODE=astrbot` to `MODE=ws` in the Compose file. Then create `NapCat` and set `ws_url` to `ws://napcat:3001`. Use only one connection method for a given NapCat instance.

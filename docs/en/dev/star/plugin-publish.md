@@ -1,13 +1,21 @@
-# Publishing Plugins to the Plugin Marketplace
+# Publishing Plugins to the Upstream-Compatible Marketplace
 
-After completing your plugin development, you can choose to publish it to the AstrBot Plugin Marketplace, allowing more users to benefit from your work.
+> [!IMPORTANT]
+> This modernized fork does not currently operate an independent official plugin
+> marketplace under Xero-Team. The Dashboard's default registry still connects to
+> upstream AstrBot services so that existing browse, install, and update flows keep
+> working. This page describes submission to the **upstream marketplace** maintained
+> by AstrBotDevs. It is not an official publication channel operated by this fork,
+> and submission does not imply review, endorsement, or support by this fork.
 
-AstrBot uses GitHub to host plugins, so you'll need to push your plugin code to the GitHub plugin repository you created earlier.
+After completing your plugin development, you may publish it to the upstream AstrBot Plugin Marketplace so that it is available to users of the upstream community.
 
-You can submit your plugin by visiting the [AstrBot Plugin Marketplace](https://plugins.astrbot.app). Once on the website, click the `+` button in the bottom-right corner, fill in the basic information, author details, repository information, and other required fields. Then click the `Submit to GITHUB` button.
+The upstream marketplace uses GitHub to host plugins, so you'll need to push your plugin code to the GitHub plugin repository you created earlier.
+
+You can submit your plugin by visiting the [upstream AstrBot Plugin Marketplace](https://plugins.astrbot.app). Once on the website, click the `+` button in the bottom-right corner, fill in the basic information, author details, repository information, and other required fields. Then click the `Submit to GITHUB` button. The site and its review process are managed by the upstream maintainers.
 
 > [!WARNING]
-> **Main repository Issue submission is deprecated**: The previous method of submitting plugins via Issues in the AstrBot main repository is no longer used. Please submit your plugin at the **[AstrBot_Plugins_Collection](https://github.com/AstrBotDevs/AstrBot_Plugins_Collection)** repository.
+> **Upstream main-repository Issue submission is deprecated**: The previous method of submitting plugins via Issues in the upstream AstrBot repository is no longer used. Submit upstream marketplace entries through the **[AstrBot_Plugins_Collection](https://github.com/AstrBotDevs/AstrBot_Plugins_Collection)** repository instead.
 
 You will be redirected to the AstrBot_Plugins_Collection repository's Issue submission page. Please verify that all information is correct, then click the `Create` button to complete the plugin publication process.
 
@@ -22,4 +30,4 @@ You will be redirected to the AstrBot_Plugins_Collection repository's Issue subm
 > - **Optimize dependency size**: If your plugin depends on large libraries, consider trimming them down or importing only what is needed.
 > - **Use `.gitattributes` or a release branch**: Reduce the zip package size by including only the files necessary for distribution.
 >
-> If your plugin truly cannot be compressed to under 16MB due to business requirements, please contact the maintainer to manually bypass this limit.
+> If your plugin cannot be compressed below 16MB, contact the upstream marketplace maintainers to ask whether an exception is possible. This fork's maintainers cannot review the submission or bypass that limit.

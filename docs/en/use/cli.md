@@ -1,169 +1,132 @@
 # CLI Commands
 
-The AstrBot CLI initializes instances, starts AstrBot, updates common config values, and manages plugins.
+The AstrBot CLI initializes runtime roots, starts AstrBot, updates common settings, and manages plugins. This fork does not publish an independent PyPI package, so this page assumes you completed the [source deployment](/en/deploy/astrbot/cli), ran `uv sync`, and execute commands from the repository root.
 
-If you install AstrBot with `uv`:
-
-```bash
-uv tool install astrbot --python 3.14
-```
-
-`uv` creates the `astrbot` executable and puts it on `PATH`. You can inspect the path with:
-
-::: code-group
-
-```bash [Linux / macOS]
-which astrbot
-```
-
-```powershell [Windows]
-where.exe astrbot
-```
-
-:::
-
-> [!TIP]
-> Run the commands below from the AstrBot working directory.
-
-## Quick Start
-
-Initialize the directory once, then start AstrBot:
+Tables below use `astrbot` as the command name. In a source checkout, use the complete prefix:
 
 ```bash
-astrbot init
-astrbot run
+uv run astrbot --help
 ```
-
-`astrbot init` creates the data directories and configuration files required by AstrBot. After initialization, use `astrbot run` for later starts.
 
 ## Top-Level Commands
 
-| Command             | Purpose                                                           |
-| ------------------- | ----------------------------------------------------------------- |
-| `astrbot init`      | Initialize the current directory as an AstrBot working directory. |
-| `astrbot run`       | Start AstrBot in the foreground.                                  |
-| `astrbot conf`      | Read or update common config values.                              |
-| `astrbot password`  | Change the WebUI login password interactively.                    |
-| `astrbot plug`      | Create, install, update, remove, or search plugins.               |
-| `astrbot help`      | Show CLI help.                                                    |
-| `astrbot --version` | Show the AstrBot CLI version.                                     |
+| Command                   | Purpose                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| `astrbot init`            | Initialize the current directory as a CLI runtime root.        |
+| `astrbot run`             | Start AstrBot in the foreground.                               |
+| `astrbot install-browser` | Install Playwright Chromium for local text-to-image rendering. |
+| `astrbot conf`            | Read or update common config values.                           |
+| `astrbot password`        | Change the WebUI login password interactively.                 |
+| `astrbot plug`            | Create, install, update, remove, or search plugins.            |
+| `astrbot help`            | Show CLI help.                                                 |
+| `astrbot --version`       | Show the CLI version.                                          |
 
-## Start AstrBot
+## Initialize and Start
+
+For the first CLI-mode run:
 
 ```bash
-astrbot run
+uv run astrbot init
+uv run astrbot run
 ```
 
-Common options:
+`init` creates the `.astrbot` marker and `data/` subdirectories, then checks Dashboard assets. The direct source entry point, `uv run main.py`, does not require this marker.
 
-| Option              | Purpose                                                                                 |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| `-p, --port <PORT>` | Set the WebUI port.                                                                     |
-| `-r, --reload`      | Enable plugin auto-reload for plugin development.                                       |
-| `--reset-password`  | Reset the WebUI initial password on startup and print the new password in startup logs. |
+Common `run` options:
 
-Examples:
+| Option              | Purpose                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| `-p, --port <PORT>` | Temporarily override the WebUI port.                       |
+| `-r, --reload`      | Enable plugin auto-reload.                                 |
+| `--reset-password`  | Reset the random initial password and print it at startup. |
 
 ```bash
-astrbot run --port 6185
-astrbot run --reload
-astrbot run --reset-password
+uv run astrbot run --port 6185
+uv run astrbot run --reload
+uv run astrbot run --reset-password
 ```
 
-If you forget the WebUI login password, run this from the AstrBot working directory:
+The CLI has no remote-bind shortcut. Remote access still requires `dashboard.host` or `ASTRBOT_DASHBOARD_HOST`; see [WebUI](/en/use/webui).
+
+The source entry point also supports password reset:
 
 ```bash
-astrbot run --reset-password
+uv run main.py --reset-password
 ```
 
-AstrBot regenerates the initial password during startup and prints it in startup logs. After logging in, change the password in the WebUI immediately.
+## Local T2I Browser
 
-When starting directly from source, you can also run:
+Run this once before enabling T2I or plugin HTML rendering:
 
 ```bash
-python main.py --reset-password
+uv run astrbot install-browser
 ```
 
-## Config
+The command asks Playwright in the current Python environment to install Chromium. It does not start AstrBot.
 
-`astrbot conf` reads and updates common config values.
+## Configuration
 
 ```bash
-astrbot conf get
-astrbot conf get dashboard.port
-astrbot conf set dashboard.port 6185
+uv run astrbot conf get
+uv run astrbot conf get dashboard.port
+uv run astrbot conf set dashboard.port 6185
 ```
 
-Supported keys:
+Supported common keys include `timezone`, `log_level`, `dashboard.port`, `dashboard.username`, `dashboard.password`, and `callback_api_base`. Password updates write the current password hashes; do not generate an MD5 value manually.
 
-| Key                  | Description                                                     |
-| -------------------- | --------------------------------------------------------------- |
-| `timezone`           | Time zone, for example `Asia/Shanghai`.                         |
-| `log_level`          | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.  |
-| `dashboard.port`     | WebUI port.                                                     |
-| `dashboard.username` | WebUI username.                                                 |
-| `dashboard.password` | WebUI password.                                                 |
-| `callback_api_base`  | Callback API base URL. Must start with `http://` or `https://`. |
-
-Changing the dashboard password writes the current password hashes automatically:
+The dedicated interactive command is also available:
 
 ```bash
-astrbot conf set dashboard.password "new-password"
-```
-
-You can also use the dedicated interactive password command:
-
-```bash
-astrbot password
-astrbot password --username admin
+uv run astrbot password
+uv run astrbot password --username admin
 ```
 
 ## Plugins
 
-`astrbot plug` manages plugins under `data/plugins`.
-
-| Command                       | Purpose                                                          |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `astrbot plug list`           | List installed plugins.                                          |
-| `astrbot plug list --all`     | Also show uninstalled plugins.                                   |
-| `astrbot plug search <QUERY>` | Search plugins.                                                  |
-| `astrbot plug install <NAME>` | Install a plugin.                                                |
-| `astrbot plug update [NAME]`  | Update one plugin, or all updatable plugins if no name is given. |
-| `astrbot plug remove <NAME>`  | Remove an installed plugin.                                      |
-| `astrbot plug new <NAME>`     | Create a new plugin from the template.                           |
-
-Use a GitHub proxy when installing or updating plugins:
-
 ```bash
-astrbot plug install example-plugin --proxy https://gh-proxy.example.com/
-astrbot plug update --proxy https://gh-proxy.example.com/
+uv run astrbot plug list
+uv run astrbot plug list --all
+uv run astrbot plug search <QUERY>
+uv run astrbot plug install <MARKET_NAME>
+uv run astrbot plug update [NAME]
+uv run astrbot plug remove <NAME>
+uv run astrbot plug new <NAME>
 ```
 
-Creating a new plugin asks for the author, description, version, and repository URL:
+### Install from a Local Directory
+
+Since v4.26.3, the CLI can copy a local plugin directory directly:
 
 ```bash
-astrbot plug new my-plugin
+uv run astrbot plug install ../my-plugin
+```
+
+The directory must contain `metadata.yaml`; its `name` must be a valid single-directory name, and `data/plugins/<name>` must not already exist.
+
+For development, editable mode creates a directory link so source changes are visible immediately:
+
+```bash
+uv run astrbot plug install --editable ../my-plugin
+# Short form
+uv run astrbot plug install -e ../my-plugin
+```
+
+Editable mode depends on operating-system symlink support and permissions. Do not treat the link as a complete plugin copy when publishing or moving an instance.
+
+### Proxy
+
+Marketplace installs and updates accept a GitHub proxy:
+
+```bash
+uv run astrbot plug install example-plugin --proxy https://gh-proxy.example.com/
+uv run astrbot plug update --proxy https://gh-proxy.example.com/
 ```
 
 ## Help
 
-Show general CLI help:
-
 ```bash
-astrbot help
-```
-
-Show help for a specific command:
-
-```bash
-astrbot help run
-astrbot run --help
-astrbot help conf
-astrbot plug --help
-```
-
-Show the version:
-
-```bash
-astrbot --version
+uv run astrbot help
+uv run astrbot help run
+uv run astrbot plug --help
+uv run astrbot --version
 ```

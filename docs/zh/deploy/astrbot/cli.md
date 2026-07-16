@@ -1,93 +1,110 @@
-# 通过源码部署 AstrBot
+# 从源码部署 AstrBot
 
-> [!WARNING]
-> 你正在直接通过源码来部署本项目，该教程需要您具有一定的技术基础。
->
-> 以下教程默认您的设备上已经安装 Python，并且版本为 `3.14+`
+> [!IMPORTANT]
+> 当前 fork 不发布独立 PyPI 包或预构建 Dashboard Release。要运行与本仓库一致的后端和 WebUI，需要从当前 checkout 安装依赖并本地构建 Dashboard。
 
-## 下载/克隆仓库
+## 前置条件
 
-如果你的电脑上安装了 `git`，你可以通过以下命令来下载源码：
+- Git
+- `uv`
+- Node.js 24.15.0
+- Corepack
+
+Python 包要求为 3.14+；仓库的 `.python-version` 固定为 3.14.6，`uv` 可以在本机缺少该版本时按配置自动下载。
+
+## 克隆仓库
 
 ```bash
 git clone https://github.com/Xero-Team/AstrBot.git
-# 上面的代码默认会拉取最新的提交的源码，如果你需要拉取最新稳定发行版本的源码，可以使用以下命令：
-# git clone --depth=1 --branch $(git ls-remote --tags --sort='-v:refname' https://github.com/Xero-Team/AstrBot.git | head -n1 | awk -F/ '{print $3}') https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 
-如果你没有安装 `git`，请先下载安装。
+默认分支跟踪当前开发状态。部署前请先阅读最新 `changelogs/`，并自行选择要固定的 commit；当前 fork 尚未建立可依赖的发布 tag 序列。
 
-或者，直接从 GitHub 上下载源码解压：
-
-![image](https://files.astrbot.app/docs/source/images/cli/image.png)
-
-## 安装依赖并运行
-
-::: details 【🥳推荐】使用 `uv` 管理依赖
-
-> 如果没安装 `uv`，请参考 [Installing uv](https://docs.astral.sh/uv/getting-started/installation/) 安装。
-
-2. 在终端执行(AstrBot 目录下)
+## 安装后端依赖
 
 ```bash
-uv sync
-uv run astrbot install-browser # 仅在使用本地文转图时需要执行一次
+uv sync --locked
+```
+
+`--locked` 会拒绝在安装时静默改写 `uv.lock`，确保使用仓库已经审核的依赖解析结果。
+
+## 构建当前 Dashboard
+
+```bash
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
+
+不要跳过这一步并依赖自动下载的上游 Dashboard；上游静态资源不保证与当前 fork 的 FastAPI 路由和前端功能一致。
+
+## 可选：安装本地文转图浏览器
+
+只有启用本地文转图或插件 HTML 渲染时才需要执行一次：
+
+```bash
+uv run astrbot install-browser
+```
+
+## 启动
+
+```bash
 uv run main.py
 ```
 
-如果环境已经同步完成，后续只想快速重启，可使用：
+依赖已同步后，可以用下面的命令跳过每次启动前的依赖检查：
 
 ```bash
 uv run --no-sync main.py
 ```
 
-:::
+首次启动会创建 `data/`、生成随机 WebUI 初始密码，并在日志中打印登录信息。默认用户名为 `astrbot`，WebUI 仅监听 `127.0.0.1:6185`。
 
-::: details Python 内置 venv 安装依赖
+## 远程访问
 
-在 AstrBot 源码目录下，使用终端运行以下命令：
+只把浏览器地址中的 `localhost` 换成服务器 IP 并不会开放服务。默认 loopback 监听是安全措施；需要远程访问时，必须显式修改 `data/cmd_config.json`：
 
-> 如果是 Windows，直接下载源码解压的，请打开解压的文件夹，在地址栏输入：
-> ![image](https://files.astrbot.app/docs/source/images/cli/image-1.png)
-
-```bash
-python -m venv .venv
+```json
+{
+  "dashboard": {
+    "host": "0.0.0.0",
+    "port": 6185
+  }
+}
 ```
 
-以上步骤会创建一个虚拟环境并激活（以免打乱您设备本地的 Python 环境）。
+也可以在启动进程时临时覆盖：
 
-接下来，通过以下命令安装依赖文件，这可能需要花费一些时间：
+::: code-group
 
-Mac/Linux/WSL 执行：
-
-```bash
-source .venv/bin/activate
-python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-python -m playwright install chromium # 仅在使用本地文转图时需要执行一次
-python main.py
+```bash [Linux / macOS]
+ASTRBOT_DASHBOARD_HOST=0.0.0.0 uv run main.py
 ```
 
-Windows 执行:
-
-```bash
-.venv\Scripts\activate
-python -m pip install -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-python -m playwright install chromium # 仅在使用本地文转图时需要执行一次
-python main.py
+```powershell [Windows PowerShell]
+$env:ASTRBOT_DASHBOARD_HOST = '0.0.0.0'
+uv run main.py
 ```
 
 :::
 
-## 🎉 大功告成
+`0.0.0.0` 会监听所有 IPv4 网卡。请同时配置主机防火墙，并优先通过带 HTTPS 的可信反向代理对外提供服务。只有当前置代理会覆盖客户端提交的 `X-Forwarded-For`/`X-Real-IP` 时，才开启 `dashboard.trust_proxy_headers`。
 
-如果一切顺利，你会看到 AstrBot 打印出的日志。
+## 更新 checkout
 
-如果没有报错，AstrBot 会在启动日志中打印 WebUI 地址和初始登录凭据。默认情况下，WebUI 地址是 `http://localhost:6185`。
+先停止 AstrBot，再执行：
 
-> [!TIP]
-> 如果你正在服务器上部署 AstrBot，需要将 `localhost` 替换为你的服务器 IP 地址。
->
-> 首次登录请使用启动日志中打印的随机初始密码（用户名通常为 `astrbot`）。登录后请立即修改密码。
+```bash
+git pull --ff-only
+uv sync --locked
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
 
-接下来，你需要部署任何一个消息平台，才能够实现在消息平台上使用 AstrBot。
+更新前备份 `data/`，并阅读跨越版本的 changelog。不要使用 `uv tool upgrade astrbot` 更新此 fork；该命令对应上游 PyPI 包。

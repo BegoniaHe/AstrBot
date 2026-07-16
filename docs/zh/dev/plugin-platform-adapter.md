@@ -2,255 +2,228 @@
 outline: deep
 ---
 
-# 开发一个平台适配器
+# 开发平台适配器
 
-AstrBot 支持以插件的形式接入平台适配器，你可以自行接入 AstrBot 没有的平台。如飞书、钉钉甚至是哔哩哔哩私信、Minecraft。
+平台适配器把外部消息平台转换成 AstrBot 的 `AstrBotMessage` / `AstrMessageEvent`，并负责把 `MessageChain` 发送回正确的会话。适配器可以由 Star 插件注册，但文档代码只能使用 `astrbot.api` 公共 SDK；如果所需类型尚未导出，应先补 SDK，而不是从 `astrbot.core` 导入。
 
-我们以一个平台 `FakePlatform` 为例展开讲解。
+## 核心契约
 
-## 内置 NapCat 说明
+一个适配器至少需要：
 
-仓库内置的 `napcat` 适配器不是纯手写实现，而是分成两层：
+1. 用 `@register_platform_adapter` 注册类型和默认配置；
+2. 继承 `Platform`，实现 `meta()`、`run()` 和实际的发送逻辑；
+3. 把收到的平台消息转换为 `AstrBotMessage`；
+4. 创建事件并通过 `commit_event()` 放入共享队列；
+5. 在 `terminate()` 中关闭长连接、HTTP client、轮询任务和临时资源；
+6. 返回父类生成的 `PlatformSendResult`，让指标和调用方知道发送结果。
 
-- `astrbot/core/platform/sources/napcat/generated/ob11_events.py` 由 NapCat 的事件类型定义自动生成。
-- `astrbot/core/platform/sources/napcat/forward_ws_client.py`、`napcat_platform_adapter.py`、`message_event.py` 等文件保留为手写运行时封装，用来适配 AstrBot 的消息模型、平台动作和错误处理。
+`run()` 是长生命周期协程。捕获宽泛异常时必须重新抛出 `asyncio.CancelledError`，并保证部分初始化也能安全调用 `terminate()`。
 
-如果需要更新 NapCat 的 schema，不要手改 `generated/` 下的文件，直接在仓库根目录执行：
+## 最小示例
+
+假设插件自带一个 `FakeClient`，它提供 `listen(callback)`、`send_chain(target, chain)` 和 `close()`。下面的示例只展示 AstrBot 边界；平台认证、重连、限流和 SDK 错误映射仍需由适配器实现。
+
+### 事件类型
+
+```python
+from astrbot.api.event import AstrMessageEvent, MessageChain
+
+
+class FakePlatformEvent(AstrMessageEvent):
+    def __init__(self, *args, client, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.client = client
+
+    async def send(self, message: MessageChain):
+        target = self.get_sender_id() if self.is_private_chat() else self.get_group_id()
+        await self.client.send_chain(target, message)
+        return await super().send(message)
+```
+
+平台 SDK 完成实际发送后，再调用并返回 `super().send()`。父类负责统一指标和逻辑发送结果；只调用父类不会替你向平台 SDK 发消息。
+
+### 适配器类型
+
+```python
+import asyncio
+
+from astrbot import logger
+from astrbot.api.event import MessageChain
+from astrbot.api.message_components import Plain
+from astrbot.api.platform import (
+    AstrBotMessage,
+    MessageMember,
+    MessageType,
+    Platform,
+    PlatformMetadata,
+    register_platform_adapter,
+)
+
+from .client import FakeClient
+from .fake_platform_event import FakePlatformEvent
+
+
+@register_platform_adapter(
+    "fake",
+    "Fake platform adapter",
+    default_config_tmpl={
+        "id": "fake",
+        "enable": False,
+        "token": "",
+    },
+)
+class FakePlatformAdapter(Platform):
+    def __init__(
+        self,
+        platform_config: dict,
+        platform_settings: dict,
+        event_queue: asyncio.Queue,
+    ) -> None:
+        super().__init__(platform_config, event_queue)
+        self.settings = platform_settings
+        self.client = FakeClient(token=str(platform_config.get("token", "")))
+        self.metadata = PlatformMetadata(
+            name="fake",
+            description="Fake platform adapter",
+            id=str(platform_config.get("id", "fake")),
+            adapter_display_name="Fake Platform",
+            support_streaming_message=False,
+            support_proactive_message=True,
+        )
+
+    def meta(self) -> PlatformMetadata:
+        return self.metadata
+
+    async def run(self) -> None:
+        async def on_message(data: dict) -> None:
+            try:
+                message = self.convert_message(data)
+                event = FakePlatformEvent(
+                    message_str=message.message_str,
+                    message_obj=message,
+                    platform_meta=self.meta(),
+                    session_id=message.session_id,
+                    client=self.client,
+                )
+                if not self.commit_event(event):
+                    logger.warning("Fake platform event queue is full")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Failed to convert Fake platform message")
+
+        await self.client.listen(on_message)
+
+    async def terminate(self) -> None:
+        await self.client.close()
+
+    def convert_message(self, data: dict) -> AstrBotMessage:
+        sender_id = str(data["user_id"])
+        group_id = str(data.get("group_id") or "")
+        is_group = bool(group_id)
+
+        message = AstrBotMessage()
+        message.type = (
+            MessageType.GROUP_MESSAGE if is_group else MessageType.FRIEND_MESSAGE
+        )
+        message.session_id = group_id if is_group else sender_id
+        message.group_id = group_id
+        message.message_id = str(data["message_id"])
+        message.self_id = str(data["bot_id"])
+        message.sender = MessageMember(
+            user_id=sender_id,
+            nickname=str(data.get("nickname") or sender_id),
+        )
+        message.message_str = str(data.get("content") or "")
+        message.message = [Plain(message.message_str)]
+        message.raw_message = data
+        return message
+
+    async def send_by_session(self, session, message_chain: MessageChain):
+        await self.client.send_chain(session.session_id, message_chain)
+        return await super().send_by_session(session, message_chain)
+```
+
+### 会话路由不能使用发送者 ID 代替群 ID
+
+`session_id` 是回复和主动消息的目标：
+
+- 私聊使用发送者/私聊会话 ID；
+- 群聊使用群、频道或 thread ID，而不是群成员的 sender ID。
+
+事件的 `send()` 也必须使用相同路由。否则入站消息看似正常，回复却会被发成私聊或发给错误对象。如果平台需要更多不可变路由信息，应在平台事件/客户端内部保存并在发送时校验，不要依赖易变化的展示名称。
+
+`send_by_session()` 用于没有原始 event 的主动发送。实际调用 SDK 成功后必须 `return await super().send_by_session(...)`；如果失败，适配器应记录平台错误并返回/抛出可诊断的失败，而不是让父类记录一次虚假的成功。
+
+## 消息组件与媒体
+
+使用公共消息组件构造标准消息链：
+
+```python
+from astrbot.api.message_components import Image, Plain, Record, Video
+
+message.message = [
+    Plain("文本"),
+    Image.fromFileSystem("/tmp/image.png"),
+    Record(file="https://example.com/audio.ogg"),
+    Video(file="base64://..."),
+]
+```
+
+组件可保存本地路径、`file:` URI、HTTP(S) URL、`base64://` 或 Data URI。发送端需要本地文件时使用组件的 `convert_to_file_path()`，不要手写各种 URI 前缀解析。
+
+AstrBot 预处理会尽量下载和标准化图片、语音及引用消息媒体。适配器自行创建的临时文件应登记到事件：
+
+```python
+event.track_temporary_local_file(temp_path)
+```
+
+媒体格式最终仍受平台 SDK 限制。把 AstrBot 组件转换为平台消息时，应明确不支持的组件、大小限制、URL 下载策略和失败结果。
+
+## 能力元数据
+
+`PlatformMetadata` 的 `name`、`description` 和 `id` 都是必填项。`id` 通常来自平台实例配置，必须在多实例之间唯一。
+
+- 未实现原生流式协议时设置 `support_streaming_message=False`；普通分段回复不等于原生流式。
+- 只有真正实现 `send_by_session()` 时才声明 `support_proactive_message=True`。
+- 平台动作（禁言、踢人、戳一戳等）应覆写对应 `Platform` 方法；`supported_actions` 可由覆写自动推导。
+- `adapter_display_name`、`logo_path`、i18n 和配置元数据可改善 WebUI 展示，但不能代替运行时校验。
+
+## 在 Star 中加载
+
+注册装饰器只有在模块被导入后才会执行。插件入口中显式导入适配器：
+
+```python
+from astrbot.api.star import Context, Star
+
+from .fake_platform_adapter import FakePlatformAdapter  # noqa: F401
+
+
+class Main(Star):
+    def __init__(self, context: Context) -> None:
+        super().__init__(context)
+```
+
+所有 Star 和第三方适配器示例都应保持在 `astrbot.api` 边界内。
+
+## NapCat 生成模型
+
+内置 NapCat 的 `generated/ob11_events.py` 来自 schema，不要手改。更新类型定义后执行：
 
 ```bash
 make napcat-codegen
-```
-
-生成之后，可以用下面两个命令验证手写运行时封装和生成产物：
-
-```bash
 make napcat-test
 make napcat-check
 ```
 
-这个任务会完成以下步骤：
+`make napcat-check` 会重新生成模型并运行定向测试。手写的连接、事件和出站协议代码仍需普通单元测试覆盖。
 
-- 从 NapCat 类型定义生成 `OB11AllEvent` 的 JSON Schema。
-- 归一化 schema 后重新生成 Pydantic v2 模型。
-- 对生成的 Python 文件自动执行仓库内的 Ruff 修复和格式化，保证产物可以直接通过 `make check`。
-- `make napcat-test` 只运行 NapCat 相关的单元测试。
-- `make napcat-check` 会串联执行代码生成和 NapCat 定向测试。
+## 验证清单
 
-首先，在插件目录下新增 `fake_platform_adapter.py` 和 `fake_platform_event.py` 文件。前者主要是平台适配器的实现，后者是平台事件的定义。
-
-## 平台适配器
-
-假设 FakePlatform 的客户端 SDK 是这样：
-
-```py
-import asyncio
-
-class FakeClient():
-    '''模拟一个消息平台，这里 5 秒钟下发一个消息'''
-    def __init__(self, token: str, username: str):
-        self.token = token
-        self.username = username
-        # ...
-
-    async def start_polling(self):
-        while True:
-            await asyncio.sleep(5)
-            await getattr(self, 'on_message_received')({
-                'bot_id': '123',
-                'content': '新消息',
-                'username': 'zhangsan',
-                'userid': '123',
-                'message_id': 'asdhoashd',
-                'group_id': 'group123',
-            })
-
-    async def send_text(self, to: str, message: str):
-        print('发了消息:', to, message)
-
-    async def send_image(self, to: str, image_path: str):
-        print('发了消息:', to, image_path)
-```
-
-我们创建 `fake_platform_adapter.py`：
-
-```py
-import asyncio
-
-from astrbot.api.platform import Platform, AstrBotMessage, MessageMember, PlatformMetadata, MessageType
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import Plain, Image, Record # 消息链中的组件，可以根据需要导入
-from astrbot.core.platform.message_session import MessageSession
-from astrbot.api.platform import register_platform_adapter
-from astrbot import logger
-from .client import FakeClient
-from .fake_platform_event import FakePlatformEvent
-
-# 注册平台适配器。第一个参数为平台名，第二个为描述。第三个为默认配置。
-@register_platform_adapter("fake", "fake 适配器", default_config_tmpl={
-    "token": "your_token",
-    "username": "bot_username"
-})
-class FakePlatformAdapter(Platform):
-
-    def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
-        super().__init__(platform_config, event_queue)
-        self.config = platform_config # 上面的默认配置，用户填写后会传到这里
-        self.settings = platform_settings # platform_settings 平台设置。
-
-    async def send_by_session(self, session: MessageSession, message_chain: MessageChain):
-        # 必须实现
-        await super().send_by_session(session, message_chain)
-
-    def meta(self) -> PlatformMetadata:
-        # 必须实现，直接像下面一样返回即可。
-        return PlatformMetadata(
-            "fake",
-            "fake 适配器",
-        )
-
-    async def run(self):
-        # 必须实现，这里是主要逻辑。
-
-        # FakeClient 是我们自己定义的，这里只是示例。这个是其回调函数
-        async def on_received(data):
-            logger.info(data)
-            abm = await self.convert_message(data=data) # 转换成 AstrBotMessage
-            await self.handle_msg(abm)
-
-        # 初始化 FakeClient
-        self.client = FakeClient(self.config['token'], self.config['username'])
-        self.client.on_message_received = on_received
-        await self.client.start_polling() # 持续监听消息，这是个堵塞方法。
-
-    async def convert_message(self, data: dict) -> AstrBotMessage:
-        # 将平台消息转换成 AstrBotMessage
-        # 这里就体现了适配程度，不同平台的消息结构不一样，这里需要根据实际情况进行转换。
-        abm = AstrBotMessage()
-        abm.type = MessageType.GROUP_MESSAGE # 还有 friend_message，对应私聊。具体平台具体分析。重要！
-        abm.group_id = data['group_id'] # 如果是私聊，这里可以不填
-        abm.message_str = data['content'] # 纯文本消息。重要！
-        abm.sender = MessageMember(user_id=data['userid'], nickname=data['username']) # 发送者。重要！
-        abm.message = [Plain(text=data['content'])] # 消息链。如果有其他类型的消息，直接 append 即可。重要！
-        abm.raw_message = data # 原始消息。
-        abm.self_id = data['bot_id']
-        abm.session_id = data['userid'] # 会话 ID。重要！
-        abm.message_id = data['message_id'] # 消息 ID。
-
-        return abm
-
-    async def handle_msg(self, message: AstrBotMessage):
-        # 处理消息
-        message_event = FakePlatformEvent(
-            message_str=message.message_str,
-            message_obj=message,
-            platform_meta=self.meta(),
-            session_id=message.session_id,
-            client=self.client
-        )
-        self.commit_event(message_event) # 提交事件到事件队列。不要忘记！
-```
-
-`fake_platform_event.py`：
-
-```py
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.platform import AstrBotMessage, PlatformMetadata
-from astrbot.api.message_components import Plain, Image
-from .client import FakeClient
-
-class FakePlatformEvent(AstrMessageEvent):
-    def __init__(self, message_str: str, message_obj: AstrBotMessage, platform_meta: PlatformMetadata, session_id: str, client: FakeClient):
-        super().__init__(message_str, message_obj, platform_meta, session_id)
-        self.client = client
-
-    async def send(self, message: MessageChain):
-        for i in message.chain: # 遍历消息链
-            if isinstance(i, Plain): # 如果是文字类型的
-                await self.client.send_text(to=self.get_sender_id(), message=i.text)
-            elif isinstance(i, Image): # 如果是图片类型的
-                # convert_to_file_path() resolves supported media refs through
-                # the shared media utilities.
-                img_path = await i.convert_to_file_path()
-                await self.client.send_image(to=self.get_sender_id(), image_path=img_path)
-
-        await super().send(message) # 需要最后加上这一段，执行父类的 send 方法。
-```
-
-## 媒体消息处理
-
-平台适配器不需要在每个平台里重复实现媒体解析逻辑。你只需要把平台消息转换成 AstrBot 的消息组件，组件里的 `file` / `url` 可以保存以下媒体引用：
-
-- 本地路径，例如 `/tmp/a.jpg`
-- 标准 `file:` URI，例如 `file:///tmp/a.jpg`
-- HTTP(S) URL，例如 `https://example.com/a.jpg`
-- `base64://`，例如 `base64://iVBORw0KGgo...`
-- Data URI，例如 `data:image/png;base64,iVBORw0KGgo...`
-
-如果你手上已经是本地文件，推荐使用组件提供的构造方法，它会生成标准 `file:` URI：
-
-```py
-from astrbot.api.message_components import Image, Record, Video
-
-abm.message.append(Image.fromFileSystem("/tmp/image.png"))
-abm.message.append(Record.fromFileSystem("/tmp/audio.wav"))
-abm.message.append(Video.fromFileSystem("/tmp/video.mp4"))
-```
-
-如果平台只给了可访问的 URL，直接放到组件里即可：
-
-```py
-abm.message.append(Image(file=image_url, url=image_url))
-abm.message.append(Record(file=audio_url, url=audio_url))
-abm.message.append(Video(file=video_url, url=video_url))
-```
-
-进入插件和 LLM 前，AstrBot 的预处理阶段会尽量把消息链里的媒体标准化：
-
-- `Image` 会通过统一媒体处理工具落地为本地文件，并在需要时转换为 JPEG。
-- `Record` 会落地为本地文件，并在需要时转换为 WAV。
-- `Reply` 中的 `Image` / `Record` 也会做同样处理。
-- 这些由核心创建的临时文件会挂到当前事件上，在事件结束后清理。
-
-发送消息时，如果平台 SDK 需要本地文件路径，调用组件的 `convert_to_file_path()` 即可，不要手写 `path.startswith("file://")` 之类的判断：
-
-```py
-if isinstance(i, Image):
-    image_path = await i.convert_to_file_path()
-    await self.client.send_image(to=self.get_sender_id(), image_path=image_path)
-elif isinstance(i, Record):
-    audio_path = await i.convert_to_file_path()
-    await self.client.send_audio(to=self.get_sender_id(), audio_path=audio_path)
-elif isinstance(i, Video):
-    video_path = await i.convert_to_file_path()
-    await self.client.send_video(to=self.get_sender_id(), video_path=video_path)
-```
-
-如果适配器自己下载了平台媒体并写入 AstrBot 临时目录，请在创建事件后把路径登记到事件上，避免事件结束后留下临时文件：
-
-```py
-message_event.track_temporary_local_file(temp_media_path)
-```
-
-最后，main.py 只需这样，在初始化的时候导入 fake_platform_adapter 模块。装饰器会自动注册。
-
-```py
-from astrbot.api.star import Context, Star
-
-class MyPlugin(Star):
-    def __init__(self, context: Context):
-        from .fake_platform_adapter import FakePlatformAdapter # noqa
-```
-
-搞好后，运行 AstrBot：
-
-![image](https://files.astrbot.app/docs/source/images/plugin-platform-adapter/QQ_1738155926221.png)
-
-这里出现了我们创建的 fake。
-
-![image](https://files.astrbot.app/docs/source/images/plugin-platform-adapter/QQ_1738155982211.png)
-
-启动后，可以看到正常工作：
-
-![image](https://files.astrbot.app/docs/source/images/plugin-platform-adapter/QQ_1738156166893.png)
-
-有任何疑问欢迎加群询问~
+- 私聊、群聊和 thread 的 `session_id` 都能正确回复；
+- `send()` 与 `send_by_session()` 都进行真实 SDK 调用并返回逻辑发送结果；
+- 队列满、连接断开、限流、取消和关闭不会泄漏任务/client；
+- 同一适配器多实例使用不同 metadata ID；
+- 图片、音频、文件、引用和不支持组件有明确行为；
+- 声明的流式、主动消息和平台动作能力都有端到端测试；
+- 插件停用/热重载后没有重复回调或旧连接残留。

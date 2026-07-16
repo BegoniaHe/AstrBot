@@ -1,185 +1,137 @@
 # Plugin Configuration
 
-As plugin functionality grows, you may need to define configurations to allow users to customize plugin behavior.
+A Star can provide `_conf_schema.json` at its plugin root. AstrBot uses the schema to create a plugin configuration file, render a WebUI form, and inject `AstrBotConfig` when instantiating the plugin.
 
-AstrBot provides "powerful" configuration parsing and visualization features. Users can configure plugins directly in the management panel without modifying code.
+The schema must be **strict JSON**: no comments, trailing commas, or Python `True` / `False` values.
 
-## Configuration Definition
-
-To register configurations, first add a `_conf_schema.json` JSON file in your plugin directory.
-
-The file content is a `Schema` that represents the configuration. The Schema is in JSON format, for example:
+## Minimal schema
 
 ```json
 {
   "token": {
-    "description": "Bot Token",
-    "type": "string"
+    "description": "Service token",
+    "type": "string",
+    "obvious_hint": true
   },
-  "sub_config": {
-    "description": "Test nested configuration",
+  "timeout": {
+    "description": "Request timeout in seconds",
+    "type": "int",
+    "default": 30,
+    "slider": {
+      "min": 1,
+      "max": 120,
+      "step": 1
+    }
+  },
+  "advanced": {
+    "description": "Advanced settings",
     "type": "object",
-    "hint": "xxxx",
     "items": {
-      "name": {
-        "description": "testsub",
-        "type": "string",
-        "hint": "xxxx"
-      },
-      "id": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx"
-      },
-      "time": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx",
-        "default": 123
+      "enabled": {
+        "type": "bool",
+        "default": false
       }
     }
   }
 }
 ```
 
-- `type`: **Required**. The type of the configuration. Supports `string`, `text`, `int`, `float`, `bool`, `object`, `list`, `dict`, `template_list`, `file`. When the type is `text`, it will be visualized as a larger resizable textarea component to accommodate large text.
-- `description`: Optional. Description of the configuration. A one-sentence description of the configuration's behavior is recommended.
-- `hint`: Optional. Hint information for the configuration, displayed in the question mark button on the right in the image above, shown when hovering over it.
-- `obvious_hint`: Optional. Whether the configuration hint should be prominently displayed, like `token` in the image above.
-- `default`: Optional. The default value of the configuration. If the user hasn't configured it, the default value will be used. Default values: int is 0, float is 0.0, bool is False, string is "", object is {}, list is [].
-- `items`: Optional. If the configuration type is `object`, the `items` field needs to be added. The content of `items` is the sub-Schema of this configuration item. Theoretically, it can be nested infinitely, but excessive nesting is not recommended.
-- `invisible`: Optional. Whether the configuration is hidden. Default is `false`. If set to `true`, it will not be displayed in the management panel.
-- `options`: Optional. A list, such as `"options": ["chat", "agent", "workflow"]`. Provides dropdown list options.
-- `editor_mode`: Optional. Whether to enable code editor mode. Default is false.
-- `editor_language`: Optional. The code language for the code editor, defaults to `json`.
-- `editor_theme`: Optional. The theme for the code editor. Options are `vs-light` (default) and `vs-dark`.
-- `_special`: Optional. Used to call AstrBot's visualization features for provider selection, persona selection, knowledge base selection, etc. See details below.
+## Supported types
 
-### Configuration Internationalization (Optional)
+The current runtime supports:
 
-Configuration `description`, `hint`, and select `labels` can follow the WebUI language. See [Plugin Internationalization](./plugin-i18n).
+| `type`          | Default | WebUI and storage semantics                          |
+| --------------- | ------- | ---------------------------------------------------- |
+| `string`        | `""`    | Single-line string.                                  |
+| `text`          | `""`    | Multi-line text.                                     |
+| `int`           | `0`     | Integer; can use `slider`.                           |
+| `float`         | `0.0`   | Floating-point number; can use `slider`.             |
+| `bool`          | `false` | Switch.                                              |
+| `list`          | `[]`    | JSON array; `items` can describe object entries.     |
+| `file`          | `[]`    | A list of relative path strings produced by uploads. |
+| `object`        | `{}`    | Nested object and must provide `items`.              |
+| `template_list` | `[]`    | Object list built from predefined templates.         |
 
-When the code editor is enabled, it looks like this:
+`dict` is **not** a current plugin-schema type. Using `type: "dict"` raises `TypeError` while defaults are built. Use `object` with explicit `items` for a key structure. For open-ended JSON, use `text` and parse and validate it inside the plugin.
 
-![editor_mode](https://files.astrbot.app/docs/source/images/plugin/image-6.png)
+## Common metadata
 
-![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
+- `description` is the field label or concise description.
+- `hint` supplies additional help.
+- `obvious_hint` makes the hint prominent in the form.
+- `default` sets an explicit default of the same type.
+- `invisible` hides the field from the WebUI while keeping it in configuration.
+- `options` supplies a string or numeric choice list.
+- `labels` supplies display text corresponding to `options`. See [Plugin Internationalization](./plugin-i18n) for current limitations.
+- `slider` applies only to `int` / `float` and contains `min`, `max`, and `step`.
+- `editor_mode`, `editor_language`, and `editor_theme` enable a code editor for text or structured input.
+- `_special` selects a dynamic AstrBot picker.
 
-The **\_special** field can be used with values such as `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, and `select_knowledgebase`, allowing users to quickly select model providers, personas, knowledge bases, and other data already configured in the WebUI.
+Common stable `_special` values for plugins include:
 
-- `select_provider`, `select_provider_tts`, `select_provider_stt`, and `select_persona` return strings.
-- `select_knowledgebase` returns a `list` and supports multiple selection, so the corresponding config item should use `type: list` with a default value of `[]`.
+- `select_provider`, `select_provider_tts`, and `select_provider_stt`, returning a Provider ID string;
+- `select_persona`, returning a Persona ID string;
+- `select_knowledgebase`, returning a list of knowledge-base IDs, so the field should be `list`.
 
-> [!NOTE]
-> For reference, AstrBot Core also uses other internal `_special` values, such as `select_providers`, `provider_pool`, `persona_pool`, `select_plugin_set`, `t2i_template`, `get_embedding_dim`, and `select_agent_runner_provider:*` (where `*` is a placeholder for the runner type). These are internal implementations and may change at any time — please avoid using them in plugins.
+Core configuration uses additional `_special` values that are not a plugin SDK contract. Do not copy them from core metadata.
 
-Using `select_provider` as an example, it will display as follows:
-
-![image](https://files.astrbot.app/docs/source/images/plugin/image-select-provider.png)
-
-### `file` type schema
-
-This allows plugins to define file-upload configuration items to guide users to upload files required by the plugin.
+## File-upload fields
 
 ```json
 {
-  "demo_files": {
+  "reference_files": {
     "type": "file",
-    "description": "Uploaded files for demo",
+    "description": "Reference documents",
     "default": [],
-    "file_types": ["pdf", "docx"]
+    "file_types": ["pdf", "txt", "md"]
   }
 }
 ```
 
-### `dict` type schema
+The saved value is not an absolute path. It is a list such as:
 
-Used to visualize editing a Python `dict` type configuration. For example, AstrBot Core's custom extra body parameter configuration:
-
-```py
-"custom_extra_body": {
-  "description": "Custom request body parameters",
-  "type": "dict",
-  "items": {},
-  "hint": "Used to add extra parameters to requests, such as temperature, top_p, max_tokens, etc.",
-  "template_schema": {
-      "temperature": {
-          "name": "Temperature",
-          "description": "Temperature parameter",
-          "hint": "Controls randomness of output, typically 0-2. Higher is more random.",
-          "type": "float",
-          "default": 0.6,
-          "slider": {"min": 0, "max": 2, "step": 0.1},
-      },
-      "top_p": {
-          "name": "Top-p",
-          "description": "Top-p sampling",
-          "hint": "Nucleus sampling parameter, typically 0-1. Controls probability mass considered.",
-          "type": "float",
-          "default": 1.0,
-          "slider": {"min": 0, "max": 1, "step": 0.01},
-      },
-      "max_tokens": {
-          "name": "Max Tokens",
-          "description": "Maximum tokens",
-          "hint": "Maximum number of tokens to generate.",
-          "type": "int",
-          "default": 8192,
-      },
-  },
+```json
+{
+  "reference_files": ["files/reference_files/guide.pdf"]
 }
 ```
 
-### `template_list` type schema
+Files live under `data/plugin_data/<plugin-root>/files/<config-key>/`. Paths and extensions are validated, and the current per-file limit is 500 MiB. Resolve a value through the public storage entry point:
 
-> [!NOTE]
-> For background on the original design, see [#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208).
+```python
+from astrbot.api.star import StarTools
 
-Plugin developers can add a template-style configuration to `_conf_schema` in the following format (somewhat similar to nested configs):
+absolute_path = StarTools.get_data_dir() / config["reference_files"][0]
+```
+
+Do not treat an upload path as a URL or bypass relative-path validation to access another plugin's data.
+
+## `template_list`
+
+Use `template_list` when users can add any number of entries from fixed structures:
 
 ```json
- "field_id": {
-  "type": "template_list",
-  "description": "Template List Field",
-  "templates": {
-    "template_1": {
-        "name": "Template One",
-        "hint":"hint",
-        "display_item": "attr_name",
-        "hide_hint_in_list": true,
+{
+  "endpoints": {
+    "type": "template_list",
+    "description": "Endpoints",
+    "templates": {
+      "http": {
+        "name": "HTTP endpoint",
+        "display_item": "name",
         "items": {
-          "attr_name": {
-            "description": "Attribute Name",
+          "name": {
             "type": "string",
             "default": ""
           },
-          "attr_a": {
-            "description": "Attribute A",
-            "type": "int",
-            "default": 10
+          "url": {
+            "type": "string",
+            "default": "https://example.com"
           },
-          "attr_b": {
-            "description": "Attribute B",
-            "hint": "This is a boolean attribute",
-            "type": "bool",
-            "default": true
+          "timeout": {
+            "type": "int",
+            "default": 30
           }
-        }
-      },
-    "template_2": {
-      "name": "Template Two",
-      "hint":"hint",
-      "items": {
-        "attr_c": {
-          "description": "Attribute A",
-          "type": "int",
-          "default": 10
-        },
-        "attr_d": {
-          "description": "Attribute B",
-          "hint": "This is a boolean attribute",
-          "type": "bool",
-          "default": true
         }
       }
     }
@@ -187,48 +139,53 @@ Plugin developers can add a template-style configuration to `_conf_schema` in th
 }
 ```
 
-Saved config example:
+The stored value includes its template key:
 
 ```json
-"field_id": [
+{
+  "endpoints": [
     {
-        "__template_key": "template_1",
-        "attr_name": "",
-        "attr_a": 10,
-        "attr_b": true
-    },
-    {
-        "__template_key": "template_2",
-        "attr_c": 10,
-        "attr_d": true
+      "__template_key": "http",
+      "name": "primary",
+      "url": "https://example.com",
+      "timeout": 30
     }
-]
+  ]
+}
 ```
 
-Templates also support these optional fields:
+- `display_item` points to a field shown in the collapsed-row title and supports nested paths such as `meta.name`.
+- `hide_hint_in_list: true` hides only the template hint in the collapsed list.
+- Every template needs `items`, and stored values are recursively validated against the selected template.
 
-- `display_item`: Specifies the key of a `string` item inside the template `items`. When set, the WebUI shows that field's current value in the collapsed list of added template entries, for example `Attribute Name: my-adapter`, making it easier to distinguish multiple entries created from the same template. Dot paths are supported for fields inside nested objects, for example `meta.name`.
-- `hide_hint_in_list`: When set to `true`, the WebUI hides the template `hint` in the collapsed list of added template entries. The template selection dropdown still shows the `hint`, and hints for fields inside the expanded entry are not affected.
+## Receiving configuration in a plugin
 
-<img width="1000" alt="image" src="https://github.com/user-attachments/assets/74876d30-11a4-491b-a7a0-8ebe8d603782" />
-
-## Using Configuration in Plugins
-
-When loading plugins, AstrBot will check if there's a `_conf_schema.json` file in the plugin directory. If it exists, it will automatically parse the configuration and save it under `data/config/<plugin_name>_config.json` (a configuration file entity created according to the Schema), and pass it to `__init__()` when instantiating the plugin class.
-
-```py
+```python
 from astrbot.api import AstrBotConfig
+from astrbot.api.star import Context, Star
 
-class ConfigPlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig): # AstrBotConfig inherits from Dict and has all dictionary methods
+
+class Main(Star):
+    def __init__(self, context: Context, config: AstrBotConfig) -> None:
         super().__init__(context)
         self.config = config
-        print(self.config)
 
-        # Supports direct configuration saving
-        # self.config.save_config() # Save configuration
+    async def initialize(self) -> None:
+        timeout = int(self.config["timeout"])
+        # Initialize clients with validated configuration.
+        _ = timeout
 ```
 
-## Configuration Updates
+The configuration filename comes from the plugin directory root name and is stored as `data/config/<root-name>_config.json`, not an arbitrary metadata display name. Saving in the WebUI validates and writes the data, then reloads the plugin. Every client, task, and file therefore needs correct `terminate()` cleanup.
 
-When you update the Schema across different versions, AstrBot will recursively inspect the configuration items in the Schema, automatically adding default values for missing items and removing those that no longer exist.
+When a plugin genuinely needs to update configuration at runtime, modify `self.config` and call `self.config.save_config()`. Do not write on every message or store runtime state, caches, or user data in configuration; use [Plugin Storage](./storage) instead.
+
+## Schema update rules
+
+On a new version, AstrBot inserts missing schema defaults, adjusts the structure, and removes fields no longer in the schema. When publishing a schema change:
+
+1. keep a key's type stable or perform an explicit migration during initialization;
+2. do not rely on removed hidden fields as persistent storage;
+3. parse `_conf_schema.json` as real JSON in tests;
+4. test empty configuration, old configuration, and WebUI save/reload paths;
+5. never include secret values in logs, examples, or error details.

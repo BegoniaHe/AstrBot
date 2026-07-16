@@ -1,185 +1,137 @@
 # 插件配置
 
-随着插件功能的增加，可能需要定义一些配置以让用户自定义插件的行为。
+Star 可以在插件根目录提供 `_conf_schema.json`。AstrBot 会根据 schema 创建插件配置文件、在 WebUI 渲染表单，并在插件实例化时注入 `AstrBotConfig`。
 
-AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户在管理面板上直接配置插件，而不需要修改代码。
+Schema 文件必须是**严格 JSON**，不能包含注释、尾随逗号或 Python 的 `True` / `False`。
 
-## 配置定义
-
-要注册配置，首先需要在您的插件目录下添加一个 `_conf_schema.json` 的 json 文件。
-
-文件内容是一个 `Schema`（模式），用于表示配置。Schema 是 json 格式的，例如上图的 Schema 是：
+## 最小 schema
 
 ```json
 {
   "token": {
-    "description": "Bot Token",
-    "type": "string"
+    "description": "Service token",
+    "type": "string",
+    "obvious_hint": true
   },
-  "sub_config": {
-    "description": "测试嵌套配置",
+  "timeout": {
+    "description": "Request timeout in seconds",
+    "type": "int",
+    "default": 30,
+    "slider": {
+      "min": 1,
+      "max": 120,
+      "step": 1
+    }
+  },
+  "advanced": {
+    "description": "Advanced settings",
     "type": "object",
-    "hint": "xxxx",
     "items": {
-      "name": {
-        "description": "testsub",
-        "type": "string",
-        "hint": "xxxx"
-      },
-      "id": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx"
-      },
-      "time": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx",
-        "default": 123
+      "enabled": {
+        "type": "bool",
+        "default": false
       }
     }
   }
 }
 ```
 
-- `type`: **此项必填**。配置的类型。支持 `string`, `text`, `int`, `float`, `bool`, `object`, `list`, `dict`, `template_list`。当类型为 `text` 时，将会可视化为一个更大的可拖拽宽高的 textarea 组件，以适应大文本。
-- `description`: 可选。配置的描述。建议一句话描述配置的行为。
-- `hint`: 可选。配置的提示信息，表现在上图中右边的问号按钮，当鼠标悬浮在问号按钮上时显示。
-- `obvious_hint`: 可选。配置的 hint 是否醒目显示。如上图的 `token`。
-- `default`: 可选。配置的默认值。如果用户没有配置，将使用默认值。int 是 0，float 是 0.0，bool 是 False，string 是 ""，object 是 {}，list 是 []。
-- `items`: 可选。如果配置的类型是 `object`，需要添加 `items` 字段。`items` 的内容是这个配置项的子 Schema。理论上可以无限嵌套，但是不建议过多嵌套。
-- `invisible`: 可选。配置是否隐藏。默认是 `false`。如果设置为 `true`，则不会在管理面板上显示。
-- `options`: 可选。一个列表，如 `"options": ["chat", "agent", "workflow"]`。提供下拉列表可选项。
-- `editor_mode`: 可选。是否启用代码编辑器模式。默认是 false。
-- `editor_language`: 可选。代码编辑器的代码语言，默认为 `json`。
-- `editor_theme`: 可选。代码编辑器的主题，可选值有 `vs-light`（默认）， `vs-dark`。
-- `_special`: 可选。用于调用 AstrBot 提供的可视化提供商选取、人格选取、知识库选取等功能，详见下文。
+## 支持的类型
 
-### 配置项国际化（可选）
+当前运行时支持：
 
-配置项的 `description`、`hint` 和下拉选项 `labels` 支持按 WebUI 语言显示，详见[插件国际化](./plugin-i18n)。
+| `type`          | 默认值  | WebUI / 存储语义                           |
+| --------------- | ------- | ------------------------------------------ |
+| `string`        | `""`    | 单行字符串。                               |
+| `text`          | `""`    | 多行文本。                                 |
+| `int`           | `0`     | 整数；可配 `slider`。                      |
+| `float`         | `0.0`   | 浮点数；可配 `slider`。                    |
+| `bool`          | `false` | 开关。                                     |
+| `list`          | `[]`    | JSON 数组；可用 `items` 描述对象数组元素。 |
+| `file`          | `[]`    | 上传文件后保存相对路径字符串列表。         |
+| `object`        | `{}`    | 嵌套对象，必须提供 `items`。               |
+| `template_list` | `[]`    | 从预定义模板创建的对象列表。               |
 
-其中，如果启用了代码编辑器，效果如下图所示:
+`dict` **不是**当前插件 schema 类型。使用 `type: "dict"` 会在加载默认配置时抛出 `TypeError`。需要键值结构时使用 `object` 并明确 `items`；需要开放 JSON 文本时使用 `text`，在插件内自行解析和验证。
 
-![editor_mode](https://files.astrbot.app/docs/source/images/plugin/image-6.png)
+## 通用元数据
 
-![editor_mode_fullscreen](https://files.astrbot.app/docs/source/images/plugin/image-7.png)
+- `description`：字段名称或简短说明。
+- `hint`：补充帮助文本。
+- `obvious_hint`：让 hint 在表单中醒目显示。
+- `default`：明确默认值；类型必须与 `type` 一致。
+- `invisible`：从 WebUI 隐藏，但仍存在于配置中。
+- `options`：字符串/数值选项列表，渲染为选择器。
+- `labels`：与 `options` 一一对应的显示文本。国际化限制见[插件国际化](./plugin-i18n)。
+- `slider`：只用于 `int` / `float`，对象包含 `min`、`max`、`step`。
+- `editor_mode`、`editor_language`、`editor_theme`：为文本/结构化输入启用代码编辑器。
+- `_special`：使用 AstrBot 提供的动态选择器。
 
-**\_special** 字段可用于 `select_provider`, `select_provider_tts`, `select_provider_stt`, `select_persona`, `select_knowledgebase` 等值，让用户快速选择在 WebUI 上已经配置好的模型提供商、人设、知识库等数据。
+插件可稳定使用的常见 `_special` 值包括：
 
-- `select_provider`、`select_provider_tts`、`select_provider_stt`、`select_persona` 的结果为字符串。
-- `select_knowledgebase` 的结果为 `list` 类型，支持多选，建议将对应配置项的 `type` 设为 `list`，默认值设为 `[]`。
+- `select_provider`、`select_provider_tts`、`select_provider_stt`：返回 Provider ID 字符串；
+- `select_persona`：返回 Persona ID 字符串；
+- `select_knowledgebase`：返回知识库 ID 列表，对应字段应为 `list`。
 
-> [!NOTE]
-> 此外，AstrBot Core 内部还使用了 `select_providers`、`provider_pool`、`persona_pool`、`select_plugin_set`、`t2i_template`、`get_embedding_dim`、`select_agent_runner_provider:*`（`*` 为运行器类型占位符）等 `_special` 值。这些属于内部实现，随时可能变动，请勿在插件中使用。
+Core 内部还使用其他 `_special` 值，但它们不是插件 SDK 契约，不要从核心配置复制。
 
-以 `select_provider` 为例，将呈现以下效果:
-
-![image](https://files.astrbot.app/docs/source/images/plugin/image-select-provider.png)
-
-### file 类型的 schema
-
-允许插件定义文件上传配置项，引导用户上传插件所需的文件。
+## 文件上传字段
 
 ```json
 {
-  "demo_files": {
+  "reference_files": {
     "type": "file",
-    "description": "Uploaded files for demo",
-    "default": [], // 支持多文件上传，默认值为一个空列表
-    "file_types": ["pdf", "docx"] // 允许上传的文件类型列表
+    "description": "Reference documents",
+    "default": [],
+    "file_types": ["pdf", "txt", "md"]
   }
 }
 ```
 
-### dict 类型的 schema
+上传结果不是绝对路径，而是类似下面的字符串列表：
 
-用于可视化编辑一个 Python 的 dict 类型的配置。如 AstrBot Core 中的自定义请求体参数配置项：
-
-```py
-"custom_extra_body": {
-  "description": "自定义请求体参数",
-  "type": "dict",
-  "items": {},
-  "hint": "用于在请求时添加额外的参数，如 temperature、top_p、max_tokens 等。",
-  "template_schema": { # 可选填写 template schema，当设置之后，用户可以透过 WebUI 快速编辑。
-      "temperature": {
-          "name": "Temperature",
-          "description": "温度参数",
-          "hint": "控制输出的随机性，范围通常为 0-2。值越高越随机。",
-          "type": "float",
-          "default": 0.6,
-          "slider": {"min": 0, "max": 2, "step": 0.1},
-      },
-      "top_p": {
-          "name": "Top-p",
-          "description": "Top-p 采样",
-          "hint": "核采样参数，范围通常为 0-1。控制模型考虑的概率质量。",
-          "type": "float",
-          "default": 1.0,
-          "slider": {"min": 0, "max": 1, "step": 0.01},
-      },
-      "max_tokens": {
-          "name": "Max Tokens",
-          "description": "最大词元（Tokens）数",
-          "hint": "生成的最大词元（Tokens）数。",
-          "type": "int",
-          "default": 8192,
-      },
-  },
+```json
+{
+  "reference_files": ["files/reference_files/guide.pdf"]
 }
 ```
 
-### template_list 类型的 schema
+文件保存在 `data/plugin_data/<plugin-root>/files/<config-key>/`。路径会经过目录和扩展名校验，单文件上限当前为 500 MiB。插件中用公开存储入口解析：
 
-> [!NOTE]
-> 如需了解最初的设计背景，可参考 [#4208](https://github.com/AstrBotDevs/AstrBot/pull/4208)。
+```python
+from astrbot.api.star import StarTools
 
-插件开发者可以在\_conf_schema中按照以下格式添加模板配置项（有点类似于原有的嵌套配置）
+absolute_path = StarTools.get_data_dir() / config["reference_files"][0]
+```
+
+不要把上传路径当作 URL，也不要绕过相对路径校验访问其他插件的数据。
+
+## `template_list`
+
+`template_list` 适合让用户从多个固定结构中添加任意数量的条目：
 
 ```json
- "field_id": {
-  "type": "template_list",
-  "description": "Template List Field",
-  "templates": {
-    "template_1": {
-        "name": "Template One",
-        "hint":"hint",
-        "display_item": "attr_name",
-        "hide_hint_in_list": true,
+{
+  "endpoints": {
+    "type": "template_list",
+    "description": "Endpoints",
+    "templates": {
+      "http": {
+        "name": "HTTP endpoint",
+        "display_item": "name",
         "items": {
-          "attr_name": {
-            "description": "Attribute Name",
+          "name": {
             "type": "string",
             "default": ""
           },
-          "attr_a": {
-            "description": "Attribute A",
-            "type": "int",
-            "default": 10
+          "url": {
+            "type": "string",
+            "default": "https://example.com"
           },
-          "attr_b": {
-            "description": "Attribute B",
-            "hint": "This is a boolean attribute",
-            "type": "bool",
-            "default": true
+          "timeout": {
+            "type": "int",
+            "default": 30
           }
-        }
-      },
-    "template_2": {
-      "name": "Template Two",
-      "hint":"hint",
-      "items": {
-        "attr_c": {
-          "description": "Attribute A",
-          "type": "int",
-          "default": 10
-        },
-        "attr_d": {
-          "description": "Attribute B",
-          "hint": "This is a boolean attribute",
-          "type": "bool",
-          "default": true
         }
       }
     }
@@ -187,48 +139,53 @@ AstrBot 提供了“强大”的配置解析和可视化功能。能够让用户
 }
 ```
 
-保存后的 config 为
+保存值包含模板标识：
 
 ```json
-"field_id": [
+{
+  "endpoints": [
     {
-        "__template_key": "template_1",
-        "attr_name": "",
-        "attr_a": 10,
-        "attr_b": true
-    },
-    {
-        "__template_key": "template_2",
-        "attr_c": 10,
-        "attr_d": true
+      "__template_key": "http",
+      "name": "primary",
+      "url": "https://example.com",
+      "timeout": 30
     }
-]
+  ]
+}
 ```
 
-模板本身还支持以下可选字段：
+- `display_item` 指向一个用于折叠列表标题的字段，也支持 `meta.name` 形式的嵌套路径。
+- `hide_hint_in_list: true` 只隐藏条目折叠列表中的模板 hint。
+- 每个模板都必须有 `items`，保存值会按所选模板递归校验。
 
-- `display_item`: 指定模板 `items` 中一个 `string` 类型字段的 key。设置后，WebUI 会在已添加模板条目的折叠列表中显示该字段当前值，例如 `Attribute Name: my-adapter`，便于添加多个同类型模板时快速区分。支持用点号选择嵌套 object 中的字段，例如 `meta.name`。
-- `hide_hint_in_list`: 设置为 `true` 时，WebUI 会在已添加模板条目的折叠列表中隐藏该模板的 `hint`。添加模板时的下拉菜单仍会显示 `hint`，展开条目后各配置项自己的 `hint` 也不受影响。
+## 在插件中接收配置
 
-<img width="1000" alt="image" src="https://github.com/user-attachments/assets/74876d30-11a4-491b-a7a0-8ebe8d603782" />
-
-## 在插件中使用配置
-
-AstrBot 在载入插件时会检测插件目录下是否有 `_conf_schema.json` 文件，如果有，会自动解析配置并保存在 `data/config/<plugin_name>_config.json` 下（依照 Schema 创建的配置文件实体），并在实例化插件类时传入给 `__init__()`。
-
-```py
+```python
 from astrbot.api import AstrBotConfig
+from astrbot.api.star import Context, Star
 
-class ConfigPlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig): # AstrBotConfig 继承自 Dict，拥有字典的所有方法
+
+class Main(Star):
+    def __init__(self, context: Context, config: AstrBotConfig) -> None:
         super().__init__(context)
         self.config = config
-        print(self.config)
 
-        # 支持直接保存配置
-        # self.config.save_config() # 保存配置
+    async def initialize(self) -> None:
+        timeout = int(self.config["timeout"])
+        # Initialize clients with validated configuration.
+        _ = timeout
 ```
 
-## 配置更新
+插件配置文件名取自插件目录的 root name，保存为 `data/config/<root-name>_config.json`，不是 metadata 中任意显示名称。WebUI 保存后会校验数据、写入配置并重载插件；因此所有 client、任务和文件都必须在 `terminate()` 中正确清理。
 
-您在发布不同版本更新 Schema 时，AstrBot 会递归检查 Schema 的配置项，自动为缺失的配置项添加默认值、移除不存在的配置项。
+插件确实需要在运行时更新配置时，可以修改 `self.config` 后调用 `self.config.save_config()`。不要在每条消息中频繁写盘，也不要把运行状态、缓存或用户数据塞进配置；这些数据应放入 [插件存储](./storage)。
+
+## Schema 更新规则
+
+加载新版本时，AstrBot 会按 schema 补齐缺失默认值、调整结构，并移除已经不存在的字段。发布 schema 变更时：
+
+1. 保持同一键的类型稳定，或在插件初始化中执行明确迁移；
+2. 不要依赖已经从 schema 删除的隐藏字段继续保存数据；
+3. 用真实 JSON 解析 `_conf_schema.json`；
+4. 在空配置、旧配置和 WebUI 保存/重载三条路径上测试；
+5. secret 字段不要写入日志、示例或错误详情。

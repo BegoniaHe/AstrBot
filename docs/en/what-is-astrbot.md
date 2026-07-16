@@ -10,6 +10,8 @@ AstrBot is an open-source, all-in-one Agentic assistant for personal and group c
 
 This documentation tracks the current fork branch. When this fork diverges from upstream, the behavior documented here follows this repository.
 
+The current branch targets Python 3.14+, uses a FastAPI Dashboard backend, and organizes platforms, providers, plugins, and Agents through explicit runtime services, lifecycle ownership, an event bus, and an ordered pipeline. Text-to-image rendering is local through Playwright Chromium rather than the removed remote rendering path.
+
 ## Documentation Overview
 
 This documentation is divided into the following sections:
@@ -21,11 +23,15 @@ This documentation is divided into the following sections:
 
 ## Quick Start
 
-- Deploy AstrBot: Read the Deployment Guide to quickly deploy AstrBot on your local machine or cloud server.
+- Deploy AstrBot: Start with [source deployment](/en/deploy/astrbot/cli), or use the [Docker](/en/deploy/astrbot/docker) path that builds this checkout locally.
 - Connect to IM platforms: Follow the instructions to connect AstrBot to your preferred IM platforms such as Discord, Telegram, Slack, etc.
 - Configure AI models: AstrBot supports various AI models. See [Connecting Model Services](/en/providers/start)
 
+## How It Works
+
+Platform adapters normalize inbound messages into `AstrMessageEvent`. `EventBus` selects a Pipeline from the matching config profile, then executes wake, whitelist, session-state, rate-limit, safety, preprocessing, plugin/Agent, result-decoration, and response stages in order. See [Project Architecture](/en/dev/architecture) for the startup flow, ownership boundaries, and change map.
+
 ## Notice
 
-1. AstrBot is a non-profit open-source project maintained by contributors worldwide and protected by the [AGPL-v3](https://www.chinasona.org/gnu/agpl-3.0-cn.html) license. If you modify AstrBot and use it to provide commercial network services, you must open-source your modifications. For details, contact [community@astrbot.app](mailto:community@astrbot.app).
+1. AstrBot is licensed under [AGPL-3.0-or-later](https://github.com/Xero-Team/AstrBot/blob/master/LICENSE). If you provide a modified version to users over a network, make sure you satisfy the license obligations.
 2. Before using this project, please read the End User License Agreement (EULA): [End User License Agreement](https://github.com/Xero-Team/AstrBot/blob/master/EULA.md). If you do not agree to any terms of the agreement, do not use this project.

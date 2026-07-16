@@ -51,9 +51,9 @@ AstrBot 支持接入企业微信应用和微信客服。
 
 ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-- 如果没有开启 `统一 Webhook 模式`，填写 `http://你的带公网地址的服务器ip:6195/callback/command`。
+- 如果没有开启 `统一 Webhook 模式`，填写经 HTTPS 反向代理后的 `https://你的域名/callback/command`。
 
-> 请注意放行端口。如果开启了统一 Webhook 模式，需要将请求转发到 AstrBot 所在服务器的 `6185` 端口；如果没有开启，则转发到配置指定的端口（默认 `6195`）。
+> 请注意放行端口。如果开启了统一 Webhook 模式，需要将请求转发到 AstrBot 所在服务器的 `6185` 端口；如果没有开启，则转发到配置指定的端口（默认 `6195`）。独立模式的 `callback_server_host` 默认是 `127.0.0.1`；仅当代理位于另一容器或主机时，才改为 `0.0.0.0` 或指定可达接口。
 
 回到微信客服 `回调配置`，点击 `完成`。如果一切无误，将会显示 `已完成`（否则会显示类似 `openapi 回调不通过` 类似的文本）。
 
@@ -105,9 +105,9 @@ AstrBot 支持接入企业微信应用和微信客服。
 
 ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-- 如果没有开启 `统一 Webhook 模式`，填入 `http://你的带公网地址的服务器ip:6195/callback/command`。
+- 如果没有开启 `统一 Webhook 模式`，填入经 HTTPS 反向代理后的 `https://你的域名/callback/command`。
 
-> 请注意放行端口。如果开启了统一 Webhook 模式，需要将请求转发到 AstrBot 所在服务器的 `6185` 端口；如果没有开启，则转发到配置指定的端口（默认 `6195`）。
+> 请注意放行端口。如果开启了统一 Webhook 模式，需要将请求转发到 AstrBot 所在服务器的 `6185` 端口；如果没有开启，则转发到配置指定的端口（默认 `6195`）。独立模式的 `callback_server_host` 默认是 `127.0.0.1`；仅当代理位于另一容器或主机时，才改为 `0.0.0.0` 或指定可达接口。
 
 接下来配置企业可信 IP。
 
@@ -125,13 +125,11 @@ AstrBot 支持接入企业微信应用和微信客服。
 
 ![image](https://files.astrbot.app/docs/source/images/wecom/3dc9fa61145ab0dd8f56a10295affec8_720.png)
 
-## 反向代理(自定义 API BASE)
+## 自定义出站 API 地址 (`api_base_url`)
 
-AstrBot 支持自定义企业微信的终结点以适应家庭 ip 没有固定的公网 IP 问题。
+`api_base_url` 控制的是 AstrBot **向企业微信发起出站 API 请求**时使用的基础地址，默认是 `https://qyapi.weixin.qq.com/cgi-bin/`。正常情况下请保留默认值；只有在使用可信 API 网关或代理时才需要修改。
 
-只需要将您的自定义地址填入 `api_base_url` 即可。
-
-> 如果您没有公网 ip 当然也可以购买一台服务器，推荐 阿里云 的 99 元/年的服务器。
+它不会改变企业微信请求 AstrBot 的入站回调 URL，也不会自动配置域名、端口转发或公网穿透。没有固定公网 IP 时，请使用统一 Webhook 配合反向代理/隧道，或部署到具有稳定公网入口的环境；不要把回调地址填入 `api_base_url`。
 
 ## 语音输入
 

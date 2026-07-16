@@ -1,26 +1,6 @@
-# Package Manager Deployment (uv)
-
-Use `uv` to install and run AstrBot quickly.
-
-## Before You Start
-
-If `uv` is not installed, install it first by following the official guide:
-<https://docs.astral.sh/uv/>
-
-`uv` supports Linux, Windows, and macOS.
-
-## Important Notes
+# Package Manager Installation
 
 > [!WARNING]
-> AstrBot deployed via `uv` **does not support upgrading through the WebUI**. To update, run `uv tool upgrade astrbot --python 3.14` from the command line.
+> The Xero-Team fork does not currently publish a PyPI package. `uv tool install astrbot` and `uv tool upgrade astrbot` install or update the upstream package with the same name, not this repository branch.
 
-AstrBot requires Python 3.14 or later. Use `--python 3.14` to ensure that `uv` creates the tool environment with Python 3.14; if Python downloads are enabled, `uv` will download Python 3.14 automatically when it is missing.
-
-## Install and Start
-
-```bash
-uv tool install astrbot --python 3.14
-astrbot install-browser # Required only when using local text-to-image rendering
-astrbot init
-astrbot run
-```
+Use the maintained [source deployment](/en/deploy/astrbot/cli), or build the [Docker](/en/deploy/astrbot/docker) image from the current checkout. Package-manager commands will be documented here only after this fork has an independent, verifiable package release pipeline.

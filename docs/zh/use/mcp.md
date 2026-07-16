@@ -1,97 +1,142 @@
 # MCP
 
-MCP(Model Context Protocol，模型上下文协议) 是一种新的开放标准协议，用来在大模型和数据源之间建立安全双向的链接。简单来说，它将函数工具单独抽离出来作为一个独立的服务，AstrBot 通过 MCP 协议远程调用函数工具，函数工具返回结果给 AstrBot。
+MCP（Model Context Protocol）让 AstrBot Agent 连接独立的工具服务。当前实现支持 stdio、SSE 和 Streamable HTTP 三种传输方式；可以在 WebUI 的 **插件 → MCP** 页面创建、测试、启用和删除服务器。
 
-![image](https://files.astrbot.app/docs/source/images/function-calling/image3.png)
+## 选择传输方式
 
-AstrBot 支持 MCP 协议，可以添加多个 MCP 服务器，并使用 MCP 服务器提供的函数工具。
+| 方式            | 适用场景                             | 关键字段                      |
+| --------------- | ------------------------------------ | ----------------------------- |
+| stdio           | AstrBot 在本机或容器中启动一个子进程 | `command`、`args`、`env`      |
+| Streamable HTTP | 当前推荐的远程 MCP HTTP 传输         | `transport`、`url`、`headers` |
+| SSE             | 仍使用旧 SSE 传输的远程服务          | `transport`、`url`、`headers` |
 
-![image](https://files.astrbot.app/docs/source/images/function-calling/image2.png)
+远程配置必须显式提供 `transport`。如果配置中没有 `url`，AstrBot 会把它视为 stdio 配置。
 
-## 初始状态配置
+## 运行时工具
 
-MCP 服务器一般使用 `uv` 或者 `npm` 来启动，因此您需要安装这两个工具。
+源码部署需要在运行 AstrBot 的同一环境中安装服务器所需的 launcher。仓库 `Dockerfile` 已包含 Node.js 24、npm/npx、Corepack/pnpm 和 uv；使用当前仓库本地构建的镜像时，不要再按旧教程在容器里重复安装 Node。
 
-对于 `uv`，您可以直接通过 pip 来安装。可在 AstrBot WebUI 快捷安装：
+主机源码部署可按 MCP 服务器自身文档安装依赖。AstrBot 不会通过 shell 解释 `command`，因此不要写 `bash -c`、`env ...`、管道或重定向。
 
-![image](https://files.astrbot.app/docs/zh/use/image.png)
+## stdio 配置
 
-输入 `uv` 即可。
-
-如果您使用 Docker 部署 AstrBot，也可以执行以下指令快捷安装。
-
-```bash
-docker exec astrbot python -m pip install uv
-```
-
-如果您通过源码部署 AstrBot，请在创建的虚拟环境内安装。
-
-对于 `npm`，您需要安装 `node`。
-
-如果您通过源码/一键安装部署 AstrBot，请参考 [Download Node.js](https://nodejs.org/en/download) 下载到您的本机。
-
-如果您使用 Docker 部署 AstrBot，您需要在容器中安装 `node`（后期 AstrBot Docker 镜像将自带 `node`），请参考执行以下指令：
-
-```bash
-sudo docker exec -it astrbot /bin/bash
-apt update && apt install curl -y
-export NVM_NODEJS_ORG_MIRROR=http://nodejs.org/dist
-# Download and install nvm:
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
-\. "$HOME/.nvm/nvm.sh"
-nvm install 22
-# Verify version:
-node -v
-nvm current
-npm -v
-npx -v
-```
-
-安装好 `node` 之后，需要重启 `AstrBot` 以应用新的环境变量。
-
-## 安装 MCP 服务器
-
-如果您使用 Docker 部署 AstrBot，请将 MCP 服务器安装在 data 目录下。
-
-### 一个例子
-
-我想安装一个查询 Arxiv 上论文的 MCP 服务器，发现了这个 Repo: [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server)，参考它的 README，
-
-我们抽取出需要的信息：
+例如用 `uvx` 启动一个 Python MCP 包：
 
 ```json
 {
-  "command": "uv",
-  "args": ["tool", "run", "arxiv-mcp-server", "--storage-path", "data/arxiv"]
+  "command": "uvx",
+  "args": ["arxiv-mcp-server", "--storage-path", "data/arxiv"],
+  "env": {
+    "ARXIV_API_TOKEN": "replace-with-secret"
+  }
 }
 ```
 
-如果要使用的 MCP 服务器需要通过环境变量配置 Token 等信息，可以使用 `env` 这个工具：
+`env` 必须是字符串到字符串的 JSON object，不能把 `env` 写成 `command`：
 
 ```json
 {
-  "command": "env",
-  "args": [
-    "XXX_RESOURCE_FROM=local",
-    "XXX_API_URL=https://xxx.com",
-    "XXX_API_TOKEN=sk-xxxxx",
-    "uv",
-    "tool",
-    "run",
-    "xxx-mcp-server",
-    "--storage-path",
-    "data/res"
-  ]
+  "env": {
+    "RESOURCE_FROM": "local",
+    "API_URL": "https://api.example.com",
+    "API_TOKEN": "replace-with-secret"
+  }
 }
 ```
 
-在 AstrBot WebUI 中设置:
+不要把 Token 放到截图、公开 issue 或插件仓库。修改环境变量后，重新连接或重启对应 MCP 服务器。
 
-![image](https://files.astrbot.app/docs/zh/use/image-2.png)
+### stdio 安全限制
 
-即可。
+默认允许的 launcher 为：
 
-参考链接：
+- `python`、`python3`、`py`
+- `node`、`npx`、`npm`、`pnpm`、`yarn`
+- `bun`、`bunx`、`deno`
+- `uv`、`uvx`
 
-1. 在这里了解如何使用 MCP: [Model Context Protocol](https://modelcontextprotocol.io/introduction)
-2. 在这里获取常用的 MCP 服务器: [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers/blob/main/README-zh.md#what-is-mcp), [Model Context Protocol servers](https://github.com/modelcontextprotocol/servers), [MCP.so](https://mcp.so)
+shell、PowerShell、`curl`、`wget`、SSH、文件删除和关机类命令会被拒绝。`command` 不能包含换行或 shell 元字符；Python `-c`、JavaScript eval/print 模式也被禁止。
+
+只有在你完全信任另一个 launcher 时，才设置进程环境变量 `ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS`。它是用逗号分隔的**完整替代列表**，不是在默认列表上追加：
+
+::: code-group
+
+```bash [Linux / macOS]
+export ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS='python,python3,node,npx,uv,uvx,my-launcher'
+```
+
+```powershell [Windows PowerShell]
+$env:ASTRBOT_MCP_STDIO_ALLOWED_COMMANDS = 'python,python3,node,npx,uv,uvx,my-launcher'
+```
+
+:::
+
+扩大白名单会允许 AstrBot 启动更多本机程序，应把它视为代码执行权限变更。
+
+## Streamable HTTP
+
+```json
+{
+  "transport": "streamable_http",
+  "url": "https://mcp.example.com/mcp",
+  "allow_private_network": false,
+  "headers": {
+    "Authorization": "Bearer replace-with-secret"
+  },
+  "timeout": 5,
+  "sse_read_timeout": 300,
+  "session_read_timeout": 60,
+  "terminate_on_close": true
+}
+```
+
+- `timeout` 是建立连接/普通 HTTP 操作超时。
+- `sse_read_timeout` 是远程流读取超时。
+- `session_read_timeout` 是 MCP session 读取超时。
+- `terminate_on_close` 控制关闭连接时是否请求远端终止 session。
+
+## SSE
+
+```json
+{
+  "transport": "sse",
+  "url": "https://mcp.example.com/sse",
+  "allow_private_network": false,
+  "headers": {},
+  "timeout": 5,
+  "sse_read_timeout": 300,
+  "session_read_timeout": 60
+}
+```
+
+新服务优先使用 Streamable HTTP；只有服务端明确提供 SSE endpoint 时才选择 SSE。
+
+## 私网访问保护
+
+远程 MCP 默认拒绝 `localhost`、loopback、私网、链路本地、multicast、保留地址和未指定地址，并拒绝 HTTP 重定向。这可以减少 SSRF 和重定向绕过风险。
+
+连接你自己控制的局域网或同机 MCP 服务时，必须显式选择放开：
+
+```json
+{
+  "transport": "streamable_http",
+  "url": "http://127.0.0.1:8000/mcp",
+  "allow_private_network": true
+}
+```
+
+> [!WARNING]
+> `allow_private_network` 会跳过目标地址的私网限制。只对固定且可信的 endpoint 开启；不要让普通用户控制 `url`、headers 或此开关。
+
+容器中的 `127.0.0.1` 指向 AstrBot 容器本身。连接同一 Compose 网络中的服务时，应使用服务名，例如 `http://mcp-server:8000/mcp`，并同样显式评估是否开启私网访问。
+
+## 故障排查
+
+1. 先在 WebUI 中点击测试，查看连接错误和服务器 stderr。
+2. stdio 报 “command is not allowed” 时，确认使用的是默认 launcher，而不是 shell wrapper。
+3. stdio 找不到命令时，确认 launcher 安装在 AstrBot 进程的 `PATH` 中；容器内安装和宿主机安装互不相通。
+4. 远程地址被拒绝时，先确认它是否解析到私网；只有可信服务才开启 `allow_private_network`。
+5. 3xx 响应不会被跟随，请直接填写最终 MCP endpoint。
+6. 修改配置后重新测试并启用服务器；ModelScope 同步只会启用成功同步的服务。
+
+参考：[MCP 官方文档](https://modelcontextprotocol.io/)。

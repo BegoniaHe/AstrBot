@@ -1,546 +1,185 @@
-# AI
+# Calling AI from a Plugin
 
-AstrBot provides built-in support for multiple Large Language Model (LLM) providers and offers a unified interface, making it convenient for plugin developers to access various LLM services.
+A Star should call models through public `astrbot.api` events, `Context`, and tool interfaces. Do not import internal types from `astrbot.core.agent`, `astrbot.core.conversation_mgr`, or concrete Provider implementations; those modules evolve with the Agent Runtime.
 
-You can use the LLM / Agent interfaces provided by AstrBot to implement your own intelligent agents.
+## Choose the right path
 
-This guide documents the current LLM invocation path used by the codebase.
+| Need                                                                          | Recommended interface                           |
+| ----------------------------------------------------------------------------- | ----------------------------------------------- |
+| Continue through AstrBot's standard Persona, conversation, and Agent pipeline | `yield event.request_llm(...)`                  |
+| Call one selected chat model without executing tools                          | `await self.context.llm_generate(...)`          |
+| Run a multi-step Agent over an explicit tool set                              | `await self.context.tool_loop_agent(...)`       |
+| Register a tool for ordinary AstrBot conversations                            | `@filter.llm_tool` or `Context.add_llm_tools()` |
 
-## Getting the Chat Model ID for the Current Session
+## Resolve the current session model
 
-```py
-umo = event.unified_msg_origin
-provider_id = await self.context.get_current_chat_provider_id(umo=umo)
-```
-
-## Invoking Large Language Models
-
-```py
-llm_resp = await self.context.llm_generate(
-    chat_provider_id=provider_id, # Chat model ID
-    prompt="Hello, world!",
+```python
+provider_id = await self.context.get_current_chat_provider_id(
+    event.unified_msg_origin
 )
-# print(llm_resp.completion_text) # Get the returned text
 ```
 
-## Defining Tools
+This follows the profile and Provider selection for the message session. If no chat model is available, it raises an error. Return a useful failure instead of silently falling back to a hard-coded Provider ID.
 
-Tools enable large language models to invoke external capabilities.
+## Use the standard pipeline
 
-```py
-from pydantic import Field
-from pydantic.dataclasses import dataclass
+When a handler should reuse the current conversation, Persona, Skills, knowledge base, and default Agent, create a `ProviderRequest` and yield it:
 
-from astrbot.core.agent.run_context import ContextWrapper
-from astrbot.core.agent.tool import FunctionTool, ToolExecResult
-from astrbot.core.astr_agent_context import AstrAgentContext
+```python
+from astrbot.api.event import AstrMessageEvent, filter
 
 
-@dataclass
-class BilibiliTool(FunctionTool[AstrAgentContext]):
-    name: str = "bilibili_videos"  # Tool name
-    description: str = "A tool to fetch Bilibili videos."  # Tool description
-    parameters: dict = Field(
-        default_factory=lambda: {
-            "type": "object",
-            "properties": {
-                "keywords": {
-                    "type": "string",
-                    "description": "Keywords to search for Bilibili videos.",
-                },
-            },
-            "required": ["keywords"],
-        }
-    )
-
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) -> ToolExecResult:
-        return "1. Video Title: How to Use AstrBot\nVideo Link: xxxxxx"
+@filter.command("ask")
+async def ask(self, event: AstrMessageEvent):
+    prompt = event.message_str.removeprefix("/ask").strip()
+    if not prompt:
+        yield event.plain_result("Please provide a question.")
+        return
+    yield event.request_llm(prompt=prompt)
 ```
 
-## Registering Tools with AstrBot
+This does not immediately return model text. It hands the request to the remaining Process pipeline and is the right choice for a plugin that replaces or augments the current user prompt.
 
-Once a Tool is defined, if you want it to be automatically invoked during user conversations, register it in your plugin's `__init__` method:
+## Generate text directly
 
-```py
-class MyPlugin(Star):
-    def __init__(self, context: Context):
-        super().__init__(context)
-        self.context.add_llm_tools(BilibiliTool(), SecondTool(), ...)
+```python
+response = await self.context.llm_generate(
+    chat_provider_id=provider_id,
+    prompt="Summarize the following text: ...",
+    system_prompt="Return a concise factual summary.",
+    image_urls=[],
+    audio_urls=[],
+)
+
+text = response.completion_text
 ```
 
-> [!WARNING]
-> `context.register_llm_tool()` has been removed. Use `@filter.llm_tool(...)` or `self.context.add_llm_tools(...)` instead.
+`llm_generate()` performs one Provider request. Even when given a `ToolSet`, it does not execute returned tool calls. Use `tool_loop_agent()` for a tool loop.
 
-### Registering Tools via Decorator
+A direct call does not automatically save its input and output into the current conversation history. Prefer the standard pipeline for user-visible continuous conversations instead of manipulating internal `conversation_manager` objects.
 
-Alternatively, you can use the `@filter.llm_tool` decorator to define and register a tool in one step. Make sure to follow the exact format below, including the docstring — AstrBot parses the docstring to generate the parameter schema:
+## Register tools
 
-```py{3,4,5,6,7}
-@filter.llm_tool(name="get_weather")  # If name is omitted, the function name is used
-async def get_weather(self, event: AstrMessageEvent, location: str) -> MessageEventResult:
-    '''Get weather information.
+### Decorator form
+
+```python
+from astrbot.api.event import AstrMessageEvent, filter
+
+
+@filter.llm_tool(name="get_weather")
+async def get_weather(
+    self,
+    event: AstrMessageEvent,
+    location: str,
+):
+    """Get current weather for one location.
 
     Args:
-        location(string): The location to query
-    '''
-    resp = self.get_weather_from_api(location)
-    yield event.plain_result("Weather: " + resp)
+        location(string): City or region name.
+    """
+    return await self.weather_client.lookup(location)
 ```
 
-In `location(string): The location to query`, `location` is the parameter name, `string` is the type, and the remainder is the description.
+AstrBot generates the schema from the Google-style docstring. In `Args:`, use `name(type): description`. Supported forms include `string`, `number`, `object`, `boolean`, `array`, and array subtypes such as `array[string]`. Python annotations do not replace the docstring schema.
 
-Supported types: `string`, `number`, `object`, `boolean`, `array`. Array subtypes are also supported, for example `array[string]`.
+Return a concise string or another framework-supported result. Never include API keys, complete response headers, or remote credentials in an error.
 
-> [!WARNING]
-> **The `Args:` block is required and must be formatted correctly.**
->
-> The `@filter.llm_tool` decorator generates the parameter schema by parsing the function's docstring — it does **not** read Python type annotations. If the docstring is missing an `Args:` block, or the format does not follow `param_name(type): description`, the generated schema will be empty. Any arguments passed by the LLM will be silently dropped, causing the function to fail with a missing-argument error.
->
-> Additionally, passing `parameters=...` directly to the decorator is **not supported** and will be silently ignored. If you need manual control over the schema, use the `@dataclass` + `add_llm_tools()` approach above.
+### Explicit `FunctionTool`
 
-## Invoking Agents
+For a hand-written JSON Schema, use public types. The handler receives the current `AstrMessageEvent` as its first argument:
 
-An Agent can be defined as a combination of system_prompt + tools + llm, enabling more sophisticated intelligent behavior.
+```python
+from astrbot.api import FunctionTool
+from astrbot.api.event import AstrMessageEvent
 
-After defining the Tool above, you can invoke an Agent as follows:
 
-```py
-llm_resp = await self.context.tool_loop_agent(
+async def weather_handler(event: AstrMessageEvent, city: str):
+    return await lookup_weather(city)
+
+
+weather_tool = FunctionTool(
+    name="weather",
+    description="Get weather for a city.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "City name",
+            }
+        },
+        "required": ["city"],
+    },
+    handler=weather_handler,
+)
+
+self.context.add_llm_tools(weather_tool)
+```
+
+Tool names are global. Replacing a same-named tool affects other Personas and plugins. Use a plugin prefix and test that disable or hot reload leaves no stale handler behind.
+
+## Run a tool-loop Agent
+
+```python
+from astrbot.api import ToolSet
+
+tools = ToolSet([weather_tool])
+response = await self.context.tool_loop_agent(
     event=event,
-    chat_provider_id=prov_id,
-    prompt="Search for videos related to AstrBot on Bilibili.",
-    tools=ToolSet([BilibiliTool()]),
-    max_steps=30, # Maximum agent execution steps
-    tool_call_timeout=120, # Tool invocation timeout
-)
-# print(llm_resp.completion_text) # Get the returned text
-```
-
-`tool_loop_agent()` method automatically handles the loop of tool invocations and LLM requests until the model stops calling tools or the maximum number of steps is reached.
-
-## Multi-Agent
-
-Multi-Agent systems decompose complex applications into multiple specialized agents that collaborate to solve problems. Unlike relying on a single agent to handle every step, multi-agent architectures allow smaller, more focused agents to be composed into coordinated workflows. We implement multi-agent systems using the `agent-as-tool` pattern.
-
-In the example below, we define a Main Agent responsible for delegating tasks to different Sub-Agents based on user queries. Each Sub-Agent focuses on specific tasks, such as retrieving weather information.
-
-![multi-agent-example-1](https://files.astrbot.app/docs/en/dev/star/guides/multi-agent-example-1.svg)
-
-Define Tools:
-
-```py
-from astrbot.api import logger
-from astrbot.core.agent.run_context import ContextWrapper
-from astrbot.core.agent.tool import FunctionTool, ToolExecResult, ToolSet
-from astrbot.core.astr_agent_context import AstrAgentContext
-from pydantic import Field
-from pydantic.dataclasses import dataclass
-
-
-@dataclass
-class AssignAgentTool(FunctionTool[AstrAgentContext]):
-    """Main agent uses this tool to decide which sub-agent to delegate a task to."""
-
-    name: str = "assign_agent"
-    description: str = "Assign an agent to a task based on the given query"
-    parameters: dict = Field(
-        default_factory=lambda: {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The query to call the sub-agent with.",
-                },
-            },
-            "required": ["query"],
-        }
-    )
-
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) -> ToolExecResult:
-        # Here you would implement the actual agent assignment logic.
-        # For demonstration purposes, we'll return a dummy response.
-        return "Based on the query, you should assign agent 1."
-
-
-@dataclass
-class WeatherTool(FunctionTool[AstrAgentContext]):
-    """In this example, sub agent 1 uses this tool to get weather information."""
-
-    name: str = "weather"
-    description: str = "Get weather information for a location"
-    parameters: dict = Field(
-        default_factory=lambda: {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "description": "The city to get weather information for.",
-                },
-            },
-            "required": ["city"],
-        }
-    )
-
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) -> ToolExecResult:
-        city = kwargs["city"]
-        # Here you would implement the actual weather fetching logic.
-        # For demonstration purposes, we'll return a dummy response.
-        return f"The current weather in {city} is sunny with a temperature of 25°C."
-
-
-@dataclass
-class SubAgent1(FunctionTool[AstrAgentContext]):
-    """Define a sub-agent as a function tool."""
-
-    name: str = "subagent1_name"
-    description: str = "subagent1_description"
-    parameters: dict = Field(
-        default_factory=lambda: {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The query to call the sub-agent with.",
-                },
-            },
-            "required": ["query"],
-        }
-    )
-
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) -> ToolExecResult:
-        ctx = context.context.context
-        event = context.context.event
-        logger.info(f"the llm context messages: {context.messages}")
-        llm_resp = await ctx.tool_loop_agent(
-            event=event,
-            chat_provider_id=await ctx.get_current_chat_provider_id(
-                event.unified_msg_origin
-            ),
-            prompt=kwargs["query"],
-            tools=ToolSet([WeatherTool()]),
-            max_steps=30,
-        )
-        return llm_resp.completion_text
-
-
-@dataclass
-class SubAgent2(FunctionTool[AstrAgentContext]):
-    """Define a sub-agent as a function tool."""
-
-    name: str = "subagent2_name"
-    description: str = "subagent2_description"
-    parameters: dict = Field(
-        default_factory=lambda: {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The query to call the sub-agent with.",
-                },
-            },
-            "required": ["query"],
-        }
-    )
-
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) -> ToolExecResult:
-        return "I am useless :(, you shouldn't call me :("
-```
-
-Then, similarly, invoke the Agent using the `tool_loop_agent()` method:
-
-```py
-@filter.command("test")
-async def test(self, event: AstrMessageEvent):
-    umo = event.unified_msg_origin
-    prov_id = await self.context.get_current_chat_provider_id(umo)
-    llm_resp = await self.context.tool_loop_agent(
-        event=event,
-        chat_provider_id=prov_id,
-        prompt="Test calling sub-agent for Beijing's weather information.",
-        system_prompt=(
-            "You are the main agent. Your task is to delegate tasks to sub-agents based on user queries."
-            "Before delegating, use the 'assign_agent' tool to determine which sub-agent is best suited for the task."
-        ),
-        tools=ToolSet([SubAgent1(), SubAgent2(), AssignAgentTool()]),
-        max_steps=30,
-    )
-    yield event.plain_result(llm_resp.completion_text)
-```
-
-## Conversation Manager
-
-### Getting the Current LLM Conversation History for a Session
-
-```py
-from astrbot.core.conversation_mgr import Conversation
-
-uid = event.unified_msg_origin
-conv_mgr = self.context.conversation_manager
-curr_cid = await conv_mgr.get_curr_conversation_id(uid)
-conversation = await conv_mgr.get_conversation(uid, curr_cid)  # Conversation
-```
-
-::: details Conversation Type Definition
-
-```py
-@dataclass
-class Conversation:
-    """The conversation entity representing a chat session."""
-
-    platform_id: str
-    """The platform ID in AstrBot"""
-    user_id: str
-    """The user ID associated with the conversation."""
-    cid: str
-    """The conversation ID, in UUID format."""
-    history: str = ""
-    """The conversation history as a string."""
-    title: str | None = ""
-    """The title of the conversation. For now, it's only used in WebChat."""
-    persona_id: str | None = ""
-    """The persona ID associated with the conversation."""
-    created_at: int = 0
-    """The timestamp when the conversation was created."""
-    updated_at: int = 0
-    """The timestamp when the conversation was last updated."""
-```
-
-:::
-
-### Quickly Adding LLM Records to a Conversation `add_message_pair`
-
-```py
-from astrbot.core.agent.message import (
-    AssistantMessageSegment,
-    UserMessageSegment,
-    TextPart,
+    chat_provider_id=provider_id,
+    prompt="Check the weather in Beijing and give one travel suggestion.",
+    system_prompt="Use only the supplied tools. Do not invent weather data.",
+    tools=tools,
+    max_steps=8,
+    tool_call_timeout=30,
 )
 
-conv_mgr = self.context.conversation_manager
-provider_id = await self.context.get_current_chat_provider_id(event.unified_msg_origin)
-curr_cid = await conv_mgr.get_curr_conversation_id(event.unified_msg_origin)
-user_msg = UserMessageSegment(content=[TextPart(text="hi")])
-llm_resp = await self.context.llm_generate(
-    chat_provider_id=provider_id,  # Chat model ID
-    contexts=[user_msg],  # When prompt is not specified, contexts is used as input; if both prompt and contexts are provided, prompt is appended to the end of the LLM input
-)
-await conv_mgr.add_message_pair(
-    cid=curr_cid,
-    user_message=user_msg,
-    assistant_message=AssistantMessageSegment(
-        content=[TextPart(text=llm_resp.completion_text)]
-    ),
-)
+yield event.plain_result(response.completion_text)
 ```
 
-### Main Methods
+`tool_loop_agent()` repeats model → tool → model until a final response or `max_steps`. Keep in mind:
 
-#### `new_conversation`
+- `event` supplies permission, workspace, and cancellation context. Do not fabricate another user's event.
+- Pass only the tools required for the task. `None` means no explicit tool set and should not be treated as “all tools.”
+- `tool_call_timeout` limits one tool call; `max_steps` limits the overall loop.
+- HTTP clients, subprocesses, and tasks created by the plugin still need cleanup on timeout, cancellation, and `terminate()`.
+- Output is not automatically added to ordinary conversation history unless the call path explicitly uses the standard conversation pipeline.
 
-- **Usage**  
-  Create a new conversation in the current session and automatically switch to it.
-- **Arguments**
-  - `unified_msg_origin: str` – In the format `platform_name:message_type:session_id`
-  - `platform_id: str | None` – Platform identifier, defaults to parsing from `unified_msg_origin`
-  - `content: list[dict] | None` – Initial message history
-  - `title: str | None` – Conversation title
-  - `persona_id: str | None` – Associated persona ID
-- **Returns**  
-  `str` – Newly generated UUID conversation ID
+## Reuse registered tools
 
-#### `switch_conversation`
+```python
+from astrbot.api import ToolSet
 
-- **Usage**  
-  Switch the session to a specified conversation.
-- **Arguments**
-  - `unified_msg_origin: str`
-  - `conversation_id: str`
-- **Returns**  
-  `None`
-
-#### `delete_conversation`
-
-- **Usage**  
-  Delete a conversation from the session; if `conversation_id` is `None`, deletes the current conversation.
-- **Arguments**
-  - `unified_msg_origin: str`
-  - `conversation_id: str | None`
-- **Returns**  
-  `None`
-
-#### `get_curr_conversation_id`
-
-- **Usage**  
-  Get the conversation ID currently in use by the session.
-- **Arguments**
-  - `unified_msg_origin: str`
-- **Returns**  
-  `str | None` – Current conversation ID, returns `None` if it doesn't exist
-
-#### `get_conversation`
-
-- **Usage**  
-  Get the complete object for a specified conversation; automatically creates it if it doesn't exist and `create_if_not_exists=True`.
-- **Arguments**
-  - `unified_msg_origin: str`
-  - `conversation_id: str`
-  - `create_if_not_exists: bool = False`
-- **Returns**  
-  `Conversation | None`
-
-#### `get_conversations`
-
-- **Usage**  
-  Retrieve the complete list of conversations for a user or platform.
-- **Arguments**
-  - `unified_msg_origin: str | None` – When `None`, does not filter by user
-  - `platform_id: str | None`
-- **Returns**  
-  `List[Conversation]`
-
-#### `update_conversation`
-
-- **Usage**  
-  Update the title, history, or persona_id of a conversation.
-- **Arguments**
-  - `unified_msg_origin: str`
-  - `conversation_id: str | None` – Uses the current conversation when `None`
-  - `history: list[dict] | None`
-  - `title: str | None`
-  - `persona_id: str | None`
-- **Returns**  
-  `None`
-
-## Persona Manager
-
-`PersonaManager` is responsible for unified loading, caching, and providing CRUD interfaces for all Personas.  
-During initialization, it reads all personas from the database and refreshes the runtime persona list used by the current session logic.
-
-```py
-persona_mgr = self.context.persona_manager
+manager = self.context.get_llm_tool_manager()
+search_tool = manager.get_tool("web_search")
+tools = ToolSet()
+if search_tool and search_tool.active:
+    tools.add_tool(search_tool)
 ```
 
-### Main Methods
+A tool can be unavailable because of profile, Persona, plugin state, or runtime selection. Check existence and active state each time, and do not cache tool objects across hot reload.
 
-#### `get_persona`
+## Agent-as-tool and SubAgents
 
-- **Usage**
-  Get persona data by persona ID.
-- **Arguments**
-  - `persona_id: str` – Persona ID
-- **Returns**
-  `Persona` – Persona data, returns None if it doesn't exist
-- **Raises**
-  `ValueError` – Raised when it doesn't exist
+`astrbot.api.agent` registers an Agent handoff tool, and `RegisteringAgent.llm_tool()` can bind tools to it. This suits code-defined agents with a fixed responsibility. For ordinary operations, prefer WebUI [SubAgent Orchestration](../../../use/subagent), where Persona, Provider, and tool permissions are easier to audit.
 
-#### `get_all_personas`
+A SubAgent is not a security container. Whether created in code or the WebUI, give it the smallest tool set, a clear description, and a finite step limit, and avoid recursive delegation.
 
-- **Usage**  
-  Retrieve all personas from the database at once.
-- **Returns**  
-  `list[Persona]` – Persona list, may be empty
+## Provider access
 
-#### `create_persona`
+Public `Context` also exposes:
 
-- **Usage**  
-  Create a new persona and immediately write it to the database; automatically refreshes the local cache upon success.
-- **Arguments**
-  - `persona_id: str` – New persona ID (unique)
-  - `system_prompt: str` – System prompt
-  - `begin_dialogs: list[str]` – Optional, opening dialogs (even number of entries, alternating user/assistant)
-  - `tools: list[str]` – Optional, list of allowed tools; `None`=all tools, `[]`=disable all
-- **Returns**  
-  `Persona` – Newly created persona object
-- **Raises**  
-  `ValueError` – If `persona_id` already exists
+- `get_provider_by_id()`;
+- `get_using_provider(umo)`;
+- `get_all_providers()`;
+- corresponding STT, TTS, embedding, and rerank query methods.
 
-#### `update_persona`
+These return current Provider abstractions. A plugin can call abstract capabilities but must not import `provider/sources/*` or depend on private fields of one adapter. Put service-specific values in plugin configuration and pass them only through supported public calls.
 
-- **Usage**  
-  Update any fields of an existing persona and synchronize to database and cache.
-- **Arguments**
-  - `persona_id: str` – Persona ID to update
-  - `system_prompt: str` – Optional, new system prompt
-  - `begin_dialogs: list[str]` – Optional, new opening dialogs
-  - `tools: list[str]` – Optional, new tool list; semantics same as `create_persona`
-- **Returns**  
-  `Persona` – Updated persona object
-- **Raises**  
-  `ValueError` – If `persona_id` doesn't exist
+## Security and tests
 
-#### `delete_persona`
-
-- **Usage**  
-  Delete the specified persona and clean up both database and cache.
-- **Arguments**
-  - `persona_id: str` – Persona ID to delete
-- **Raises**  
-  `ValueError` – If `persona_id` doesn't exist
-
-#### `get_default_persona_v3`
-
-- **Usage**  
-  Get the default persona (v3 format) to use based on the current session configuration.  
-  Falls back to `DEFAULT_PERSONALITY` if configuration doesn't specify one or the specified persona doesn't exist.
-- **Arguments**
-  - `umo: str | MessageSession | None` – Session identifier, used to read user-level configuration
-- **Returns**  
-  `Personality` – Default persona object in v3 format
-
-::: details Persona / Personality Type Definition
-
-```py
-
-class Persona(SQLModel, table=True):
-    """Persona is a set of instructions for LLMs to follow.
-
-    It can be used to customize the behavior of LLMs.
-    """
-
-    __tablename__ = "personas"
-
-    id: int = Field(primary_key=True, sa_column_kwargs={"autoincrement": True})
-    persona_id: str = Field(max_length=255, nullable=False)
-    system_prompt: str = Field(sa_type=Text, nullable=False)
-    begin_dialogs: Optional[list] = Field(default=None, sa_type=JSON)
-    """a list of strings, each representing a dialog to start with"""
-    tools: Optional[list] = Field(default=None, sa_type=JSON)
-    """None means use ALL tools for default, empty list means no tools, otherwise a list of tool names."""
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column_kwargs={"onupdate": datetime.now(timezone.utc)},
-    )
-
-    __table_args__ = (
-        UniqueConstraint(
-            "persona_id",
-            name="uix_persona_id",
-        ),
-    )
-
-
-class Personality(TypedDict):
-    """LLM Persona class.
-
-    Prefer using the Persona class above.
-    """
-
-    prompt: str
-    name: str
-    begin_dialogs: list[str]
-    tools: list[str] | None
-    """Tool list. None means use all tools, empty list means don't use any tools"""
-```
-
-:::
+- Validate user-controlled prompts, URLs, files, and tool parameters.
+- Do not treat model output as a trusted instruction. Continue authorization checks for file writes, shell, accounts, and external actions.
+- Cover unavailable Providers, empty output, invalid tool arguments, timeout, cancellation, step exhaustion, and plugin hot reload.
+- Use mock Providers and tools in unit tests. Enable live Provider tests only through explicit environment variables.
+- Keep user-facing errors concise and redacted; put detailed exceptions only in protected logs.

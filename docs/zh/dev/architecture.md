@@ -1,0 +1,132 @@
+---
+outline: deep
+---
+
+# 项目架构
+
+本文描述当前 Xero-Team fork 的运行时结构和代码边界。历史教程或上游实现与本页冲突时，以当前仓库代码为准。
+
+## 事实来源
+
+项目不会把某一篇文档当成唯一真相。修改功能时，应同时核对下面这些来源：
+
+| 内容                    | 事实来源                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| 版本号与 Python 要求    | `pyproject.toml`、`astrbot/__init__.py`、`.python-version`                                    |
+| Python 依赖             | `pyproject.toml`、`requirements.txt`、`uv.lock`                                               |
+| Dashboard 工具链        | `dashboard/package.json`、`dashboard/pnpm-lock.yaml`                                          |
+| 文档工具链              | `docs/package.json`、`docs/pnpm-lock.yaml`                                                    |
+| 默认配置与 WebUI 元数据 | `astrbot/core/config/default.py`                                                              |
+| HTTP API 契约           | `openspec/openapi-v1.yaml`                                                                    |
+| 当前上游同步点          | `upstream-sync.yaml`                                                                          |
+| 版本化变更记录          | `changelogs/`；它记录已吸收的版本变更，不等同于 fork 已发布资产；更晚提交尚未纳入最新版本记录 |
+
+当前可复现开发与 CI 基线为 Python 3.14.6、Node.js 24.15.0 和 pnpm 11.13.0；Python 包元数据允许 3.14 及以上版本。
+
+## 启动流程
+
+源码入口和 CLI 入口的前置流程并不相同，但最后都会显式创建 `RuntimeServices` 并交给 `InitialLoader`：
+
+- 根目录 `main.py` 先调用 `runtime_bootstrap.initialize_runtime_bootstrap()` 配置受信任 CA，再导入核心模块、应用启动环境参数并校验 Python 与运行目录。Dashboard 解析优先使用显式 `--webui-dir`，然后依次检查版本匹配的源码树 `dashboard/dist`、运行目录 `data/dist`、包内置资源和下载资源；下载失败时，仍带 `index.html` 的失配 `data/dist` 只作为降级回退。
+- `astrbot` CLI 先解析并锁定 CLI runtime root，要求存在 `.astrbot` 标记，并运行自己的交互式 Dashboard 资源检查。它当前不会调用根入口的 `runtime_bootstrap`，因此修改启动安全或资源解析时必须分别检查两条路径。
+- 两条路径随后都调用 `create_runtime_services()` 创建配置、数据库、共享偏好、HTML 渲染器、文件 token 服务和依赖安装器等实例，再由 `InitialLoader` 初始化 `AstrBotCoreLifecycle`，并行运行核心任务与 FastAPI Dashboard。
+- 初始化中途失败时会调用生命周期清理；停止逻辑必须能处理“只初始化了一部分”的状态并允许重复调用。导入 `astrbot.core` 本身不得创建运行时服务或访问用户数据。
+
+## 运行时所有权
+
+`RuntimeServices` 持有一个 AstrBot 进程共享的基础能力：
+
+- `AstrBotConfig`
+- `SQLiteDatabase`
+- `SharedPreferences`
+- 本地 Playwright `HtmlRenderer`
+- `FileTokenService`
+- `PipInstaller`
+- demo mode 状态
+
+`AstrBotCoreLifecycle` 在这些基础服务之上按依赖顺序创建 Provider、Platform、Conversation、Persona、Memory、Knowledge Base、Cron、Plugin、SubAgent 和 Pipeline 等管理器。需要共享这些能力时，应通过现有所有者注入，不要恢复进程级全局单例。
+
+## 消息处理链
+
+平台适配器将消息规范化为 `AstrMessageEvent`，写入最大长度为 1024 的共享事件队列。`EventBus` 根据消息命中的配置文件选择对应的 `PipelineScheduler`，并在并发信号量保护下执行完整流水线。
+
+流水线顺序由 `astrbot/core/pipeline/stage_order.py` 定义：
+
+1. `WakingCheckStage`
+2. `WhitelistCheckStage`
+3. `SessionStatusCheckStage`
+4. `RateLimitStage`
+5. `ContentSafetyCheckStage`
+6. `PreProcessStage`
+7. `ProcessStage`
+8. `ResultDecorateStage`
+9. `RespondStage`
+
+`ProcessStage` 负责插件处理与 Agent 调用；`ResultDecorateStage` 处理前缀、分段、TTS、本地文转图、引用等结果装饰；`RespondStage` 统一调用平台发送接口。流水线同时支持普通异步 stage 和用异步生成器实现的洋葱式前后处理，修改时必须保留停止传播和收尾语义。
+
+## Agent、工具与 Skills
+
+核心 Agent 运行时位于 `astrbot/core/agent/`，主 Agent 的请求组装位于 `astrbot/core/astr_main_agent.py`。Provider 抽象位于 `astrbot/core/provider/`；OpenAI、Anthropic、Gemini 等具体实现位于 `provider/sources/`，并通过 `provider_modules.py` 延迟注册。Dify、Coze、DashScope 和 DeerFlow 属于 `astrbot/core/agent/runners/` 下的外部 Agent Runner，不是普通模型 Provider。
+
+工具来源包括内置工具、插件工具和 MCP 工具。MCP 支持 stdio、SSE 与 Streamable HTTP；远程 HTTP 默认拒绝 localhost、私网、链路本地和保留地址，只有在可信配置中显式设置 `allow_private_network` 才会放开。
+
+Skills 可来自 `data/skills`、插件 `skills/`、沙盒和当前会话 workspace。工作区 Skill 是请求级资源，默认路径为 `data/workspaces/{normalized_umo}/skills/`。
+
+SubAgent 通过 `transfer_to_*` handoff 工具挂载到主 Agent。启用编排后，主 Agent 默认保留自身工具；只有启用“去重重复工具”时，才会移除与已启用 SubAgent 重叠的工具。
+
+## 插件边界
+
+插件称为 Star。内置插件位于 `astrbot/builtin_stars/`，用户插件位于 `<runtime-root>/data/plugins/`。
+
+插件和内置 Star 应使用 `astrbot.api` 提供的 SDK，不应直接依赖具体平台或 Provider source。共享核心只有注册/发现所有者（例如平台管理器和 Provider 模块注册表）可以有意导入具体 source；普通共享模块不能绕过这些所有者。`tests/unit/test_import_boundaries.py` 会检查关键绝对导入路径，但不能代替对相对导入和注册所有权的代码审查：
+
+- `astrbot/api/` 不得依赖 Dashboard 或具体 source。
+- 共享 `astrbot/core/` 只有注册/发现所有者可以直接导入具体平台或 Provider source。
+- `astrbot/builtin_stars/` 不得直接导入具体 source。
+
+插件持久化小数据应使用 Star KV API；文件应通过 `from astrbot.api.star import StarTools` 导入公共接口，并放在 `StarTools.get_data_dir()` 返回的 `data/plugin_data/<plugin>` 目录，而不是插件源码目录。
+
+## Dashboard 与 HTTP API
+
+Dashboard 后端是 FastAPI 应用，使用 Hypercorn 运行。普通 JSON 路由位于 `astrbot/dashboard/api/`，领域操作位于 `astrbot/dashboard/services/`，请求模型集中在 `astrbot/dashboard/schemas.py`。
+
+普通 JSON API 使用 `status` / `message` / `data` envelope，常见状态为 `ok`、`error`，部分显式场景也会返回 `warning`。文件下载、SSE、Webhook、静态资源和其他协议原生响应应使用相应的 FastAPI/Starlette response，不应强制包成 JSON。
+
+所有 `/api/v1` 路由由 `astrbot/dashboard/api/router.py` 汇总。源规范是 `openspec/openapi-v1.yaml`；Dashboard 的 Hey API 客户端和文档站的 `public/openapi.json` 都由它生成，禁止手工修改生成客户端。
+
+## 运行目录
+
+源码目录和运行时根目录不是同一个概念。运行时根目录默认是当前工作目录，可由 `ASTRBOT_ROOT` 覆盖；Desktop 包使用用户目录下的专用根目录。
+
+常见可变数据位于 `<runtime-root>/data/`：
+
+- `cmd_config.json` 与 `config/`
+- `data_v4.db`
+- `plugins/` 与 `plugin_data/`
+- `skills/` 与 `workspaces/`
+- `knowledge_base/`
+- `t2i_templates/`
+- `backups/`、`temp/`、`webchat/`
+
+`astrbot.core.utils.astrbot_path` 中的运行目录 helper 当前返回字符串；新核心代码做路径运算时应在调用边界包装成 `Path(...)`。不要把这条规则套到已经返回 `Path` 的 CLI helper 或 `StarTools.get_data_dir()`。
+
+## 网络与安全默认值
+
+- WebUI 和内置 Webhook/反向 WebSocket 服务默认只监听 loopback。远程访问必须显式配置监听地址，并配合防火墙、TLS 或可信反向代理。
+- `dashboard.trust_proxy_headers` 默认关闭；只有确认前置代理会覆盖客户端提交的转发头时才应开启。
+- 下载路径必须验证 TLS，不允许通过 `ssl=False` 或 `verify=False` 静默降级。
+- 不可信 XML 使用 `defusedxml` 解析。
+- Dashboard 动态 HTML 必须经过 DOMPurify；前端 lint 默认禁止未审计的 `v-html`。
+- 面向用户或日志输出的 Agent 异常需要经过敏感信息脱敏。
+
+## 修改位置速查
+
+| 变更类型        | 主要位置                                            | 同步检查                                           |
+| --------------- | --------------------------------------------------- | -------------------------------------------------- |
+| 新消息平台      | `astrbot/core/platform/sources/`                    | 注册、配置元数据、平台文档、发送/清理测试          |
+| 新模型 Provider | `astrbot/core/provider/sources/`                    | `provider_modules.py`、配置元数据、Provider 测试   |
+| 新 Agent Runner | `astrbot/core/agent/runners/`                       | Provider 配置、Runner 文档、工具/流式行为          |
+| Pipeline 行为   | `astrbot/core/pipeline/`                            | stage 顺序、停止传播、流式与非流式测试             |
+| Dashboard API   | `astrbot/dashboard/api/`、`services/`、`schemas.py` | OpenAPI、生成客户端、前后端测试                    |
+| 插件 SDK        | `astrbot/api/`、`astrbot/core/star/`                | import boundary、插件指南、内置 Star               |
+| NapCat 事件模型 | `scripts/napcat/`                                   | 运行 `make napcat-check`，不要手改 generated model |

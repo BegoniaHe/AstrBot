@@ -1,11 +1,14 @@
 # Deploy AstrBot with Docker
 
 > [!WARNING]
-> This fork does not publish an official Docker image. Docker deployment should build AstrBot locally from this repository.
+> This fork does not publish a prebuilt Docker image. Clone this repository and build from its root `Dockerfile` and Compose files.
 
-## Recommended Path
+## Choose a Compose File
 
-For this fork, the maintained Docker path is based on `compose-with-napcat.yml`. It builds AstrBot from the local `Dockerfile` instead of pulling an upstream image.
+The repository provides two locally built deployment paths:
+
+- `compose.yml`: runs AstrBot only. Use it for QQ Official Bot, Telegram, Discord, and other platforms, or when you manage the bot protocol implementation separately.
+- `compose-with-napcat.yml`: runs AstrBot and NapCat together for personal QQ accounts. AstrBot is still built from the local checkout; NapCat uses its official container image.
 
 Clone the repository first:
 
@@ -14,75 +17,96 @@ git clone https://github.com/Xero-Team/AstrBot.git
 cd AstrBot
 ```
 
+## Allow Access to the WebUI from Outside the Container
+
+The AstrBot WebUI listens on `127.0.0.1` by default. Inside a container, this means that publishing port `6185` alone does not make the WebUI reachable from the host.
+
+Before starting, add the following entry under `astrbot.environment` in the Compose file you selected:
+
+```yaml
+environment:
+  - TZ=Asia/Shanghai
+  - ASTRBOT_DASHBOARD_HOST=0.0.0.0
+```
+
+`ASTRBOT_DASHBOARD_HOST` takes precedence over `dashboard.host` in `data/cmd_config.json`. If external access is no longer needed, remove the environment variable and restore the configured host to a loopback address.
+
+> [!CAUTION]
+> `0.0.0.0` makes the WebUI listen on every container interface. Do not expose the admin panel directly to the public internet. Restrict firewall access and use a reverse proxy, HTTPS, a strong password, and TOTP.
+
 ## Start AstrBot Only
 
-If you only want AstrBot itself, start just the `astrbot` service:
+The root `compose.yml` builds the current checkout as the local image `astrbot:local`:
 
 ```bash
-docker compose -f compose-with-napcat.yml up -d --build astrbot
+docker compose up -d --build
+docker compose logs -f astrbot
 ```
 
-View logs with:
+Its default mount and published ports are:
 
-```bash
-docker compose -f compose-with-napcat.yml logs -f astrbot
-```
+- `./data` -> `/AstrBot/data`: configuration, database, plugins, and other runtime data.
+- `6185:6185`: AstrBot WebUI.
+- `6199:6199`: optional OneBot v11 reverse WebSocket endpoint.
+
+Publishing `6199` does not change the OneBot listener address. Only set that platform's `ws_reverse_host` to `0.0.0.0` when its OneBot client runs outside the AstrBot container. Also configure `ws_reverse_token` and restrict network access to the port.
 
 ## Start AstrBot and NapCat Together
 
-If you also need AstrBot + NapCat, start the full compose stack:
+First add `ASTRBOT_DASHBOARD_HOST=0.0.0.0` to `compose-with-napcat.yml` as described above.
+
+The file currently also sets NapCat `MODE=astrbot`. On every NapCat startup, that mode writes a **reverse** WebSocket client targeting `ws://astrbot:6199/ws`. To use AstrBot's currently recommended dedicated `NapCat` platform, change it first to:
+
+```yaml
+- MODE=ws
+```
+
+`MODE=ws` starts a OneBot v11 forward WebSocket server on `0.0.0.0:3001`. Then start the stack:
 
 ```bash
 docker compose -f compose-with-napcat.yml up -d --build
+docker compose -f compose-with-napcat.yml logs -f astrbot napcat
 ```
 
-This compose file:
+On Linux, you can run NapCat with your host user's UID/GID to reduce bind-mount permission issues:
 
-- builds the AstrBot image locally from this repository
-- starts the official NapCat container
-- keeps AstrBot and NapCat on the same internal Docker network
+```bash
+NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) \
+  docker compose -f compose-with-napcat.yml up -d --build
+```
 
-Default ports:
+This Compose file publishes:
 
-- `6185`: AstrBot WebUI
-- `6099`: NapCat WebUI
+- `6185`: AstrBot WebUI.
+- `6099`: NapCat WebUI.
 
-Default persistent directories:
+It persists:
 
 - `./data`
 - `./napcat/config`
 - `./ntqq`
 
-## NapCat Connection Notes
+AstrBot and NapCat share an internal Docker network. With `MODE=ws`, create the dedicated `NapCat` platform in AstrBot and set `ws_url` to `ws://napcat:3001`. If NapCat's forward WebSocket uses a token, configure the same token on both sides. This path does not require publishing a QQ WebSocket port to the host.
 
-After the containers are up:
+> [!NOTE]
+> NapCat `MODE` selects a startup template and rewrites `onebot11.json` on every start; the template token is empty. To persist a custom token, start once with `MODE=ws`, remove `MODE` from the Compose file, and then set the token in NapCat WebUI. The resulting configuration remains under `./napcat/config`.
 
-1. In AstrBot WebUI, create a `NapCat` bot and set `ws_url` to `ws://napcat:3001`.
-2. If NapCat requires WebSocket authentication, set the same `token` in AstrBot.
-3. Keep both containers on the same internal network so AstrBot can dial NapCat directly.
+If you retain the Compose file's original `MODE=astrbot`, do not create the dedicated `NapCat` platform. Create `OneBot v11`, set `ws_reverse_host` to `0.0.0.0`, and keep port `6199`. It only needs to be reachable on the internal Docker network and does not need to be published to the host. For authentication, likewise remove `MODE` after the initial configuration is generated, then set the same token in NapCat and AstrBot.
 
-Because both containers share the same internal network, AstrBot does not need a separate callback path anymore.
+## First Login and Updates
 
-## Old Paths That Are Not Recommended
+On first startup, AstrBot prints the WebUI address and a random initial password in its logs. The default username is `astrbot`. Change the password immediately after logging in.
 
-The following are not the Docker deployment path for this fork anymore:
-
-- using historical upstream prebuilt images directly
-- switching upstream image pulls to a mirror
-- deploying this fork through handwritten `docker run` commands
-
-Those approaches do not match how this fork ships code, dependencies, and dashboard assets.
-
-## After Startup
-
-If startup succeeds, AstrBot prints the WebUI URL and initial credentials in container logs. Open the printed URL to access the dashboard.
-
-> [!TIP]
-> First-time logins use the random initial password printed in startup logs. The username is usually `astrbot`. Change it immediately after login.
-
-To update later:
+To update, back up `data/`, pull the latest code, and rebuild the selected service:
 
 ```bash
-git pull
-docker compose -f compose-with-napcat.yml up -d --build astrbot
+git pull --ff-only
+docker compose up -d --build
+```
+
+For the NapCat stack, use:
+
+```bash
+git pull --ff-only
+docker compose -f compose-with-napcat.yml up -d --build
 ```

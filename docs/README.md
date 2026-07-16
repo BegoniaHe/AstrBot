@@ -1,9 +1,48 @@
-# AstrBot
+# AstrBot documentation
 
-_✨ 易上手的多平台 LLM 聊天机器人及开发框架文档（当前仓库分支） ✨_
+This directory contains the documentation sources for the current
+[Xero-Team/AstrBot](https://github.com/Xero-Team/AstrBot) branch. When this
+fork differs from upstream tutorials, the code, configuration defaults, API
+specification, and deployment files in this repository are authoritative.
 
-[查看文档](https://docs.astrbot.app/) ｜ [问题提交](https://github.com/Xero-Team/AstrBot/issues)
+- Chinese sources: `docs/zh/`
+- English sources: `docs/en/`
+- Site navigation and theme: `docs/.vitepress/`
+- Published developer OpenAPI document: `docs/public/openapi.json`
 
-[AstrBot](https://github.com/Xero-Team/AstrBot) 是一个现代化维护中的 AstrBot fork：保持上游同步能力，但以当前分支的代码、配置、API 和部署文件为准，不继续为旧兼容路径背书。
+## Local preview
 
-![image](https://github.com/user-attachments/assets/48f72a71-9456-4166-bbd2-f2a6c8cd740f)
+The pinned pnpm version is declared in `docs/package.json`. Use Corepack so the
+same toolchain is used locally and in CI.
+
+```bash
+cd docs
+corepack pnpm install --frozen-lockfile
+corepack pnpm run docs:dev
+```
+
+Build the production site with:
+
+```bash
+cd docs
+corepack pnpm run docs:build
+```
+
+Do not edit `docs/.vitepress/dist/`; it is generated and ignored. When a
+backend route or OpenAPI schema changes, regenerate the published API document
+from the repository root:
+
+```bash
+uv run python docs/scripts/update_openapi_json.py
+node node_modules/prettier/bin/prettier.cjs --write docs/public/openapi.json
+```
+
+The formatting step uses the root repository tooling installed by
+`make bootstrap` or `corepack npm ci`.
+
+User-facing changes should update both language trees when an equivalent page
+exists. Keep internal links extensionless so VitePress validates them during
+the production build.
+
+[Published documentation](https://docs.astrbot.app/) ·
+[Report an issue](https://github.com/Xero-Team/AstrBot/issues)

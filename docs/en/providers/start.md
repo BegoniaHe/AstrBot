@@ -1,43 +1,51 @@
 # Model Providers
 
-AstrBot treats model services and agent orchestration as separate concerns:
+AstrBot separates API sources, concrete models, and Agent execution into three layers:
 
-- `Providers`: manage endpoint type, `API Base URL`, `API Key`, and available model list.
-- `Conversation`: choose the default chat model for the current configuration.
-- `Agent Runners`: handle multi-turn execution, tool calling, and orchestration; this includes third-party integrations such as Dify, Coze, Alibaba Bailian Applications, and DeerFlow.
+- A **Provider source** stores the API type, base URL, API key, proxy, and source-level capabilities.
+- A **model** references a Provider source and stores the model ID, context window, modalities, and generation parameters.
+- An **Agent Runner** controls multi-step execution. The built-in `local` runner uses chat models from the first two layers; Dify, Coze, Alibaba Bailian Applications, and DeerFlow are separate external runners, not ordinary chat Providers.
 
-## What this fork actually supports
+## Current capability range
 
-The built-in chat model path supports these native API formats:
+The current WebUI exposes these Provider categories:
 
-- OpenAI / OpenAI-compatible APIs
-- Anthropic
-- Google Gemini
+| Category        | Built-in types and representative integrations                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chat Completion | OpenAI Chat Completions and compatible APIs, OpenAI Responses, Anthropic, Google Gemini, plus dedicated Kimi Code, MiniMax Token Plan, Xiaomi, xAI, Zhipu, LongCat, Groq, OpenRouter, and AIHubMix adapters. |
+| Speech to Text  | OpenAI Whisper API, self-hosted Whisper, SenseVoice, Mimo, and Xinference.                                                                                                                                   |
+| Text to Speech  | OpenAI, Mimo, Genie, Edge TTS, GPT-SoVITS, FishAudio, DashScope, Azure, MiniMax, Volcengine, Gemini, and ElevenLabs.                                                                                         |
+| Embedding       | OpenAI, Gemini, NVIDIA, and Ollama.                                                                                                                                                                          |
+| Rerank          | vLLM, Xinference, Alibaba Bailian, and NVIDIA.                                                                                                                                                               |
+| Agent Runner    | Dify, Coze, Alibaba Bailian Applications, and DeerFlow; selected by a profile rather than invoked as a local model.                                                                                          |
 
-If a service does not have its own dedicated guide but exposes an OpenAI-compatible API, select `OpenAI` and fill in its `API Base URL` and `API Key`.
+Templates come from the current code registry and can change in later releases. Treat the list shown under **Providers → Add Provider Source** as authoritative for the running version.
 
-For local models, see:
+## Recommended configuration flow
 
-- [Ollama](/en/providers/provider-ollama)
-- [LM Studio](/en/providers/provider-lmstudio)
+1. Open **Providers** and add a source in the Provider Sources section.
+2. Select the exact API type and enter its base URL, API key, proxy, and related fields.
+3. Fetch models from the source or add a model with the exact model ID.
+4. Verify `max_context_tokens`, modalities, and tool-calling capability for each model.
+5. Open **Config**, edit the active profile, and select the default chat, STT, TTS, embedding, or rerank model under Provider settings.
+6. Use the test action or a real conversation before configuring fallback and retries.
 
-For third-party orchestration services, see:
+Provider data is stored in two profile arrays:
 
-- [Agent Runners Overview](/en/providers/agent-runners)
+- `provider_sources` contains shared endpoints and credentials;
+- `provider` contains model instances linked through `provider_source_id`.
 
-## Configuration Flow
+Do not copy old `provider` objects by hand. The current WebUI coordinates model references when a source is renamed and handles dependent models when a source is removed.
 
-1. Open WebUI `Providers` and click `+ Add Provider`.
-2. Choose the API type and fill in `API Base URL`, `API Key`, and related fields.
-3. Fetch the model list and enable the models you want to use.
-4. Open `Conversation` and choose the default chat model for the current configuration.
-5. If you use a third-party orchestration service, configure it in the `Agent Runners` section separately instead of mixing it with chat-model setup.
+## Choosing an API type
 
-## Where the Configuration Lives
+- Use **OpenAI Chat Completions** or a matching preset when the service explicitly exposes a compatible Chat Completions endpoint.
+- Use **OpenAI Responses** when you need its remote state modes, background responses, or native Web Search. It is not an alias for Chat Completions.
+- Prefer native Anthropic and Gemini adapters to retain thinking, native search, image output, or safety settings.
+- “OpenAI compatible” only means the request protocol is similar. It does not guarantee compatible tools, vision, audio, streaming usage, or reasoning fields. Test each required capability.
 
-- Provider-related settings are stored in the `provider` field of `data/cmd_config.json`.
-- The selected default chat model is stored in the active configuration file.
+See [Provider Configuration](./llm) for field details. For local models, see [Ollama](./provider-ollama) and [LM Studio](./provider-lmstudio). For external orchestration, see [Agent Runners](./agent-runners).
 
-## Using Environment Variables for Keys
+## Loading keys from environment variables
 
-You can load provider API keys from environment variables. In the provider configuration form, set the `API Key` field to `$ENV_VARIABLE_NAME`, for example `$OPENAI_API_KEY`.
+API-key fields accept `$ENV_VARIABLE_NAME`, such as `$OPENAI_API_KEY`. The variable must exist in the AstrBot process environment. In containers, inject it through a Secret, restricted env file, or orchestration platform instead of baking it into an image or committing it.

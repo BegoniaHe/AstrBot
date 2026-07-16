@@ -19,7 +19,7 @@ your_plugin/
 当当前语言没有对应翻译、某个字段缺失，或语言文件不存在时，AstrBot 会回退到默认文案：
 
 - 插件名称、卡片短描述和描述回退到 `metadata.yaml` 中的 `display_name`、`short_desc`、`desc`。
-- 配置项文案回退到 `_conf_schema.json` 中的 `description`、`hint`、`labels`。
+- 配置项文案回退到 `_conf_schema.json` 中的 `description` 和 `hint`。
 
 ## 元数据
 
@@ -68,14 +68,13 @@ your_plugin/
       "hint": "是否启用这个插件。"
     },
     "mode": {
-      "description": "模式",
-      "labels": ["快速", "安全"]
+      "description": "模式"
     }
   }
 }
 ```
 
-`options` 是配置保存值，不建议翻译。下拉框的展示文本请使用 `labels`。
+`options` 是配置保存值，不应翻译。当前 i18n 解析器只稳定返回字符串，不能翻译 `labels` 数组；下拉框的 `labels` 请直接放在 `_conf_schema.json`，或暂时保持与保存值相同。
 
 ## 插件 Dashboard Pages
 
@@ -149,8 +148,7 @@ your_plugin/
     },
     "output_level": {
       "description": "SSE delivery level",
-      "hint": "silence: permission requests only; simple: plain text messages and system events; summary: recent N messages when a task completes; detail: all messages in real time",
-      "labels": ["Silence", "Simple", "Summary", "Detail"]
+      "hint": "silence: permission requests only; simple: plain text messages and system events; summary: recent N messages when a task completes; detail: all messages in real time"
     }
   }
 }
@@ -158,4 +156,6 @@ your_plugin/
 
 ## 约束
 
-插件国际化只读取 `.astrbot-plugin/i18n` 目录。语言文件必须使用嵌套 JSON 结构，不支持点号扁平 key。
+插件国际化只读取 `.astrbot-plugin/i18n` 目录。语言文件必须使用嵌套 JSON object，不支持点号扁平 key。单个 locale 文件超过 1 MiB、文件名 locale 为空或超过 32 个字符、JSON 无效或顶层不是 object 时，运行时会跳过该文件。
+
+翻译叶子值应使用字符串。数组和对象不是当前 WebUI 的稳定翻译值；尤其不要在 locale 文件中覆盖 `labels` 数组。

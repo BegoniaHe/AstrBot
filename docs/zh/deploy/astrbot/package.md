@@ -1,25 +1,6 @@
-# 包管理器部署（uv）
-
-使用 `uv` 可以快速安装并启动 AstrBot。
-
-## 前置条件
-
-如果尚未安装 `uv`，请先按照官方文档安装：<https://docs.astral.sh/uv/>
-
-`uv` 支持 Linux、Windows、macOS。
-
-## 注意事项
+# 包管理器安装说明
 
 > [!WARNING]
-> 通过 `uv` 部署的 AstrBot **不支持在 WebUI 中进行版本升级**。如需更新，请在命令行中执行 `uv tool upgrade astrbot --python 3.14`。
+> 当前 Xero-Team fork 不发布 PyPI 包。执行 `uv tool install astrbot` 或 `uv tool upgrade astrbot` 安装/更新的是上游同名包，不代表本仓库当前分支。
 
-AstrBot 需要 Python 3.14 或更高版本。使用 `--python 3.14` 可以确保 `uv` 使用 Python 3.14 创建 tool 环境；如果启用了 Python 自动下载，`uv` 会在缺少 Python 3.14 时自动下载。
-
-## 安装并启动
-
-```bash
-uv tool install astrbot --python 3.14
-astrbot install-browser # 仅在使用本地文转图时需要执行一次
-astrbot init # 只需要在第一次部署时执行，后续启动不需要执行
-astrbot run
-```
+请使用本仓库维护的[源码部署](/deploy/astrbot/cli)，或从当前 checkout 本地构建 [Docker](/deploy/astrbot/docker) 镜像。只有在本 fork 建立独立且可验证的包发布流程后，本页才会重新提供包管理器安装命令。

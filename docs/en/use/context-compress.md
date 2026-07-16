@@ -1,40 +1,54 @@
 # Context Compression
 
-AstrBot includes automatic context compression.
+When the local Agent Runner approaches a model's context-window limit, AstrBot automatically compacts older messages so the request does not fail because of an oversized context. The default strategy summarizes older history with an LLM while preserving recent conversation turns exactly.
 
-![alt text](https://files.astrbot.app/docs/source/images/context-compress/image.png)
+![Context compression settings](https://files.astrbot.app/docs/source/images/context-compress/image.png)
 
-AstrBot automatically compresses the context when the conversation context **reaches 82% of the maximum context window length of the conversation model being used**, ensuring that as much conversation content as possible is retained without losing key information.
+## When compression runs
 
-## Compression Strategies
+AstrBot checks the context before every Agent step. This includes the next model call after a tool finishes. Compression is triggered when the estimated context usage exceeds **82%** of the model's context window.
 
-There are currently two compression strategies:
+The window size is resolved in this order:
 
-1. Truncate by conversation rounds. This strategy simply removes the earliest conversation content until the context length meets the requirements. You can specify the number of conversation rounds to discard at once, with a default of 1 round. This is the **default strategy**.
-2. LLM-based context compression. This strategy calls the model itself to summarize and compress the conversation content, thereby retaining more key information. You can specify the conversation model to use for compression; if not selected, it will automatically fall back to the "truncate by conversation rounds" strategy. You can set the number of recent conversation rounds to retain during compression, with a default of 4. You can also customize the prompt used during compression. The default prompt is:
+1. Use `max_context_tokens` from the model configuration.
+2. If it is unset or not positive, look up the model in AstrBot's built-in model metadata.
+3. If the model is still unknown, use `provider_settings.fallback_max_context_tokens`, which defaults to `128000`.
 
-```text
-Based on our full conversation history, produce a concise summary of key takeaways and/or project progress.
-1. Systematically cover all core topics discussed and the final conclusion/outcome for each; clearly highlight the latest primary focus.
-2. If any tools were used, summarize tool usage (total call count) and extract the most valuable insights from tool outputs.
-3. If there was an initial user goal, state it first and describe the current progress/status.
-4. Write the summary in the user's language.
-```
+For custom model IDs or model names rewritten by a proxy, set an accurate `max_context_tokens` value on the model. A value that is too large can let the provider reject the request first; a value that is too small causes premature compression.
 
-After one round of compression, AstrBot will perform a secondary check to verify if the current context length meets the requirements. If it still doesn't meet the requirements, it will adopt a halving strategy, cutting the current context content in half until the requirements are met.
+![Model context-window setting](https://files.astrbot.app/docs/source/images/context-compress/image1.png)
 
-- AstrBot will invoke the compressor for checking before each conversation request.
-- In the current version, AstrBot does not perform context compression during tool invocations. We will support this feature in the future, so stay tuned.
+## Compression strategies
 
-## ‼️ Important: Model Context Window Settings
+Choose a strategy with `context_limit_reached_strategy` in the profile's Provider settings.
 
-By default, when you add a model, AstrBot automatically retrieves the model's context window size from the API provided by [MODELS.DEV](https://models.dev/) based on the model's ID. However, due to the wide variety of models and the fact that some providers even modify the model IDs, AstrBot cannot automatically infer the context window size for all models you add.
+### `llm_compress`: LLM summary (default)
 
-You can manually set the model's context window size in the model configuration, as shown in the image below:
+AstrBot asks a compression model to summarize complete older turns, then combines that summary with the most recent original turns.
 
-![alt text](https://files.astrbot.app/docs/source/images/context-compress/image1.png)
+- `llm_compress_provider_id` selects the chat model used for summarization. When left empty, AstrBot uses the model active for the current session.
+- `llm_compress_keep_recent_ratio` is the share of the pre-compression token count preserved as exact recent context. It defaults to `0.15`, is clamped to the range `0`–`0.3`, and is mapped to whole conversation turns rather than splitting a turn. AstrBot also tries to preserve the active, latest user request exactly.
+- `llm_compress_instruction` overrides the summary instruction.
 
-> [!NOTE]
-> If you don't see the configuration option shown in the image above, please delete the model and re-add it.
+The default instruction asks the summary to preserve:
 
-When the model context window size is set to 0, AstrBot will still automatically retrieve the model's context window size from MODELS.DEV for each request. If it remains 0, context compression will not be enabled for that request.
+1. every core topic, its outcome, and the latest primary focus;
+2. tool-call counts and the most valuable tool results;
+3. files, documents, code, references, and paths that may be needed later;
+4. the user's original goal and current progress;
+5. the user's language, plus the latest result and concrete next step for work in progress.
+
+If the configured compression model is unavailable, AstrBot tries the model active for the current session. If no usable model is available, it uses turn-based truncation. The runtime also applies a truncation safeguard when summarization fails or the summarized context is still over the threshold.
+
+### `truncate_by_turns`: turn-based truncation
+
+This strategy makes no extra LLM call. It removes the oldest complete conversation turns, with `dequeue_context_length` controlling how many turns are dropped at a time. The default is `1`. It is fast and has no summary-model cost, but old details are discarded instead of condensed.
+
+## Maximum conversation turns
+
+`max_context_length` is a turn limit independent of the token threshold:
+
+- `-1` disables the turn limit, which is the default;
+- a positive integer keeps only that many recent turns before token-based compression runs.
+
+When both limits are configured, the turn limit is enforced first. For long-running tasks with substantial tool output, keep `llm_compress` enabled and configure an accurate context-window size. Use turn-based truncation when avoiding an additional summarization call matters more than retaining older details.

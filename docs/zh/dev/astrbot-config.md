@@ -1,562 +1,221 @@
----
-outline: deep
----
+# AstrBot 配置参考
 
-# AstrBot 配置文件
+AstrBot 的配置会随 Provider、平台适配器和 Agent 能力持续演进。本页记录当前稳定的配置分组、默认行为和运维边界，不维护一份手抄的“完整默认配置”。
 
-## data/cmd_config.json
+当前代码的权威来源是：
 
-AstrBot 的配置文件是一个 JSON 格式的文件。AstrBot 会在启动时读取这个文件，并根据文件中的配置来初始化 AstrBot，其路径位于 `data/cmd_config.json`。
+- 默认值：`astrbot/core/config/default.py` 中的 `DEFAULT_CONFIG`；
+- WebUI 字段元数据：同文件中的 `CONFIG_METADATA_3` 和 `CONFIG_METADATA_3_SYSTEM`；
+- 加载、完整性检查和密码迁移：`astrbot/core/config/astrbot_config.py`。
 
-> AstrBot 支持多配置文件。`data/cmd_config.json` 作为默认配置文件 `default`。其他您在 WebUI 新建的配置文件会存储在 `data/config/` 目录下，以 `abconf_` 开头。
+## 配置文件位置与加载行为
 
-AstrBot 默认配置如下：
+默认配置文件是运行根目录下的 `data/cmd_config.json`。设置 `ASTRBOT_ROOT` 后，路径变为 `$ASTRBOT_ROOT/data/cmd_config.json`。
 
-```jsonc
+WebUI 创建的其他配置档位于 `data/config/abconf_<uuid>.json`。消息会话与配置档的绑定由配置管理器维护；不要通过重命名文件来移动绑定关系。
+
+配置文件由 Python 标准 JSON 解析器读取，因此必须是**严格 JSON**：
+
+- 布尔值使用 `true` / `false`；
+- 不允许注释；
+- 不允许尾随逗号；
+- 字符串和键必须使用双引号。
+
+启动时，AstrBot 会递归补上缺失的当前默认键、调整顺序，并删除不在当前默认结构中的未知键。手动添加未被当前代码支持的字段并不能扩展配置。
+
+> [!TIP]
+> 优先使用 WebUI：配置档相关设置位于 **配置文件**，Provider 和模型位于 **提供商**，平台实例位于 **机器人**，进程级设置按类别位于 **设置**。直接编辑 JSON 后应重启 AstrBot，并先保留一份副本。
+
+## 顶层结构
+
+| 键                                                | 用途                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `config_version`                                  | 当前核心配置结构版本，默认 `2`，不要手动降级。                                 |
+| `platform_settings`                               | 所有消息平台共用的收发、白名单、限流和分段回复行为。                           |
+| `provider_sources`                                | API 端点和凭据等 Provider 来源。由“提供商”页面维护。                           |
+| `provider`                                        | 具体聊天、STT、TTS、Embedding、Rerank 等模型实例。                             |
+| `provider_settings`                               | 当前配置档的 Agent、默认模型、Persona、检索、上下文和工具行为。                |
+| `subagent_orchestrator`                           | 子代理 handoff 编排。                                                          |
+| `provider_stt_settings` / `provider_tts_settings` | 语音转文本和文本转语音默认模型及开关。                                         |
+| `provider_ltm_settings`                           | 旧名称下的群聊上下文、图片转述和主动回复设置；不是 Alkaid 长期记忆的数据开关。 |
+| `content_safety`                                  | 内置关键词和可选外部内容安全检查。                                             |
+| `dashboard`                                       | WebUI 监听、认证、限流、TOTP 和 TLS。                                          |
+| `platform` / `platform_specific`                  | 平台实例，以及 Lark、Telegram、Discord 等平台特异行为。                        |
+| 其他顶层键                                        | 管理员、T2I、代理、日志、时区、插件、知识库、Trace 和指标等。                  |
+
+`provider_sources`、`provider` 和 `platform` 中的对象结构由各类型注册的当前模板决定。不要从旧文档复制对象；在 WebUI 创建后再检查保存结果。模型通过 `provider_source_id` 引用来源，重命名或删除来源时应让 WebUI 同步引用。
+
+## `platform_settings`
+
+常用字段如下：
+
+| 键                                          | 默认值                      | 说明                                                                                                        |
+| ------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `unique_session`                            | `false`                     | 是否为群内成员拆分独立会话。                                                                                |
+| `rate_limit`                                | `60` 秒 / `30` 条 / `stall` | 超限时等待（`stall`）或丢弃（`discard`）。                                                                  |
+| `enable_id_white_list`                      | `true`                      | 启用 ID 白名单；管理员是否绕过由两个 `wl_ignore_admin_*` 字段控制。                                         |
+| `reply_prefix`                              | `""`                        | 所有回复的前缀。                                                                                            |
+| `reply_with_mention` / `reply_with_quote`   | `false`                     | @ 用户或引用原消息，实际能力取决于适配器。                                                                  |
+| `forward_threshold`                         | `1500`                      | 支持转发消息的平台上，长回复转发阈值。                                                                      |
+| `segmented_reply`                           | 见默认配置                  | 非流式结果的分段、间隔、清理规则。                                                                          |
+| `path_mapping`                              | `[]`                        | 将平台事件中的容器路径映射到 AstrBot 可访问路径，格式为 `原路径:目标路径`。该功能仍在收发 pipeline 中使用。 |
+| `friend_message_needs_wake_prefix`          | `false`                     | 私聊是否也要求唤醒前缀。                                                                                    |
+| `ignore_bot_self_message` / `ignore_at_all` | `false`                     | 忽略机器人自身消息或全体提及。                                                                              |
+
+`path_mapping` 示例：
+
+```json
 {
-    "config_version": 2,
-    "platform_settings": {
-        "unique_session": False,
-        "rate_limit": {
-            "time": 60,
-            "count": 30,
-            "strategy": "stall",  # stall, discard
-        },
-        "reply_prefix": "",
-        "forward_threshold": 1500,
-        "enable_id_white_list": True,
-        "id_whitelist": [],
-        "id_whitelist_log": True,
-        "wl_ignore_admin_on_group": True,
-        "wl_ignore_admin_on_friend": True,
-        "reply_with_mention": False,
-        "reply_with_quote": False,
-        "path_mapping": [],
-        "segmented_reply": {
-            "enable": False,
-            "only_llm_result": True,
-            "interval_method": "random",
-            "interval": "1.5,3.5",
-            "log_base": 2.6,
-            "words_count_threshold": 150,
-            "regex": ".*?[。？！~…]+|.+$",
-            "content_cleanup_rule": "",
-        },
-        "no_permission_reply": True,
-        "empty_mention_waiting": True,
-        "empty_mention_waiting_need_reply": True,
-        "friend_message_needs_wake_prefix": False,
-        "ignore_bot_self_message": False,
-        "ignore_at_all": False,
-    },
-    "provider": [],
-    "provider_settings": {
-        "enable": True,
-        "default_provider_id": "",
-        "default_image_caption_provider_id": "",
-        "image_caption_prompt": "Please describe the image using Chinese.",
-        "provider_pool": ["*"],  # "*" 表示使用所有可用的提供者
-        "wake_prefix": "",
-        "web_search": False,
-        "websearch_provider": "tavily",
-        "websearch_tavily_key": [],
-        "websearch_bocha_key": [],
-        "websearch_brave_key": [],
-        "websearch_exa_key": [],
-        "web_search_link": False,
-        "display_reasoning_text": False,
-        "identifier": False,
-        "group_name_display": False,
-        "datetime_system_prompt": True,
-        "default_personality": "default",
-        "persona_pool": ["*"],
-        "prompt_prefix": "{{prompt}}",
-        "max_context_length": -1,
-        "dequeue_context_length": 1,
-        "streaming_response": False,
-        "show_tool_use_status": False,
-        "streaming_segmented": False,
-        "max_agent_step": 30,
-        "tool_call_timeout": 120,
-    },
-    "provider_stt_settings": {
-        "enable": False,
-        "provider_id": "",
-    },
-    "provider_tts_settings": {
-        "enable": False,
-        "provider_id": "",
-        "dual_output": False,
-        "use_file_service": False,
-    },
-    "provider_ltm_settings": {
-        "group_icl_enable": False,
-        "group_message_max_cnt": 300,
-        "image_caption": False,
-        "active_reply": {
-            "enable": False,
-            "method": "possibility_reply",
-            "possibility_reply": 0.1,
-            "whitelist": [],
-        },
-    },
-    "content_safety": {
-        "also_use_in_response": False,
-        "internal_keywords": {"enable": True, "extra_keywords": []},
-        "baidu_aip": {"enable": False, "app_id": "", "api_key": "", "secret_key": ""},
-    },
-    "admins_id": ["astrbot"],
-    "t2i": False,
-    "t2i_word_threshold": 150,
-    "t2i_use_file_service": False,
-    "t2i_active_template": "base",
-    "http_proxy": "",
-    "no_proxy": ["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"],
-    "dashboard": {
-        "enable": True,
-        "username": "astrbot",
-        "password": "<your_password_md5>",
-        "jwt_secret": "",
-        "host": "127.0.0.1",
-        "port": 6185,
-    },
-    "platform": [],
-    "platform_specific": {
-        # 平台特异配置：按平台分类，平台下按功能分组
-        "lark": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["Typing"]},
-        },
-        "telegram": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["✍️"]},
-        },
-        "discord": {
-            "pre_ack_emoji": {"enable": False, "emojis": ["🤔"]},
-        },
-    },
-    "wake_prefix": ["/"],
-    "log_level": "INFO",
-    "trace_enable": False,
-    "pip_install_arg": "",
-    "pypi_index_url": "https://mirrors.aliyun.com/pypi/simple/",
-    "timezone": "Asia/Shanghai",
-    "callback_api_base": "",
-    "plugin_set": ["*"],  # "*" 表示使用所有可用的插件, 空列表表示不使用任何插件
+  "platform_settings": {
+    "path_mapping": [
+      "/app/.config/QQ:/var/lib/docker/volumes/napcat_data/_data"
+    ]
+  }
 }
 ```
 
-## 字段详解
+这是局部示意，不应覆盖完整文件。Windows 驱动器号本身含冒号，建议通过 WebUI 配置并在实际平台消息上验证。
 
-### `config_version`
+## `provider_settings`
 
-配置文件版本，请勿修改。
+### Provider 选择与重试
 
-### `platform_settings`
+- `enable`：是否启用 AI Provider 处理，默认 `true`。
+- `default_provider_id`：默认聊天模型 ID。
+- `fallback_chat_models`：主模型失败时按顺序尝试的聊天模型 ID。
+- `request_max_retries`：单个模型请求最大重试次数，默认 `5`；fallback 与单模型重试是不同层次。
+- `provider_pool`：本配置档可用 Provider 范围，`["*"]` 表示全部。
+- `default_image_caption_provider_id` 和 `image_caption_prompt`：为不支持图片的流程生成图片描述。
 
-消息平台适配器的通用设置。
+API Key 属于敏感配置。不要把真实 `cmd_config.json`、截图、日志或备份提交到 Git；日志和 Trace 也可能包含 Provider ID、请求错误或工具输出。
 
-#### `platform_settings.unique_session`
+### Persona、提示词与会话
 
-是否启用会话隔离。默认为 `false`。启用后，在群组或者频道中，每个人的对话的上下文都是独立的。
+- `default_personality`：默认 Persona ID。
+- `persona_pool`：本配置档可选 Persona，`["*"]` 表示全部。
+- `prompt_prefix`：用户提示词模板，必须保留 `{{prompt}}` 才能包含原始输入。
+- `wake_prefix`：配置档级唤醒前缀；顶层 `wake_prefix` 仍是全局命令/唤醒前缀列表。
+- `identifier`、`group_name_display`、`datetime_system_prompt`：向提示词加入用户 ID、群名或当前时间。
 
-#### `platform_settings.rate_limit`
+Persona 的选择优先级和权限语义见 [Persona 人格设定](../use/persona)。
 
-当消息速率超过限制时的处理策略。`time` 为时间窗口，`count` 为消息数量，`strategy` 为限制策略。`stall` 为等待，`discard` 为丢弃。
+### 上下文管理
 
-#### `platform_settings.reply_prefix`
+| 键                               | 默认值              | 说明                                                    |
+| -------------------------------- | ------------------- | ------------------------------------------------------- |
+| `context_limit_reached_strategy` | `llm_compress`      | `llm_compress` 或 `truncate_by_turns`。                 |
+| `llm_compress_keep_recent_ratio` | `0.15`              | 原样保留最近上下文的 token 比例，范围限制为 `0`–`0.3`。 |
+| `llm_compress_provider_id`       | `""`                | 留空时使用当前会话聊天模型。                            |
+| `llm_compress_instruction`       | 内置五点指令        | 摘要提示词。                                            |
+| `max_context_length`             | `-1`                | 压缩前最多保留的对话轮数；`-1` 不限制。                 |
+| `dequeue_context_length`         | `1`                 | 按轮截断时一次丢弃的轮数。                              |
+| `fallback_max_context_tokens`    | 运行时默认 `128000` | 模型未配置窗口且内置元数据无法识别时的兜底值。          |
 
-回复消息时的固定前缀字符串。默认为空。
+完整行为见 [自动上下文压缩](../use/context-compress)。
 
-#### `platform_settings.forward_threshold`
+### Agent Runner 与工具
 
-> 目前仅 QQ 平台适配器适用。
+- `agent_runner_type`：`local` 使用内置 Agent；也可选择已配置的 Dify、Coze、DashScope 或 DeerFlow Runner。
+- `*_agent_runner_provider_id`：对应外部 Runner 的 Provider ID。
+- `max_agent_step`：单次 Agent 运行最大 step，默认 `30`，也适用于当前子代理执行。
+- `tool_call_timeout`：单次工具调用超时秒数，默认 `120`。
+- `tool_schema_mode`：`full` 发送完整工具 schema；`skills_like` 使用较轻的两阶段 schema。
+- `show_tool_use_status` / `show_tool_call_result`：向用户显示工具状态及结果摘要。
+- `buffer_intermediate_messages`：非流式多 step 运行时合并中间文本。
+- `sanitize_context_by_modalities`：按当前模型能力清理历史中的不支持模态和工具结构，会改变模型实际看到的上下文。
+- `proactive_capability.add_cron_tools`：向本地 Agent 提供主动任务/Cron 工具。
+- `file_extract`：实验性文档提取配置，目前模板面向 Moonshot API。
 
-消息转发阈值。当回复内容超过一定字数后，机器人会将消息折叠成 QQ 群聊的 “转发消息”，以防止刷屏。
+### 流式输出
 
-#### `platform_settings.enable_id_white_list`
+- `streaming_response`：启用 Provider 流式响应。
+- `unsupported_streaming_strategy`：平台不支持原生流式回复时，使用 `realtime_segmenting` 实时分段，或 `turn_off` 关闭该次流式回复。
 
-是否启用 ID 白名单。默认为 `true`。启用后，只有在白名单中的 ID 发来的消息才会被处理。
+旧字段 `provider_settings.streaming_segmented` 已删除，不要重新加入。
 
-#### `platform_settings.id_whitelist`
+### Computer Use 与沙箱
 
-ID 白名单。填写后，将只处理所填写的 ID 发来的消息事件。为空时表示不启用白名单过滤。可以使用 `/sid` 指令获取在某个平台上的会话 ID。
+- `computer_use_runtime`：`none`、`local` 或 `sandbox`，默认 `none`。
+- `computer_use_require_admin`：默认 `true`，只有 AstrBot 管理员可调用电脑能力。
+- `sandbox.booter`：`shipyard_neo` 或 `cua`，其余字段保存 endpoint、token、profile、TTL 或 CUA 系统/遥测/本地模式配置。
 
-也可在 AstrBot 日志内获取会话 ID，当一条消息没通过白名单时，会输出 INFO 级别的日志，格式类似 `aiocqhttp:GroupMessage:547540978`
+本地模式直接操作 AstrBot 主机，应仅在可信环境使用。沙箱也不是自动授权边界；仍需限制管理员、Persona 工具和外部网络。
 
-#### `platform_settings.id_whitelist_log`
+### 搜索与图片
 
-是否打印未通过 ID 白名单的消息日志。默认为 `true`。
+`web_search`、`websearch_provider` 及各 Provider Key 控制内置网页搜索；`web_search_link` 控制是否附加链接。密钥应在 WebUI 中填写。
 
-#### `platform_settings.wl_ignore_admin_on_group` & `platform_settings.wl_ignore_admin_on_friend`
+`image_compress_enabled` 和 `image_compress_options.max_size/quality` 控制送入模型前的图片压缩。`max_quoted_fallback_images` 与 `quoted_message_parser` 限制引用消息和转发消息展开深度，避免无限抓取。
 
-- `wl_ignore_admin_on_group`: 是否管理员发送的群组消息无视 ID 白名单。默认为 `true`。
+## 子代理、语音与知识库
 
-- `wl_ignore_admin_on_friend`: 是否管理员发送的私聊消息无视 ID 白名单。默认为 `true`。
+- `subagent_orchestrator.main_enable`：启用 handoff。
+- `remove_main_duplicate_tools`：只移除主 Agent 与子 Agent 重叠的工具；默认 `false`。
+- `router_system_prompt` 和 `agents`：路由提示词与子 Agent 定义。推荐通过专用页面维护，详见 [子代理编排](../use/subagent)。
+- `provider_stt_settings`：STT 总开关和默认模型。
+- `provider_tts_settings`：TTS 模型、双输出、文件服务和 `0`–`1` 触发概率。
+- `kb_names`、`kb_fusion_top_k`、`kb_final_top_k`：默认知识库和检索数量。
+- `kb_agentic_mode`：将知识库检索作为工具交给模型自主调用。
 
-#### `platform_settings.reply_with_mention`
+Alkaid [长期记忆](../use/long-term-memory) 当前没有对应的启停配置；不要把 `provider_ltm_settings` 当作长期记忆开关。
 
-是否在回复消息时 @ 提到用户。默认为 `false`。
+## WebUI 与认证
 
-#### `platform_settings.reply_with_quote`
+`dashboard` 的关键默认值：
 
-是否在回复消息时引用用户的消息。默认为 `false`。
+| 键                       | 默认值      | 说明                                                                                    |
+| ------------------------ | ----------- | --------------------------------------------------------------------------------------- |
+| `enable`                 | `true`      | 启用 WebUI/API。                                                                        |
+| `username`               | `astrbot`   | 初始用户名。                                                                            |
+| `host`                   | `127.0.0.1` | 默认只监听 loopback。远程访问必须显式改为 `0.0.0.0` 或指定接口，并配置防火墙/反向代理。 |
+| `port`                   | `6185`      | HTTP(S) 监听端口。                                                                      |
+| `trust_proxy_headers`    | `false`     | 是否信任 `X-Forwarded-For` / `X-Real-IP`；只应在受控反向代理后启用。                    |
+| `auth_rate_limit.enable` | `true`      | 登录、TOTP 等认证端点限流。                                                             |
+| `totp.enable`            | `false`     | WebUI TOTP 双因素认证。                                                                 |
+| `ssl.enable`             | `false`     | 由 AstrBot 直接终止 TLS；证书、私钥和可选 CA 使用对应路径字段。                         |
 
-#### `platform_settings.path_mapping`
-
-_该配置项已被废弃。_
-
-路径映射列表。用于将消息中的文件路径进行替换。每个映射项包含 `from` 和 `to` 两个字段，表示将消息中的 `from` 路径替换为 `to` 路径。
-
-#### `platform_settings.segmented_reply`
-
-分段回复设置。
-
-- `enable`: 是否启用分段回复。默认为 `false`。
-- `only_llm_result`: 是否仅对 LLM 生成的回复进行分段。默认为 `true`。
-- `interval_method`: 分段间隔方法。可选值为 `random` 和 `log`。默认为 `random`。
-- `interval`: 分段间隔时间。对于 `random` 方法，填写两个逗号分隔的数字，表示最小和最大间隔时间（单位：秒）。对于 `log` 方法，填写一个数字，表示对数基底。默认为 `"1.5,3.5"`。
-- `log_base`: 对数基底，仅在 `interval_method` 为 `log` 时适用。默认为 `2.6`。
-- `words_count_threshold`: 分段回复的字数上限。只有字数小于此值的消息才会被分段，超过此值的长消息将直接发送（不分段）。默认为 `150`。
-- `regex`: 用于分隔一段消息。默认情况下会根据句号、问号等标点符号分隔。`re.findall(r'<regex>', text)`。默认值为 `".*?[。？！~…]+|.+$"`。
-- `content_cleanup_rule`: 移除分段后的内容中的指定的内容。支持正则表达式。如填写 `[。？！]` 将移除所有的句号、问号、感叹号。`re.sub(r'<regex>', '', text)`。
-
-#### `platform_settings.no_permission_reply`
-
-是否在用户没有权限时回复无权限的提示消息。默认为 `true`。
-
-#### `platform_settings.empty_mention_waiting`
-
-是否启用空 @ 等待机制。默认为 `true`。启用后，当用户发送一条仅包含 @ 机器人的消息时，机器人会等待用户在 60 秒内发送下一条消息，并将两条消息合并后进行处理。这在某些平台不支持 @ 和语音/图片等消息同时发送时特别有用。
-
-#### `platform_settings.empty_mention_waiting_need_reply`
-
-在上面一个配置项(`empty_mention_waiting`)中，如果启用了触发等待，启用此项后，机器人会立即使用 LLM 生成一条回复。否则，将不回复而只是等待。默认为 `true`。
-
-#### `platform_settings.friend_message_needs_wake_prefix`
-
-是否在消息平台的私聊消息中需要唤醒前缀。默认为 `false`。启用后，在私聊消息中，用户需要使用唤醒前缀才能触发机器人的响应。
-
-#### `platform_settings.ignore_bot_self_message`
-
-是否忽略机器人自己发送的消息。默认为 `false`。启用后，机器人将不会处理自己发送的消息，在某些平台可以防止死循环。
-
-#### `platform_settings.ignore_at_all`
-
-是否忽略 @ 全体成员的消息。默认为 `false`。启用后，机器人将不会响应包含 @ 全体成员的消息。
-
-### `provider`
-
-> 此配置项仅在 `data/cmd_config.json` 中生效，AstrBot 不会读取 `data/config/` 目录下的配置文件中的此项。
-
-已配置的模型服务提供商的配置列表。
-
-### `provider_settings`
-
-大语言模型提供商的通用设置。
-
-#### `provider_settings.enable`
-
-是否启用大语言模型聊天。默认为 `true`。
-
-#### `provider_settings.default_provider_id`
-
-默认的对话模型提供商 ID。必须是 `provider` 列表中已配置的提供商 ID。如果为空，则使用配置列表中的第一个对话模型提供商。
-
-#### `provider_settings.default_image_caption_provider_id`
-
-默认的图像描述模型提供商 ID。必须是 `provider` 列表中已配置的提供商 ID。如果为空，则代表不使用图像描述功能。
-
-此配置项的意思是，当用户发送一张图片时，AstrBot 会使用此提供商来生成对图片的描述文本，并将描述文本作为对话的上下文之一。这在对话模型不支持多模态输入时特别有用。
-
-#### `provider_settings.image_caption_prompt`
-
-图像描述的提示词模板。默认为 `"Please describe the image using Chinese."`。
-
-#### `provider_settings.provider_pool`
-
-_此配置项尚未实际使用_
-
-#### `provider_settings.wake_prefix`
-
-使用 LLM 聊天额外的触发条件。如填写 `chat`，则需要发送消息时要以 `/chat` 才能触发 LLM 聊天。其中 `/` 是机器人的唤醒前缀。是一个防止滥用的手段。
-
-#### `provider_settings.web_search`
-
-是否启用 AstrBot 自带的网页搜索能力。默认为 `false`。启用后，LLM 可能会自动搜索网页并根据内容回答。
-
-#### `provider_settings.websearch_provider`
-
-网页搜索提供商类型。默认为 `tavily`。目前支持 `tavily`、`baidu_ai_search`、`bocha`、`brave`、`exa`、`firecrawl`。
-
-- `tavily`：使用 Tavily 搜索引擎。
-- `baidu_ai_search`：使用百度 AI Search（MCP）。
-- `bocha`：使用 BoCha 搜索引擎。
-- `brave`：使用 Brave Search API。
-- `exa`：使用 Exa 搜索引擎。
-- `firecrawl`：使用 Firecrawl Search API。
-
-#### `provider_settings.websearch_tavily_key`
-
-Tavily 搜索引擎的 API Key 列表。使用 `tavily` 作为网页搜索提供商时需要填写。
-
-#### `provider_settings.websearch_bocha_key`
-
-BoCha 搜索引擎的 API Key 列表。使用 `bocha` 作为网页搜索提供商时需要填写。
-
-#### `provider_settings.websearch_brave_key`
-
-Brave 搜索引擎的 API Key 列表。使用 `brave` 作为网页搜索提供商时需要填写。
-
-#### `provider_settings.websearch_exa_key`
-
-Exa 搜索引擎的 API Key 列表。使用 `exa` 作为网页搜索提供商时需要填写。
-
-#### `provider_settings.websearch_firecrawl_key`
-
-Firecrawl 搜索引擎的 API Key 列表。使用 `firecrawl` 作为网页搜索提供商时需要填写。
-
-#### `provider_settings.web_search_link`
-
-是否在回复中提示模型附上搜索结果的链接。默认为 `false`。
-
-#### `provider_settings.display_reasoning_text`
-
-是否在回复中显示模型的推理过程。默认为 `false`。
-
-#### `provider_settings.identifier`
-
-是否在 Prompt 前加上群成员的名字以让模型更好地了解群聊状态。默认为 `false`。启用将略微增加 token 开销。
-
-#### `provider_settings.group_name_display`
-
-是否在提示模型了解所在群的名称。默认为 `false`。此配置项目前仅在 QQ 平台适配器中生效。
-
-#### `provider_settings.datetime_system_prompt`
-
-是否在系统提示词中加上当前机器的日期时间。默认为 `true`。
-
-#### `provider_settings.default_personality`
-
-默认使用的人格的 ID。请在 WebUI 配置人格。
-
-#### `provider_settings.persona_pool`
-
-_此配置项尚未实际使用_
-
-#### `provider_settings.prompt_prefix`
-
-用户提示词。可使用 `{{prompt}}` 作为用户输入的占位符。如果不输入占位符则代表添加在用户输入的前面。
-
-#### `provider_settings.max_context_length`
-
-当对话上下文超出这个数量时丢弃最旧的部分，一轮聊天记为 1 条。-1 为不限制。
-
-#### `provider_settings.dequeue_context_length`
-
-当触发上面提到的 `max_context_length` 限制时，每次丢弃的对话轮数。
-
-#### `provider_settings.streaming_response`
-
-是否启用流式响应。默认为 `false`。启用后，模型的回复会实时类似打字机的效果发送给用户。此配置项仅在 WebChat、Telegram、飞书平台生效。
-
-#### `provider_settings.show_tool_use_status`
-
-是否显示工具使用状态。默认为 `false`。启用后，模型在使用工具时会显示工具的名称和输入参数。
-
-#### `provider_settings.streaming_segmented`
-
-不支持流式响应的消息平台是否降级为使用分段回复。默认为 `false`。意思是，如果启用了流式响应，但当前消息平台不支持流式响应，那么是否使用分段多次回复来代替。
-
-#### `provider_settings.max_agent_step`
-
-Agent 最大步骤数限制。默认为 `30`。模型的每次工具调用算作一步。
-
-#### `provider_settings.tool_call_timeout`
-
-工具调用的最大超时时间（秒），默认为 `120` 秒。
-
-#### `provider_stt_settings`
-
-语音转文本服务提供商的通用设置。
-
-#### `provider_stt_settings.enable`
-
-是否启用语音转文本服务。默认为 `false`。
-
-#### `provider_stt_settings.provider_id`
-
-语音转文本服务提供商 ID。必须是 `provider` 列表中已配置的 STT 提供商 ID。
-
-#### `provider_tts_settings`
-
-文本转语音服务提供商的通用设置。
-
-#### `provider_tts_settings.enable`
-
-是否启用文本转语音服务。默认为 `false`。
-
-#### `provider_tts_settings.provider_id`
-
-文本转语音服务提供商 ID。必须是 `provider` 列表中已配置的 TTS 提供商 ID。
-
-#### `provider_tts_settings.dual_output`
-
-是否启用双输出。默认为 `false`。启用后，机器人会同时发送文本和语音消息。
-
-#### `provider_tts_settings.use_file_service`
-
-是否启用文件服务。默认为 `false`。启用后，机器人会将输出的语音文件以 HTTP 文件外链的形式提供给消息平台。此配置项依赖于 `callback_api_base` 的配置。
-
-#### `provider_ltm_settings`
-
-群聊上下文感知服务提供商的通用设置。
-
-#### `provider_ltm_settings.group_icl_enable`
-
-是否启用群聊上下文感知。默认为 `false`。启用后，机器人会记录群聊中的对话内容，以便更好地理解群聊的上下文。
-
-上下文的内容会被放在对话的系统提示词中。
-
-#### `provider_ltm_settings.group_message_max_cnt`
-
-群聊消息的最大记录数量。默认为 `300`。超过此数量的消息将被丢弃。
-
-#### `provider_ltm_settings.image_caption`
-
-是否记录群聊中的图片，并自动使用图像描述模型生成图片的描述文本。默认为 `false`。此配置项依赖于 `provider_settings.default_image_caption_provider_id` 的配置。请谨慎使用，因为这可能会增加大量的 API 调用和 token 开销。
-
-#### `provider_ltm_settings.active_reply`
-
-- `enable`: 是否启用主动回复。默认为 `false`。
-- `method`: 主动回复的方法。可选值为 `possibility_reply`。
-- `possibility_reply`: 主动回复的概率。默认为 `0.1`。仅在 `method` 为 `possibility_reply` 时适用。
-- `whitelist`: 主动回复的 ID 白名单。仅在此列表中的 ID 才会触发主动回复。为空时表示不启用白名单过滤。可以使用 `/sid` 指令获取在某个平台上的会话 ID。
-
-### `content_safety`
-
-内容安全设置。
-
-#### `content_safety.also_use_in_response`
-
-是否在 LLM 回复中也进行内容安全检查。默认为 `false`。启用后，机器人生成的回复也会经过内容安全检查，以防止生成不当内容。
-
-#### `content_safety.internal_keywords`
-
-内部关键词检测设置。
-
-- `enable`: 是否启用内部关键词检测。默认为 `true`。
-- `extra_keywords`: 额外的关键词列表，支持正则表达式。默认为空。
-
-#### `content_safety.baidu_aip`
-
-百度 AI 内容审核设置。
-
-- `enable`: 是否启用百度 AI 内容审核。默认为 `false`。
-- `app_id`: 百度 AI 内容审核的 App ID。
-- `api_key`: 百度 AI 内容审核的 API Key。
-- `secret_key`: 百度 AI 内容审核的 Secret Key。
-
-> [!TIP]
-> 如果要启用百度 AI 内容审核，请先 `pip install baidu-aip`。
-
-### `admins_id`
-
-管理员 ID 列表。此外，还可以使用 `/op`, `/deop` 指令来添加或删除管理员。
-
-### `t2i`
-
-是否启用文本转图像功能。默认为 `false`。启用后，当用户发送的消息超过一定字数时，机器人会将消息渲染成图片发送给用户，以提高可读性并防止刷屏。支持 Markdown 渲染。
-
-### `t2i_word_threshold`
-
-文本转图像的字数阈值。默认为 `150`。当用户发送的消息超过此字数时，机器人会将消息渲染成图片发送给用户。
-
-### `t2i_use_file_service`
-
-是否通过文件服务公开本地渲染图片。默认为 `false`。启用后，机器人会将渲染的图片以 HTTP 文件外链的形式提供给消息平台。此配置项依赖于 `callback_api_base` 的配置。
-
-文本转图像使用本地 Playwright Chromium。通过源码或 `uv tool` 安装后，请执行一次 `astrbot install-browser` 安装浏览器。
-
-### `http_proxy`
-
-HTTP 代理。如 `http://localhost:7890`。
-
-### `no_proxy`
-
-不使用代理的地址列表。默认为 `["localhost", "127.0.0.1", "::1", "10.*", "192.168.*"]`。
-
-### `dashboard`
-
-AstrBot WebUI 配置。
-
-请不要随意修改 `password` 的值。它是随机初始密码经过 `md5` 编码后的值。首次启动时请在日志中获取初始密码，并在控制面板中修改。
-
-- `enable`: 是否启用 AstrBot WebUI。默认为 `true`。
-- `username`: AstrBot WebUI 的用户名。
-- `password`: AstrBot WebUI 的密码。首次启动会随机生成初始密码（已在日志中打印），这里保存的是该密码的 `md5` 值。请勿直接修改，除非您知道自己在做什么。
-- `jwt_secret`: JWT 的密钥。AstrBot 会在初始化时随机生成。请勿修改，除非您知道自己在做什么。
-- `host`: AstrBot WebUI 监听的地址。默认为 `127.0.0.1`；仅在需要远程访问时设置为 `0.0.0.0`。
-- `port`: AstrBot WebUI 监听的端口。默认为 `6185`。
-
-### `platform`
-
-> 此配置项仅在 `data/cmd_config.json` 中生效，AstrBot 不会读取 `data/config/` 目录下的配置文件中的此项。
-
-已配置的 AstrBot 消息平台适配器的配置列表。
-
-### `platform_specific`
-
-平台特异配置。按平台分类，平台下按功能分组。
-
-#### `platform_specific.<platform>.pre_ack_emoji`
-
-启用后，当请求 LLM 前，AstrBot 会先发送一个预回复的表情以告知用户正在处理请求。此功能目前仅在飞书平台适配器和 Telegram 中生效。
-
-##### lark (飞书)
-
-- `enable`: 是否启用飞书消息预回复表情。默认为 `false`。
-- `emojis`: 预回复的表情列表。默认为 `["Typing"]`。表情枚举名参考：[表情文案说明](https://open.feishu.cn/document/server-docs/im-v1/message-reaction/emojis-introduce)
-
-##### telegram
-
-- `enable`: 是否启用 Telegram 消息预回复表情。默认为 `false`。
-- `emojis`: 预回复的表情列表。默认为 `["✍️"]`。Telegram 仅支持固定反应集合，参考：[reactions.txt](https://gist.github.com/Soulter/3f22c8e5f9c7e152e967e8bc28c97fc9)
-
-##### discord
-
-- `enable`: 是否启用 Discord 消息预回复表情。默认为 `false`。
-- `emojis`: 预回复的表情列表。默认为 `["🤔"]`。Discord反应支持参考：[Discord Reaction FAQ](https://support.discord.com/hc/en-us/articles/12102061808663-Reactions-and-Super-Reactions-FAQ)
-
-### `wake_prefix`
-
-唤醒前缀。默认为 `/`。当消息以 `/` 开头时，AstrBot 会被唤醒。
-
-> [!TIP]
-> 如果唤醒的会话不在 ID 白名单中，AstrBot 将不会响应。
-
-### `log_level`
-
-日志级别。默认为 `INFO`。可以设置为 `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。
-
-### `trace_enable`
-
-是否启用追踪记录。默认为 `false`。启用后，AstrBot 会记录运行追踪信息，可以在管理面板的 Trace 页面查看。
-
-### `pip_install_arg`
-
-`pip install` 的参数。如 `-i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple`。
-
-### `pypi_index_url`
-
-PyPI 镜像源地址。默认为 `https://mirrors.aliyun.com/pypi/simple/`。
-
-### `timezone`
-
-时区设置。请填写 IANA 时区名称, 如 Asia/Shanghai, 为空时使用系统默认时区。所有时区请查看: [IANA Time Zone Database](https://data.iana.org/time-zones/tzdb-2021a/zone1970.tab)。
-
-### `callback_api_base`
-
-AstrBot API 的基础地址。用于文件服务和插件回调等功能。如 `http://example.com:6185`。默认为空，表示不启用文件服务和插件回调功能。
-
-### `plugin_set`
-
-已启用的插件列表。`*` 表示启用所有可用的插件。默认为 `["*"]`。
+密码以 PBKDF2 哈希存放在 `pbkdf2_password`。`password` 是迁移期使用的哈希字段，不要在 JSON 中写明文，也不要手工生成或交换哈希。忘记密码时使用：
+
+```bash
+uv run astrbot run --reset-password
+```
+
+源码入口也支持 `uv run main.py --reset-password`。启动日志会输出新生成的临时密码，并要求登录后修改。
+
+## 系统、日志与输出装饰
+
+- `admins_id`：AstrBot 管理员 ID 列表；使用 `/sid` 查看平台 ID。
+- `t2i`、`t2i_word_threshold`：将超过阈值的**输出结果**渲染为图片；`t2i_active_template` 由模板管理页面维护。
+- `t2i_use_file_service`：用文件 token URL 暴露渲染结果，需要正确设置 `callback_api_base`。
+- `http_proxy` / `no_proxy`：为出站 HTTP 设置代理和直连范围。
+- `log_level`、`log_file_*`：控制台和轮转文件日志。
+- `trace_enable`：Trace 采集总开关；`trace_log_*` 控制独立 Trace 文件。
+- `temp_dir_max_size`：`data/temp` 上限（MiB），默认 `1024`；后台定期清理旧文件。
+- `timezone`：IANA 时区名称，默认 `Asia/Shanghai`。
+- `callback_api_base`：外部服务访问 AstrBot 回调/文件 URL 的公开基地址，不改变监听地址。
+- `plugin_set`：配置档可用插件，`["*"]` 为全部，空列表为不使用插件。
+- `disable_builtin_commands` / `disable_metrics`：关闭内置命令或指标采集。
+
+## 进程级环境覆盖
+
+少量启动参数可以用环境变量覆盖；它们不是任意配置键到环境变量的通用映射。
+
+| 环境变量                                                                                   | 用途                                                   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `ASTRBOT_ROOT`                                                                             | 迁移运行根目录。                                       |
+| `DASHBOARD_HOST` / `ASTRBOT_DASHBOARD_HOST`                                                | 覆盖 WebUI 监听地址。                                  |
+| `DASHBOARD_PORT` / `ASTRBOT_DASHBOARD_PORT`                                                | 覆盖 WebUI 端口。                                      |
+| `DASHBOARD_SSL_ENABLE` / `ASTRBOT_DASHBOARD_SSL_ENABLE`                                    | 覆盖 WebUI TLS 开关。                                  |
+| `DASHBOARD_SSL_CERT`、`DASHBOARD_SSL_KEY`、`DASHBOARD_SSL_CA_CERTS` 及对应 `ASTRBOT_` 前缀 | 覆盖 TLS 文件。                                        |
+| `ASTRBOT_DASHBOARD_INITIAL_PASSWORD`                                                       | 首次初始化或显式重置时提供初始密码；必须满足密码校验。 |
+
+容器中发布 `6185` 端口并不会覆盖默认 loopback 监听，必须同时设置 host。详见 [Docker 部署](../deploy/astrbot/docker)。
+
+## 修改配置时的检查清单
+
+1. 先确认当前 `DEFAULT_CONFIG` 和 WebUI 元数据中确实存在该字段。
+2. 通过 WebUI 修改，或停止 AstrBot 后编辑严格 JSON。
+3. 不在 Issue、日志或 Git diff 中暴露凭据、TOTP secret、JWT secret 和访问 token。
+4. 重启后查看日志是否出现字段被删除、Provider 加载失败或平台重载失败。
+5. 修改监听、代理头、TLS、Computer Use、MCP 或回调地址后，重新做网络边界测试。
+6. 为多个配置档分别验证默认 Provider、Persona、插件池和会话绑定；默认配置档的值不会自动代表所有配置档。

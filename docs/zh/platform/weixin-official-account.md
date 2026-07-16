@@ -46,9 +46,10 @@ AstrBot 支持接入微信公众平台，并以微信公众号的形式接入。
 
 ![unified_webhook](https://files.astrbot.app/docs/source/images/use/unified-webhook.png)
 
-- 如果没有开启 `统一 Webhook 模式`，请填入 `http://你的域名/callback/command`。
+- 如果没有开启 `统一 Webhook 模式`，请填入 `https://你的域名/callback/command`。
 
-> 注意⚠️：仅支持 80 或者 443 端口。您可能需要购买域名，然后反向代理流量到 AstrBot 所在服务器的 `6185` 端口（如果开启了统一 Webhook 模式）或 `6194` 端口（如果没有开启统一 Webhook 模式），或者将端口改成 80 端口（注意服务器需要没有软件在占用 80 端口）。
+> [!NOTE]
+> 微信公众平台只接受外部端口 80 或 443。通常应使用域名和 HTTPS 反向代理：统一 Webhook 模式转发到 AstrBot 的 `6185` 端口，独立模式转发到适配器端口（默认 `6194`）。独立模式的 `callback_server_host` 默认是 `127.0.0.1`；仅当代理位于另一容器或主机时，才改为 `0.0.0.0` 或指定可达接口。
 
 消息加解密方式请选中 `安全模式`。
 
@@ -63,13 +64,11 @@ AstrBot 支持接入微信公众平台，并以微信公众号的形式接入。
 > [!NOTE]
 > 如果没有回复，并且控制台报错 `ip xxxxx not in whitelist`，说明你没有添加公网 IP 地址到微信公众平台的 IP 白名单中。如果确认添加了，那请等待若干分钟以让微信服务器更新。
 
-## 反向代理(自定义 API BASE)
+## 自定义出站 API 地址 (`api_base_url`)
 
-AstrBot 支持自定义企业微信的终结点以适应家庭 ip 没有固定的公网 IP 问题。
+`api_base_url` 控制的是 AstrBot **向微信公众平台发起出站 API 请求**时使用的基础地址，默认是 `https://api.weixin.qq.com/cgi-bin/`。正常情况下请保留默认值；只有在使用可信 API 网关或代理时才需要修改。
 
-只需要将您的自定义地址填入 `api_base_url` 即可。
-
-> 如果您没有公网 ip 当然也可以购买一台服务器，推荐 阿里云 的 99 元/年的服务器。
+它不会改变微信服务器请求 AstrBot 的入站回调 URL，也不会自动配置域名、端口转发或公网穿透。没有固定公网 IP 时，请使用统一 Webhook 配合反向代理/隧道，或部署到具有稳定公网入口的环境；不要把 `api_base_url` 当作回调地址。
 
 ## 语音输入
 

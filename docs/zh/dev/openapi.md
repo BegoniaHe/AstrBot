@@ -34,28 +34,29 @@ X-API-Key: abk_xxx
 
 创建 API Key 时可配置 `scopes`。每个 scope 控制可访问的接口范围：
 
-| Scope      | 作用                                                                               | 可访问接口                                                                                                                      |
-| ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `bot`      | 管理机器人/平台配置                                                                | `GET /api/v1/bot-types`、`GET/POST /api/v1/bots`、`PATCH /api/v1/bots/enabled`                                                  |
-| `provider` | 管理模型提供商和提供商源                                                           | `GET/POST /api/v1/providers`、`GET/PUT/DELETE /api/v1/provider-sources/by-id`                                                   |
-| `persona`  | 管理人格和人格文件夹                                                               | `GET/POST /api/v1/personas`、`GET/POST /api/v1/persona-folders`                                                                 |
-| `im`       | 主动发 IM 消息、查询 bot/platform 列表                                             | `POST /api/v1/im/messages`、`GET /api/v1/im/bots`                                                                               |
-| `config`   | 管理配置文件、系统配置和通用配置。该 scope 同时包含 `bot` 和 `provider` 访问权限。 | `GET /api/v1/configs`、`GET/PUT /api/v1/system-config`、`GET/POST /api/v1/config-profiles`                                      |
-| `chat`     | 调用对话能力、查询对话会话                                                         | `POST /api/v1/chat`、`GET /api/v1/chat/sessions`                                                                                |
-| `data`     | 管理会话状态、会话分组、会话规则和已保存对话                                       | `GET/POST /api/v1/sessions`、`GET/POST /api/v1/session-groups`、`GET/POST /api/v1/conversations`                                |
-| `file`     | 上传和下载对话附件                                                                 | `POST /api/v1/file`、`GET /api/v1/file`、`POST /api/v1/files`                                                                   |
-| `plugin`   | 管理插件、插件配置、插件源和插件市场                                               | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/config`、`POST /api/v1/plugins/install/url`                                     |
-| `mcp`      | 管理 MCP 服务器配置和服务端同步                                                    | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
-| `skill`    | 管理 Skills、Skill 压缩包、Skill 文件和 Shipyard Neo Skill 流程                    | `GET/POST /api/v1/skills`、`PUT /api/v1/skills/{skill_name}/files/{file_path}`、`POST /api/v1/skills/neo/sync`                  |
-| `kb`       | 管理知识库及其检索                                                                 | `GET/POST /api/v1/knowledge-bases`、`GET/PUT/DELETE /api/v1/knowledge-bases/{kb_id}`                                            |
+| Scope      | 作用                                                         | 代表性接口                                                                                                                      |
+| ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `bot`      | 管理机器人/平台配置                                          | `GET/POST /api/v1/bots`、`PATCH /api/v1/bots/{bot_id}/enabled`                                                                  |
+| `provider` | 管理模型和 Provider 来源                                     | `GET/POST /api/v1/providers`、`GET/PUT/DELETE /api/v1/provider-sources/{source_id}`                                             |
+| `persona`  | 管理 Persona 和 Persona 文件夹                               | `GET/POST /api/v1/personas`、`GET/POST /api/v1/persona-folders`                                                                 |
+| `im`       | 主动发 IM 消息、查询 bot/platform 列表                       | `POST /api/v1/im/messages`、`GET /api/v1/im/bots`                                                                               |
+| `config`   | 管理配置档、系统配置和通用配置；同时包含 `bot` 和 `provider` | `GET/PUT /api/v1/system-config`、`GET/POST /api/v1/config-profiles`、`GET /api/v1/subagents/config`                             |
+| `chat`     | 调用对话能力、查询和维护 WebChat 会话                        | `POST /api/v1/chat`、`GET /api/v1/chat/sessions`、`GET /api/v1/chat/configs`                                                    |
+| `kb`       | 管理知识库、文档、分块和检索                                 | `GET/POST /api/v1/knowledge-bases`、`POST /api/v1/knowledge-bases/{kb_id}/retrieve`                                             |
+| `memory`   | 审计和维护长期记忆事实、画像及操作记录                       | `GET/POST /api/v1/memory/facts`、`POST /api/v1/memory/facts/{fact_id}/delete`、`GET /api/v1/memory/operations`                  |
+| `data`     | 管理会话状态、会话分组、会话规则和已保存对话                 | `GET/POST /api/v1/sessions`、`GET/POST /api/v1/session-groups`、`GET/POST /api/v1/conversations`                                |
+| `file`     | 上传和下载对话附件                                           | `POST/GET /api/v1/file`、`POST /api/v1/files`                                                                                   |
+| `plugin`   | 管理插件、插件配置、插件源和市场                             | `GET /api/v1/plugins`、`GET/PUT /api/v1/plugins/{plugin_id}/config`、`POST /api/v1/plugins/install/url`                         |
+| `mcp`      | 管理 MCP 服务器配置和服务端同步                              | `GET/POST /api/v1/mcp/servers`、`PATCH /api/v1/mcp/servers/{server_name}/enabled`、`POST /api/v1/mcp/providers/modelscope/sync` |
+| `skill`    | 管理 Skills、压缩包、文件和 Shipyard Neo 流程                | `GET/POST /api/v1/skills`、`PUT /api/v1/skills/{skill_name}/files/{file_path}`、`POST /api/v1/skills/neo/sync`                  |
 
 如果 API Key 未包含目标接口所需 scope，请求会返回 `403 Insufficient API key scope`。
 
 `config` 是较大的管理 scope。创建 API Key 时如果包含 `config`，AstrBot 会同时授予该 Key `config`、`bot` 和 `provider` 访问权限。WebUI 的勾选逻辑也会体现这个依赖关系：选中 `config` 会同时选中 `bot` 和 `provider`；取消选中 `bot` 或 `provider` 时，会同步取消 `config`。
 
-当前开发者 API Key 支持以上 12 个 scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。
+当前开发者 API Key 支持以上 13 个 scope。`/api/v1/skills/*` 接口使用单数 `skill` scope，不使用复数 `skills`。
 
-注意：后端已经支持 `data` 和 `kb` scope，但当前 Settings 页面里的 scope 选择器暂时还没有把它们列出来。
+注意：后端已经支持 `data`、`kb` 和 `memory`，但当前 Settings 页面里的 scope 选择器暂时没有列出这三项。不要把“UI 中不可选”等同于“后端没有权限检查”；自动化客户端仍必须携带准确 scope 的 Key。
 
 `tool`、`system` 等接口仍然会出现在本地完整的 `/api/v1/openapi.json` 规范里，但它们目前属于依赖 Dashboard 登录态的接口，而不是开发者 API Key scope。
 
@@ -67,7 +68,7 @@ X-API-Key: abk_xxx
 
 - `POST /api/v1/chat`：发送对话消息（SSE 流式返回，不传 `session_id` 会自动创建 UUID）
 - `GET /api/v1/chat/sessions`：分页获取指定 `username` 的会话
-- `GET /api/v1/configs`：获取可用配置文件列表
+- `GET /api/v1/chat/configs`：获取 Chat 可选配置档；当前运行时要求 `chat` scope
 - `POST /api/v1/file`：上传附件，之后可在消息段中引用
 
 **机器人和模型提供商**
@@ -77,9 +78,11 @@ X-API-Key: abk_xxx
 - `GET /api/v1/providers`：获取模型提供商配置列表
 - `GET /api/v1/provider-sources`：获取提供商源配置列表
 
-**人格、数据、插件、MCP 和 Skills**
+**Persona、知识库、长期记忆、数据、插件、MCP 和 Skills**
 
 - `GET /api/v1/personas`：获取人格列表
+- `GET /api/v1/knowledge-bases`：获取知识库列表
+- `GET /api/v1/memory/facts`：分页查询长期记忆事实
 - `GET /api/v1/sessions`：获取会话状态与规则
 - `GET /api/v1/conversations`：获取已保存对话
 - `GET /api/v1/plugins`：获取插件列表
@@ -176,6 +179,43 @@ curl -N 'http://localhost:6185/api/v1/chat' \
   -H 'Content-Type: application/json' \
   -d '{"message":"Hello","username":"alice"}'
 ```
+
+## JSON 响应封装与流式例外
+
+普通 JSON API 使用统一封装：
+
+```json
+{
+  "status": "ok",
+  "message": null,
+  "data": {}
+}
+```
+
+业务错误通常返回 `status: "error"` 和可读的 `message`。客户端不能只依赖 HTTP 2xx 判断业务成功，应同时检查 `status`。
+
+以下响应遵循协议自身格式，不使用普通 JSON 封装：
+
+- Chat 的 Server-Sent Events（SSE）流；
+- 文件上传后的实际文件下载响应；
+- 会话导出、日志流、Webhook 和静态资源等二进制、流式或原生协议响应。
+
+调用这些接口时应根据 OpenAPI 的 content type 和具体路由处理，不要无条件执行 `response.json()`。
+
+## 契约维护流程
+
+本仓库的源规范是根目录 `openspec/openapi-v1.yaml`。运行时路由和 Pydantic 请求模型位于 `astrbot/dashboard/api/` 与 `astrbot/dashboard/schemas.py`。修改路由、请求/响应 schema、scope 或规范时，必须同步这些来源并重新生成：
+
+```bash
+cd dashboard
+corepack pnpm generate:api
+cd ..
+node node_modules/prettier/bin/prettier.cjs --write --ignore-path .gitignore "dashboard/src/api/generated/openapi-v1/**/*.ts"
+uv run python docs/scripts/update_openapi_json.py
+node node_modules/prettier/bin/prettier.cjs --write docs/public/openapi.json
+```
+
+不要手工编辑 `dashboard/src/api/generated/openapi-v1/` 或 `docs/public/openapi.json`。仓库 `.prettierignore` 默认排除生成客户端，因此必须用上面的 `--ignore-path .gitignore` 显式应用其已提交格式；两个格式化命令都只是机械处理。提交前还应验证本地 `/api/v1/openapi.json`、源码规范、前端调用点、中英文本文档及相关测试一致。
 
 ## 完整 API 文档
 

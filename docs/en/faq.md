@@ -1,183 +1,177 @@
 # FAQ
 
-## Dashboard Related
+## WebUI and accounts
 
-### Encountering 404 Error When Opening the Dashboard
+### The WebUI shows 404 or a blank page
 
-Download the dashboard ZIP asset from the [release](https://github.com/Xero-Team/AstrBot/releases) page, extract it into `AstrBot/data`, and then restart AstrBot. If it still does not work, try restarting your computer as well.
-
-### First Login Account and Random Password
-
-On first startup, the WebUI account is `astrbot` by default, and the default password is randomly generated (it is not a fixed hardcoded value). Check the startup logs and log in with the random initial password shown there:
-
-```text
-[00:27:40.590] [Core] [INFO] [dashboard.server:523]:
- ✨✨✨
-  AstrBot vX.Y.Z WebUI is ready
-
-   ➜  Local: http://localhost:6185
-   ➜  Initial username: astrbot
-   ➜  Initial password: UiYVpZxnW8k22IWqf0ru5pOy
-   ➜  Change it after logging in
- ✨✨✨
-Set dashboard.host in data/cmd_config.json to enable remote access.
-```
-
-`UiYVpZxnW8k22IWqf0ru5pOy` in this example is the initial password printed by that run.
-
-### Forgot Dashboard Password
-
-If you forgot your AstrBot dashboard password, you can use the CLI tool `astrbot password` to change the password.
-
-Another approach you can take is to find the `"dashboard"` field in `AstrBot/data/cmd_config.json`, for example:
-
-```json
-  "dashboard": {
-    "enable": true,
-    "username": "astrbot",
-    "password": "81e0c3dxxxxxxxxxxx78862e78",
-    "pbkdf2_password": "pbkdf2_sha256$600000$1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "password_storage_upgraded": true,
-    "password_change_required": true,
-    "jwt_secret": "5e1b0280bcxxxxxxxxxxxxxxxxf4a",
-    "host": "127.0.0.1",
-    "port": 6185,
-    "disable_access_log": true,
-    "ssl": {
-      "enable": false,
-      "cert_file": "",
-      "key_file": "",
-      "ca_certs": ""
-    }
-  },
-```
-
-Delete the `username`, `password`, `pbkdf2_password`, `password_storage_upgraded`, `password_change_required`, and `jwt_secret` fields (with their values), then save.
-The segment should look like:
-
-```json
-  "dashboard": {
-    "enable": true,
-    "host": "127.0.0.1",
-    "port": 6185,
-    "disable_access_log": true,
-    "ssl": {
-      "enable": false,
-      "cert_file": "",
-      "key_file": "",
-      "ca_certs": ""
-    }
-  },
-```
-
-After restart, AstrBot will automatically generate a random password with the fixed username `astrbot`; check the startup logs.
-
-### Correct Password Cannot Log In After Upgrading AstrBot
-
-If you are sure the dashboard password is correct but still cannot log in after upgrading AstrBot, the old WebUI static files may be incompatible with the newer backend.
-
-Solution:
-
-1. Stop AstrBot.
-2. Delete the `dist` folder under AstrBot's `data` directory: `AstrBot/data/dist`.
-3. Restart AstrBot.
-4. Access the dashboard in your browser. Press `Ctrl+Shift+R` or `Ctrl+F5` (or `Cmd+Shift+R` on macOS) to force refresh the page.
-
-After restart, AstrBot will reload or download WebUI files that match the current version.
-
-## Bot Core Related
-
-### How to Let AstrBot Control My Mac / Windows / Linux Computer?
-
-1. In AstrBot WebUI's `Config -> General Config`, find `Use Computer Capabilities`, and select `local` for the runtime environment.
-2. In `Config -> Other Config`, find `Admin ID List`, and add your user ID (you can get it through the `/sid` command).
-
-> [!TIP]
-> For security reasons, when runtime environment is set to `local`, AstrBot only allows AstrBot administrators to use computer capabilities by default.
-> You can select `sandbox` for the runtime environment, which allows all users to use computer capabilities (in an isolated sandbox). For more details, see [AstrBot Sandbox Environment](/en/use/astrbot-agent-sandbox.md)
-
-### Where Is the `data` Directory for an AstrBot Desktop Install?
-
-It is stored under the `.astrbot` directory in your home directory.
-
-- Windows: `C:\Users\<your-username>\.astrbot`
-- macOS / Linux: `/Users/<your-username>/.astrbot` or `/home/<your-username>/.astrbot`
-
-### Where Is the `data` Directory for an AstrBot Launcher Install?
-
-AstrBot Launcher is an external tool, so the `data` directory location depends on the Launcher implementation you use.
-
-For the current common GUI Launcher builds, data is usually stored under the `.astrbot_launcher` directory in your home directory:
-
-- Windows: `C:\Users\<your-username>\.astrbot_launcher`
-- macOS / Linux: `/Users/<your-username>/.astrbot_launcher` or `/home/<your-username>/.astrbot_launcher`
-
-If you are using another Launcher variant, follow that Launcher's documentation or actual working directory layout.
-
-### Bot Cannot Chat in Group Conversations
-
-1. In group chats, to prevent message flooding, the bot will not respond to every monitored message. Please try mentioning (@) the bot or using a wake word to chat, such as the default `/`, for example: `/hello`.
-
-### No Permission to Execute Admin Commands
-
-1. `/name, /provider, /dashboard_update, /op, /deop, /persona, /llm, /plugin, /model, /groupnew` are the default admin commands. You can use the `/sid` command to get a user's ID, then add it to the admin ID list in Settings -> Other Settings.
-
-### Chinese Characters Garbled When Locally Rendering Markdown Images (t2i)
-
-You can customize the font in your active t2i template CSS, for example with `font-family: 'Maple Mono', 'Noto Sans CJK SC', sans-serif;`.
-
-Recommended font: [Maple Mono](https://github.com/subframe7536/maple-font).
-
-### Cannot Parse API Returned Completion & LLM Returns `<empty content>`
-
-This is because the provider's API returned empty text. Try the following steps:
-
-1. Check if the API key is still valid
-2. Check if the API call limit or quota has been reached
-3. Check network connection
-4. Try reset
-5. Lower the maximum conversation count setting
-6. Switch to another model from the same provider / a different provider
-
-## Plugin Related
-
-### Cannot Install Plugin
-
-1. Plugins are installed via GitHub. Access to GitHub from mainland China can indeed be unstable. You can use a proxy, then go to Other Settings -> HTTP Proxy to configure it. Alternatively, download the plugin archive directly and upload it.
-
-### Error `No module named 'xxx'` After Installing Plugin
-
-![image](https://files.astrbot.app/docs/source/images/faq/image.png)
-
-This is because the plugin's dependencies were not installed properly. Normally, AstrBot automatically installs plugin dependencies after installing the plugin, but installation may fail in the following situations:
-
-1. Network issues preventing dependency downloads
-2. Plugin author did not include a `requirements.txt` file
-3. Python version incompatibility
-
-Solution:
-
-Based on the error message, refer to the plugin's README to manually install dependencies. You can install dependencies in the AstrBot WebUI under `Console` -> `Install Pip Package`.
-
-![image](https://files.astrbot.app/docs/source/images/faq/image-1.png)
-
-If you find that the plugin author did not include a `requirements.txt` file, please submit an issue in the plugin repository to remind the author to add it.
-
-## OneBot v11 / NapCat Related
-
-### I Followed the Docs, so Why Can't NapCat Connect to AstrBot?
-
-1. If **both** AstrBot and NapCat are deployed with Docker, try running:
+This fork does not publish an independent prebuilt Dashboard asset. A source deployment must build the Dashboard from the same checkout and sync it into the backend static directory:
 
 ```bash
-sudo docker network create newnet
-sudo docker network connect newnet astrbot
-sudo docker network connect newnet napcat
-sudo docker restart astrbot
-sudo docker restart napcat
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
 ```
 
-If these commands succeed, go back to NapCat WebUI and change the WebSocket URL in the network configuration from `ws://127.0.0.1:6199/ws` to `ws://astrbot:6199/ws`.
+Restart AstrBot, then force-refresh with `Ctrl+Shift+R` / `Ctrl+F5` (`Cmd+Shift+R` on macOS). Do not overwrite this fork with an upstream Dashboard build; its routes and pages may not match.
 
-2. If only NapCat is deployed with Docker, change the WebSocket URL in NapCat WebUI from `ws://127.0.0.1:6199/ws` to `ws://<host-ip>:6199/ws`, where `<host-ip>` is the IP address of the machine running AstrBot.
-3. If neither side is deployed with Docker, use `ws://localhost:6199/ws` or `ws://127.0.0.1:6199/ws` in NapCat WebUI.
+### What are the first-login credentials?
+
+The default username is `astrbot`. First startup generates a random strong password and prints it in the startup log:
+
+```text
+➜  Initial username: astrbot
+➜  Initial password: <password generated for this startup>
+➜  Change it after logging in
+```
+
+There is no fixed default password. Change the initial password immediately and do not publish startup logs that contain it.
+
+### I forgot the WebUI password
+
+From a source checkout, run:
+
+```bash
+uv run astrbot run --reset-password
+```
+
+Or use:
+
+```bash
+uv run main.py --reset-password
+```
+
+Startup generates a new password and prints it in the log. Do not delete `pbkdf2_password` or `jwt_secret` manually, and never put a plaintext password in the configuration file.
+
+### Why is the server IP unreachable?
+
+The WebUI listens only on `127.0.0.1:6185` by default. Replacing `localhost` with a server IP in the browser does not change the bind address.
+
+To allow remote connections for one process:
+
+::: code-group
+
+```bash [Linux / macOS]
+ASTRBOT_DASHBOARD_HOST=0.0.0.0 uv run main.py
+```
+
+```powershell [Windows PowerShell]
+$env:ASTRBOT_DASHBOARD_HOST = '0.0.0.0'
+uv run main.py
+```
+
+:::
+
+You can also set `dashboard.host` to `0.0.0.0` in `data/cmd_config.json`. This listens on every IPv4 interface, so configure the host firewall and preferably expose AstrBot through a trusted HTTPS reverse proxy. Enable `dashboard.trust_proxy_headers` only when that proxy overwrites client-supplied forwarding headers.
+
+Publishing container port `6185` also requires this bind override. See [Docker Deployment](./deploy/astrbot/docker).
+
+## Runtime data and updates
+
+### Where is `data`?
+
+The runtime root defaults to the process working directory, and runtime data lives at `<root>/data`. Running `uv run main.py` from the repository root normally uses `AstrBot/data`.
+
+With `ASTRBOT_ROOT` set, data lives at `$ASTRBOT_ROOT/data`. Configuration, the SQLite database, plugins, Skills, knowledge bases, temporary files, and backups can all live there, so back up the directory as a unit before an upgrade.
+
+This fork does not provide an independent Desktop or Launcher distribution. Directory layouts chosen by external launchers are outside this repository's guarantees.
+
+### How do I update a source deployment?
+
+Stop AstrBot and back up `data/`, then run:
+
+```bash
+git pull --ff-only
+uv sync --locked
+cd dashboard
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+cd ..
+uv run python scripts/sync_dashboard_dist.py
+```
+
+Read the intervening files under `changelogs/` and current unreleased commits first. Do not use `uv tool upgrade astrbot` for this fork; the `astrbot` package on PyPI is upstream.
+
+## Agent behavior, permissions, and output
+
+### The bot does not answer in a group
+
+To avoid flooding group chats, the default behavior requires mentioning the bot or using a wake prefix such as `/hello`. Also check:
+
+- which profile is bound to the message session;
+- whether the platform and Provider are enabled;
+- allowlist, administrator bypass, and rate limiting;
+- `ignore_at_all`, self-message filtering, and platform permissions.
+
+### An administrator command says permission denied
+
+Use `/sid` to inspect the current user ID, then add it to the administrator-ID list in the active profile. Profiles can be bound separately to platforms, groups, or direct messages, so editing the default profile may not affect the current session.
+
+### How do I enable Computer Use?
+
+Under **Config → Agent Computer Use**, select:
+
+- `local` to operate directly on the AstrBot host, only in a trusted environment;
+- `sandbox` to use the configured Shipyard Neo or CUA sandbox;
+- `none` to disable it, which is the default.
+
+`computer_use_require_admin` defaults to `true` for both local and sandbox runtimes. A sandbox provides runtime isolation but does not remove the user authorization gate. See [Computer Use](./use/computer) and [Agent Sandbox](./use/astrbot-agent-sandbox).
+
+### CJK text is garbled in T2I output
+
+Configure an installed CJK font in the active local T2I template, for example:
+
+```css
+font-family: 'Maple Mono', 'Noto Sans CJK SC', sans-serif;
+```
+
+See [Maple Mono](https://github.com/subframe7536/maple-font). The font must also be installed inside the container when AstrBot runs in Docker.
+
+### A Provider returns empty content
+
+Check, in order:
+
+1. API-key permission, balance, and quota;
+2. exact API Base and model ID;
+3. support for the current image, tool-call, or reasoning format;
+4. proxy, DNS, TLS, and request timeout;
+5. Provider test output and the original server error;
+6. whether fallback models actually use independent endpoints.
+
+Do not “fix” connectivity by disabling TLS verification. Reset the conversation or reduce retained history when appropriate, and see [Context Compression](./use/context-compress).
+
+## Plugins
+
+### Plugin installation fails
+
+If GitHub access is unavailable, configure an outbound HTTP proxy or download a trusted plugin archive and upload it through the WebUI. Do not install an unknown archive: plugins execute inside the AstrBot process with its Python permissions.
+
+### `No module named 'xxx'` after installation
+
+Common causes are a network failure, a missing `requirements.txt`, or a dependency that does not support Python 3.14. Inspect installation logs and the plugin README first. In a source development checkout, use `uv` for installation and debugging; do not mix unmanaged global `pip` packages into production.
+
+Report a missing dependency declaration to the plugin author instead of permanently maintaining an unreproducible manual environment.
+
+## NapCat / OneBot v11
+
+### Recommended new setup: NapCat forward WebSocket
+
+Use the dedicated **NapCat** adapter and let AstrBot connect to NapCat:
+
+1. Start NapCat's forward WebSocket server. The container image with `MODE=ws` listens on `0.0.0.0:3001` by default.
+2. Set the NapCat URL in AstrBot to:
+   - `ws://napcat:3001` on the same Docker network;
+   - `ws://127.0.0.1:3001` for processes on the same host;
+   - a protected NapCat host address for separate machines, with firewall and token controls.
+3. Remember that `127.0.0.1` inside a container refers only to that container.
+
+Check Docker DNS, the TCP port, and NapCat logs from the AstrBot container. `0.0.0.0` is a server bind address, never a client destination.
+
+### When is reverse WebSocket on 6199 used?
+
+`6199/ws` belongs to the generic **OneBot v11 (aiocqhttp)** reverse-WebSocket path, not the recommended dedicated NapCat adapter path.
+
+When keeping the older compose combination with `MODE=astrbot`, NapCat connects to `ws://astrbot:6199/ws`. AstrBot must use the OneBot v11 platform and bind `ws_reverse_host` to `0.0.0.0` across containers. Use loopback only when both endpoints are host processes.
+
+Do not configure forward and reverse paths for the same NapCat instance at once, or events can be duplicated. See [NapCat](./platform/napcat) and [OneBot v11](./platform/aiocqhttp).

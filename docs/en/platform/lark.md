@@ -89,7 +89,7 @@ Next, click on "Events & Callbacks," select "Receive events using long connectio
 ### `webhook` Send Events to Developer Server Method
 
 > [!TIP]
-> To make better use of this method, please refer to [Unified Webhook Mode](/en/use/unified-webhook.md#how-to-use-unified-webhook-mode) for the necessary configuration.
+> To make better use of this method, please refer to [Unified Webhook Mode](/en/use/unified-webhook) for the necessary configuration.
 
 After clicking `Save`, the bot card will display "View Webhook URL." Click to view and copy the callback URL.
 

@@ -1,130 +1,129 @@
-# 消息的发送
+# 消息发送
 
-## 被动消息
+## 被动回复
 
-被动消息指的是机器人被动回复消息。
+事件处理器可以通过 `yield` 返回一个或多个消息结果：
 
 ```python
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
+from astrbot.api.event import AstrMessageEvent, filter
+
+
+@filter.command("hello")
+async def hello(self, event: AstrMessageEvent):
     yield event.plain_result("Hello!")
-    yield event.plain_result("你好！")
-
-    yield event.image_result("path/to/image.jpg") # 发送图片
-    yield event.image_result("https://example.com/image.jpg") # 发送 URL 图片，务必以 http 或 https 开头
+    yield event.image_result("path/to/image.jpg")
+    yield event.image_result("https://example.com/image.jpg")
 ```
 
-## 主动消息
+本地路径由 AstrBot 进程所在的主机或容器解析；URL 图片必须以 `http://` 或
+`https://` 开头。具体消息类型是否可用仍取决于平台适配器。
 
-主动消息指的是机器人主动推送消息。某些平台可能不支持主动消息发送。
+## 主动发送
 
-如果是一些定时任务或者不想立即发送消息，可以使用 `event.unified_msg_origin` 得到一个字符串并将其存储，然后在想发送消息的时候使用 `self.context.send_message(unified_msg_origin, chains)` 来发送消息。
+定时任务或其他延迟流程可以保存 `event.unified_msg_origin`，之后通过
+`Context.send_message()` 向同一会话发送消息：
 
 ```python
-from astrbot.api.event import MessageChain
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
-    umo = event.unified_msg_origin
-    message_chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
-    await self.context.send_message(event.unified_msg_origin, message_chain)
+
+@filter.command("remember-me")
+async def remember_me(self, event: AstrMessageEvent):
+    session = event.unified_msg_origin
+    chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
+
+    send_result = await self.context.send_message(session, chain)
+    if not send_result.success:
+        logger.warning(
+            "Message delivery failed: %s",
+            send_result.error_message or "unknown error",
+        )
+
+    yield event.plain_result("已尝试主动发送消息。")
 ```
 
-通过这个特性，你可以将 unified_msg_origin 存储起来，然后在需要的时候发送消息。
+`Context.send_message()` 返回 `PlatformSendResult`，其中包含 `platform_id`、
+`success`、`target`、`message_count` 和 `error_message`。平台不存在、平台发送
+抛出异常等情况会返回 `success=False`；格式非法的会话字符串会抛出 `ValueError`。
+并非所有平台都支持主动发送。QQ 官方机器人需要仍可用的本地缓存会话状态；微信公众号适配器目前会明确拒绝主动发送。插件应检查 `send_result`，并为平台限制准备降级行为。
 
-> [!TIP]
-> 关于 unified_msg_origin。
-> unified_msg_origin 是一个字符串，记录了一个会话的唯一 ID，AstrBot 能够据此找到属于哪个消息平台的哪个会话。这样就能够实现在 `send_message` 的时候，发送消息到正确的会话。有关 MessageChain，请参见接下来的一节。
+`unified_msg_origin` 是 AstrBot 的统一会话标识，包含定位平台实例和会话所需的信息。
+持久化它时应按用户数据处理，不要把它公开到日志或不受信任的客户端。
 
-## 富媒体消息
+## 富媒体消息链
 
-AstrBot 支持发送富媒体消息，比如图片、语音、视频等。使用 `MessageChain` 来构建消息。
+使用公开的消息组件构建有序消息链：
 
 ```python
 import astrbot.api.message_components as Comp
+from astrbot.api.event import AstrMessageEvent, filter
 
-@filter.command("helloworld")
-async def helloworld(self, event: AstrMessageEvent):
+
+@filter.command("picture")
+async def picture(self, event: AstrMessageEvent):
     chain = [
-        Comp.At(qq=event.get_sender_id()), # At 消息发送者
-        Comp.Plain("来看这个图："),
-        Comp.Image.fromURL("https://example.com/image.jpg"), # 从 URL 发送图片
-        Comp.Image.fromFileSystem("path/to/image.jpg"), # 从本地文件目录发送图片
-        Comp.Plain("这是一个图片。")
+        Comp.At(qq=event.get_sender_id()),
+        Comp.Plain("来看这张图片："),
+        Comp.Image.fromURL("https://example.com/image.jpg"),
+        Comp.Image.fromFileSystem("path/to/image.jpg"),
+        Comp.Plain("消息组件会按列表顺序发送。"),
     ]
     yield event.chain_result(chain)
 ```
 
-上面构建了一个 `message chain`，也就是消息链，最终会发送一条包含了图片和文字的消息，并且保留顺序。
+部分平台会拆分或降级不支持的组件。OneBot 适配器还可能清理纯文本首尾空白；确实
+需要保留时，可以在文本边界加入零宽空格 `\u200b`。
 
-> [!TIP]
-> 在 aiocqhttp 消息适配器中，对于 `plain` 类型的消息，在发送中会使用 `strip()` 方法去除空格及换行符，可以在消息前后添加零宽空格 `\u200b` 以解决这个问题。
-
-类似地，
-
-**文件 File**
-
-```py
-Comp.File(file="path/to/file.txt", name="file.txt") # 部分平台不支持
-```
-
-**语音 Record**
-
-```py
-path = "path/to/record.wav" # 暂时只接受 wav 格式，其他格式请自行转换
-Comp.Record(file=path, url=path)
-```
-
-**视频 Video**
-
-```py
-path = "path/to/video.mp4"
-Comp.Video.fromFileSystem(path=path)
-Comp.Video.fromURL(url="https://example.com/video.mp4")
-```
-
-## 发送视频消息
+### 文件
 
 ```python
-from astrbot.api.event import filter, AstrMessageEvent
-
-@filter.command("test")
-async def test(self, event: AstrMessageEvent):
-    from astrbot.api.message_components import Video
-    # fromFileSystem 需要用户的协议端和机器人端处于一个系统中。
-    video = Video.fromFileSystem(
-        path="test.mp4"
-    )
-    # 更通用
-    video = Video.fromURL(
-        url="https://example.com/video.mp4"
-    )
-    yield event.chain_result([video])
+Comp.File(name="file.txt", file="path/to/file.txt")
 ```
 
-![发送视频消息](https://files.astrbot.app/docs/source/images/plugin/db93a2bb-671c-4332-b8ba-9a91c35623c2.png)
+文件消息并非所有平台都支持。
+
+### 语音
+
+```python
+Comp.Record.fromFileSystem("path/to/record.wav")
+Comp.Record.fromURL("https://example.com/record.mp3")
+Comp.Record.fromBase64(encoded_audio)
+```
+
+`Record` 组件本身并非全局仅接受 WAV。AstrBot 会在需要时解析或转换音频，但实际
+可用格式取决于目标适配器以及运行环境的媒体工具链；WAV 通常是跨平台最稳妥的输入。
+
+### 视频
+
+```python
+Comp.Video.fromFileSystem("path/to/video.mp4")
+Comp.Video.fromURL("https://example.com/video.mp4")
+```
+
+本地文件必须存在于 AstrBot 运行环境中。URL 与视频格式还需要目标平台支持。
 
 ## 发送群合并转发消息
 
-> 大多数平台都不支持此种消息类型，当前适配情况：OneBot v11
+合并转发不是通用组件，目前主要用于 OneBot v11：
 
-可以按照如下方式发送群合并转发消息。
+```python
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.message_components import Image, Node, Plain
 
-```py
-from astrbot.api.event import filter, AstrMessageEvent
 
-@filter.command("test")
-async def test(self, event: AstrMessageEvent):
-    from astrbot.api.message_components import Node, Plain, Image
+@filter.command("forward-demo")
+async def forward_demo(self, event: AstrMessageEvent):
     node = Node(
-        uin=905617992,
-        name="Soulter",
+        uin="10001",
+        name="示例用户",
         content=[
-            Plain("hi"),
-            Image.fromFileSystem("test.jpg")
-        ]
+            Plain("Hello"),
+            Image.fromFileSystem("test.jpg"),
+        ],
     )
     yield event.chain_result([node])
 ```
 
-![发送群合并转发消息](https://files.astrbot.app/docs/source/images/plugin/image-4.png)
+在其他平台使用前，应先检查适配器是否支持该组件，并为不支持的情况准备纯文本等
+降级结果。
