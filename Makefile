@@ -249,7 +249,7 @@ check-all: $(CHECK_TARGETS)
 check-all-platforms: check-all check-ps
 	@echo "==> all platform checks passed"
 
-format:
+format: doctor
 	@$(MAKE) $(PARALLEL_SUBMAKE_FLAGS) format-all
 
 format-all: $(FORMAT_TARGETS)

@@ -36,7 +36,7 @@ def main() -> None:
     required = [
         Check("Python", (sys.executable, "--version"), expected_prefix="Python 3.14."),
         Check("uv", ("uv", "--version")),
-        Check("Node.js", ("node", "--version"), expected_prefix="v24.15."),
+        Check("Node.js", ("node", "--version"), expected_prefix="v24."),
         Check("Corepack", ("corepack", "--version")),
     ]
     if sys.platform != "win32":
