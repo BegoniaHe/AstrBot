@@ -28,6 +28,10 @@ from astrbot.dashboard.services.chat_service import (
     collect_plain_text_from_message_parts,
 )
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
+from astrbot.dashboard.services.webchat_result_reducer import (
+    merge_webchat_refs,
+    parse_webchat_attachment,
+)
 
 SendJson = Callable[[dict], Awaitable[None]]
 ReceiveJson = Callable[[], Awaitable[dict]]
@@ -489,18 +493,7 @@ class LiveChatService:
                         plain_text,
                         message_parts_to_save,
                     )
-                    if refs.get("used"):
-                        existing = {
-                            item.get("url")
-                            for item in extracted_refs.get("used", [])
-                            if isinstance(item, dict)
-                        }
-                        extracted_refs.setdefault("used", []).extend(
-                            item
-                            for item in refs["used"]
-                            if isinstance(item, dict)
-                            and item.get("url") not in existing
-                        )
+                    extracted_refs = merge_webchat_refs(extracted_refs, refs)
                 except Exception as exc:
                     logger.exception(
                         f"[Live Chat] Failed to extract web search refs: {exc}",
@@ -579,7 +572,7 @@ class LiveChatService:
                 if result_type == "refs":
                     native_refs = result.get("data")
                     if isinstance(native_refs, dict):
-                        refs = native_refs
+                        refs = merge_webchat_refs(refs, native_refs)
                     await self.send_chat_payload(
                         session, {"ct": "chat", **result}, send_json
                     )
@@ -676,27 +669,16 @@ class LiveChatService:
                 streaming=streaming,
             )
             return
-        if result_type is None:
+        attachment = parse_webchat_attachment(result_type, result_text)
+        if attachment is None:
             return
-        markers = {
-            "image": "[IMAGE]",
-            "record": "[RECORD]",
-            "file": "[FILE]",
-            "video": "[VIDEO]",
-        }
-        marker = markers.get(result_type)
-        if marker is None:
-            return
-        filename = str(result_text).replace(marker, "", 1)
-        display_name = None
-        if result_type in {"file", "video"} and "|" in filename:
-            filename, display_name = filename.split("|", 1)
+        filename, attach_type, display_name = attachment
         if display_name is None:
-            part = await self.create_attachment_from_file(filename, result_type)
+            part = await self.create_attachment_from_file(filename, attach_type)
         else:
             part = await self.create_attachment_from_file(
                 filename,
-                result_type,
+                attach_type,
                 display_name=display_name,
             )
         accumulator.add_attachment(part)

@@ -1,7 +1,11 @@
+import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import astrbot.dashboard.services.open_api_service as open_api_service_module
 from astrbot.core.platform.send_result import PlatformSendResult
 from astrbot.dashboard.services.open_api_service import (
     OpenApiService,
@@ -140,6 +144,131 @@ async def test_run_chat_websocket_handles_control_messages(monkeypatch):
         },
     ]
     assert handled == [{"t": "send", "message": "hello"}]
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_ws_send_reduces_queue_results_and_persists_native_refs(
+    monkeypatch,
+):
+    service = _service()
+    back_queue = asyncio.Queue()
+    chat_queue = MagicMock()
+    chat_queue.put = AsyncMock()
+    service.prepare_chat_send = AsyncMock(return_value=("alice", "session-1", None))
+    service.update_session_config_route = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr,
+        "get_or_create_back_queue",
+        lambda *_args: back_queue,
+    )
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr,
+        "get_or_create_queue",
+        lambda *_args: chat_queue,
+    )
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr, "remove_back_queue", MagicMock()
+    )
+
+    saved = []
+
+    async def build_user_message_parts(_message):
+        return [{"type": "plain", "text": "question"}]
+
+    async def create_attachment(filename, attach_type, display_name=None):
+        assert (filename, attach_type, display_name) == (
+            "stored.pdf",
+            "file",
+            "report.pdf",
+        )
+        return {"type": "file", "attachment_id": "attachment-1"}
+
+    async def insert_user_message(*_args):
+        return None
+
+    async def save_bot_message(*args):
+        saved.append(args)
+        return SimpleNamespace(id=99, created_at=datetime.now(UTC))
+
+    bridge = OpenApiWebSocketChatBridge(
+        build_user_message_parts=build_user_message_parts,
+        create_attachment_from_file=create_attachment,
+        extract_web_search_refs=lambda *_args: {
+            "used": [{"url": "https://example.com", "title": "Tool source"}]
+        },
+        insert_user_message=insert_user_message,
+        save_bot_message=save_bot_message,
+    )
+    await back_queue.put({"message_id": "wrong", "type": "plain", "data": "ignored"})
+    await back_queue.put(
+        {
+            "message_id": "message-1",
+            "type": "plain",
+            "data": '{"id":"tool-1","name":"search"}',
+            "streaming": True,
+            "chain_type": "tool_call",
+        }
+    )
+    await back_queue.put(
+        {
+            "message_id": "message-1",
+            "type": "agent_stats",
+            "data": '{"latency": 3}',
+            "chain_type": "agent_stats",
+        }
+    )
+    await back_queue.put(
+        {
+            "message_id": "message-1",
+            "type": "refs",
+            "data": {"used": [{"url": "https://example.com", "snippet": "Native"}]},
+        }
+    )
+    await back_queue.put(
+        {
+            "message_id": "message-1",
+            "type": "plain",
+            "data": "answer",
+            "streaming": True,
+        }
+    )
+    await back_queue.put(
+        {
+            "message_id": "message-1",
+            "type": "file",
+            "data": "[FILE]stored.pdf|report.pdf",
+            "streaming": False,
+        }
+    )
+    await back_queue.put({"message_id": "message-1", "type": "end", "data": ""})
+
+    sent = []
+
+    async def send_json(payload):
+        sent.append(payload)
+
+    async def send_error(*_args):
+        raise AssertionError("send_error should not be called")
+
+    await service.handle_chat_ws_send(
+        post_data={"message": "question", "message_id": "message-1"},
+        conf_list=[],
+        chat_bridge=bridge,
+        send_json=send_json,
+        send_error=send_error,
+    )
+
+    assert len(saved) == 1
+    _, parts, agent_stats, refs = saved[0]
+    assert parts == [
+        {"type": "plain", "text": "answer"},
+        {"type": "file", "attachment_id": "attachment-1"},
+        {"type": "tool_call", "tool_calls": [{"id": "tool-1", "name": "search"}]},
+    ]
+    assert agent_stats == {"latency": 3}
+    assert refs == {"used": [{"url": "https://example.com", "title": "Tool source"}]}
+    assert not any(item.get("data") == "ignored" for item in sent)
+    assert any(item.get("type") == "refs" for item in sent)
 
 
 @pytest.mark.asyncio

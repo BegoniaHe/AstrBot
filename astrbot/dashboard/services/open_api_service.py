@@ -1,5 +1,4 @@
 import asyncio
-import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,10 +17,14 @@ from astrbot.core.utils.datetime_utils import to_utc_isoformat
 from astrbot.dashboard.services.api_key_service import ApiKeyService
 from astrbot.dashboard.services.auth_service import ALL_OPEN_API_SCOPES
 from astrbot.dashboard.services.chat_service import (
-    BotMessageAccumulator,
     collect_plain_text_from_message_parts,
 )
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
+from astrbot.dashboard.services.webchat_result_reducer import (
+    WebChatResultReducer,
+    merge_webchat_refs,
+    parse_webchat_attachment,
+)
 
 SendJson = Callable[[dict], Awaitable[None]]
 ReceiveJson = Callable[[], Awaitable[Any]]
@@ -35,7 +38,7 @@ class OpenApiServiceError(Exception):
 @dataclass
 class OpenApiWebSocketChatBridge:
     build_user_message_parts: Callable[[object], Awaitable[list]]
-    create_attachment_from_file: Callable[[str, str], Awaitable[Any]]
+    create_attachment_from_file: Callable[..., Awaitable[Any]]
     extract_web_search_refs: Callable[[str, list], dict]
     insert_user_message: Callable[[str, str, list], Awaitable[None]]
     save_bot_message: Callable[[str, list, dict, dict], Awaitable[Any]]
@@ -404,9 +407,7 @@ class OpenApiService:
                 }
             )
 
-            message_accumulator = BotMessageAccumulator()
-            agent_stats = {}
-            refs = {}
+            reducer = WebChatResultReducer()
             while True:
                 try:
                     result = await asyncio.wait_for(back_queue.get(), timeout=1)
@@ -422,55 +423,39 @@ class OpenApiService:
 
                 result_text = result.get("data", "")
                 msg_type = result.get("type")
-                streaming = result.get("streaming", False)
                 chain_type = result.get("chain_type")
 
                 if chain_type == "agent_stats":
-                    try:
+                    if reducer.consume_metadata(result) == "agent_stats":
                         stats_info = {
                             "type": "agent_stats",
-                            "data": json.loads(result_text),
+                            "data": reducer.agent_stats,
                         }
                         await send_json(stats_info)
-                        agent_stats = stats_info["data"]
-                    except Exception:
-                        pass
                     continue
 
                 if msg_type == "refs":
-                    native_refs = result.get("data")
-                    if isinstance(native_refs, dict):
-                        refs = native_refs
+                    reducer.consume_metadata(result)
                     await send_json(result)
                     continue
 
                 await send_json(result)
 
                 if msg_type == "plain":
-                    message_accumulator.add_plain(
-                        result_text,
-                        chain_type=chain_type,
-                        streaming=streaming,
-                    )
+                    reducer.accumulate_plain(result)
                 elif msg_type in {"image", "record", "file", "video"}:
-                    filename = str(result_text).replace(f"[{msg_type.upper()}]", "")
+                    attachment = parse_webchat_attachment(msg_type, result_text)
+                    assert attachment is not None
+                    filename, attach_type, display_name = attachment
                     part = await chat_bridge.create_attachment_from_file(
                         filename,
-                        msg_type,
+                        attach_type,
+                        **({"display_name": display_name} if display_name else {}),
                     )
-                    message_accumulator.add_attachment(part)
+                    reducer.accumulator.add_attachment(part)
 
-                should_save = False
-                if msg_type == "end":
-                    should_save = bool(
-                        message_accumulator.has_content() or refs or agent_stats
-                    )
-                elif (streaming and msg_type == "complete") or not streaming:
-                    if chain_type not in ("tool_call", "tool_call_result"):
-                        should_save = True
-
-                if should_save:
-                    message_parts_to_save = message_accumulator.build_message_parts(
+                if reducer.should_flush(result):
+                    message_parts_to_save = reducer.accumulator.build_message_parts(
                         include_pending_tool_calls=True
                     )
                     plain_text = collect_plain_text_from_message_parts(
@@ -481,29 +466,19 @@ class OpenApiService:
                             plain_text,
                             message_parts_to_save,
                         )
-                        if refs.get("used"):
-                            existing = {
-                                item.get("url")
-                                for item in extracted_refs.get("used", [])
-                                if isinstance(item, dict)
-                            }
-                            extracted_refs.setdefault("used", []).extend(
-                                item
-                                for item in refs["used"]
-                                if isinstance(item, dict)
-                                and item.get("url") not in existing
-                            )
-                        refs = extracted_refs
+                        refs = merge_webchat_refs(extracted_refs, reducer.native_refs)
                     except Exception as exc:
                         logger.exception(
                             f"Open API WS failed to extract web search refs: {exc}",
                             exc_info=True,
                         )
 
+                        refs = reducer.native_refs
+
                     saved_record = await chat_bridge.save_bot_message(
                         session_id,
                         message_parts_to_save,
-                        agent_stats,
+                        reducer.agent_stats,
                         refs,
                     )
                     if saved_record:
@@ -519,9 +494,7 @@ class OpenApiService:
                                 "session_id": session_id,
                             }
                         )
-                    message_accumulator = BotMessageAccumulator()
-                    agent_stats = {}
-                    refs = {}
+                    reducer.reset()
                 if msg_type == "end":
                     break
         except Exception as exc:

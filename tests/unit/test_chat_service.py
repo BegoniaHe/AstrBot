@@ -11,6 +11,7 @@ from starlette.datastructures import UploadFile
 import astrbot.dashboard.services.chat_service as chat_service_module
 from astrbot.dashboard.services.chat_service import (
     BotMessageAccumulator,
+    ChatRunState,
     ChatService,
     ChatServiceError,
     extract_web_search_refs,
@@ -615,6 +616,55 @@ async def test_build_chat_stream_collects_tool_call_refs_and_agent_stats_on_end(
         "end",
         "message_saved",
     ]
+
+
+@pytest.mark.asyncio
+async def test_chat_run_persists_native_refs_and_publishes_them(monkeypatch):
+    service = _service()
+    back_queue = asyncio.Queue()
+    run = ChatRunState(
+        run_id="native-refs",
+        username="alice",
+        session_id="session-native-refs",
+        llm_checkpoint_id="checkpoint-1",
+        platform_history_id="webchat",
+        back_queue=back_queue,
+    )
+    service.chat_runs[run.run_id] = run
+    service.chat_runs_by_session[run.session_id] = {run.run_id}
+    published = []
+    service._publish_chat_run = MagicMock(
+        side_effect=lambda _run, payload: published.append(payload)
+    )
+    service.save_bot_message = AsyncMock(
+        return_value=_history_record(10, {"type": "bot", "message": []})
+    )
+    monkeypatch.setattr(
+        chat_service_module.webchat_queue_mgr, "remove_back_queue", MagicMock()
+    )
+    native_refs = {
+        "used": [
+            {"url": "https://example.com/one", "title": "One"},
+            {"url": "https://example.com/one", "snippet": "duplicate"},
+        ]
+    }
+    await back_queue.put(
+        {"message_id": run.run_id, "type": "refs", "data": native_refs}
+    )
+    await back_queue.put({"message_id": run.run_id, "type": "end", "data": ""})
+
+    await service._consume_chat_run(run)
+
+    assert run.refs == {"used": [native_refs["used"][0]]}
+    service.save_bot_message.assert_awaited_once_with(
+        run.session_id,
+        [],
+        {},
+        {"used": [native_refs["used"][0]]},
+        run.llm_checkpoint_id,
+        run.platform_history_id,
+    )
+    assert any(payload["type"] == "refs" for payload in published)
 
 
 @pytest.mark.asyncio

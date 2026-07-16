@@ -32,6 +32,12 @@ from astrbot.core.utils.media_utils import (
     detect_image_mime_type_async,
 )
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
+from astrbot.dashboard.services.webchat_result_reducer import (
+    BotMessageAccumulator,
+    collect_plain_text_from_message_parts,
+    merge_webchat_refs,
+    parse_webchat_attachment,
+)
 from astrbot.dashboard.upload_utils import save_upload_to_path
 
 SSE_HEARTBEAT = ": heartbeat\n\n"
@@ -76,17 +82,6 @@ def extract_reasoning_from_message_parts(message_parts: list[dict]) -> str:
     return "".join(reasoning_parts)
 
 
-def collect_plain_text_from_message_parts(message_parts: list[dict]) -> str:
-    text_parts: list[str] = []
-    for part in message_parts:
-        if part.get("type") != "plain":
-            continue
-        text = part.get("text")
-        if isinstance(text, str) and text:
-            text_parts.append(text)
-    return "".join(text_parts)
-
-
 def build_bot_history_content(
     message_parts: list[dict],
     *,
@@ -104,119 +99,6 @@ def build_bot_history_content(
     if refs:
         content["refs"] = refs
     return content
-
-
-class BotMessageAccumulator:
-    def __init__(self) -> None:
-        self.parts: list[dict] = []
-        self.pending_text = ""
-        self.pending_tool_calls: dict[str, dict] = {}
-
-    def has_content(self) -> bool:
-        return bool(self.parts or self.pending_text or self.pending_tool_calls)
-
-    def add_plain(
-        self,
-        result_text: str,
-        *,
-        chain_type: str | None,
-        streaming: bool,
-    ) -> None:
-        if chain_type == "tool_call":
-            self._flush_pending_text()
-            self._store_tool_call(result_text)
-            return
-
-        if chain_type == "tool_call_result":
-            self._flush_pending_text()
-            self._store_tool_call_result(result_text)
-            return
-
-        if chain_type == "reasoning":
-            self._flush_pending_text()
-            self._append_think_part(result_text)
-            return
-
-        if streaming:
-            self.pending_text += result_text
-        else:
-            self.pending_text = result_text
-
-    def add_attachment(self, part: dict | None) -> None:
-        if not part:
-            return
-        self._flush_pending_text()
-        self.parts.append(part)
-
-    def build_message_parts(
-        self, *, include_pending_tool_calls: bool = False
-    ) -> list[dict]:
-        self._flush_pending_text()
-        if include_pending_tool_calls and self.pending_tool_calls:
-            for tool_call in self.pending_tool_calls.values():
-                self.parts.append({"type": "tool_call", "tool_calls": [tool_call]})
-            self.pending_tool_calls = {}
-        return self.parts
-
-    def plain_text(self) -> str:
-        return collect_plain_text_from_message_parts(self.build_message_parts())
-
-    def reasoning_text(self) -> str:
-        return extract_reasoning_from_message_parts(self.build_message_parts())
-
-    def _flush_pending_text(self) -> None:
-        if not self.pending_text:
-            return
-
-        if self.parts and self.parts[-1].get("type") == "plain":
-            last_text = self.parts[-1].get("text")
-            self.parts[-1]["text"] = f"{last_text or ''}{self.pending_text}"
-        else:
-            self.parts.append({"type": "plain", "text": self.pending_text})
-        self.pending_text = ""
-
-    def _append_think_part(self, text: str) -> None:
-        if not text:
-            return
-
-        if self.parts and self.parts[-1].get("type") == "think":
-            last_text = self.parts[-1].get("think")
-            self.parts[-1]["think"] = f"{last_text or ''}{text}"
-        else:
-            self.parts.append({"type": "think", "think": text})
-
-    def _store_tool_call(self, result_text: str) -> None:
-        tool_call = self._parse_json_object(result_text)
-        if not tool_call:
-            return
-        tool_call_id = str(tool_call.get("id") or "")
-        if not tool_call_id:
-            return
-        self.pending_tool_calls[tool_call_id] = tool_call
-
-    def _store_tool_call_result(self, result_text: str) -> None:
-        tool_result = self._parse_json_object(result_text)
-        if not tool_result:
-            return
-
-        tool_call_id = str(tool_result.get("id") or "")
-        if not tool_call_id:
-            return
-
-        tool_call = self.pending_tool_calls.pop(tool_call_id, None) or {
-            "id": tool_call_id
-        }
-        tool_call["result"] = tool_result.get("result")
-        tool_call["finished_ts"] = tool_result.get("ts")
-        self.parts.append({"type": "tool_call", "tool_calls": [tool_call]})
-
-    @staticmethod
-    def _parse_json_object(raw_text: str) -> dict | None:
-        try:
-            parsed = json.loads(raw_text)
-        except json.JSONDecodeError:
-            return None
-        return parsed if isinstance(parsed, dict) else None
 
 
 def extract_web_search_refs(
@@ -923,6 +805,7 @@ class ChatService:
                     message_parts_to_save,
                     self.preferences,
                 )
+                extracted_refs = merge_webchat_refs(extracted_refs, pending_refs)
             except Exception as exc:
                 logger.exception(
                     f"Failed to extract web search refs: {exc}",
@@ -971,6 +854,14 @@ class ChatService:
                     )
                     continue
 
+                if msg_type == "refs":
+                    native_refs = result.get("data")
+                    if isinstance(native_refs, dict):
+                        pending_refs = merge_webchat_refs(pending_refs, native_refs)
+                        run.refs = pending_refs
+                    self._publish_chat_run(run, result)
+                    continue
+
                 attachment_saved_payload = None
                 if msg_type == "plain":
                     for accumulator in (pending_accumulator, display_accumulator):
@@ -980,20 +871,11 @@ class ChatService:
                             streaming=streaming,
                         )
                 elif msg_type in {"image", "record", "file", "video"}:
-                    prefix = {
-                        "image": "[IMAGE]",
-                        "record": "[RECORD]",
-                        "file": "[FILE]",
-                        "video": "[VIDEO]",
-                    }[msg_type]
-                    filename = str(result_text).replace(prefix, "", 1)
-                    display_name = None
-                    if msg_type in {"file", "video"} and "|" in filename:
-                        filename, display_name = filename.split("|", 1)
+                    attachment = parse_webchat_attachment(msg_type, result_text)
+                    assert attachment is not None
+                    filename, attach_type, display_name = attachment
                     part = await self.create_attachment_from_file(
-                        filename,
-                        msg_type,
-                        display_name=display_name,
+                        filename, attach_type, display_name=display_name
                     )
                     for accumulator in (pending_accumulator, display_accumulator):
                         accumulator.add_attachment(part)
