@@ -120,8 +120,16 @@ else:
 
 
 class FakeEvent:
-    def __init__(self, unified_msg_origin: str = "umo-1") -> None:
+    def __init__(
+        self,
+        unified_msg_origin: str = "umo-1",
+        platform_name: str = "test",
+    ) -> None:
         self.unified_msg_origin = unified_msg_origin
+        self.platform_name = platform_name
+
+    def get_platform_name(self) -> str:
+        return self.platform_name
 
 
 async def _yield_items(*items):
@@ -237,3 +245,29 @@ async def test_process_forwards_event_and_trimmed_prefix_to_selected_substage(
     assert outputs == ["umo-ok:ask", "done"]
     should_process.assert_awaited_once_with(event)
     assert stage.agent_sub_stage.process_calls == [(event, "ask")]
+
+
+@pytest.mark.parametrize("agent_runner_type", ["local", "remote"])
+@pytest.mark.asyncio
+async def test_process_ignores_provider_wake_prefix_for_webchat(
+    monkeypatch,
+    agent_runner_type,
+):
+    stage = agent_request.AgentRequestSubStage()
+    ctx = _ctx(agent_runner_type=agent_runner_type, wake_prefix="ask")
+    await stage.initialize(ctx)
+    stage.agent_sub_stage.responses = ["done"]
+
+    should_process = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        agent_request.SessionServiceManager,
+        "should_process_llm_request",
+        should_process,
+    )
+    event = FakeEvent("webchat-umo", platform_name="webchat")
+
+    outputs = [item async for item in stage.process(event)]
+
+    assert outputs == ["done"]
+    should_process.assert_awaited_once_with(event)
+    assert stage.agent_sub_stage.process_calls == [(event, "")]

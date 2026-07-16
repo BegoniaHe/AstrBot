@@ -356,7 +356,7 @@
         },
         "wake_prefix": {
           "description": "Additional LLM Chat Wake Prefix",
-          "hint": "If the wake prefix is / and the additional chat wake prefix is chat, then /chat is required to trigger LLM requests"
+          "hint": "Applies only to messaging platforms, not WebUI. If the wake prefix is / and the additional chat wake prefix is chat, then /chat is required to trigger LLM requests"
         },
         "prompt_prefix": {
           "description": "User Prompt",

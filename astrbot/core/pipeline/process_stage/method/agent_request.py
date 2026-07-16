@@ -45,5 +45,8 @@ class AgentRequestSubStage(Stage):
             )
             return
 
-        async for resp in self.agent_sub_stage.process(event, self.prov_wake_prefix):
+        provider_wake_prefix = (
+            "" if event.get_platform_name() == "webchat" else self.prov_wake_prefix
+        )
+        async for resp in self.agent_sub_stage.process(event, provider_wake_prefix):
             yield resp
