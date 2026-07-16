@@ -17,10 +17,33 @@ class _OutOfOrderEmbeddingProvider(EmbeddingProvider):
             await asyncio.sleep(0.05)
         else:
             await asyncio.sleep(0.01)
-        return [[float(idx)] for idx, _text in enumerate(texts, start=int(texts[0][-1]))]
+        return [
+            [float(idx)] for idx, _text in enumerate(texts, start=int(texts[0][-1]))
+        ]
 
     def get_dim(self) -> int:
         return 1
+
+
+class _DefaultDimEmbeddingProvider(EmbeddingProvider):
+    async def get_embedding(self, text: str) -> list[float]:
+        return [float(len(text))]
+
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        return [[float(len(text))] for text in texts]
+
+
+def test_embedding_provider_uses_shared_dimension_configuration(caplog) -> None:
+    provider = _DefaultDimEmbeddingProvider(
+        {"type": "test", "embedding_dimensions": "1536"}, {}
+    )
+    invalid_provider = _DefaultDimEmbeddingProvider(
+        {"type": "test", "embedding_dimensions": "not-a-number"}, {}
+    )
+
+    assert provider.get_dim() == 1536
+    assert invalid_provider.get_dim() == 0
+    assert "embedding_dimensions" in caplog.text
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ import os
 from collections.abc import AsyncGenerator
 from typing import Literal
 
+from astrbot import logger
 from astrbot.core.agent.message import ContentPart, Message, is_checkpoint_message
 from astrbot.core.agent.tool import ToolSet
 from astrbot.core.provider.entities import (
@@ -330,10 +331,18 @@ class EmbeddingProvider(AbstractProvider):
         """批量获取文本的向量"""
         ...
 
-    @abc.abstractmethod
     def get_dim(self) -> int:
-        """获取向量的维度"""
-        ...
+        """Return the configured embedding dimension, or the provider default."""
+        if "embedding_dimensions" in self.provider_config:
+            try:
+                return int(self.provider_config["embedding_dimensions"])
+            except ValueError, TypeError:
+                logger.warning(
+                    "embedding_dimensions in embedding configs is not a valid "
+                    "integer: %r, ignored.",
+                    self.provider_config["embedding_dimensions"],
+                )
+        return 0
 
     async def test(self) -> None:
         await self.get_embedding("astrbot")

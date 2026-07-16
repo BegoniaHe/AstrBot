@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 
 import aiohttp
 
-from astrbot.api import logger
+from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 
 from ..entities import ProviderType

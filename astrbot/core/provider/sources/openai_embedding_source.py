@@ -94,17 +94,6 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                 )
         return kwargs
 
-    def get_dim(self) -> int:
-        """获取向量的维度"""
-        if "embedding_dimensions" in self.provider_config:
-            try:
-                return int(self.provider_config["embedding_dimensions"])
-            except ValueError, TypeError:
-                logger.warning(
-                    f"embedding_dimensions in embedding configs is not a valid integer: '{self.provider_config['embedding_dimensions']}', ignored."
-                )
-        return 0
-
     async def terminate(self):
         if self.client:
             await self.client.close()
