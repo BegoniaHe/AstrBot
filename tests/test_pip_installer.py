@@ -36,6 +36,19 @@ def _make_run_pip_mock(
     return AsyncMock(side_effect=run_pip)
 
 
+def test_streaming_log_writer_ignores_reentrant_log_output():
+    stream = None
+
+    def log_line(line: str) -> None:
+        assert stream is not None
+        stream._emit(f"log handler failed while writing: {line}")
+
+    stream = pip_installer_module._StreamingLogWriter(log_line)
+    stream._emit("Collecting demo-package")
+
+    assert stream.lines == ["Collecting demo-package"]
+
+
 def _configure_run_pip_in_process_capture(
     monkeypatch,
     *,

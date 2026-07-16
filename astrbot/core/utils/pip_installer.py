@@ -202,10 +202,18 @@ class _StreamingLogWriter(io.TextIOBase):
         self._log_func = log_func
         self._lines = deque(maxlen=max_lines or _MAX_PIP_OUTPUT_LINES)
         self._buffer = ""
+        self._emitting = threading.local()
 
     def _emit(self, line: str) -> None:
+        if getattr(self._emitting, "active", False):
+            return
+
         self._lines.append(line)
-        self._log_func(line)
+        self._emitting.active = True
+        try:
+            self._log_func(line)
+        finally:
+            self._emitting.active = False
 
     def write(self, text: str) -> int:
         if not text:
