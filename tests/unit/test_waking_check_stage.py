@@ -82,13 +82,13 @@ async def make_stage(**settings):
         "admins_id": ["admin"],
         "wake_prefix": ["/"],
         "plugin_set": ["*"],
-        "disable_builtin_commands": False,
         "platform_settings": {
             "no_permission_reply": True,
             "friend_message_needs_wake_prefix": False,
             "ignore_bot_self_message": False,
             "ignore_at_all": False,
             "unique_session": False,
+            "group_wake_policy": {"mention_bot": False, "reply_to_bot": False},
             **settings,
         },
     }
@@ -128,7 +128,11 @@ async def make_stage(**settings):
             False,
         ),
         ({}, FakeEvent([Plain("/hello")], message_text="/hello"), True),
-        ({}, FakeEvent([At(qq="bot"), Plain("hello")]), True),
+        (
+            {"group_wake_policy": {"mention_bot": True, "reply_to_bot": False}},
+            FakeEvent([At(qq="bot"), Plain("hello")]),
+            True,
+        ),
         ({}, FakeEvent([At(qq="other"), Plain("hello")]), False),
         ({}, FakeEvent([AtAll(), Plain("hello")]), True),
         ({"ignore_at_all": True}, FakeEvent([AtAll(), Plain("hello")]), False),
@@ -137,20 +141,56 @@ async def make_stage(**settings):
 async def test_detect_wake_behavior_matrix(settings, event, expected):
     stage = await make_stage(**settings)
 
-    assert await stage._detect_wake(event) is expected
+    assert (await stage._detect_wake(event)).should_wake is expected
     assert event.is_wake is expected
 
 
 @pytest.mark.asyncio
 async def test_detect_wake_resolves_unknown_reply_sender(monkeypatch):
     event = FakeEvent([Reply(id="reply-1"), Plain("hello")])
-    stage = await make_stage()
+    stage = await make_stage(
+        group_wake_policy={"mention_bot": False, "reply_to_bot": True}
+    )
     client = SimpleNamespace(get_msg_sender_id=AsyncMock(return_value="bot"))
     monkeypatch.setattr(waking, "OneBotClient", lambda _: client)
 
-    assert await stage._detect_wake(event) is True
+    assert (await stage._detect_wake(event)).should_wake is True
     assert event.get_messages()[0].sender_id == "bot"
     client.get_msg_sender_id.assert_awaited_once_with("reply-1")
+
+
+@pytest.mark.asyncio
+async def test_group_wake_policy_does_not_mutate_at_component(monkeypatch):
+    stage = await make_stage()
+    monkeypatch.setattr(
+        waking.star_handlers_registry,
+        "get_handlers_by_event_type",
+        lambda *_args, **_kwargs: [],
+    )
+    mention = At(qq="bot")
+    event = FakeEvent([mention, Plain("hello")])
+
+    await stage.process(event)
+
+    assert event.stopped is True
+    assert event.get_messages()[0] is mention
+
+
+@pytest.mark.asyncio
+async def test_adapter_preconfigured_wake_bypasses_group_wake_policy(monkeypatch):
+    stage = await make_stage()
+    monkeypatch.setattr(
+        waking.star_handlers_registry,
+        "get_handlers_by_event_type",
+        lambda *_args, **_kwargs: [],
+    )
+    event = FakeEvent([At(qq="bot")])
+    event.is_wake = True
+
+    await stage.process(event)
+
+    assert event.stopped is False
+    assert "adapter_preconfigured" in event.get_extra("wake_reasons")
 
 
 @pytest.mark.asyncio

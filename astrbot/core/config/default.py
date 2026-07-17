@@ -96,6 +96,10 @@ DEFAULT_CONFIG = {
         "friend_message_needs_wake_prefix": False,
         "ignore_bot_self_message": False,
         "ignore_at_all": False,
+        "group_wake_policy": {
+            "mention_bot": False,
+            "reply_to_bot": False,
+        },
     },
     "provider_sources": [],  # provider sources
     "provider": [],  # models from provider_sources
@@ -1038,6 +1042,13 @@ CONFIG_METADATA_2 = {
                     "ignore_at_all": {
                         "type": "bool",
                         "hint": "启用后，机器人会忽略 @ 全体成员 的消息事件。",
+                    },
+                    "group_wake_policy": {
+                        "type": "object",
+                        "items": {
+                            "mention_bot": {"type": "bool"},
+                            "reply_to_bot": {"type": "bool"},
+                        },
                     },
                     "segmented_reply": {
                         "type": "object",

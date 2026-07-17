@@ -304,6 +304,10 @@ async def test_aiocqhttp_reply_only_wake_resolves_sender_lazily(monkeypatch):
                     "ignore_bot_self_message": False,
                     "ignore_at_all": False,
                     "unique_session": False,
+                    "group_wake_policy": {
+                        "mention_bot": True,
+                        "reply_to_bot": True,
+                    },
                 },
                 "disable_builtin_commands": False,
                 "plugin_set": ["*"],

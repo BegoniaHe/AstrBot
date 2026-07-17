@@ -1,4 +1,6 @@
 from collections.abc import AsyncGenerator, Callable
+from dataclasses import dataclass
+from enum import Enum
 
 from astrbot import logger
 from astrbot.core.message.components import At, AtAll, Reply
@@ -26,6 +28,23 @@ UNIQUE_SESSION_ID_BUILDERS: dict[str, Callable[[AstrMessageEvent], str | None]] 
     "misskey": lambda e: f"{e.get_session_id()}_{e.get_sender_id()}",
     "matrix": lambda e: f"{e.get_sender_id()}_{e.get_group_id() or e.get_session_id()}",
 }
+
+
+class WakeReason(Enum):
+    PREFIX = "prefix"
+    COMMAND = "command"
+    MENTION_BOT = "mention_bot"
+    MENTION_ALL = "mention_all"
+    REPLY_TO_BOT = "reply_to_bot"
+    PRIVATE_DEFAULT = "private_default"
+    ADAPTER_PRECONFIGURED = "adapter_preconfigured"
+    PLUGIN_HANDLER = "plugin_handler"
+
+
+@dataclass
+class WakeDecision:
+    should_wake: bool
+    reasons: set[WakeReason]
 
 
 def build_unique_session_id(event: AstrMessageEvent) -> str | None:
@@ -71,11 +90,13 @@ class WakingCheckStage(Stage):
             "ignore_at_all",
             False,
         )
-        self.disable_builtin_commands = self.ctx.astrbot_config.get(
-            "disable_builtin_commands", False
-        )
         platform_settings = self.ctx.astrbot_config.get("platform_settings", {})
         self.unique_session = platform_settings.get("unique_session", False)
+        group_wake_policy = platform_settings.get("group_wake_policy", {})
+        self.group_wake_mention_bot = bool(group_wake_policy.get("mention_bot", False))
+        self.group_wake_reply_to_bot = bool(
+            group_wake_policy.get("reply_to_bot", False)
+        )
 
     async def process(
         self,
@@ -88,7 +109,10 @@ class WakingCheckStage(Stage):
 
         event.message_str = event.message_str.strip()
         self._assign_admin_role(event)
-        is_wake = await self._detect_wake(event)
+        wake_decision = await self._detect_wake(event)
+        event.set_extra(
+            "wake_reasons", {reason.value for reason in wake_decision.reasons}
+        )
         (
             activated_handlers,
             handlers_parsed_params,
@@ -103,7 +127,7 @@ class WakingCheckStage(Stage):
         )
         event.set_extra("activated_handlers", activated_handlers)
         event.set_extra("handlers_parsed_params", handlers_parsed_params)
-        if not (is_wake or event.is_wake):
+        if not (wake_decision.should_wake or event.is_wake):
             event.stop_event()
 
     def _apply_unique_session(self, event: AstrMessageEvent) -> None:
@@ -129,7 +153,10 @@ class WakingCheckStage(Stage):
                 event.role = "admin"
                 break
 
-    async def _detect_wake(self, event: AstrMessageEvent) -> bool:
+    async def _detect_wake(self, event: AstrMessageEvent) -> WakeDecision:
+        if event.is_wake:
+            return WakeDecision(True, {WakeReason.ADAPTER_PRECONFIGURED})
+
         wake_prefixes = self.ctx.astrbot_config["wake_prefix"]
         messages = event.get_messages()
         skip_private_wake = bool(event.get_extra("skip_private_wake", False))
@@ -147,19 +174,19 @@ class WakingCheckStage(Stage):
                 event.is_at_or_wake_command = True
                 event.is_wake = True
                 event.message_str = event.message_str[len(wake_prefix) :].strip()
-                return True
+                return WakeDecision(True, {WakeReason.PREFIX})
 
         unresolved_replies: list[Reply] = []
         for message in messages:
             reply_sender_id = self._reply_sender_id(message)
-            if self._message_wakes_event(message, event, reply_sender_id):
+            if reason := self._message_wakes_event(message, event, reply_sender_id):
                 event.is_wake = True
                 event.is_at_or_wake_command = True
-                return True
+                return WakeDecision(True, {reason})
             if isinstance(message, Reply) and not reply_sender_id:
                 unresolved_replies.append(message)
         if await self._unresolved_reply_wakes_event(event, unresolved_replies):
-            return True
+            return WakeDecision(True, {WakeReason.REPLY_TO_BOT})
         if (
             event.is_private_chat()
             and not skip_private_wake
@@ -170,8 +197,8 @@ class WakingCheckStage(Stage):
         ):
             event.is_wake = True
             event.is_at_or_wake_command = True
-            return True
-        return False
+            return WakeDecision(True, {WakeReason.PRIVATE_DEFAULT})
+        return WakeDecision(False, set())
 
     @staticmethod
     def _reply_sender_id(message: object) -> str:
@@ -181,15 +208,22 @@ class WakingCheckStage(Stage):
 
     def _message_wakes_event(
         self, message: object, event: AstrMessageEvent, reply_sender_id: str
-    ) -> bool:
-        return (
-            (isinstance(message, At) and str(message.qq) == str(event.get_self_id()))
-            or (isinstance(message, AtAll) and not self.ignore_at_all)
-            or (
-                isinstance(message, Reply)
-                and reply_sender_id == str(event.get_self_id())
-            )
-        )
+    ) -> WakeReason | None:
+        if (
+            isinstance(message, At)
+            and str(message.qq) == str(event.get_self_id())
+            and self.group_wake_mention_bot
+        ):
+            return WakeReason.MENTION_BOT
+        if isinstance(message, AtAll) and not self.ignore_at_all:
+            return WakeReason.MENTION_ALL
+        if (
+            isinstance(message, Reply)
+            and reply_sender_id == str(event.get_self_id())
+            and self.group_wake_reply_to_bot
+        ):
+            return WakeReason.REPLY_TO_BOT
+        return None
 
     async def _unresolved_reply_wakes_event(
         self, event: AstrMessageEvent, replies: list[Reply]
@@ -202,7 +236,10 @@ class WakingCheckStage(Stage):
             if not resolved_sender_id:
                 continue
             reply.sender_id = resolved_sender_id
-            if resolved_sender_id == str(event.get_self_id()):
+            if (
+                resolved_sender_id == str(event.get_self_id())
+                and self.group_wake_reply_to_bot
+            ):
                 event.is_wake = True
                 event.is_at_or_wake_command = True
                 return True
@@ -224,13 +261,6 @@ class WakingCheckStage(Stage):
             EventType.AdapterMessageEvent,
             plugins_name=event.plugins_name,
         ):
-            if (
-                self.disable_builtin_commands
-                and handler.handler_module_path
-                == "astrbot.builtin_stars.builtin_commands.main"
-            ):
-                continue
-
             # filter 需满足 AND 逻辑关系
             passed = True
             permission_not_pass = False
@@ -274,6 +304,11 @@ class WakingCheckStage(Stage):
                     return activated_handlers, handlers_parsed_params, True
 
                 event.is_wake = True
+                wake_reasons = event.get_extra("wake_reasons", default=set())
+                if not isinstance(wake_reasons, set):
+                    wake_reasons = set(wake_reasons)
+                wake_reasons.add(WakeReason.PLUGIN_HANDLER.value)
+                event.set_extra("wake_reasons", wake_reasons)
 
                 is_group_cmd_handler = any(
                     isinstance(f, CommandGroupFilter) for f in handler.event_filters

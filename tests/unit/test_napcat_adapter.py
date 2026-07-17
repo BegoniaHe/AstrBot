@@ -1821,6 +1821,10 @@ async def test_napcat_private_notice_events_do_not_auto_wake_pipeline(monkeypatc
                     "ignore_bot_self_message": False,
                     "ignore_at_all": False,
                     "unique_session": False,
+                    "group_wake_policy": {
+                        "mention_bot": True,
+                        "reply_to_bot": True,
+                    },
                 },
                 "disable_builtin_commands": False,
                 "plugin_set": ["*"],
@@ -2055,6 +2059,10 @@ async def test_napcat_reply_only_wake_resolves_sender_lazily_in_waking_stage(
                     "ignore_bot_self_message": False,
                     "ignore_at_all": False,
                     "unique_session": False,
+                    "group_wake_policy": {
+                        "mention_bot": True,
+                        "reply_to_bot": True,
+                    },
                 },
                 "disable_builtin_commands": False,
                 "plugin_set": ["*"],
