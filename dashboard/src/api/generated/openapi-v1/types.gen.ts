@@ -423,6 +423,10 @@ export type CommandPatchRequest = {
   permission_group?: string;
 };
 
+export type BuiltinCommandBulkToggleRequest = {
+  enabled: boolean;
+};
+
 export type CommandSummary = {
   total?: number;
   disabled?: number;
@@ -3501,6 +3505,23 @@ export type UpdateCommandResponses = {
 
 export type UpdateCommandResponse =
   UpdateCommandResponses[keyof UpdateCommandResponses];
+
+export type BulkToggleBuiltinCommandsData = {
+  body: BuiltinCommandBulkToggleRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/commands/builtin';
+};
+
+export type BulkToggleBuiltinCommandsResponses = {
+  /**
+   * Standard AstrBot success response
+   */
+  200: SuccessEnvelope;
+};
+
+export type BulkToggleBuiltinCommandsResponse =
+  BulkToggleBuiltinCommandsResponses[keyof BulkToggleBuiltinCommandsResponses];
 
 export type ListCommandConflictsData = {
   body?: never;

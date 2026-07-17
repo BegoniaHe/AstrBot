@@ -58,6 +58,24 @@ class CommandService:
 
         return await self._get_command_payload(handler_full_name)
 
+    async def bulk_toggle_builtin_commands(self, enabled: bool) -> dict:
+        """Set enabled state for every built-in command in the command DB."""
+        db = self._services().db
+        commands = await list_commands(db)
+        updated: list[str] = []
+        for command in self._iter_commands(commands):
+            if (
+                command.get("module_path")
+                != "astrbot.builtin_stars.builtin_commands.main"
+            ):
+                continue
+            handler_full_name = command.get("handler_full_name")
+            if not isinstance(handler_full_name, str):
+                continue
+            await toggle_command(db, handler_full_name, enabled)
+            updated.append(handler_full_name)
+        return {"enabled": enabled, "updated": updated}
+
     async def rename_command(
         self,
         handler_full_name: str | None,
@@ -114,6 +132,12 @@ class CommandService:
             if found:
                 return found
         return {}
+
+    @staticmethod
+    def _iter_commands(commands: list[dict]):
+        for command in commands:
+            yield command
+            yield from CommandService._iter_commands(command.get("sub_commands", []))
 
     @staticmethod
     def _find_command_payload(command: dict, handler_full_name: str) -> dict | None:

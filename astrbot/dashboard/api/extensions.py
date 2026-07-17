@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 
 from astrbot.dashboard.responses import ApiError, ok
 from astrbot.dashboard.schemas import (
+    BuiltinCommandBulkToggleRequest,
     CommandPermissionRequest,
     CommandRenameRequest,
     CommandToggleRequest,
@@ -52,6 +53,16 @@ async def _toggle_command(payload: CommandToggleRequest, service: CommandService
         _raise_command_error(exc)
 
 
+async def _bulk_toggle_builtin_commands(
+    payload: BuiltinCommandBulkToggleRequest,
+    service: CommandService,
+):
+    try:
+        return ok(await service.bulk_toggle_builtin_commands(payload.enabled))
+    except CommandServiceError as exc:
+        _raise_command_error(exc)
+
+
 async def _rename_command(payload: CommandRenameRequest, service: CommandService):
     try:
         return ok(
@@ -94,6 +105,15 @@ async def list_command_conflicts(
     service: CommandService = Depends(get_command_service),
 ):
     return await _list_command_conflicts(service)
+
+
+@router.patch("/commands/builtin")
+async def bulk_toggle_builtin_commands(
+    payload: BuiltinCommandBulkToggleRequest,
+    _auth: AuthContext = Depends(require_tool_scope),
+    service: CommandService = Depends(get_command_service),
+):
+    return await _bulk_toggle_builtin_commands(payload, service)
 
 
 @router.patch("/commands/{command_id:path}")

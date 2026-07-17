@@ -33,6 +33,7 @@ from astrbot.core.platform.manager import PlatformManager
 from astrbot.core.platform_message_history_mgr import PlatformMessageHistoryManager
 from astrbot.core.provider.manager import ProviderManager
 from astrbot.core.runtime_services import RuntimeServices
+from astrbot.core.star.command_management import list_commands, toggle_command
 from astrbot.core.star.context import Context
 from astrbot.core.star.star_handler import EventType, star_handlers_registry, star_map
 from astrbot.core.star.star_manager import PluginManager
@@ -330,6 +331,7 @@ class AstrBotCoreLifecycle:
         # 扫描、注册插件、实例化插件类
         self._plugin_reload_started = True
         await self.plugin_manager.reload()
+        await self._migrate_legacy_builtin_command_switch()
 
         # 根据配置实例化各个 Provider
         self._default_chat_provider_warning_emitted = False
@@ -371,6 +373,31 @@ class AstrBotCoreLifecycle:
             update_llm_metadata(),
             name="update_llm_metadata",
         )
+
+    async def _migrate_legacy_builtin_command_switch(self) -> None:
+        """Migrate the removed global builtin-command flag into command records."""
+        if not any(
+            config.get("disable_builtin_commands") is True
+            for config in self.astrbot_config_mgr.confs.values()
+        ):
+            return
+
+        commands = await list_commands(self.db)
+        pending = list(commands)
+        while pending:
+            command = pending.pop()
+            pending.extend(command.get("sub_commands", []))
+            if command.get(
+                "module_path"
+            ) == "astrbot.builtin_stars.builtin_commands.main" and isinstance(
+                command.get("handler_full_name"), str
+            ):
+                await toggle_command(self.db, command["handler_full_name"], False)
+
+        for config in self.astrbot_config_mgr.confs.values():
+            if config.pop("disable_builtin_commands", None) is not None:
+                config.save_config()
+        logger.info("Migrated disable_builtin_commands to per-command settings.")
 
     def _load(self) -> None:
         """加载事件总线和任务并初始化."""

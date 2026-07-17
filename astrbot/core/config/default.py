@@ -310,7 +310,6 @@ DEFAULT_CONFIG = {
     "kb_fusion_top_k": 20,  # 知识库检索融合阶段返回结果数量
     "kb_final_top_k": 5,  # 知识库检索最终返回结果数量
     "kb_agentic_mode": False,
-    "disable_builtin_commands": False,
     "disable_metrics": False,
 }
 
@@ -3951,11 +3950,6 @@ CONFIG_METADATA_3 = {
                     "platform_settings.empty_mention_waiting": {
                         "description": "只 @ 机器人是否触发等待",
                         "type": "bool",
-                    },
-                    "disable_builtin_commands": {
-                        "description": "禁用自带指令",
-                        "type": "bool",
-                        "hint": "禁用所有 AstrBot 的自带指令，如 help, sid, new 等。",
                     },
                 },
             },

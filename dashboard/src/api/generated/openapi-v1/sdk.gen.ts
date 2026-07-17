@@ -25,6 +25,8 @@ import type {
   BatchUpdateSessionServiceResponses,
   BindPluginSourceData,
   BindPluginSourceResponses,
+  BulkToggleBuiltinCommandsData,
+  BulkToggleBuiltinCommandsResponses,
   CheckBackupData,
   CheckBackupResponses,
   CheckUpdateData,
@@ -3026,6 +3028,27 @@ export const updateCommand = <ThrowOnError extends boolean = false>(
     responseType: 'json',
     security: [{ name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/commands/{command_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Enable or disable all built-in commands
+ */
+export const bulkToggleBuiltinCommands = <ThrowOnError extends boolean = false>(
+  options: Options<BulkToggleBuiltinCommandsData, ThrowOnError>,
+): RequestResult<BulkToggleBuiltinCommandsResponses, unknown, ThrowOnError> =>
+  (options.client ?? client).patch<
+    BulkToggleBuiltinCommandsResponses,
+    unknown,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [{ name: 'X-API-Key', type: 'apiKey' }],
+    url: '/api/v1/commands/builtin',
     ...options,
     headers: {
       'Content-Type': 'application/json',

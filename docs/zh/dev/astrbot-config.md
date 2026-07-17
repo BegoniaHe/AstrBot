@@ -194,7 +194,7 @@ uv run astrbot run --reset-password
 - `timezone`：IANA 时区名称，默认 `Asia/Shanghai`。
 - `callback_api_base`：外部服务访问 AstrBot 回调/文件 URL 的公开基地址，不改变监听地址。
 - `plugin_set`：配置档可用插件，`["*"]` 为全部，空列表为不使用插件。
-- `disable_builtin_commands` / `disable_metrics`：关闭内置命令或指标采集。
+- `disable_metrics`：关闭指标采集。内置命令可在 Dashboard 的命令管理页面逐项启用或停用。
 
 ## 进程级环境覆盖
 

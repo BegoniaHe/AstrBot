@@ -2176,6 +2176,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommandItemEnvelope'
 
+  /api/v1/commands/builtin:
+    patch:
+      tags: [Commands]
+      summary: Enable or disable all built-in commands
+      operationId: bulkToggleBuiltinCommands
+      x-astrbot-scope: plugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuiltinCommandBulkToggleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+
   /api/v1/commands/conflicts:
     get:
       tags: [Commands]
@@ -5413,6 +5429,14 @@ components:
             type: string
         permission_group:
           type: string
+      additionalProperties: false
+
+    BuiltinCommandBulkToggleRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
       additionalProperties: false
 
     CommandSummary:

@@ -766,10 +766,6 @@
       },
       "wake_prefix": {
         "description": "Wake Word"
-      },
-      "disable_builtin_commands": {
-        "description": "Disable Built-in Commands",
-        "hint": "Disable all built-in AstrBot commands such as help, sid, new, etc."
       }
     },
     "whitelist": {

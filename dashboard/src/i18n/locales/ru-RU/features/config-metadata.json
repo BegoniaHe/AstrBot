@@ -766,10 +766,6 @@
       },
       "wake_prefix": {
         "description": "Префикс пробуждения"
-      },
-      "disable_builtin_commands": {
-        "description": "Отключить встроенные команды",
-        "hint": "Отключает help, sid, new и другие базовые команды."
       }
     },
     "whitelist": {

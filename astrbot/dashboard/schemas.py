@@ -190,6 +190,10 @@ class CommandToggleRequest(BaseModel):
     enabled: bool
 
 
+class BuiltinCommandBulkToggleRequest(BaseModel):
+    enabled: bool
+
+
 class CommandRenameRequest(BaseModel):
     handler_full_name: str
     new_name: str
