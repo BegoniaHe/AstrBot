@@ -1,12 +1,12 @@
 import asyncio
 import ipaddress
 import os
+import re
 import socket
 import time
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-import jwt
 import psutil
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -32,8 +32,6 @@ from astrbot.dashboard.request_state import DashboardRequestState
 from astrbot.dashboard.responses import error
 
 from .api.app import create_dashboard_asgi_app
-from .plugin_page_auth import PluginPageAuth
-from .services.auth_service import DASHBOARD_JWT_COOKIE_NAME
 
 _RATE_LIMITED_ENDPOINTS: frozenset = frozenset(
     {
@@ -41,6 +39,9 @@ _RATE_LIMITED_ENDPOINTS: frozenset = frozenset(
         "/api/v1/auth/totp/setup",
         "/api/v1/auth/login",
     }
+)
+_SECRET_RAW_PATH_RE = re.compile(
+    r"^(/api/plugin-pages/v1/sessions/|/api/plugin-files/v1/)[^/]+"
 )
 
 
@@ -164,6 +165,16 @@ class _ProxyAwareHypercornLogger(HypercornLogger):
 
     def atoms(self, request, response, request_time):
         atoms = AccessLogAtoms(request, response, request_time)
+        path = str(request.get("path", ""))
+        redacted_path = _SECRET_RAW_PATH_RE.sub(r"\1<redacted>", path)
+        if redacted_path != path:
+            method = "GET" if request.get("type") != "http" else request["method"]
+            protocol = request.get("http_version", "ws")
+            atoms["r"] = f"{method} {redacted_path} {protocol}"
+            atoms["R"] = atoms["r"]
+            atoms["U"] = redacted_path
+            atoms["Uq"] = redacted_path
+            atoms["q"] = ""
         client_host = self._get_request_log_host(request)
         if client_host:
             atoms["h"] = client_host
@@ -249,79 +260,7 @@ class AstrBotDashboard:
         rate_limit_response = await self._apply_auth_rate_limit(current_request, path)
         if rate_limit_response is not None:
             return rate_limit_response
-        if path.startswith("/api/v1"):
-            return None
-        is_plugin_page_path = PluginPageAuth.is_protected_path(path)
-        if not is_plugin_page_path:
-            return None
-        dashboard_token = self._extract_dashboard_jwt(current_request)
-        asset_token = (
-            PluginPageAuth.extract_asset_token(current_request.query_params)
-            if is_plugin_page_path
-            else None
-        )
-        token_candidates = []
-        if dashboard_token:
-            token_candidates.append(dashboard_token)
-        if asset_token and asset_token != dashboard_token:
-            token_candidates.append(asset_token)
-        if not token_candidates:
-            r = JSONResponse(error("未授权"))
-            r.status_code = 401
-            return r
-
-        token_errors: list[str] = []
-        for token in token_candidates:
-            payload, token_error = self._validate_dashboard_token(token, path)
-            if payload is not None:
-                current_request.state.dashboard_g.username = cast(
-                    str, payload["username"]
-                )
-                return None
-            token_errors.append(token_error)
-
-        error_message = (
-            "Token 过期"
-            if token_errors and all(item == "Token 过期" for item in token_errors)
-            else "Token 无效"
-        )
-        r = JSONResponse(error(error_message))
-        r.status_code = 401
-        return r
-
-    def _validate_dashboard_token(
-        self,
-        token: str,
-        path: str,
-    ) -> tuple[dict[str, Any] | None, str]:
-        """Validate a dashboard JWT or scoped plugin page asset token.
-
-        Args:
-            token: JWT value from the Authorization header, cookie, or query string.
-            path: Current request path used for plugin page asset token scope checks.
-
-        Returns:
-            A tuple of the decoded payload and an error message. The payload is
-            present only when the token is valid for the current request path.
-        """
-        try:
-            payload = jwt.decode(token, self._jwt_secret, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
-            return None, "Token 过期"
-        except jwt.InvalidTokenError:
-            return None, "Token 无效"
-
-        if PluginPageAuth.is_asset_token(payload) and not PluginPageAuth.is_scope_valid(
-            payload,
-            path,
-        ):
-            return None, "Token 无效"
-
-        username = payload.get("username")
-        if not isinstance(username, str) or not username.strip():
-            return None, "Token 无效"
-
-        return payload, ""
+        return None
 
     async def _apply_auth_rate_limit(
         self,
@@ -386,22 +325,6 @@ class AstrBotDashboard:
                 pass
 
         return "unknown"
-
-    @staticmethod
-    def _extract_dashboard_jwt(current_request: Request) -> str | None:
-        auth_header = current_request.headers.get("Authorization", "").strip()
-        if auth_header.startswith("Bearer "):
-            token = auth_header.removeprefix("Bearer ").strip()
-            if token:
-                return token
-
-        cookie_token = current_request.cookies.get(
-            DASHBOARD_JWT_COOKIE_NAME,
-            "",
-        ).strip()
-        if cookie_token:
-            return cookie_token
-        return None
 
     def check_port_in_use(self, port: int) -> bool:
         """跨平台检测端口是否被占用"""

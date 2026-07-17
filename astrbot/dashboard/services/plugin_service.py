@@ -588,7 +588,7 @@ class PluginService:
         plugin: StarMetadata,
     ) -> list[dict]:
         components = [
-            *self.get_plugin_page_components(plugin),
+            *self._get_plugin_dashboard_components(plugin),
             *self.get_plugin_skill_components(plugin),
             *await self.get_plugin_handler_components(plugin.star_handler_full_names),
         ]
@@ -597,35 +597,31 @@ class PluginService:
             key=lambda item: PLUGIN_COMPONENT_TYPE_ORDER.get(item["type"], 99),
         )
 
-    def get_plugin_page_components(self, plugin: StarMetadata) -> list[dict]:
-        plugin_dir_name = str(plugin.root_dir_name or plugin.name or "").strip()
-        if not plugin_dir_name:
+    def _get_plugin_dashboard_components(self, plugin: StarMetadata) -> list[dict]:
+        manifest = getattr(plugin, "dashboard", None)
+        if manifest is None:
             return []
-
-        pages_root = (
-            Path(self.plugin_manager.plugin_store_path) / plugin_dir_name / "pages"
-        )
-        if not pages_root.is_dir():
+        registry = self.plugin_manager.dashboard_extension_registry
+        snapshot = registry.get_snapshot(manifest.extension_id)
+        if snapshot is None:
             return []
-
-        components: list[dict] = []
-        for page_dir in sorted(pages_root.iterdir()):
-            if not page_dir.is_dir() or not (page_dir / "index.html").is_file():
-                continue
-            page_name = page_dir.name
-            components.append(
-                {
-                    "type": "page",
-                    "name": page_name,
-                    "title": page_name,
-                    "page_name": page_name,
-                    "i18n_key": f"pages.{page_name}",
-                    "description": "Plugin Page entry",
-                    "plugin_name": str(plugin.name or ""),
-                    "plugin_marketplace_name": str(plugin.name or "").replace("_", "-"),
-                }
-            )
-        return components
+        owner_key = (bool(plugin.reserved), str(plugin.root_dir_name or ""))
+        if snapshot.owner_key != owner_key:
+            return []
+        return [
+            {
+                "type": "page",
+                "name": page.id,
+                "title": page.title,
+                "page_name": page.id,
+                "extension_id": snapshot.extension_id,
+                "page_id": page.id,
+                "icon": page.icon,
+                "plugin_name": snapshot.plugin_name,
+                "plugin_marketplace_name": snapshot.plugin_name.replace("_", "-"),
+            }
+            for page in snapshot.pages
+        ]
 
     async def get_plugin_handler_components(
         self,

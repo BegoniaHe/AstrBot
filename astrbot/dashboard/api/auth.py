@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import jwt
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from astrbot.core.star.dashboard_extension import ALL_OPEN_API_SCOPES
 from astrbot.dashboard.responses import ApiError
 from astrbot.dashboard.schemas import (
     AccountUpdateRequest,
@@ -13,7 +15,6 @@ from astrbot.dashboard.schemas import (
 )
 from astrbot.dashboard.services.api_key_service import ApiKeyService
 from astrbot.dashboard.services.auth_service import (
-    ALL_OPEN_API_SCOPES,
     DASHBOARD_JWT_COOKIE_MAX_AGE,
     DASHBOARD_JWT_COOKIE_NAME,
     OPEN_API_SCOPE_INCLUDES,
@@ -21,9 +22,12 @@ from astrbot.dashboard.services.auth_service import (
     TOTP_TRUSTED_DEVICE_MAX_AGE,
     AuthService,
     AuthServiceResult,
+    DashboardSessionPrincipal,
+    DashboardTokenValidator,
 )
 
 router = APIRouter(tags=["Auth"])
+_SAFE_HTTP_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
 
 @dataclass(frozen=True)
@@ -62,42 +66,175 @@ def _get_dashboard_state_username(request: Request) -> str | None:
     return None
 
 
-def _extract_dashboard_jwt(request: Request) -> str | None:
+def _extract_dashboard_jwt_with_source(
+    request: Request,
+) -> tuple[str | None, str | None]:
     auth_header = request.headers.get("Authorization", "").strip()
     if auth_header.startswith("Bearer "):
         token = auth_header.removeprefix("Bearer ").strip()
         if token:
-            return token
+            return token, "bearer"
 
     cookie_token = request.cookies.get(DASHBOARD_JWT_COOKIE_NAME, "").strip()
     if cookie_token:
-        return cookie_token
-    return None
+        return cookie_token, "cookie"
+    return None, None
+
+
+def _extract_dashboard_jwt(request: Request) -> str | None:
+    return _extract_dashboard_jwt_with_source(request)[0]
+
+
+def _dashboard_token_validator(request: Request) -> DashboardTokenValidator:
+    return request.app.state.dashboard_token_validator
+
+
+def _dashboard_config(request: Request) -> dict:
+    core_lifecycle = getattr(request.app.state, "core_lifecycle", None)
+    config = getattr(core_lifecycle, "astrbot_config", None)
+    if config is None:
+        return {}
+    dashboard_config = config.get("dashboard", {})
+    return dashboard_config if isinstance(dashboard_config, dict) else {}
+
+
+def _normalized_origin(scheme: str, host: str) -> tuple[str, str, int] | None:
+    if not scheme or not host or "," in scheme or "," in host:
+        return None
+    try:
+        parsed = urlsplit(f"{scheme.lower()}://{host}")
+        port = parsed.port
+    except ValueError:
+        return None
+    normalized_scheme = parsed.scheme.lower()
+    if normalized_scheme not in {"http", "https"} or not parsed.hostname:
+        return None
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    return (
+        normalized_scheme,
+        parsed.hostname.lower(),
+        port or (443 if normalized_scheme == "https" else 80),
+    )
+
+
+def _request_external_origin(request: Request) -> tuple[str, str, int] | None:
+    scheme = request.url.scheme
+    host = request.headers.get("host", "")
+    if _dashboard_config(request).get("trust_proxy_headers", False):
+        forwarded_scheme = (
+            request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+        )
+        forwarded_host = (
+            request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+        )
+        if forwarded_scheme:
+            scheme = forwarded_scheme
+        if forwarded_host:
+            host = forwarded_host
+    return _normalized_origin(scheme, host)
+
+
+def request_external_origin(request: Request) -> str | None:
+    """Return the trusted external request origin as an ASCII URL."""
+    normalized = _request_external_origin(request)
+    if normalized is None:
+        return None
+    scheme, host, port = normalized
+    default_port = 443 if scheme == "https" else 80
+    host_text = f"[{host}]" if ":" in host else host
+    return f"{scheme}://{host_text}" + ("" if port == default_port else f":{port}")
+
+
+def _origin_header_value(request: Request) -> tuple[str, str, int] | None:
+    origin = request.headers.get("origin", "").strip()
+    if not origin or origin == "null" or "," in origin:
+        return None
+    try:
+        parsed = urlsplit(origin)
+        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            return None
+        if parsed.username is not None or parsed.password is not None:
+            return None
+        port = parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return None
+    scheme = parsed.scheme.lower()
+    return (
+        scheme,
+        parsed.hostname.lower(),
+        port or (443 if scheme == "https" else 80),
+    )
+
+
+def _require_cookie_mutation_origin(request: Request) -> None:
+    if request.method.upper() in _SAFE_HTTP_METHODS:
+        return
+    if _origin_header_value(request) != _request_external_origin(request):
+        raise ApiError("Invalid request origin", status_code=403)
+
+
+def _validate_logout_cookie(
+    request: Request,
+) -> DashboardSessionPrincipal | None:
+    token = request.cookies.get(DASHBOARD_JWT_COOKIE_NAME, "").strip()
+    if not token:
+        return None
+    try:
+        principal = _dashboard_token_validator(request).validate(token)
+    except jwt.InvalidTokenError:
+        return None
+    _require_cookie_mutation_origin(request)
+    return principal
 
 
 async def require_dashboard_user(request: Request) -> str:
     if username := _get_dashboard_state_username(request):
         return username
 
-    token = _extract_dashboard_jwt(request)
+    token, source = _extract_dashboard_jwt_with_source(request)
     if not token:
         raise ApiError("未授权", status_code=401)
 
     try:
-        payload = jwt.decode(
-            token,
-            request.app.state.jwt_secret,
-            algorithms=["HS256"],
-        )
+        principal = _dashboard_token_validator(request).validate(token)
     except jwt.ExpiredSignatureError as exc:
         raise ApiError("Token 过期", status_code=401) from exc
     except jwt.InvalidTokenError as exc:
         raise ApiError("Token 无效", status_code=401) from exc
+    if source == "cookie":
+        _require_cookie_mutation_origin(request)
+    return principal.username
 
-    username = payload.get("username")
-    if not isinstance(username, str) or not username.strip():
-        raise ApiError("Token 无效", status_code=401)
-    return username
+
+async def require_dashboard_session_principal(
+    request: Request,
+) -> DashboardSessionPrincipal:
+    """Require matching Dashboard Bearer and HttpOnly-cookie sessions."""
+    auth_header = request.headers.get("Authorization", "").strip()
+    if not auth_header.startswith("Bearer "):
+        raise ApiError("Unauthorized", status_code=401)
+    bearer_token = auth_header.removeprefix("Bearer ").strip()
+    cookie_token = request.cookies.get(DASHBOARD_JWT_COOKIE_NAME, "").strip()
+    if not bearer_token or not cookie_token:
+        raise ApiError("Unauthorized", status_code=401)
+    validator = _dashboard_token_validator(request)
+    try:
+        bearer_principal = validator.validate(bearer_token)
+        cookie_principal = validator.validate(cookie_token)
+    except jwt.ExpiredSignatureError as exc:
+        raise ApiError("Token expired", status_code=401) from exc
+    except jwt.InvalidTokenError as exc:
+        raise ApiError("Invalid token", status_code=401) from exc
+    if (
+        bearer_principal.sid != cookie_principal.sid
+        or bearer_principal.username != cookie_principal.username
+    ):
+        raise ApiError("Unauthorized", status_code=401)
+    _require_cookie_mutation_origin(request)
+    return bearer_principal
 
 
 async def _require_api_key_scope(
@@ -140,15 +277,11 @@ async def require_scope(request: Request, scope: str) -> AuthContext:
     if raw_key:
         return await _require_api_key_scope(request, raw_key, scope)
 
-    token = _extract_dashboard_jwt(request)
+    token, source = _extract_dashboard_jwt_with_source(request)
     if not token:
         raise ApiError("Missing API key", status_code=401)
     try:
-        payload = jwt.decode(
-            token,
-            request.app.state.jwt_secret,
-            algorithms=["HS256"],
-        )
+        principal = _dashboard_token_validator(request).validate(token)
     except jwt.ExpiredSignatureError as exc:
         raise ApiError("Token expired", status_code=401) from exc
     except jwt.InvalidTokenError as exc:
@@ -160,10 +293,9 @@ async def require_scope(request: Request, scope: str) -> AuthContext:
                 raise api_key_exc from exc
         raise ApiError("Invalid token", status_code=401) from exc
 
-    username = payload.get("username")
-    if not isinstance(username, str) or not username.strip():
-        raise ApiError("Invalid token", status_code=401)
-    return AuthContext(username=username, scopes=["*"], via="jwt")
+    if source == "cookie":
+        _require_cookie_mutation_origin(request)
+    return AuthContext(username=principal.username, scopes=["*"], via="jwt")
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -188,7 +320,7 @@ def _auth_result_payload(result: AuthServiceResult) -> dict:
     return payload
 
 
-def _use_secure_dashboard_jwt_cookie(request: Request) -> bool:
+def use_secure_dashboard_cookie(request: Request) -> bool:
     dashboard_config = getattr(request.app.state, "dashboard_config", {})
     default_secure = not bool(getattr(request.app.state, "debug", False)) and not bool(
         getattr(request.app.state, "dashboard_testing", False)
@@ -212,19 +344,20 @@ def _set_dashboard_jwt_cookie(
         max_age=DASHBOARD_JWT_COOKIE_MAX_AGE,
         httponly=True,
         samesite="strict",
-        secure=_use_secure_dashboard_jwt_cookie(request),
-        path="/",
+        secure=use_secure_dashboard_cookie(request),
+        path="/api/v1",
     )
 
 
 def _clear_dashboard_jwt_cookie(request: Request, response: JSONResponse) -> None:
-    response.delete_cookie(
-        DASHBOARD_JWT_COOKIE_NAME,
-        httponly=True,
-        samesite="strict",
-        secure=_use_secure_dashboard_jwt_cookie(request),
-        path="/",
-    )
+    for path in ("/api/v1", "/"):
+        response.delete_cookie(
+            DASHBOARD_JWT_COOKIE_NAME,
+            httponly=True,
+            samesite="strict",
+            secure=use_secure_dashboard_cookie(request),
+            path=path,
+        )
 
 
 def _set_trusted_device_cookie(
@@ -238,7 +371,7 @@ def _set_trusted_device_cookie(
         max_age=TOTP_TRUSTED_DEVICE_MAX_AGE,
         httponly=True,
         samesite="strict",
-        secure=_use_secure_dashboard_jwt_cookie(request),
+        secure=use_secure_dashboard_cookie(request),
         path="/api/v1/auth",
     )
 
@@ -253,6 +386,13 @@ def _auth_service_response(
     )
     if result.jwt_token:
         _set_dashboard_jwt_cookie(request, response, result.jwt_token)
+        response.delete_cookie(
+            DASHBOARD_JWT_COOKIE_NAME,
+            httponly=True,
+            samesite="strict",
+            secure=use_secure_dashboard_cookie(request),
+            path="/",
+        )
     if result.trusted_device_token:
         _set_trusted_device_cookie(request, response, result.trusted_device_token)
     return response
@@ -363,6 +503,11 @@ async def login(
 
 @router.post("/auth/logout")
 async def logout(request: Request):
+    principal = _validate_logout_cookie(request)
+    if principal is not None:
+        services = request.app.state.services
+        await services.plugin_page_sessions.revoke_by_auth_session_id(principal.sid)
+        await services.plugin_file_tickets.revoke_by_auth_session_id(principal.sid)
     response = JSONResponse(
         {"status": "ok", "message": "已退出登录", "data": {}},
         status_code=200,

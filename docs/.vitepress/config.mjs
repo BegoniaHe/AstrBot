@@ -169,6 +169,10 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '项目架构', link: '/architecture' },
+              {
+                text: '插件 Web 扩展迁移',
+                link: '/plugin-web-extension-migration',
+              },
               { text: '源码开发', link: '/development' },
               { text: 'Linux 开发环境', link: '/linux' },
               {
@@ -185,6 +189,10 @@ export default defineConfig({
                   { text: '发送消息', link: '/guides/send-message' },
                   { text: '插件配置', link: '/guides/plugin-config' },
                   { text: '插件国际化', link: '/guides/plugin-i18n' },
+                  {
+                    text: 'Dashboard 扩展',
+                    link: '/plugin-dashboard-extension',
+                  },
                   { text: '调用 AI', link: '/guides/ai' },
                   { text: '存储', link: '/guides/storage' },
                   { text: '文转图', link: '/guides/html-to-pic' },
@@ -432,6 +440,10 @@ export default defineConfig({
                   {
                     text: 'Plugin Internationalization',
                     link: '/guides/plugin-i18n',
+                  },
+                  {
+                    text: 'Dashboard Extensions',
+                    link: '/plugin-dashboard-extension',
                   },
                   { text: 'AI', link: '/guides/ai' },
                   { text: 'Storage', link: '/guides/storage' },

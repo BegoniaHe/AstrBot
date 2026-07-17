@@ -1,5 +1,21 @@
 import type { PluginData } from '@/api/v1';
 
+export interface PluginPageComponent {
+  type: 'page';
+  name: string;
+  title: string;
+  page_name: string;
+  extension_id: string;
+  page_id: string;
+  icon?: string | null;
+  plugin_name: string;
+  plugin_marketplace_name: string;
+  description?: string;
+}
+
+export type PluginComponent =
+  PluginPageComponent | ({ type: string } & Record<string, unknown>);
+
 export interface InstalledPlugin extends PluginData {
   name: string;
   repo?: string;
@@ -14,6 +30,7 @@ export interface InstalledPlugin extends PluginData {
   short_desc?: string;
   logo?: string;
   i18n?: Record<string, unknown>;
+  components?: PluginComponent[] | Record<string, PluginComponent[]>;
   [key: string]: unknown;
 }
 

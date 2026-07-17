@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -10,6 +13,7 @@ star_map: dict[str, StarMetadata] = {}
 
 if TYPE_CHECKING:
     from . import Star
+    from .dashboard_extension import DashboardExtensionManifest
 
 
 @dataclass
@@ -70,8 +74,11 @@ class StarMetadata:
     i18n: dict[str, dict] = field(default_factory=dict)
     """插件自带的国际化文案，按 locale 分组。"""
 
-    pages: list[dict] = field(default_factory=list)
-    """插件注册的 Pages 元数据。"""
+    dashboard: DashboardExtensionManifest | None = None
+    """Validated Dashboard Extension Protocol v1 manifest."""
+
+    dashboard_root: Path | None = None
+    """Validated real plugin root used by Dashboard resources."""
 
     @property
     def plugin_id(self) -> str:

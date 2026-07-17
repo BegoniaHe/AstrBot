@@ -4,9 +4,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from astrbot.core.db import BaseDatabase
+from astrbot.core.star.dashboard_extension import ALL_OPEN_API_SCOPES
 from astrbot.core.utils.datetime_utils import normalize_datetime_utc
 
-from .auth_service import ALL_OPEN_API_SCOPES, OPEN_API_SCOPE_INCLUDES
+from .auth_service import OPEN_API_SCOPE_INCLUDES
 
 
 class ApiKeyServiceError(Exception):

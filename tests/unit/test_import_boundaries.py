@@ -56,7 +56,9 @@ def test_builtin_stars_may_depend_on_the_plugin_sdk() -> None:
 
 def test_public_sdk_and_core_leaf_imports_remain_available() -> None:
     sdk = importlib.import_module("astrbot.api")
+    dashboard_sdk = importlib.import_module("astrbot.api.dashboard")
     leaf = importlib.import_module("astrbot.core.platform.astr_message_event")
 
     assert sdk.FunctionTool is not None
+    assert dashboard_sdk.DashboardJsonAction is not None
     assert leaf.AstrMessageEvent is not None

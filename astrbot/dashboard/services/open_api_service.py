@@ -13,9 +13,9 @@ from astrbot.core.platform.sources.webchat.message_parts_helper import (
     webchat_message_parts_have_content,
 )
 from astrbot.core.platform.sources.webchat.webchat_queue_mgr import webchat_queue_mgr
+from astrbot.core.star.dashboard_extension import ALL_OPEN_API_SCOPES
 from astrbot.core.utils.datetime_utils import to_utc_isoformat
 from astrbot.dashboard.services.api_key_service import ApiKeyService
-from astrbot.dashboard.services.auth_service import ALL_OPEN_API_SCOPES
 from astrbot.dashboard.services.chat_service import (
     collect_plain_text_from_message_parts,
 )

@@ -559,6 +559,10 @@ class AstrBotCoreLifecycle:
                         plugins = []
                     for plugin in plugins:
                         try:
+                            await plugin_manager.deactivate_plugin_extension(
+                                plugin,
+                                reason="shutdown",
+                            )
                             await plugin_manager._terminate_plugin(plugin)
                         except Exception as exc:
                             logger.warning(

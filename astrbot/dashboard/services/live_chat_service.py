@@ -22,6 +22,7 @@ from astrbot.core.platform.sources.webchat.message_parts_helper import (
 from astrbot.core.platform.sources.webchat.webchat_queue_mgr import webchat_queue_mgr
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path, get_astrbot_temp_path
 from astrbot.core.utils.datetime_utils import to_utc_isoformat
+from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 from astrbot.dashboard.services.chat_service import (
     BotMessageAccumulator,
     build_bot_history_content,
@@ -120,12 +121,17 @@ class LiveChatService:
         self,
         db: Any,
         core_lifecycle: DashboardCoreLifecycle,
+        *,
+        token_validator: DashboardTokenValidator | None = None,
     ) -> None:
         self.db = db
         self.core_lifecycle = core_lifecycle
         self.preferences = core_lifecycle.services.preferences
         self.config = core_lifecycle.astrbot_config
         self.plugin_manager = core_lifecycle.plugin_manager
+        self.token_validator = token_validator or DashboardTokenValidator(
+            self.config["dashboard"].get("jwt_secret", "")
+        )
         self.platform_history_mgr = core_lifecycle.platform_message_history_manager
         self.sessions: dict[str, LiveChatSession] = {}
         self.attachments_dir = os.path.join(get_astrbot_data_path(), "attachments")
@@ -135,14 +141,11 @@ class LiveChatService:
     def authenticate_token(
         self,
         token: str | None,
-        jwt_secret: str | None = None,
     ) -> str:
         if not token:
             raise LiveChatAuthError("Missing authentication token")
-        jwt_secret = jwt_secret or self.config["dashboard"].get("jwt_secret")
         try:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-            return payload["username"]
+            return self.token_validator.validate(token).username
         except jwt.ExpiredSignatureError as exc:
             raise LiveChatAuthError("Token expired") from exc
         except jwt.InvalidTokenError as exc:

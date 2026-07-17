@@ -1,7 +1,11 @@
 import asyncio
 import datetime
+import hashlib
+import hmac
 import os
+import secrets
 from dataclasses import dataclass
+from typing import Any
 
 import jwt
 import pyotp
@@ -44,28 +48,15 @@ from astrbot.dashboard.password_state import (
     set_password_storage_upgraded,
 )
 
-ALL_OPEN_API_SCOPES = (
-    "bot",
-    "provider",
-    "persona",
-    "im",
-    "config",
-    "chat",
-    "kb",
-    "memory",
-    "data",
-    "file",
-    "plugin",
-    "mcp",
-    "skill",
-)
-
 OPEN_API_SCOPE_INCLUDES = {
     "config": ("bot", "provider"),
 }
 
 DASHBOARD_JWT_COOKIE_NAME = "astrbot_dashboard_jwt"
 DASHBOARD_JWT_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
+DASHBOARD_SESSION_TOKEN_TYPE = "dashboard_session"
+DASHBOARD_SESSION_AUDIENCE = "astrbot-dashboard"
+DASHBOARD_SESSION_ISSUER_PURPOSE = b"dashboard-session-issuer-v1"
 SKIP_DEFAULT_PASSWORD_AUTH_ENV = "ASTRBOT_DASHBOARD_SKIP_DEFAULT_PASSWORD_AUTH"
 SKIP_DEFAULT_PASSWORD_AUTH_ENV_OLD = "DASHBOARD_SKIP_DEFAULT_PASSWORD_AUTH"
 LOCAL_DASHBOARD_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -99,6 +90,89 @@ class AuthServiceResult:
     trusted_device_token: str | None = None
 
 
+@dataclass(frozen=True)
+class DashboardSessionPrincipal:
+    username: str
+    sid: str
+    jti: str
+
+
+def derive_dashboard_secret(jwt_secret: str, purpose: bytes) -> bytes:
+    """Derive a purpose-bound secret from the persisted Dashboard secret."""
+    if not jwt_secret:
+        raise ValueError("JWT secret is not set in the cmd_config.")
+    return hmac.new(jwt_secret.encode(), purpose, hashlib.sha256).digest()
+
+
+class DashboardTokenValidator:
+    """Issue and validate Dashboard session JWTs with mutually exclusive rules."""
+
+    _REQUIRED_CLAIMS = (
+        "exp",
+        "iat",
+        "iss",
+        "aud",
+        "sub",
+        "username",
+        "sid",
+        "jti",
+        "token_type",
+    )
+
+    def __init__(self, jwt_secret: str) -> None:
+        if not jwt_secret:
+            raise ValueError("JWT secret is not set in the cmd_config.")
+        self._jwt_secret = jwt_secret
+        issuer_digest = derive_dashboard_secret(
+            jwt_secret,
+            DASHBOARD_SESSION_ISSUER_PURPOSE,
+        ).hex()
+        self.issuer = f"urn:astrbot:dashboard:{issuer_digest}"
+
+    def issue(self, username: str) -> str:
+        now = datetime.datetime.now(datetime.UTC)
+        payload: dict[str, Any] = {
+            "token_type": DASHBOARD_SESSION_TOKEN_TYPE,
+            "aud": DASHBOARD_SESSION_AUDIENCE,
+            "iss": self.issuer,
+            "sub": username,
+            "username": username,
+            "sid": secrets.token_urlsafe(32),
+            "jti": secrets.token_urlsafe(32),
+            "iat": now,
+            "exp": now + datetime.timedelta(seconds=DASHBOARD_JWT_COOKIE_MAX_AGE),
+        }
+        return jwt.encode(payload, self._jwt_secret, algorithm="HS256")
+
+    def validate(self, token: str) -> DashboardSessionPrincipal:
+        payload = jwt.decode(
+            token,
+            self._jwt_secret,
+            algorithms=["HS256"],
+            audience=DASHBOARD_SESSION_AUDIENCE,
+            issuer=self.issuer,
+            options={"require": list(self._REQUIRED_CLAIMS)},
+        )
+        if payload.get("token_type") != DASHBOARD_SESSION_TOKEN_TYPE:
+            raise jwt.InvalidTokenError("Invalid Dashboard token type")
+
+        username = payload.get("username")
+        subject = payload.get("sub")
+        sid = payload.get("sid")
+        jti = payload.get("jti")
+        if (
+            not isinstance(username, str)
+            or not username.strip()
+            or subject != username
+            or not isinstance(sid, str)
+            or not sid
+            or not isinstance(jti, str)
+            or not jti
+        ):
+            raise jwt.InvalidTokenError("Invalid Dashboard token claims")
+        return DashboardSessionPrincipal(username=username, sid=sid, jti=jti)
+
+
 class AuthService:
     def __init__(
         self,
@@ -106,10 +180,14 @@ class AuthService:
         config: AstrBotConfig,
         *,
         demo_mode: bool,
+        token_validator: DashboardTokenValidator | None = None,
     ) -> None:
         self.db = db
         self.config = config
         self.demo_mode = demo_mode
+        self.token_validator = token_validator or DashboardTokenValidator(
+            self.config["dashboard"].get("jwt_secret", "")
+        )
 
     async def setup_status(self) -> AuthServiceResult:
         return AuthServiceResult(
@@ -396,15 +474,8 @@ class AuthService:
 
         return AuthServiceResult(message="Updated account successfully")
 
-    def generate_jwt(self, username: str):
-        payload = {
-            "username": username,
-            "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=7),
-        }
-        jwt_token = self.config["dashboard"].get("jwt_secret", None)
-        if not jwt_token:
-            raise ValueError("JWT secret is not set in the cmd_config.")
-        return jwt.encode(payload, jwt_token, algorithm="HS256")
+    def generate_jwt(self, username: str) -> str:
+        return self.token_validator.issue(username)
 
     async def is_setup_required(self) -> bool:
         if self.demo_mode:

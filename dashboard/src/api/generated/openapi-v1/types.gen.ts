@@ -24,6 +24,103 @@ export type JsonSchema = {
   [key: string]: unknown;
 };
 
+export type PluginDashboardSessionRequest = {
+  protocol_version: 1;
+  expected_generation: string;
+};
+
+export type PluginDashboardActionRequest = {
+  protocol_version: 1;
+  instance_id: string;
+  expected_generation: string;
+  payload: unknown;
+};
+
+export type PluginDashboardFileRequest = {
+  protocol_version: 1;
+  instance_id: string;
+  expected_generation: string;
+  expected_disposition: 'inline' | 'attachment';
+  payload: unknown;
+};
+
+export type PluginDashboardUploadMetadata = {
+  protocol_version: 1;
+  instance_id: string;
+  expected_generation: string;
+  fields: unknown;
+};
+
+export type PluginDashboardUploadRequest = {
+  metadata: PluginDashboardUploadMetadata;
+  file: Blob | File;
+};
+
+export type PluginDashboardPage = {
+  id: string;
+  title: string;
+  icon: string | null;
+  actions: Array<string>;
+};
+
+export type PluginDashboardAction = {
+  id: string;
+  kind: 'json' | 'upload' | 'file';
+  required_scope: string;
+  description: string;
+  input_schema: JsonSchema;
+  output_schema?: JsonSchema;
+  disposition?: 'inline' | 'attachment';
+  max_file_bytes?: number;
+  allowed_content_types?: Array<string>;
+  allowed_extensions?: Array<string>;
+};
+
+export type PluginDashboardCatalog = {
+  protocol_version: 1;
+  extension_id: string;
+  plugin_name: string;
+  plugin_generation: string;
+  pages: Array<PluginDashboardPage>;
+  actions: Array<PluginDashboardAction>;
+};
+
+export type PluginDashboardCatalogResponse = {
+  status: 'ok';
+  message?: string | null;
+  data: PluginDashboardCatalog;
+};
+
+export type PluginDashboardSession = {
+  protocol_version: 1;
+  instance_id: string;
+  plugin_generation: string;
+  iframe_url: string;
+  handshake_nonce: string;
+  expires_at: string;
+};
+
+export type PluginDashboardSessionResponse = {
+  status: 'ok';
+  message?: string | null;
+  data: PluginDashboardSession;
+};
+
+export type PluginDashboardFileTicket = {
+  ticket_url: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  disposition: 'inline' | 'attachment';
+  expires_at: string;
+};
+
+export type PluginDashboardFileResponse = {
+  status: 'ok';
+  message?: string | null;
+  data: PluginDashboardFileTicket;
+};
+
 export type LoginRequest = {
   username: string;
   password: string;
@@ -649,6 +746,12 @@ export type SubAgentConfigRequest = {
     [key: string]: unknown;
   }>;
 };
+
+export type ExtensionId = string;
+
+export type PluginPageId = string;
+
+export type PluginActionId = string;
 
 export type AttachmentId = string;
 
@@ -2352,6 +2455,307 @@ export type DownloadAttachmentResponses = {
 
 export type DownloadAttachmentResponse =
   DownloadAttachmentResponses[keyof DownloadAttachmentResponses];
+
+export type GetPluginDashboardCatalogData = {
+  body?: never;
+  path: {
+    extension_id: string;
+  };
+  query?: never;
+  url: '/api/v1/plugins/{extension_id}/dashboard';
+};
+
+export type GetPluginDashboardCatalogErrors = {
+  /**
+   * Standard AstrBot error response
+   */
+  401: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  404: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetPluginDashboardCatalogError =
+  GetPluginDashboardCatalogErrors[keyof GetPluginDashboardCatalogErrors];
+
+export type GetPluginDashboardCatalogResponses = {
+  /**
+   * Current Dashboard extension catalog
+   */
+  200: PluginDashboardCatalogResponse;
+};
+
+export type GetPluginDashboardCatalogResponse =
+  GetPluginDashboardCatalogResponses[keyof GetPluginDashboardCatalogResponses];
+
+export type CreatePluginDashboardPageSessionData = {
+  body: PluginDashboardSessionRequest;
+  path: {
+    extension_id: string;
+    page_id: string;
+  };
+  query?: never;
+  url: '/api/v1/plugins/{extension_id}/dashboard/pages/{page_id}/session';
+};
+
+export type CreatePluginDashboardPageSessionErrors = {
+  /**
+   * Standard AstrBot error response
+   */
+  401: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  404: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  409: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  429: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  503: ErrorEnvelope;
+};
+
+export type CreatePluginDashboardPageSessionError =
+  CreatePluginDashboardPageSessionErrors[keyof CreatePluginDashboardPageSessionErrors];
+
+export type CreatePluginDashboardPageSessionResponses = {
+  /**
+   * Page session created
+   */
+  200: PluginDashboardSessionResponse;
+};
+
+export type CreatePluginDashboardPageSessionResponse =
+  CreatePluginDashboardPageSessionResponses[keyof CreatePluginDashboardPageSessionResponses];
+
+export type InvokePluginDashboardActionData = {
+  body: PluginDashboardActionRequest;
+  path: {
+    extension_id: string;
+    action_id: string;
+  };
+  query?: never;
+  url: '/api/v1/plugins/{extension_id}/dashboard/actions/{action_id}';
+};
+
+export type InvokePluginDashboardActionErrors = {
+  /**
+   * Standard AstrBot error response
+   */
+  400: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  401: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  403: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  404: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  409: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  413: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  422: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  429: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  500: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  503: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  504: ErrorEnvelope;
+};
+
+export type InvokePluginDashboardActionError =
+  InvokePluginDashboardActionErrors[keyof InvokePluginDashboardActionErrors];
+
+export type InvokePluginDashboardActionResponses = {
+  /**
+   * Standard AstrBot success response
+   */
+  200: SuccessEnvelope;
+};
+
+export type InvokePluginDashboardActionResponse =
+  InvokePluginDashboardActionResponses[keyof InvokePluginDashboardActionResponses];
+
+export type InvokePluginDashboardUploadData = {
+  body: PluginDashboardUploadRequest;
+  path: {
+    extension_id: string;
+    action_id: string;
+  };
+  query?: never;
+  url: '/api/v1/plugins/{extension_id}/dashboard/uploads/{action_id}';
+};
+
+export type InvokePluginDashboardUploadErrors = {
+  /**
+   * Standard AstrBot error response
+   */
+  400: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  401: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  403: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  404: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  409: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  413: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  415: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  422: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  429: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  500: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  503: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  504: ErrorEnvelope;
+};
+
+export type InvokePluginDashboardUploadError =
+  InvokePluginDashboardUploadErrors[keyof InvokePluginDashboardUploadErrors];
+
+export type InvokePluginDashboardUploadResponses = {
+  /**
+   * Standard AstrBot success response
+   */
+  200: SuccessEnvelope;
+};
+
+export type InvokePluginDashboardUploadResponse =
+  InvokePluginDashboardUploadResponses[keyof InvokePluginDashboardUploadResponses];
+
+export type InvokePluginDashboardFileData = {
+  body: PluginDashboardFileRequest;
+  path: {
+    extension_id: string;
+    action_id: string;
+  };
+  query?: never;
+  url: '/api/v1/plugins/{extension_id}/dashboard/files/{action_id}';
+};
+
+export type InvokePluginDashboardFileErrors = {
+  /**
+   * Standard AstrBot error response
+   */
+  400: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  401: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  403: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  404: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  409: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  413: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  415: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  422: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  429: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  500: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  503: ErrorEnvelope;
+  /**
+   * Standard AstrBot error response
+   */
+  504: ErrorEnvelope;
+};
+
+export type InvokePluginDashboardFileError =
+  InvokePluginDashboardFileErrors[keyof InvokePluginDashboardFileErrors];
+
+export type InvokePluginDashboardFileResponses = {
+  /**
+   * File ticket created
+   */
+  200: PluginDashboardFileResponse;
+};
+
+export type InvokePluginDashboardFileResponse =
+  InvokePluginDashboardFileResponses[keyof InvokePluginDashboardFileResponses];
 
 export type ListPluginsData = {
   body?: never;

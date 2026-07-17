@@ -15,9 +15,13 @@ from fastapi import FastAPI, Request
 import astrbot.dashboard.services.config_service as config_service
 from astrbot.core.file_token_service import FileTokenService
 from astrbot.core.platform.send_result import PlatformSendResult
+from astrbot.core.star.dashboard_extension import DashboardExtensionRegistry
 from astrbot.dashboard.api.app import create_dashboard_asgi_app
 from astrbot.dashboard.services.api_key_service import ApiKeyService
-from astrbot.dashboard.services.auth_service import DASHBOARD_JWT_COOKIE_NAME
+from astrbot.dashboard.services.auth_service import (
+    DASHBOARD_JWT_COOKIE_NAME,
+    DashboardTokenValidator,
+)
 from astrbot.dashboard.services.platform_service import PlatformServiceError
 from astrbot.dashboard.services.plugin_service import (
     PLUGIN_UPDATE_SOURCE_REQUIRED_MESSAGE,
@@ -749,6 +753,7 @@ def fake_core_lifecycle():
         conversation_manager=FakeConversationManager(),
         platform_message_history_manager=SimpleNamespace(),
         plugin_manager=SimpleNamespace(
+            dashboard_extension_registry=DashboardExtensionRegistry(),
             context=SimpleNamespace(get_all_stars=lambda: [demo_plugin]),
             failed_plugin_info=None,
             failed_plugin_dict={},
@@ -757,7 +762,7 @@ def fake_core_lifecycle():
             reload=reload_plugin,
             _validate_astrbot_version_specifier=validate_astrbot_version_specifier,
         ),
-        star_context=SimpleNamespace(registered_web_apis=[]),
+        star_context=SimpleNamespace(),
         kb_manager=None,
     )
 
@@ -783,11 +788,7 @@ async def asgi_client(asgi_app):
 
 
 def _jwt_headers() -> dict[str, str]:
-    token = jwt.encode(
-        {"username": "fastapi-v1-test"},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    token = DashboardTokenValidator(JWT_SECRET).issue("fastapi-v1-test")
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -829,11 +830,7 @@ async def test_public_versions_route_uses_static_folder(
 async def test_v1_scope_dependencies_accept_dashboard_cookie(
     asgi_client: httpx.AsyncClient,
 ):
-    token = jwt.encode(
-        {"username": "fastapi-v1-cookie-test"},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    token = DashboardTokenValidator(JWT_SECRET).issue("fastapi-v1-cookie-test")
 
     response = await asgi_client.get(
         "/api/v1/bots",
@@ -847,6 +844,163 @@ async def test_v1_scope_dependencies_accept_dashboard_cookie(
 
 
 @pytest.mark.asyncio
+async def test_legacy_dashboard_token_without_required_claims_is_rejected(
+    asgi_client: httpx.AsyncClient,
+):
+    token = jwt.encode(
+        {"username": "legacy-dashboard-user"},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+    response = await asgi_client.get(
+        "/api/v1/bots",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("claim", "value"),
+    [
+        ("token_type", "wrong-token-type"),
+        ("aud", "wrong-audience"),
+        ("iss", "urn:astrbot:dashboard:wrong-instance"),
+        ("sid", ""),
+        ("jti", ""),
+        ("sub", "different-user"),
+    ],
+)
+async def test_dashboard_session_claim_mismatch_is_rejected(
+    asgi_client: httpx.AsyncClient,
+    claim: str,
+    value: str,
+):
+    validator = DashboardTokenValidator(JWT_SECRET)
+    payload = jwt.decode(
+        validator.issue("fastapi-v1-test"),
+        options={"verify_signature": False},
+    )
+    payload[claim] = value
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    response = await asgi_client.get(
+        "/api/v1/bots",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "missing_claim",
+    ["exp", "iat", "iss", "aud", "sub", "username", "sid", "jti", "token_type"],
+)
+async def test_dashboard_session_missing_required_claim_is_rejected(
+    asgi_client: httpx.AsyncClient,
+    missing_claim: str,
+):
+    validator = DashboardTokenValidator(JWT_SECRET)
+    payload = jwt.decode(
+        validator.issue("fastapi-v1-test"),
+        options={"verify_signature": False},
+    )
+    del payload[missing_claim]
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    response = await asgi_client.get(
+        "/api/v1/bots",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_each_dashboard_login_token_has_a_distinct_session_id(asgi_app: FastAPI):
+    validator = asgi_app.state.dashboard_token_validator
+
+    first = validator.validate(validator.issue("dashboard-user"))
+    second = validator.validate(validator.issue("dashboard-user"))
+
+    assert first.sid != second.sid
+    assert first.jti != second.jti
+
+
+@pytest.mark.asyncio
+async def test_cookie_authenticated_mutation_rejects_untrusted_origins(
+    asgi_client: httpx.AsyncClient,
+):
+    token = DashboardTokenValidator(JWT_SECRET).issue("cookie-user")
+    cookie = {"Cookie": f"{DASHBOARD_JWT_COOKIE_NAME}={token}"}
+
+    missing = await asgi_client.post("/api/v1/auth/logout", headers=cookie)
+    opaque = await asgi_client.post(
+        "/api/v1/auth/logout",
+        headers={**cookie, "Origin": "null"},
+    )
+    cross_site = await asgi_client.post(
+        "/api/v1/auth/logout",
+        headers={**cookie, "Origin": "https://attacker.example"},
+    )
+    same_origin = await asgi_client.post(
+        "/api/v1/auth/logout",
+        headers={**cookie, "Origin": "http://testserver"},
+    )
+
+    assert missing.status_code == 403
+    assert opaque.status_code == 403
+    assert cross_site.status_code == 403
+    assert same_origin.status_code == 200
+    set_cookie_headers = same_origin.headers.get_list("set-cookie")
+    assert any("Path=/api/v1" in header for header in set_cookie_headers)
+    assert any("Path=/" in header for header in set_cookie_headers)
+
+
+@pytest.mark.asyncio
+async def test_logout_ignores_invalid_cookie_and_still_clears_it(
+    asgi_client: httpx.AsyncClient,
+):
+    response = await asgi_client.post(
+        "/api/v1/auth/logout",
+        headers={"Cookie": f"{DASHBOARD_JWT_COOKIE_NAME}=invalid"},
+    )
+
+    assert response.status_code == 200
+    assert len(response.headers.get_list("set-cookie")) == 2
+
+
+@pytest.mark.asyncio
+async def test_cookie_csrf_uses_trusted_proxy_external_origin(
+    asgi_app: FastAPI,
+    asgi_client: httpx.AsyncClient,
+):
+    astrbot_config = asgi_app.state.core_lifecycle.astrbot_config
+    previous_dashboard_config = astrbot_config.get("dashboard")
+    astrbot_config["dashboard"] = {"trust_proxy_headers": True}
+    token = DashboardTokenValidator(JWT_SECRET).issue("proxy-user")
+    try:
+        response = await asgi_client.post(
+            "/api/v1/auth/logout",
+            headers={
+                "Cookie": f"{DASHBOARD_JWT_COOKIE_NAME}={token}",
+                "Origin": "https://dashboard.example",
+                "X-Forwarded-Proto": "https",
+                "X-Forwarded-Host": "dashboard.example",
+            },
+        )
+    finally:
+        if previous_dashboard_config is None:
+            del astrbot_config["dashboard"]
+        else:
+            astrbot_config["dashboard"] = previous_dashboard_config
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_v1_openapi_is_served_by_fastapi(asgi_client: httpx.AsyncClient):
     response = await asgi_client.get("/api/v1/openapi.json")
 
@@ -857,6 +1011,39 @@ async def test_v1_openapi_is_served_by_fastapi(asgi_client: httpx.AsyncClient):
     assert "/api/v1/bots" in spec["paths"]
     assert "/api/v1/providers" in spec["paths"]
     assert "/api/v1/plugins" in spec["paths"]
+    plugin_dashboard_paths = [
+        "/api/v1/plugins/{extension_id}/dashboard",
+        "/api/v1/plugins/{extension_id}/dashboard/pages/{page_id}/session",
+        "/api/v1/plugins/{extension_id}/dashboard/actions/{action_id}",
+        "/api/v1/plugins/{extension_id}/dashboard/uploads/{action_id}",
+        "/api/v1/plugins/{extension_id}/dashboard/files/{action_id}",
+    ]
+    for path in plugin_dashboard_paths:
+        assert path in spec["paths"]
+        operation = next(iter(spec["paths"][path].values()))
+        assert operation["security"] == [
+            {"DashboardBearerAuth": [], "DashboardCookieAuth": []}
+        ]
+    assert (
+        spec["components"]["securitySchemes"]["DashboardBearerAuth"]["scheme"]
+        == "bearer"
+    )
+    assert spec["components"]["securitySchemes"]["DashboardCookieAuth"] == {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "astrbot_dashboard_jwt",
+    }
+    assert not any("/api/plugin-pages/" in path for path in spec["paths"])
+    assert not any("/api/plugin-files/" in path for path in spec["paths"])
+    session_operation = spec["paths"][plugin_dashboard_paths[1]]["post"]
+    file_operation = spec["paths"][plugin_dashboard_paths[4]]["post"]
+    assert "Set-Cookie" in session_operation["responses"]["200"]["headers"]
+    assert "Set-Cookie" in file_operation["responses"]["200"]["headers"]
+    upload_operation = spec["paths"][plugin_dashboard_paths[3]]["post"]
+    upload_schema = upload_operation["requestBody"]["content"]["multipart/form-data"][
+        "schema"
+    ]
+    assert upload_schema["required"] == ["metadata", "file"]
     assert "/api/v1/conversations" in spec["paths"]
     assert "/api/v1/mcp/servers" in spec["paths"]
     assert "/api/v1/skills" in spec["paths"]
@@ -2223,31 +2410,6 @@ async def test_v1_plugin_update_all_rejects_legacy_plugin_ids_field(
     )
 
     assert response.status_code == 422
-
-
-def test_astrbot_web_request_requires_plugin_context():
-    from astrbot.api.web import request as plugin_request
-
-    with pytest.raises(RuntimeError, match="plugin Web API handler"):
-        _ = plugin_request.method
-
-
-def test_astrbot_web_request_proxy_exposes_typed_methods():
-    from typing import get_type_hints
-
-    from astrbot.api.web import (
-        PluginMultiDict,
-        PluginRequestProxy,
-        PluginUploadFile,
-    )
-    from astrbot.api.web import request as plugin_request
-
-    assert isinstance(plugin_request, PluginRequestProxy)
-    assert get_type_hints(type(plugin_request).form)["return"] == PluginMultiDict[str]
-    assert (
-        get_type_hints(type(plugin_request).files)["return"]
-        == PluginMultiDict[PluginUploadFile]
-    )
 
 
 @pytest.mark.asyncio

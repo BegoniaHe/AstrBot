@@ -8,12 +8,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 from astrbot.dashboard.services.live_chat_service import LiveChatService
+
+_LIVE_CHAT_JWT_SECRET = "live-chat-test-secret-with-32-bytes"
 
 
 def _service() -> LiveChatService:
     core_lifecycle = SimpleNamespace(
-        astrbot_config={"dashboard": {"jwt_secret": "test-secret"}},
+        astrbot_config={"dashboard": {"jwt_secret": _LIVE_CHAT_JWT_SECRET}},
         services=SimpleNamespace(preferences=SimpleNamespace(temporary_cache={})),
         plugin_manager=SimpleNamespace(),
         platform_message_history_manager=SimpleNamespace(),
@@ -26,6 +29,13 @@ def _record(record_id: int):
         id=record_id,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
+
+
+def test_authenticate_dashboard_session_token():
+    service = _service()
+    token = DashboardTokenValidator(_LIVE_CHAT_JWT_SECRET).issue("dashboard-user")
+
+    assert service.authenticate_token(token) == "dashboard-user"
 
 
 @pytest.mark.asyncio
@@ -51,7 +61,6 @@ async def test_run_websocket_session_closes_when_token_is_missing():
     )
 
     assert closed == [(1008, "Missing authentication token")]
-    assert service.sessions == {}
 
 
 @pytest.mark.asyncio
@@ -266,14 +275,16 @@ def test_authenticate_token_maps_invalid_and_expired_errors(monkeypatch):
     service = _service()
 
     monkeypatch.setattr(
-        "astrbot.dashboard.services.live_chat_service.jwt.decode",
+        service.token_validator,
+        "validate",
         MagicMock(side_effect=__import__("jwt").ExpiredSignatureError("expired")),
     )
     with pytest.raises(Exception, match="Token expired"):
         service.authenticate_token("token")
 
     monkeypatch.setattr(
-        "astrbot.dashboard.services.live_chat_service.jwt.decode",
+        service.token_validator,
+        "validate",
         MagicMock(side_effect=__import__("jwt").InvalidTokenError("invalid")),
     )
     with pytest.raises(Exception, match="Invalid token"):

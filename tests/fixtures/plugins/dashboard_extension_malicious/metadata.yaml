@@ -1,0 +1,15 @@
+name: dashboard_extension_malicious
+author: AstrBot Security Tests
+version: 1.0.0
+desc: Deliberately invalid Dashboard extension fixture
+requires:
+  dashboard_extension: 1
+dashboard:
+  extension_id: io.github.example.dashboard-extension-malicious
+  pages:
+    - id: settings
+      title: Settings
+      module: ../outside.js
+      assets_manifest: pages/settings/assets.v1.json
+      actions:
+        - config.read

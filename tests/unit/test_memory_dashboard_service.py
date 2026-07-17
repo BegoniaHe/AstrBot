@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import httpx
-import jwt
 import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -12,23 +11,21 @@ from astrbot.dashboard.api.memory import list_memory_facts, refresh_memory_profi
 from astrbot.dashboard.api.memory import router as memory_router
 from astrbot.dashboard.responses import ApiError, error
 from astrbot.dashboard.schemas import MemoryProfileRefreshRequest
+from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 from astrbot.dashboard.services.memory_service import MemoryService
 
 JWT_SECRET = "memory-dashboard-service-test-secret"
 
 
 def _memory_headers() -> dict[str, str]:
-    token = jwt.encode(
-        {"username": "memory-dashboard-user"},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    token = DashboardTokenValidator(JWT_SECRET).issue("memory-dashboard-user")
     return {"Authorization": f"Bearer {token}"}
 
 
 def _memory_app(service: MemoryService, db) -> FastAPI:
     app = FastAPI()
     app.state.jwt_secret = JWT_SECRET
+    app.state.dashboard_token_validator = DashboardTokenValidator(JWT_SECRET)
     app.state.db = db
     app.state.services = SimpleNamespace(memory=service)
 

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,8 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import yaml
+from pydantic import BaseModel, ConfigDict
 
 from astrbot.core.star import star_manager as star_manager_module
+from astrbot.core.star.dashboard_extension import (
+    DashboardJsonAction,
+)
 from astrbot.core.star.star_manager import PluginDependencyInstallError, PluginManager
 from astrbot.core.utils.pip_installer import PipInstallError
 from astrbot.core.utils.requirements_utils import MissingRequirementsPlan
@@ -28,6 +33,14 @@ class MockStar:
         self.repo = TEST_PLUGIN_REPO
         self.reserved = False
         self.info = {"repo": TEST_PLUGIN_REPO, "readme": ""}
+
+
+class _DashboardEmptyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class _DashboardResult(BaseModel):
+    ok: bool
 
 
 def _write_local_test_plugin(plugin_path: Path, repo_url: str, version: str = "1.0.0"):
@@ -53,6 +66,55 @@ def _write_requirements(plugin_path: Path):
     """Creates a requirements.txt file."""
     with open(plugin_path / "requirements.txt", "w", encoding="utf-8") as f:
         f.write("networkx\n")
+
+
+def _write_dashboard_extension_metadata(plugin_path: Path, plugin_name: str) -> None:
+    module_path = "pages/settings/app.js"
+    module_content = b"export const plugin = true;\n"
+    module_file = plugin_path / module_path
+    module_file.parent.mkdir(parents=True, exist_ok=True)
+    module_file.write_bytes(module_content)
+    assets_manifest = plugin_path / "pages/settings/assets.v1.json"
+    assets_manifest.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "files": [
+                    {
+                        "path": module_path,
+                        "sha256": hashlib.sha256(module_content).hexdigest(),
+                        "size": len(module_content),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (plugin_path / "metadata.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": plugin_name,
+                "author": "AstrBot Team",
+                "desc": "Dashboard extension integration test",
+                "version": "1.0.0",
+                "requires": {"dashboard_extension": 1},
+                "dashboard": {
+                    "extension_id": f"io.github.example.{plugin_name.replace('_', '-')}",
+                    "pages": [
+                        {
+                            "id": "settings",
+                            "title": "Settings",
+                            "module": module_path,
+                            "assets_manifest": "pages/settings/assets.v1.json",
+                            "actions": ["config.read"],
+                        }
+                    ],
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_load_plugin_i18n_reads_locale_files(tmp_path: Path):
@@ -175,11 +237,10 @@ def test_load_plugin_metadata_includes_i18n(tmp_path: Path):
 
     assert metadata is not None
     assert metadata.short_desc == "Local test short description"
-    assert metadata.pages == []
     assert metadata.i18n == {"zh-CN": {"metadata": {"display_name": "你好世界"}}}
 
 
-def test_load_plugin_metadata_includes_pages(tmp_path: Path):
+def test_load_plugin_metadata_rejects_top_level_pages(tmp_path: Path):
     plugin_path = tmp_path / "helloworld"
     _write_local_test_plugin(plugin_path, TEST_PLUGIN_REPO)
     metadata_path = plugin_path / "metadata.yaml"
@@ -187,10 +248,8 @@ def test_load_plugin_metadata_includes_pages(tmp_path: Path):
     metadata["pages"] = [{"name": "dashboard", "title": "Dashboard"}]
     metadata_path.write_text(yaml.dump(metadata), encoding="utf-8")
 
-    loaded_metadata = PluginManager._load_plugin_metadata(str(plugin_path))
-
-    assert loaded_metadata is not None
-    assert loaded_metadata.pages == [{"name": "dashboard", "title": "Dashboard"}]
+    with pytest.raises(Exception, match="top-level pages is unsupported"):
+        PluginManager._load_plugin_metadata(str(plugin_path))
 
 
 def test_load_plugin_metadata_raises_without_metadata_yaml(tmp_path: Path):
@@ -220,6 +279,236 @@ def test_load_plugin_metadata_rejects_description_alias(tmp_path: Path):
 
     with pytest.raises(Exception, match="插件元数据信息不完整"):
         PluginManager._load_plugin_metadata(str(plugin_path))
+
+
+@pytest.mark.asyncio
+async def test_plugin_initialize_commits_dashboard_registration_atomically(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _clear_star_runtime_state()
+    plugin_name = "dashboard_plugin"
+    module_path = f"data.plugins.{plugin_name}.main"
+    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path.mkdir()
+    _write_dashboard_extension_metadata(plugin_path, plugin_name)
+
+    class DashboardPlugin:
+        def __init__(self, context):
+            self.context = context
+
+        async def initialize(self):
+            registrar = self.context.dashboard_extensions.for_plugin(self)
+            registrar.register_json(
+                DashboardJsonAction(
+                    name="config.read",
+                    input_model=_DashboardEmptyRequest,
+                    output_model=_DashboardResult,
+                ),
+                self.read_config,
+            )
+
+        async def read_config(self, _payload, _context):
+            return _DashboardResult(ok=True)
+
+    metadata = star_manager_module.StarMetadata(
+        star_cls_type=DashboardPlugin,
+        module_path=module_path,
+    )
+    star_manager_module.star_map[module_path] = metadata
+    star_manager_module.star_registry.append(metadata)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_get_plugin_modules",
+        lambda: [{"pname": plugin_name, "module": "main"}],
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_import_plugin_with_dependency_recovery",
+        AsyncMock(return_value=ModuleType(module_path)),
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.preferences,
+        "global_get",
+        AsyncMock(side_effect=lambda _key, default=None: default),
+    )
+    monkeypatch.setattr(
+        star_manager_module,
+        "sync_command_configs",
+        AsyncMock(),
+    )
+
+    try:
+        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+        snapshots = plugin_manager_pm.dashboard_extension_registry.snapshots()
+    finally:
+        _clear_star_runtime_state()
+
+    assert success is True
+    assert error is None
+    assert len(snapshots) == 1
+    assert snapshots[0].plugin_name == plugin_name
+    assert list(snapshots[0].actions) == ["config.read"]
+
+
+@pytest.mark.asyncio
+async def test_plugin_initialize_failure_rolls_back_dashboard_registration(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _clear_star_runtime_state()
+    plugin_name = "dashboard_plugin_failure"
+    module_path = f"data.plugins.{plugin_name}.main"
+    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path.mkdir()
+    _write_dashboard_extension_metadata(plugin_path, plugin_name)
+
+    class DashboardPlugin:
+        def __init__(self, context):
+            self.context = context
+
+        async def initialize(self):
+            registrar = self.context.dashboard_extensions.for_plugin(self)
+            registrar.register_json(
+                DashboardJsonAction(
+                    name="config.read",
+                    input_model=_DashboardEmptyRequest,
+                    output_model=_DashboardResult,
+                ),
+                self.read_config,
+            )
+            raise RuntimeError("initialize failed")
+
+        async def read_config(self, _payload, _context):
+            return _DashboardResult(ok=True)
+
+    metadata = star_manager_module.StarMetadata(
+        star_cls_type=DashboardPlugin,
+        module_path=module_path,
+    )
+    star_manager_module.star_map[module_path] = metadata
+    star_manager_module.star_registry.append(metadata)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_get_plugin_modules",
+        lambda: [{"pname": plugin_name, "module": "main"}],
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_import_plugin_with_dependency_recovery",
+        AsyncMock(return_value=ModuleType(module_path)),
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.preferences,
+        "global_get",
+        AsyncMock(side_effect=lambda _key, default=None: default),
+    )
+    monkeypatch.setattr(star_manager_module, "sync_command_configs", AsyncMock())
+
+    try:
+        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+        snapshots = plugin_manager_pm.dashboard_extension_registry.snapshots()
+    finally:
+        _clear_star_runtime_state()
+
+    assert success is False
+    assert "initialize failed" in str(error)
+    assert snapshots == ()
+
+
+@pytest.mark.asyncio
+async def test_plugin_constructor_cannot_register_dashboard_action(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _clear_star_runtime_state()
+    plugin_name = "dashboard_constructor_plugin"
+    module_path = f"data.plugins.{plugin_name}.main"
+    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path.mkdir()
+    _write_dashboard_extension_metadata(plugin_path, plugin_name)
+
+    class DashboardPlugin:
+        def __init__(self, context):
+            context.dashboard_extensions.for_plugin(self)
+
+    metadata = star_manager_module.StarMetadata(
+        star_cls_type=DashboardPlugin,
+        module_path=module_path,
+    )
+    star_manager_module.star_map[module_path] = metadata
+    star_manager_module.star_registry.append(metadata)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_get_plugin_modules",
+        lambda: [{"pname": plugin_name, "module": "main"}],
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_import_plugin_with_dependency_recovery",
+        AsyncMock(return_value=ModuleType(module_path)),
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.preferences,
+        "global_get",
+        AsyncMock(side_effect=lambda _key, default=None: default),
+    )
+    monkeypatch.setattr(star_manager_module, "sync_command_configs", AsyncMock())
+
+    try:
+        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+    finally:
+        _clear_star_runtime_state()
+
+    assert success is False
+    assert "during initialize" in str(error)
+    assert plugin_manager_pm.dashboard_extension_registry.snapshots() == ()
+
+
+@pytest.mark.asyncio
+async def test_install_validates_dashboard_manifest_before_dependencies(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    plugin_name = "invalid_dashboard_install"
+    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    ensure_requirements = AsyncMock()
+
+    async def mock_install(_repo_url, _proxy):
+        plugin_path.mkdir()
+        _write_dashboard_extension_metadata(plugin_path, plugin_name)
+        metadata_path = plugin_path / "metadata.yaml"
+        metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
+        metadata["dashboard"]["pages"][0]["module"] = "../outside.js"
+        metadata_path.write_text(
+            yaml.safe_dump(metadata, sort_keys=False),
+            encoding="utf-8",
+        )
+        return str(plugin_path)
+
+    monkeypatch.setattr(
+        plugin_manager_pm.updator,
+        "parse_github_url",
+        lambda _url: ("owner", plugin_name, ""),
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.updator,
+        "format_name",
+        lambda name: name,
+    )
+    monkeypatch.setattr(plugin_manager_pm.updator, "install", mock_install)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "_ensure_plugin_requirements",
+        ensure_requirements,
+    )
+
+    with pytest.raises(
+        Exception, match="Invalid asset path segment|escapes plugin root"
+    ):
+        await plugin_manager_pm.install_plugin("https://example.invalid/plugin.git")
+
+    ensure_requirements.assert_not_awaited()
 
 
 def test_get_modules_ignores_directory_name_entrypoint(tmp_path: Path):
@@ -609,12 +898,20 @@ async def test_reload_all_unbinds_every_registered_plugin(
 
     terminated = []
     unbound = []
+    transition_order = []
+
+    async def mock_deactivate(plugin, *, reason, release=False):
+        assert reason == "reload"
+        assert release is False
+        transition_order.append(f"drain:{plugin.name}")
 
     async def mock_terminate(plugin):
         terminated.append(plugin.name)
+        transition_order.append(f"terminate:{plugin.name}")
 
     async def mock_unbind(plugin_name, plugin_module_path):
         unbound.append(plugin_name)
+        transition_order.append(f"unbind:{plugin_name}")
         star_manager_module.star_map.pop(plugin_module_path, None)
         for index, metadata in enumerate(star_manager_module.star_registry):
             if metadata.name == plugin_name:
@@ -630,6 +927,11 @@ async def test_reload_all_unbinds_every_registered_plugin(
         return True, None
 
     monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "deactivate_plugin_extension",
+        mock_deactivate,
+    )
     monkeypatch.setattr(plugin_manager_pm, "_unbind_plugin", mock_unbind)
     monkeypatch.setattr(plugin_manager_pm, "load", mock_load)
 
@@ -640,6 +942,15 @@ async def test_reload_all_unbinds_every_registered_plugin(
 
     assert terminated == plugin_names
     assert unbound == plugin_names
+    assert transition_order == [
+        step
+        for plugin_name in plugin_names
+        for step in (
+            f"drain:{plugin_name}",
+            f"terminate:{plugin_name}",
+            f"unbind:{plugin_name}",
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -682,13 +993,30 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
     async def mock_terminate(star_metadata):
         assert star_metadata is plugin
 
+    transition_order = []
+
+    async def mock_deactivate(star_metadata, *, reason, release=False):
+        assert star_metadata is plugin
+        assert reason == "disable"
+        assert release is False
+        transition_order.append("drain")
+
+    async def ordered_terminate(star_metadata):
+        await mock_terminate(star_metadata)
+        transition_order.append("terminate")
+
     async def mock_reload(plugin_name):
         assert plugin_name == plugin.root_dir_name
         return True, None
 
     monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
     monkeypatch.setattr(plugin_manager_pm.preferences, "global_put", mock_global_put)
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
+    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", ordered_terminate)
+    monkeypatch.setattr(
+        plugin_manager_pm,
+        "deactivate_plugin_extension",
+        mock_deactivate,
+    )
     monkeypatch.setattr(plugin_manager_pm, "reload", mock_reload)
 
     try:
@@ -699,6 +1027,7 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
         assert preferences["inactivated_plugins"] == [plugin.module_path]
         assert preferences["inactivated_llm_tools"] == [plugin_tool.name]
         assert plugin.activated is False
+        assert transition_order == ["drain", "terminate"]
 
         await plugin_manager_pm.turn_on_plugin(plugin.root_dir_name)
 
@@ -1611,6 +1940,7 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
     cleanup_calls = []
+    transition_order = []
 
     mock_star = MockStar()
     mock_star.root_dir_name = TEST_PLUGIN_DIR
@@ -1622,8 +1952,20 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
 
     cast(Any, plugin_manager_pm.context).stars.append(mock_star)
 
+    async def mock_deactivate(plugin, *, reason, release=False):
+        assert plugin is mock_star
+        assert reason == "uninstall"
+        assert release is True
+        transition_order.append("drain")
+
+    async def mock_terminate(_plugin):
+        transition_order.append("terminate")
+
+    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
     monkeypatch.setattr(
-        plugin_manager_pm, "_terminate_plugin", lambda p: asyncio.sleep(0)
+        plugin_manager_pm,
+        "deactivate_plugin_extension",
+        mock_deactivate,
     )
     monkeypatch.setattr(
         plugin_manager_pm, "_unbind_plugin", lambda n, m: asyncio.sleep(0)
@@ -1651,6 +1993,8 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
     await plugin_manager_pm.uninstall_plugin(
         TEST_PLUGIN_NAME, delete_config=False, delete_data=True
     )
+
+    assert transition_order == ["drain", "terminate"]
 
     assert len(cleanup_calls) == 1
     assert cleanup_calls[0]["plugin_id"] == "mock_author/mock_name"

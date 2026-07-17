@@ -51,6 +51,11 @@ import type {
   PersonaRequest,
   PipInstallRequest,
   PluginConfigFileDeleteRequest,
+  PluginDashboardAction,
+  PluginDashboardCatalog,
+  PluginDashboardFileTicket,
+  PluginDashboardPage,
+  PluginDashboardSession,
   PluginBatchUpdateRequest,
   PluginGithubInstallRequest,
   PluginSourceBindRequest,
@@ -96,6 +101,30 @@ export interface ApiEnvelope<T> {
 
 export const UPGRADE_RECOVERY_EVENT = 'astrbot-upgrade-recovery';
 export const UPGRADE_RECOVERY_TOKEN_KEY = 'astrbot-upgrade-recovery-token';
+export const PLUGIN_DASHBOARD_LIFECYCLE_EVENT =
+  'astrbot:plugin-dashboard-lifecycle';
+
+export type PluginDashboardLifecycleReason = 'plugin_changed' | 'logout';
+
+export interface PluginDashboardLifecycleDetail {
+  reason: PluginDashboardLifecycleReason;
+  plugin_name?: string;
+}
+
+const nativeFetch =
+  typeof window === 'undefined' ? fetch : window.fetch.bind(window);
+
+function notifyPluginDashboardLifecycle(
+  detail: PluginDashboardLifecycleDetail,
+): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent<PluginDashboardLifecycleDetail>(
+      PLUGIN_DASHBOARD_LIFECYCLE_EVENT,
+      { detail },
+    ),
+  );
+}
 
 export type OpenConfig = DynamicConfig;
 
@@ -1069,6 +1098,7 @@ export const authApi = {
     return typed<AuthLoginData>(openApiV1.login({ body: payload }));
   },
   logout() {
+    notifyPluginDashboardLifecycle({ reason: 'logout' });
     return typed<OpenConfig>(openApiV1.logout());
   },
   setupStatus(requestConfig?: AxiosRequestConfig) {
@@ -1642,25 +1672,54 @@ export const pluginApi = {
     pluginId: string,
     options?: { delete_config?: boolean; delete_data?: boolean },
   ) {
-    return typed<OpenConfig>(
+    const response = typed<OpenConfig>(
       openApiV1.uninstallPlugin({
         path: { plugin_id: pluginId },
         body: options,
       }),
     );
+    void response.then((result) => {
+      if (result.data.status === 'ok') {
+        notifyPluginDashboardLifecycle({
+          reason: 'plugin_changed',
+          plugin_name: pluginId,
+        });
+      }
+    });
+    return response;
   },
   reload(pluginId: string) {
-    return typed<OpenConfig>(
+    const response = typed<OpenConfig>(
       openApiV1.reloadPlugin({ path: { plugin_id: pluginId } }),
     );
+    void response.then((result) => {
+      if (result.data.status === 'ok') {
+        notifyPluginDashboardLifecycle({
+          reason: 'plugin_changed',
+          plugin_name: pluginId,
+        });
+      }
+    });
+    return response;
   },
   setEnabled(pluginId: string, enabled: boolean) {
-    return typed<OpenConfig>(
+    const response = typed<OpenConfig>(
       openApiV1.setPluginEnabled({
         path: { plugin_id: pluginId },
         body: { enabled },
       }),
     );
+    if (!enabled) {
+      void response.then((result) => {
+        if (result.data.status === 'ok') {
+          notifyPluginDashboardLifecycle({
+            reason: 'plugin_changed',
+            plugin_name: pluginId,
+          });
+        }
+      });
+    }
+    return response;
   },
   update(pluginId: string, body?: PluginUpdateRequest) {
     return typed<OpenConfig>(
@@ -1761,6 +1820,161 @@ export const pluginApi = {
       }),
     );
   },
+};
+
+export const pluginDashboardApi = {
+  catalog(extensionId: string, requestConfig?: AxiosRequestConfig) {
+    return typed<PluginDashboardCatalog>(
+      openApiV1.getPluginDashboardCatalog(
+        generatedOptions(
+          { path: { extension_id: extensionId } },
+          requestConfig,
+        ),
+      ),
+    );
+  },
+  createSession(
+    extensionId: string,
+    pageId: string,
+    expectedGeneration: string,
+    requestConfig?: AxiosRequestConfig,
+  ) {
+    return typed<PluginDashboardSession>(
+      openApiV1.createPluginDashboardPageSession(
+        generatedOptions(
+          {
+            path: { extension_id: extensionId, page_id: pageId },
+            body: {
+              protocol_version: 1,
+              expected_generation: expectedGeneration,
+            },
+          },
+          requestConfig,
+        ),
+      ),
+    );
+  },
+  invoke(
+    extensionId: string,
+    actionId: string,
+    instanceId: string,
+    expectedGeneration: string,
+    payload: unknown,
+    requestConfig?: AxiosRequestConfig,
+  ) {
+    return typed<unknown>(
+      openApiV1.invokePluginDashboardAction(
+        generatedOptions(
+          {
+            path: { extension_id: extensionId, action_id: actionId },
+            body: {
+              protocol_version: 1,
+              instance_id: instanceId,
+              expected_generation: expectedGeneration,
+              payload,
+            },
+          },
+          requestConfig,
+        ),
+      ),
+    );
+  },
+  upload(
+    extensionId: string,
+    actionId: string,
+    instanceId: string,
+    expectedGeneration: string,
+    file: File,
+    fields: unknown,
+    requestConfig?: AxiosRequestConfig,
+  ) {
+    const formData = new FormData();
+    formData.append(
+      'metadata',
+      new File(
+        [
+          JSON.stringify({
+            protocol_version: 1,
+            instance_id: instanceId,
+            expected_generation: expectedGeneration,
+            fields,
+          }),
+        ],
+        'metadata.json',
+        { type: 'application/json' },
+      ),
+    );
+    formData.append('file', file);
+    return typed<unknown>(
+      httpClient.post(
+        `/api/v1/plugins/${encodeURIComponent(extensionId)}/dashboard/uploads/${encodeURIComponent(actionId)}`,
+        formData,
+        requestConfig,
+      ),
+    );
+  },
+  createFileTicket(
+    extensionId: string,
+    actionId: string,
+    instanceId: string,
+    expectedGeneration: string,
+    expectedDisposition: 'inline' | 'attachment',
+    payload: unknown,
+    requestConfig?: AxiosRequestConfig,
+  ) {
+    return typed<PluginDashboardFileTicket>(
+      openApiV1.invokePluginDashboardFile(
+        generatedOptions(
+          {
+            path: { extension_id: extensionId, action_id: actionId },
+            body: {
+              protocol_version: 1,
+              instance_id: instanceId,
+              expected_generation: expectedGeneration,
+              expected_disposition: expectedDisposition,
+              payload,
+            },
+          },
+          requestConfig,
+        ),
+      ),
+    );
+  },
+  async readInlineTicket(
+    ticket: PluginDashboardFileTicket,
+    signal?: AbortSignal,
+  ) {
+    const ticketUrl = new URL(ticket.ticket_url, window.location.origin);
+    if (
+      ticketUrl.origin !== window.location.origin ||
+      !ticketUrl.pathname.startsWith('/api/plugin-files/v1/') ||
+      ticketUrl.search ||
+      ticketUrl.hash
+    ) {
+      throw new Error('Invalid plugin file ticket');
+    }
+    const response = await nativeFetch(ticketUrl, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      signal,
+    });
+    if (!response.ok) throw new Error('Plugin file read failed');
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength !== ticket.size) {
+      throw new Error('Plugin file size mismatch');
+    }
+    return bytes;
+  },
+};
+
+export type {
+  PluginDashboardAction,
+  PluginDashboardCatalog,
+  PluginDashboardFileTicket,
+  PluginDashboardPage,
+  PluginDashboardSession,
 };
 
 export const knowledgeApi = {

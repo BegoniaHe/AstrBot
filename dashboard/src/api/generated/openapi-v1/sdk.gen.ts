@@ -59,6 +59,9 @@ import type {
   CreatePersonaFolderData,
   CreatePersonaFolderResponses,
   CreatePersonaResponses,
+  CreatePluginDashboardPageSessionData,
+  CreatePluginDashboardPageSessionErrors,
+  CreatePluginDashboardPageSessionResponses,
   CreatePluginSourceData,
   CreatePluginSourceResponses,
   CreateProviderData,
@@ -194,6 +197,9 @@ import type {
   GetPluginConfigResponses,
   GetPluginConfigSchemaData,
   GetPluginConfigSchemaResponses,
+  GetPluginDashboardCatalogData,
+  GetPluginDashboardCatalogErrors,
+  GetPluginDashboardCatalogResponses,
   GetPluginData,
   GetPluginReadmeData,
   GetPluginReadmeResponses,
@@ -254,6 +260,15 @@ import type {
   InstallPluginFromUrlResponses,
   InvokeBotActionData,
   InvokeBotActionResponses,
+  InvokePluginDashboardActionData,
+  InvokePluginDashboardActionErrors,
+  InvokePluginDashboardActionResponses,
+  InvokePluginDashboardFileData,
+  InvokePluginDashboardFileErrors,
+  InvokePluginDashboardFileResponses,
+  InvokePluginDashboardUploadData,
+  InvokePluginDashboardUploadErrors,
+  InvokePluginDashboardUploadResponses,
   ListActiveUmosData,
   ListActiveUmosResponses,
   ListApiKeysData,
@@ -2147,6 +2162,189 @@ export const downloadAttachment = <ThrowOnError extends boolean = false>(
     security: [{ name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/files/{attachment_id}/content',
     ...options,
+  });
+
+/**
+ * Get the Dashboard extension Page and Action catalog
+ */
+export const getPluginDashboardCatalog = <ThrowOnError extends boolean = false>(
+  options: Options<GetPluginDashboardCatalogData, ThrowOnError>,
+): RequestResult<
+  GetPluginDashboardCatalogResponses,
+  GetPluginDashboardCatalogErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetPluginDashboardCatalogResponses,
+    GetPluginDashboardCatalogErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      {
+        key: 'DashboardBearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+      {
+        in: 'cookie',
+        name: 'astrbot_dashboard_jwt',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/v1/plugins/{extension_id}/dashboard',
+    ...options,
+  });
+
+/**
+ * Create an authenticated Dashboard extension Page session
+ */
+export const createPluginDashboardPageSession = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreatePluginDashboardPageSessionData, ThrowOnError>,
+): RequestResult<
+  CreatePluginDashboardPageSessionResponses,
+  CreatePluginDashboardPageSessionErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreatePluginDashboardPageSessionResponses,
+    CreatePluginDashboardPageSessionErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      {
+        key: 'DashboardBearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+      {
+        in: 'cookie',
+        name: 'astrbot_dashboard_jwt',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/v1/plugins/{extension_id}/dashboard/pages/{page_id}/session',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Invoke a Dashboard extension JSON Action
+ */
+export const invokePluginDashboardAction = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<InvokePluginDashboardActionData, ThrowOnError>,
+): RequestResult<
+  InvokePluginDashboardActionResponses,
+  InvokePluginDashboardActionErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    InvokePluginDashboardActionResponses,
+    InvokePluginDashboardActionErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      {
+        key: 'DashboardBearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+      {
+        in: 'cookie',
+        name: 'astrbot_dashboard_jwt',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/v1/plugins/{extension_id}/dashboard/actions/{action_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Invoke a Dashboard extension upload Action
+ */
+export const invokePluginDashboardUpload = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<InvokePluginDashboardUploadData, ThrowOnError>,
+): RequestResult<
+  InvokePluginDashboardUploadResponses,
+  InvokePluginDashboardUploadErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    InvokePluginDashboardUploadResponses,
+    InvokePluginDashboardUploadErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    responseType: 'json',
+    security: [
+      {
+        key: 'DashboardBearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+      {
+        in: 'cookie',
+        name: 'astrbot_dashboard_jwt',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/v1/plugins/{extension_id}/dashboard/uploads/{action_id}',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Invoke a Dashboard extension file Action and create a ticket
+ */
+export const invokePluginDashboardFile = <ThrowOnError extends boolean = false>(
+  options: Options<InvokePluginDashboardFileData, ThrowOnError>,
+): RequestResult<
+  InvokePluginDashboardFileResponses,
+  InvokePluginDashboardFileErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    InvokePluginDashboardFileResponses,
+    InvokePluginDashboardFileErrors,
+    ThrowOnError
+  >({
+    responseType: 'json',
+    security: [
+      {
+        key: 'DashboardBearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+      {
+        in: 'cookie',
+        name: 'astrbot_dashboard_jwt',
+        type: 'apiKey',
+      },
+    ],
+    url: '/api/v1/plugins/{extension_id}/dashboard/files/{action_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**

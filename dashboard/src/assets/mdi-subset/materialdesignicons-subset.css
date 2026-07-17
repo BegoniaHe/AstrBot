@@ -1,4 +1,4 @@
-/* Auto-generated MDI subset – 264 icons */
+/* Auto-generated MDI subset – 265 icons */
 /* Do not edit manually. Run: pnpm run subset-icons */
 
 @font-face {
@@ -62,6 +62,10 @@
 
 .mdi-api-off::before {
   content: "\F1257";
+}
+
+.mdi-application-brackets-outline::before {
+  content: "\F0C8C";
 }
 
 .mdi-apps::before {

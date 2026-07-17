@@ -25,13 +25,16 @@ from astrbot.core.utils.astrbot_path import (
     get_astrbot_data_path,
 )
 from astrbot.core.utils.task_utils import create_tracked_task
+from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 
 CHUNK_SIZE = 1024 * 1024
 UPLOAD_EXPIRE_SECONDS = 3600
 
 
 class BackupServiceError(Exception):
-    pass
+    def __init__(self, message: str, *, status_code: int = 200) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass
@@ -62,10 +65,15 @@ class BackupService:
         self,
         db: BaseDatabase,
         core_lifecycle: AstrBotCoreLifecycle,
+        *,
+        token_validator: DashboardTokenValidator | None = None,
     ) -> None:
         self.db = db
         self.core_lifecycle = core_lifecycle
         self.config = core_lifecycle.astrbot_config
+        self.token_validator = token_validator or DashboardTokenValidator(
+            self.config["dashboard"].get("jwt_secret", "")
+        )
         self.backup_dir = get_astrbot_backups_path()
         self.data_dir = get_astrbot_data_path()
         self.chunks_dir = os.path.join(self.backup_dir, ".chunks")
@@ -596,30 +604,16 @@ class BackupService:
         *,
         filename: str | None,
         token: str | None,
-        jwt_secret: str | None,
     ) -> BackupDownload:
         if not filename:
             raise BackupServiceError("缺少参数 filename")
         if not token:
-            raise BackupServiceError("缺少参数 token")
-        if not jwt_secret:
-            raise BackupServiceError("服务器配置错误")
+            raise BackupServiceError("缺少参数 token", status_code=401)
 
         try:
-            jwt.decode(
-                token,
-                jwt_secret,
-                algorithms=["HS256"],
-                options={
-                    "require": ["exp"],
-                    "verify_signature": True,
-                    "verify_exp": True,
-                },
-            )
-        except jwt.ExpiredSignatureError as exc:
-            raise BackupServiceError("Token 已过期，请刷新页面后重试") from exc
+            self.token_validator.validate(token)
         except jwt.InvalidTokenError as exc:
-            raise BackupServiceError("Token 无效") from exc
+            raise BackupServiceError("Token 无效", status_code=401) from exc
 
         filename = self._validate_backup_filename(filename, missing="缺少参数 filename")
         file_path = os.path.join(self.backup_dir, filename)

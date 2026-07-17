@@ -43,9 +43,7 @@
     "viewInfo": "行为",
     "viewDocs": "文档",
     "viewRepo": "仓库",
-    "openPages": "Pages",
     "openPage": "打开",
-    "openWebui": "打开插件UI界面",
     "close": "关闭",
     "save": "保存",
     "saveAndClose": "保存并关闭",
@@ -134,6 +132,16 @@
       "authorWebsite": "作者网站",
       "repository": "仓库"
     }
+  },
+  "pageHost": {
+    "title": "插件页面",
+    "connected": "已连接",
+    "closed": "插件页面已关闭",
+    "protocolError": "插件页面协议校验失败",
+    "navigationBlocked": "插件页面尝试离开安全容器，实例已关闭",
+    "sessionExpired": "登录或页面会话已过期",
+    "pluginChanged": "插件已重载、禁用或卸载，页面实例已关闭",
+    "pluginUnavailable": "插件页面当前不可用"
   },
   "market": {
     "recommended": "🥳 推荐",

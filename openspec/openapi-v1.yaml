@@ -31,6 +31,7 @@ tags:
   - name: IM
   - name: Files
   - name: Plugins
+  - name: Plugin Dashboard
   - name: Plugin Sources
   - name: Commands
   - name: Tools
@@ -1363,6 +1364,215 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  /api/v1/plugins/{extension_id}/dashboard:
+    get:
+      tags: [Plugin Dashboard]
+      summary: Get the Dashboard extension Page and Action catalog
+      operationId: getPluginDashboardCatalog
+      security:
+        - DashboardBearerAuth: []
+          DashboardCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExtensionId'
+      responses:
+        '200':
+          description: Current Dashboard extension catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDashboardCatalogResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/plugins/{extension_id}/dashboard/pages/{page_id}/session:
+    post:
+      tags: [Plugin Dashboard]
+      summary: Create an authenticated Dashboard extension Page session
+      operationId: createPluginDashboardPageSession
+      security:
+        - DashboardBearerAuth: []
+          DashboardCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExtensionId'
+        - $ref: '#/components/parameters/PluginPageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginDashboardSessionRequest'
+      responses:
+        '200':
+          description: Page session created
+          headers:
+            Set-Cookie:
+              description: Exact-Path HttpOnly Page-session secret cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDashboardSessionResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/plugins/{extension_id}/dashboard/actions/{action_id}:
+    post:
+      tags: [Plugin Dashboard]
+      summary: Invoke a Dashboard extension JSON Action
+      operationId: invokePluginDashboardAction
+      security:
+        - DashboardBearerAuth: []
+          DashboardCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExtensionId'
+        - $ref: '#/components/parameters/PluginActionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginDashboardActionRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/plugins/{extension_id}/dashboard/uploads/{action_id}:
+    post:
+      tags: [Plugin Dashboard]
+      summary: Invoke a Dashboard extension upload Action
+      operationId: invokePluginDashboardUpload
+      security:
+        - DashboardBearerAuth: []
+          DashboardCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExtensionId'
+        - $ref: '#/components/parameters/PluginActionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PluginDashboardUploadRequest'
+            encoding:
+              metadata:
+                contentType: application/json
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/plugins/{extension_id}/dashboard/files/{action_id}:
+    post:
+      tags: [Plugin Dashboard]
+      summary: Invoke a Dashboard extension file Action and create a ticket
+      operationId: invokePluginDashboardFile
+      security:
+        - DashboardBearerAuth: []
+          DashboardCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExtensionId'
+        - $ref: '#/components/parameters/PluginActionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginDashboardFileRequest'
+      responses:
+        '200':
+          description: File ticket created
+          headers:
+            Set-Cookie:
+              description: Exact-Path HttpOnly file-ticket secret cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDashboardFileResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
 
   /api/v1/plugins:
     get:
@@ -3992,6 +4202,14 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    DashboardBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Dashboard session JWT
+    DashboardCookieAuth:
+      type: apiKey
+      in: cookie
+      name: astrbot_dashboard_jwt
 
   responses:
     Ok:
@@ -4023,6 +4241,31 @@ components:
             type: string
 
   parameters:
+    ExtensionId:
+      name: extension_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 128
+        pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$'
+    PluginPageId:
+      name: page_id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 48
+        pattern: '^[a-z][a-z0-9-]{0,47}$'
+    PluginActionId:
+      name: action_id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$'
     AttachmentId:
       name: attachment_id
       in: path
@@ -4236,6 +4479,263 @@ components:
     JsonSchema:
       type: object
       additionalProperties: true
+
+    PluginDashboardSessionRequest:
+      type: object
+      required: [protocol_version, expected_generation]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        expected_generation:
+          type: string
+          minLength: 1
+          maxLength: 128
+      additionalProperties: false
+
+    PluginDashboardActionRequest:
+      type: object
+      required: [protocol_version, instance_id, expected_generation, payload]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        instance_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expected_generation:
+          type: string
+          minLength: 1
+          maxLength: 128
+        payload: {}
+      additionalProperties: false
+
+    PluginDashboardFileRequest:
+      type: object
+      required:
+        [
+          protocol_version,
+          instance_id,
+          expected_generation,
+          expected_disposition,
+          payload,
+        ]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        instance_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expected_generation:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expected_disposition:
+          type: string
+          enum: [inline, attachment]
+        payload: {}
+      additionalProperties: false
+
+    PluginDashboardUploadMetadata:
+      type: object
+      required: [protocol_version, instance_id, expected_generation, fields]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        instance_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expected_generation:
+          type: string
+          minLength: 1
+          maxLength: 128
+        fields: {}
+      additionalProperties: false
+
+    PluginDashboardUploadRequest:
+      type: object
+      required: [metadata, file]
+      properties:
+        metadata:
+          $ref: '#/components/schemas/PluginDashboardUploadMetadata'
+        file:
+          type: string
+          format: binary
+      additionalProperties: false
+
+    PluginDashboardPage:
+      type: object
+      required: [id, title, icon, actions]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        icon:
+          type: [string, 'null']
+        actions:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    PluginDashboardAction:
+      type: object
+      required: [id, kind, required_scope, description, input_schema]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [json, upload, file]
+        required_scope:
+          type: string
+        description:
+          type: string
+        input_schema:
+          $ref: '#/components/schemas/JsonSchema'
+        output_schema:
+          $ref: '#/components/schemas/JsonSchema'
+        disposition:
+          type: string
+          enum: [inline, attachment]
+        max_file_bytes:
+          type: integer
+          minimum: 1
+        allowed_content_types:
+          type: array
+          items:
+            type: string
+        allowed_extensions:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    PluginDashboardCatalog:
+      type: object
+      required:
+        [
+          protocol_version,
+          extension_id,
+          plugin_name,
+          plugin_generation,
+          pages,
+          actions,
+        ]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        extension_id:
+          type: string
+        plugin_name:
+          type: string
+        plugin_generation:
+          type: string
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginDashboardPage'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginDashboardAction'
+      additionalProperties: false
+
+    PluginDashboardCatalogResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        message:
+          type: [string, 'null']
+        data:
+          $ref: '#/components/schemas/PluginDashboardCatalog'
+      additionalProperties: false
+
+    PluginDashboardSession:
+      type: object
+      required:
+        [
+          protocol_version,
+          instance_id,
+          plugin_generation,
+          iframe_url,
+          handshake_nonce,
+          expires_at,
+        ]
+      properties:
+        protocol_version:
+          type: integer
+          const: 1
+        instance_id:
+          type: string
+        plugin_generation:
+          type: string
+        iframe_url:
+          type: string
+        handshake_nonce:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+
+    PluginDashboardSessionResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        message:
+          type: [string, 'null']
+        data:
+          $ref: '#/components/schemas/PluginDashboardSession'
+      additionalProperties: false
+
+    PluginDashboardFileTicket:
+      type: object
+      required:
+        [ticket_url, filename, content_type, size, disposition, expires_at]
+      properties:
+        ticket_url:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+        size:
+          type: integer
+          minimum: 0
+        disposition:
+          type: string
+          enum: [inline, attachment]
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+
+    PluginDashboardFileResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        message:
+          type: [string, 'null']
+        data:
+          $ref: '#/components/schemas/PluginDashboardFileTicket'
+      additionalProperties: false
 
     LoginRequest:
       type: object

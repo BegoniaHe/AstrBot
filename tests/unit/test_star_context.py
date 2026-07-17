@@ -137,13 +137,12 @@ def test_context_mutable_state_is_not_shared_between_instances():
     first = make_initialized_context()
     second = make_initialized_context()
 
-    first.registered_web_apis.append(("route", MagicMock(), ["GET"], "desc"))
     first.register_task(SimpleNamespace(), "task")
     first._star_manager = object()
 
-    assert second.registered_web_apis == []
     assert second._register_tasks == []
     assert second._star_manager is None
+    assert first.dashboard_extension_registry is not second.dashboard_extension_registry
 
 
 def test_context_commit_event_returns_false_when_queue_is_full():

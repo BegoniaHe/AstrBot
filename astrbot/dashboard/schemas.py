@@ -7,6 +7,35 @@ class OpenModel(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class PluginDashboardSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protocol_version: Literal[1]
+    expected_generation: str = Field(min_length=1, max_length=128)
+
+
+class PluginDashboardActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protocol_version: Literal[1]
+    instance_id: str = Field(min_length=1, max_length=128)
+    expected_generation: str = Field(min_length=1, max_length=128)
+    payload: Any
+
+
+class PluginDashboardFileRequest(PluginDashboardActionRequest):
+    expected_disposition: Literal["inline", "attachment"]
+
+
+class PluginDashboardUploadMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protocol_version: Literal[1]
+    instance_id: str = Field(min_length=1, max_length=128)
+    expected_generation: str = Field(min_length=1, max_length=128)
+    fields: Any
+
+
 def _reject_legacy_mcp_request_fields(
     value: Any,
     *,

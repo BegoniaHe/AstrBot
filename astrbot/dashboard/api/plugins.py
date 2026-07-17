@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from astrbot import logger
 from astrbot.dashboard.async_utils import run_maybe_async
-from astrbot.dashboard.responses import ok
+from astrbot.dashboard.responses import ApiError, ok
 from astrbot.dashboard.schemas import (
     EnabledPatch,
     PluginBatchUpdateRequest,
@@ -47,6 +47,15 @@ def get_config_display_service(request: Request) -> ConfigDisplayService:
 
 def get_config_file_service(request: Request) -> ConfigFileService:
     return request.app.state.services.config_files
+
+
+async def require_plugin_id_scope(
+    request: Request,
+    plugin_id: str,
+) -> AuthContext:
+    if plugin_id.split("/", 1)[0] == "extensions":
+        raise ApiError("Plugin not found", status_code=404)
+    return await require_plugin_scope(request)
 
 
 def _reject_legacy_plugin_query_params(request: Request, *forbidden: str) -> None:
@@ -312,7 +321,7 @@ async def reload_failed_plugin(
 @router.get("/plugins/{plugin_id:path}/config")
 async def get_plugin_config(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigDisplayService = Depends(get_config_display_service),
 ):
     return ok({"plugin_name": plugin_id, **await service.get_configs(plugin_id)})
@@ -322,7 +331,7 @@ async def get_plugin_config(
 async def update_plugin_config(
     plugin_id: str,
     payload: PluginConfigPayload,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigFileService = Depends(get_config_file_service),
 ):
     body = _model_dict(payload)
@@ -335,7 +344,7 @@ async def update_plugin_config(
 @router.get("/plugins/{plugin_id:path}/config/schema")
 async def get_plugin_config_schema(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigDisplayService = Depends(get_config_display_service),
 ):
     return ok({"plugin_name": plugin_id, **await service.get_configs(plugin_id)})
@@ -345,7 +354,7 @@ async def get_plugin_config_schema(
 async def list_plugin_config_files(
     plugin_id: str,
     config_key: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigFileService = Depends(get_config_file_service),
 ):
     return ok(
@@ -362,7 +371,7 @@ async def upload_plugin_config_files(
     plugin_id: str,
     config_key: str,
     request: Request,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigFileService = Depends(get_config_file_service),
 ):
     form = await request.form()
@@ -381,7 +390,7 @@ async def upload_plugin_config_files(
 async def delete_plugin_config_file(
     plugin_id: str,
     payload: PluginConfigFileDeleteRequest | None = None,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: ConfigFileService = Depends(get_config_file_service),
 ):
     body = _model_dict(payload)
@@ -396,7 +405,7 @@ async def delete_plugin_config_file(
 @router.get("/plugins/{plugin_id:path}/readme")
 async def get_plugin_readme(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     return await _run_service(
@@ -408,7 +417,7 @@ async def get_plugin_readme(
 @router.get("/plugins/{plugin_id:path}/changelog")
 async def get_plugin_changelog(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     return await _run_service(
@@ -420,7 +429,7 @@ async def get_plugin_changelog(
 @router.post("/plugins/{plugin_id:path}/reload")
 async def reload_plugin(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     return await _run_service(
@@ -433,7 +442,7 @@ async def reload_plugin(
 async def bind_plugin_source(
     plugin_id: str,
     payload: PluginSourceBindRequest,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     body = _model_dict(payload)
@@ -447,7 +456,7 @@ async def bind_plugin_source(
 async def set_plugin_enabled(
     plugin_id: str,
     payload: EnabledPatch,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     return await _run_service(
@@ -462,7 +471,7 @@ async def set_plugin_enabled(
 async def update_plugin(
     plugin_id: str,
     payload: PluginUpdateRequest | None = None,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     body = _model_dict(payload)
@@ -475,7 +484,7 @@ async def update_plugin(
 @router.get("/plugins/{plugin_id:path}")
 async def get_plugin(
     plugin_id: str,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     return await _run_service(
@@ -492,7 +501,7 @@ async def get_plugin(
 async def uninstall_plugin(
     plugin_id: str,
     payload: PluginUninstallRequest | None = None,
-    _auth: AuthContext = Depends(require_plugin_scope),
+    _auth: AuthContext = Depends(require_plugin_id_scope),
     service: PluginService = Depends(get_service),
 ):
     body = _model_dict(payload)

@@ -45,6 +45,11 @@ from astrbot.core.utils.task_utils import create_tracked_task
 from . import StarMetadata
 from .command_management import sync_command_configs
 from .context import Context
+from .dashboard_extension import (
+    DashboardExtensionAccess,
+    DashboardExtensionRegistry,
+    validate_dashboard_manifest,
+)
 from .error_messages import format_plugin_error
 from .filter.permission import PermissionType, PermissionTypeFilter
 from .star import star_map, star_registry
@@ -188,6 +193,12 @@ class PluginManager:
         self.context = context
         self.context._star_manager = self  # type: ignore
         StarTools.initialize(context)
+        registry = getattr(context, "dashboard_extension_registry", None)
+        if not isinstance(registry, DashboardExtensionRegistry):
+            registry = DashboardExtensionRegistry()
+            context.dashboard_extension_registry = registry
+            context.dashboard_extensions = DashboardExtensionAccess(registry)
+        self.dashboard_extension_registry = registry
 
         self.config = config
         self.preferences = preferences
@@ -493,6 +504,8 @@ class PluginManager:
             raise Exception(
                 "插件元数据信息不完整。name, desc, version, author 是必须的字段。",
             )
+        plugin_root = Path(plugin_path).resolve(strict=True)
+        dashboard = validate_dashboard_manifest(metadata, plugin_root)
         return StarMetadata(
             name=metadata["name"],
             author=metadata["author"],
@@ -519,7 +532,8 @@ class PluginManager:
                 if isinstance(metadata.get("astrbot_version"), str)
                 else None
             ),
-            pages=metadata["pages"] if isinstance(metadata.get("pages"), list) else [],
+            dashboard=dashboard,
+            dashboard_root=plugin_root,
             i18n=PluginManager._load_plugin_i18n(plugin_path),
         )
 
@@ -716,6 +730,7 @@ class PluginManager:
             if self._is_plugin_module_path(module_path, module_prefix) or (
                 metadata.root_dir_name == dir_name and metadata.reserved == is_reserved
             ):
+                self.dashboard_extension_registry.rollback_metadata(metadata)
                 star_map.pop(module_path, None)
                 if metadata in star_registry:
                     star_registry.remove(metadata)
@@ -861,6 +876,7 @@ class PluginManager:
                 # 重载所有插件
                 for smd in list(star_registry):
                     try:
+                        await self.deactivate_plugin_extension(smd, reason="reload")
                         await self._terminate_plugin(smd)
                     except Exception as e:
                         logger.warning(traceback.format_exc())
@@ -878,6 +894,7 @@ class PluginManager:
                 smd = star_map.get(specified_module_path)
                 if smd:
                     try:
+                        await self.deactivate_plugin_extension(smd, reason="reload")
                         await self._terminate_plugin(smd)
                     except Exception as e:
                         logger.warning(traceback.format_exc())
@@ -905,8 +922,11 @@ class PluginManager:
         plugin_config: AstrBotConfig | None,
         *,
         ignore_version_check: bool,
+        metadata_yaml: StarMetadata | None = None,
     ) -> tuple[str, str, str]:
-        metadata_yaml = self._load_plugin_metadata(plugin_path=plugin_dir_path)
+        metadata_yaml = metadata_yaml or self._load_plugin_metadata(
+            plugin_path=plugin_dir_path
+        )
         metadata.name = metadata_yaml.name
         metadata.author = metadata_yaml.author
         metadata.desc = metadata_yaml.desc
@@ -916,7 +936,8 @@ class PluginManager:
         metadata.display_name = metadata_yaml.display_name
         metadata.support_platforms = metadata_yaml.support_platforms
         metadata.astrbot_version = metadata_yaml.astrbot_version
-        metadata.pages = metadata_yaml.pages
+        metadata.dashboard = metadata_yaml.dashboard
+        metadata.dashboard_root = metadata_yaml.dashboard_root
         metadata.i18n = metadata_yaml.i18n
         if not ignore_version_check:
             is_valid, error_message = self._validate_astrbot_version_specifier(
@@ -1023,8 +1044,22 @@ class PluginManager:
         return full_names
 
     async def _initialize_plugin_and_run_hooks(self, metadata: StarMetadata) -> None:
-        if metadata.star_cls and hasattr(metadata.star_cls, "initialize"):
-            await metadata.star_cls.initialize()
+        if metadata.star_cls and metadata.activated:
+            self.dashboard_extension_registry.begin_registration(
+                metadata,
+                metadata.star_cls,
+            )
+            try:
+                if hasattr(metadata.star_cls, "initialize"):
+                    await metadata.star_cls.initialize()
+                await self.dashboard_extension_registry.commit_registration(
+                    metadata.star_cls
+                )
+            except BaseException:
+                self.dashboard_extension_registry.rollback_registration(
+                    metadata.star_cls
+                )
+                raise
         for handler in star_handlers_registry.get_handlers_by_event_type(
             EventType.OnPluginLoadedEvent,
         ):
@@ -1115,6 +1150,9 @@ class PluginManager:
                     continue
 
                 logger.info("Loading plugin %s ...", root_dir_name)
+                validated_metadata = self._load_plugin_metadata(
+                    plugin_path=plugin_dir_path
+                )
 
                 # 尝试导入模块
                 try:
@@ -1168,8 +1206,13 @@ class PluginManager:
                         plugin_dir_path,
                         plugin_config,
                         ignore_version_check=ignore_version_check,
+                        metadata_yaml=validated_metadata,
                     )
                     logger.info(metadata)
+
+                    metadata.module = module
+                    metadata.root_dir_name = root_dir_name
+                    metadata.reserved = reserved
 
                     if path not in inactivated_plugins:
                         self._instantiate_plugin(
@@ -1181,10 +1224,6 @@ class PluginManager:
                         )
                     else:
                         logger.info("Plugin %s is disabled.", metadata.name)
-
-                    metadata.module = module
-                    metadata.root_dir_name = root_dir_name
-                    metadata.reserved = reserved
                     self._bind_plugin_handlers(metadata, inactivated_llm_tools)
 
                 else:
@@ -1252,6 +1291,11 @@ class PluginManager:
 
         if plugin and plugin.name and plugin.module_path:
             try:
+                await self.deactivate_plugin_extension(
+                    plugin,
+                    reason="failed_install_cleanup",
+                    release=True,
+                )
                 await self._terminate_plugin(plugin)
             except Exception:
                 logger.warning(traceback.format_exc())
@@ -1426,6 +1470,7 @@ class PluginManager:
                     os.rename(plugin_path, target_plugin_path)
                     plugin_path = target_plugin_path
                     dir_name = metadata_dir_name
+                self._load_plugin_metadata(plugin_path)
                 await self._ensure_plugin_requirements(
                     plugin_path,
                     dir_name,
@@ -1513,6 +1558,11 @@ class PluginManager:
 
             # 终止插件
             try:
+                await self.deactivate_plugin_extension(
+                    plugin,
+                    reason="uninstall",
+                    release=True,
+                )
                 await self._terminate_plugin(plugin)
             except Exception as e:
                 logger.warning(traceback.format_exc())
@@ -1679,6 +1729,7 @@ class PluginManager:
         await self.updator.update(plugin, proxy=proxy, download_url=download_url)
         if plugin.root_dir_name:
             plugin_dir_path = os.path.join(self.plugin_store_path, plugin.root_dir_name)
+            self._load_plugin_metadata(plugin_dir_path)
             await self._ensure_plugin_requirements(
                 plugin_dir_path,
                 plugin_name,
@@ -1697,6 +1748,7 @@ class PluginManager:
                 raise Exception("插件不存在。")
 
             # 调用插件的终止方法
+            await self.deactivate_plugin_extension(plugin, reason="disable")
             await self._terminate_plugin(plugin)
 
             # 加入到 shared_preferences 中
@@ -1731,6 +1783,20 @@ class PluginManager:
             )
 
             plugin.activated = False
+
+    async def deactivate_plugin_extension(
+        self,
+        plugin: StarMetadata,
+        *,
+        reason: str,
+        release: bool = False,
+    ) -> None:
+        """Drain and deactivate one plugin's Dashboard extension generation."""
+        await self.dashboard_extension_registry.deactivate(
+            plugin,
+            reason=reason,
+            release=release,
+        )
 
     @staticmethod
     async def _terminate_plugin(star_metadata: StarMetadata) -> None:
@@ -1846,6 +1912,7 @@ class PluginManager:
                 os.remove(zip_file_path)
             except Exception as e:
                 logger.warning(f"删除插件压缩包失败: {e!s}")
+            self._load_plugin_metadata(desti_dir)
             await self._ensure_plugin_requirements(desti_dir, dir_name)
             # await self.reload()
             success, error_message = await self.load(

@@ -21,8 +21,10 @@ export function writeDashboardVersionFile({
   const version = `v${readAstrBotVersion(astrbotInitPath)}`;
   const assetsDir = join(distDir, 'assets');
   const versionFile = join(assetsDir, 'version');
+  const pluginUiProtocolFile = join(assetsDir, 'plugin-ui-protocol');
   mkdirSync(assetsDir, { recursive: true });
   writeFileSync(versionFile, version, 'utf8');
+  writeFileSync(pluginUiProtocolFile, '1', 'utf8');
   return versionFile;
 }
 

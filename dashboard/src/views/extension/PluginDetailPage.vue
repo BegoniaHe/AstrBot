@@ -313,6 +313,7 @@ const normalizeHandlerList = (source) => {
 };
 
 const componentGroupOrder = [
+  'page',
   'skill',
   'command',
   'llm_tool',
@@ -321,6 +322,7 @@ const componentGroupOrder = [
 ];
 
 const componentGroupIcons = {
+  page: 'mdi-application-brackets-outline',
   skill: 'mdi-lightning-bolt',
   command: 'mdi-console-line',
   llm_tool: 'mdi-tools',
@@ -425,6 +427,9 @@ const getHandlerCommand = (handler) =>
   ).trim();
 
 const getHandlerDisplayName = (handler, groupKey) => {
+  if (groupKey === 'page') {
+    return handler?.title || handler?.name || tm('status.unknown');
+  }
   if (handler?.name) {
     return handler.name;
   }
@@ -506,6 +511,16 @@ const openExternal = (url) => {
 
 const goBack = () => {
   router.push({ name: 'Extensions', hash: `#${detailSourceTab.value}` });
+};
+
+const openPluginPage = (component) => {
+  const extensionId = String(component?.extension_id || '').trim();
+  const pageId = String(component?.page_id || '').trim();
+  if (!extensionId || !pageId) return;
+  router.push({
+    name: 'PluginPageHost',
+    params: { extensionId, pageId },
+  });
 };
 
 const renderMarkdown = (source) => {
@@ -784,6 +799,7 @@ onBeforeUnmount(() => {
           v-for="group in groupedComponentSections"
           :key="group.key"
           class="handler-group"
+          :data-testid="`plugin-component-group-${group.key}`"
         >
           <div class="handler-group__title">
             <v-icon :icon="group.icon" size="20" />
@@ -896,6 +912,17 @@ onBeforeUnmount(() => {
                         {{ getHandlerTiming(component) }}
                       </span>
                       <span>{{ getComponentDescription(component) }}</span>
+                      <v-btn
+                        v-if="group.key === 'page'"
+                        color="primary"
+                        variant="tonal"
+                        size="small"
+                        prepend-icon="mdi-open-in-new"
+                        :data-testid="`open-plugin-page-${component.page_id}`"
+                        @click="openPluginPage(component)"
+                      >
+                        {{ tm('buttons.openPage') }}
+                      </v-btn>
                     </div>
                   </td>
                 </tr>

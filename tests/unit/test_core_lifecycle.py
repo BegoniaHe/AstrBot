@@ -603,6 +603,7 @@ class TestAstrBotCoreLifecycleInitialize:
         plugin_manager = SimpleNamespace(
             context=star_context,
             reload=AsyncMock(side_effect=init_action("plugin_reload")),
+            deactivate_plugin_extension=AsyncMock(),
             _terminate_plugin=AsyncMock(side_effect=cleanup_action("plugin")),
         )
         subagent_orchestrator = SimpleNamespace(reload_from_config=AsyncMock())
@@ -663,6 +664,11 @@ class TestAstrBotCoreLifecycleInitialize:
         await lifecycle.stop()
 
         assert cleanup_order == expected_cleanup
+        if "plugin" in expected_cleanup:
+            plugin_manager.deactivate_plugin_extension.assert_awaited_once_with(
+                plugin,
+                reason="shutdown",
+            )
         assert mock_db.db.close.await_count == int("database" in expected_cleanup)
         assert mock_db.html_renderer.terminate.await_count == int(
             "html_renderer" in expected_cleanup
@@ -911,6 +917,7 @@ class TestAstrBotCoreLifecycleStopAdditional:
         lifecycle.plugin_manager._terminate_plugin = AsyncMock(
             side_effect=Exception("Plugin termination failed")
         )
+        lifecycle.plugin_manager.deactivate_plugin_extension = AsyncMock()
 
         lifecycle.provider_manager = MagicMock()
         lifecycle.provider_manager.terminate = AsyncMock()

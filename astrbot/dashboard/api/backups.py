@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from astrbot import logger
 from astrbot.dashboard.async_utils import run_maybe_async
@@ -78,11 +78,10 @@ def _download_backup(
             service.prepare_download(
                 filename=filename,
                 token=token,
-                jwt_secret=service.config.get("dashboard", {}).get("jwt_secret"),
             )
         )
     except BackupServiceError as exc:
-        return error(str(exc))
+        return JSONResponse(error(str(exc)), status_code=exc.status_code)
     except Exception as exc:
         logger.error("下载备份失败: %s", exc, exc_info=True)
         return error(f"下载备份失败: {exc!s}")

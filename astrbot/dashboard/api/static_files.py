@@ -36,4 +36,7 @@ async def serve_static_file(request: Request, static_path: str):
 for index_route in service.list_index_routes():
     router.add_api_route(index_route, serve_index, methods=["GET"])
 
+for index_route in service.list_dynamic_index_routes():
+    router.add_api_route(index_route, serve_index, methods=["GET"])
+
 router.add_api_route("/{static_path:path}", serve_static_file, methods=["GET"])

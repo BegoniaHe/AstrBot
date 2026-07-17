@@ -31,6 +31,7 @@ from astrbot.core.subagent_orchestrator import SubAgentOrchestrator
 from astrbot.core.utils.astrbot_path import get_astrbot_system_tmp_path
 
 from ..exceptions import ProviderNotFoundError
+from .dashboard_extension import DashboardExtensionAccess, DashboardExtensionRegistry
 from .filter.command import CommandFilter
 from .filter.regex import RegexFilter
 from .star import StarMetadata, star_map, star_registry
@@ -46,8 +47,6 @@ if TYPE_CHECKING:
     from astrbot.core.utils.shared_preferences import SharedPreferences
     from astrbot.core.utils.t2i.renderer import HtmlRenderer
 
-WebApiHandler = Callable[..., Awaitable[Any]]
-RegisteredWebApi = tuple[str, WebApiHandler, list[str], str]
 _PLUGIN_MODULE_FLAGS = {"builtin_stars", "plugins"}
 
 
@@ -165,7 +164,10 @@ class Context:
         self.subagent_orchestrator = subagent_orchestrator
         self.persona_runtime_manager: PersonaRuntimeManager | None = None
         self.memory_manager: MemoryManager | None = None
-        self.registered_web_apis: list[RegisteredWebApi] = []
+        self.dashboard_extension_registry = DashboardExtensionRegistry()
+        self.dashboard_extensions = DashboardExtensionAccess(
+            self.dashboard_extension_registry
+        )
         self._register_tasks: list[Awaitable] = []
         self._star_manager = None
 
@@ -567,30 +569,6 @@ class Context:
                 logger.warning("替换已存在的 LLM 工具: " + tool.name)
                 self.provider_manager.llm_tools.remove_tool(tool.name)
             self.provider_manager.llm_tools.func_list.append(tool)
-
-    def register_web_api(
-        self,
-        route: str,
-        view_handler: WebApiHandler,
-        methods: list[str],
-        desc: str,
-    ) -> None:
-        """注册 Web API。
-
-        Args:
-            route: API 路由路径。
-            view_handler: 异步视图处理函数。
-            methods: HTTP 方法列表。
-            desc: API 描述。
-
-        Note:
-            如果相同路由和方法已注册，会替换现有的 API。
-        """
-        for idx, api in enumerate(self.registered_web_apis):
-            if api[0] == route and methods == api[2]:
-                self.registered_web_apis[idx] = (route, view_handler, methods, desc)
-                return
-        self.registered_web_apis.append((route, view_handler, methods, desc))
 
     """
     以下的方法已经不推荐使用。请从 AstrBot 文档查看更好的注册方式。

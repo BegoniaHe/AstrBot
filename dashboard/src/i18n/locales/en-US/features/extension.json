@@ -43,9 +43,7 @@
     "viewInfo": "Handlers",
     "viewDocs": "Documentation",
     "viewRepo": "Repository",
-    "openPages": "Pages",
     "openPage": "Open",
-    "openWebui": "Open Plugin UI",
     "close": "Close",
     "save": "Save",
     "saveAndClose": "Save and Close",
@@ -134,6 +132,16 @@
       "authorWebsite": "Author Website",
       "repository": "Repository"
     }
+  },
+  "pageHost": {
+    "title": "Plugin Page",
+    "connected": "Connected",
+    "closed": "The Plugin Page was closed",
+    "protocolError": "Plugin Page protocol validation failed",
+    "navigationBlocked": "The Plugin Page tried to leave its secure container and was closed",
+    "sessionExpired": "The Dashboard or Page session expired",
+    "pluginChanged": "The plugin was reloaded, disabled, or uninstalled, so this Page was closed",
+    "pluginUnavailable": "The Plugin Page is currently unavailable"
   },
   "market": {
     "recommended": "🥳 Recommended",
