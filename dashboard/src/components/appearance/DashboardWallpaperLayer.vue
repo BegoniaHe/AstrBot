@@ -40,7 +40,8 @@ async function decodeImage(url: string): Promise<void> {
   image.src = url;
   await new Promise<void>((resolve, reject) => {
     image.onload = () => void resolve();
-    image.onerror = () => void reject(new Error('Wallpaper could not be decoded'));
+    image.onerror = () =>
+      void reject(new Error('Wallpaper could not be decoded'));
   });
   await image.decode?.().catch(() => undefined);
 }
