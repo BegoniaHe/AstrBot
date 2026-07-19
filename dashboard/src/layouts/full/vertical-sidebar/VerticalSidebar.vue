@@ -132,8 +132,11 @@ const frameBorder = computed(
 );
 
 const isMobile = window.innerWidth < 768;
+const isRailSidebar = computed(() => !isMobile && customizer.mini_sidebar);
 if (isMobile) {
   customizer.Sidebar_drawer = false;
+} else {
+  customizer.Sidebar_drawer = true;
 }
 
 const dragPos = ref({ left: '', top: '' });
@@ -387,7 +390,7 @@ async function fetchStarCount() {
 
   try {
     const response = await fetch(
-      'https://api.github.com/repos/AstrBotDevs/AstrBot',
+      'https://api.github.com/repos/Xero-Team/AstrBot',
       {
         headers: {
           Accept: 'application/vnd.github+json',
@@ -426,7 +429,7 @@ function openChangelogDialog() {
     app
     class="leftSidebar"
     :width="sidebarWidth"
-    :rail="customizer.mini_sidebar"
+    :rail="isRailSidebar"
   >
     <div class="sidebar-container">
       <v-list
@@ -435,7 +438,7 @@ function openChangelogDialog() {
           'pa-4',
           'listitem',
           'flex-grow-1',
-          { 'hidden-scrollbar': customizer.mini_sidebar },
+          { 'hidden-scrollbar': isRailSidebar },
         ]"
         :open-strategy="'multiple'"
       >
@@ -443,10 +446,10 @@ function openChangelogDialog() {
           v-for="(item, i) in sidebarMenu"
           :key="item.title || item.to || `sidebar-item-${i}`"
         >
-          <NavItem :item="item" class="leftPadding" />
+          <NavItem :item="item" class="leftPadding" :rail="isRailSidebar" />
         </template>
       </v-list>
-      <div v-if="!customizer.mini_sidebar" class="sidebar-footer">
+      <div v-if="!isRailSidebar" class="sidebar-footer">
         <v-btn
           class="sidebar-footer-btn"
           size="small"
@@ -489,7 +492,7 @@ function openChangelogDialog() {
           size="small"
           variant="text"
           prepend-icon="mdi-github"
-          @click="openIframeLink('https://github.com/AstrBotDevs/AstrBot')"
+          @click="openIframeLink('https://github.com/Xero-Team/AstrBot')"
         >
           {{ t('core.navigation.github') }}
           <v-chip
@@ -502,10 +505,93 @@ function openChangelogDialog() {
           >
         </v-btn>
       </div>
+      <div v-else class="sidebar-footer sidebar-footer-rail">
+        <v-tooltip
+          location="right"
+          :text="t('core.navigation.settings')"
+          open-delay="180"
+        >
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              class="sidebar-footer-icon-btn"
+              variant="text"
+              to="/settings"
+              :aria-label="t('core.navigation.settings')"
+            >
+              <v-icon icon="mdi-cog" />
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip
+          location="right"
+          :text="t('core.navigation.changelog')"
+          open-delay="180"
+        >
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              class="sidebar-footer-icon-btn"
+              variant="text"
+              :aria-label="t('core.navigation.changelog')"
+              @click="openChangelogDialog"
+            >
+              <v-icon icon="mdi-note-text-outline" />
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip
+          location="right"
+          :text="t('core.navigation.documentation')"
+          open-delay="180"
+        >
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              class="sidebar-footer-icon-btn"
+              variant="text"
+              :aria-label="t('core.navigation.documentation')"
+              @click="toggleIframe"
+            >
+              <v-icon icon="mdi-book-open-variant" />
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip
+          location="right"
+          :text="t('core.navigation.faq')"
+          open-delay="180"
+        >
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              class="sidebar-footer-icon-btn"
+              variant="text"
+              :aria-label="t('core.navigation.faq')"
+              @click="openFaqLink"
+            >
+              <v-icon icon="mdi-frequently-asked-questions" />
+            </v-btn>
+          </template>
+        </v-tooltip>
+        <v-tooltip location="right" text="GitHub" open-delay="180">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              class="sidebar-footer-icon-btn"
+              variant="text"
+              aria-label="GitHub"
+              @click="openIframeLink('https://github.com/Xero-Team/AstrBot')"
+            >
+              <v-icon icon="mdi-github" />
+            </v-btn>
+          </template>
+        </v-tooltip>
+      </div>
     </div>
 
     <div
-      v-if="!customizer.mini_sidebar && customizer.Sidebar_drawer"
+      v-if="!isRailSidebar && !isMobile && customizer.Sidebar_drawer"
       class="sidebar-resize-handle"
       :class="{ resizing: isResizing }"
       @mousedown="startSidebarResize"

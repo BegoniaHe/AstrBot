@@ -1,17 +1,15 @@
 <script setup>
 import { useI18n } from '@/i18n/composables';
-import { useCustomizerStore } from '@/stores/customizer';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
-const props = defineProps({ item: Object, level: Number });
+const props = defineProps({ item: Object, level: Number, rail: Boolean });
 const { t } = useI18n();
-const customizer = useCustomizerStore();
 const route = useRoute();
 
 const itemStyle = computed(() => {
   const lvl = props.level ?? 0;
-  const indent = customizer.mini_sidebar ? '0px' : `${lvl * 24}px`;
+  const indent = props.rail ? '0px' : `${lvl * 24}px`;
   return { '--indent-padding': indent };
 });
 
@@ -23,7 +21,11 @@ const isItemActive = computed(() => {
     const [path, hash] = props.item.to.split('#');
     return route.path === path && route.hash === `#${hash}`;
   }
-  return route.path === props.item.to;
+  const targetPath = props.item.to.replace(/\/$/, '') || '/';
+  return (
+    route.path === targetPath ||
+    (targetPath !== '/' && route.path.startsWith(`${targetPath}/`))
+  );
 });
 
 const itemTitle = computed(() => {
@@ -36,10 +38,40 @@ const itemTitle = computed(() => {
   <v-list-group
     v-if="item.children"
     :value="item.title"
-    :class="{ 'group-bordered': customizer.mini_sidebar }"
+    :class="{ 'rail-group': rail }"
   >
     <template #activator="{ props: activatorProps }">
+      <v-tooltip
+        v-if="rail"
+        location="right"
+        :text="itemTitle"
+        open-delay="180"
+      >
+        <template #activator="{ props: tooltipProps }">
+          <v-list-item
+            v-bind="{ ...activatorProps, ...tooltipProps }"
+            rounded
+            class="mb-1"
+            color="secondary"
+            :prepend-icon="item.icon"
+            :style="{ '--indent-padding': '0px' }"
+            :aria-label="itemTitle"
+          >
+            <v-list-item-title
+              style="
+                font-size: 14px;
+                font-weight: 500;
+                line-height: 1.2;
+                word-break: break-word;
+              "
+            >
+              {{ itemTitle }}
+            </v-list-item-title>
+          </v-list-item>
+        </template>
+      </v-tooltip>
       <v-list-item
+        v-else
         v-bind="activatorProps"
         rounded
         class="mb-1"
@@ -65,9 +97,44 @@ const itemTitle = computed(() => {
       v-for="(child, index) in item.children"
       :key="child.title || child.to || `child-${index}`"
     >
-      <NavItem :item="child" :level="(level || 0) + 1" />
+      <NavItem :item="child" :level="(level || 0) + 1" :rail="rail" />
     </template>
   </v-list-group>
+
+  <v-tooltip
+    v-else-if="rail"
+    location="right"
+    :text="itemTitle"
+    open-delay="180"
+  >
+    <template #activator="{ props: tooltipProps }">
+      <v-list-item
+        v-bind="tooltipProps"
+        :to="item.type === 'external' ? '' : item.to"
+        :href="item.type === 'external' ? item.to : ''"
+        :active="isItemActive"
+        rounded
+        class="mb-1"
+        color="secondary"
+        :disabled="item.disabled"
+        :target="item.type === 'external' ? '_blank' : ''"
+        :style="itemStyle"
+        :aria-label="itemTitle"
+      >
+        <template #prepend>
+          <v-icon
+            v-if="item.icon"
+            :size="item.iconSize"
+            class="hide-menu"
+            :icon="item.icon"
+          ></v-icon>
+        </template>
+        <v-list-item-title style="font-size: 14px">{{
+          itemTitle
+        }}</v-list-item-title>
+      </v-list-item>
+    </template>
+  </v-tooltip>
 
   <v-list-item
     v-else
@@ -113,10 +180,16 @@ const itemTitle = computed(() => {
 </template>
 
 <style>
-/* 在折叠(mini)状态下，分组展开时给整个分组（母项+子项）加边框以便区分 */
-.group-bordered.v-list-group--open {
-  border: 2px solid rgba(var(--v-theme-borderLight), 0.35);
-  border-radius: 8px;
-  background: rgba(var(--v-theme-borderLight), 0.04);
+.rail-group {
+  border-radius: 12px;
+  transition: background-color 0.18s ease;
+}
+
+.rail-group.v-list-group--open {
+  background: rgba(var(--v-theme-primary), 0.06);
+}
+
+.rail-group.v-list-group--open > .v-list-group__items {
+  padding-bottom: 2px;
 }
 </style>

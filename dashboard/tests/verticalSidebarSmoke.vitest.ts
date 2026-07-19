@@ -18,7 +18,7 @@ vi.mock('@/layouts/full/vertical-sidebar/sidebarItem', () => ({
 
 vi.mock('@/layouts/full/vertical-sidebar/NavItem.vue', () => ({
   default: {
-    props: ['item'],
+    props: ['item', 'rail'],
     template: '<div class="nav-item-stub">{{ item.title }}</div>',
   },
 }));
@@ -74,7 +74,7 @@ describe('VerticalSidebar smoke', () => {
     await flushPromises();
 
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.github.com/repos/AstrBotDevs/AstrBot',
+      'https://api.github.com/repos/Xero-Team/AstrBot',
       expect.objectContaining({
         headers: expect.objectContaining({
           Accept: 'application/vnd.github+json',
