@@ -37,8 +37,14 @@ class PersonaCommands:
 
         return lines
 
-    async def persona(self, message: AstrMessageEvent) -> None:
-        tokens = message.message_str.split(" ", 2)
+    async def persona(
+        self,
+        message: AstrMessageEvent,
+        action: str = "",
+        persona_id: str = "",
+    ) -> None:
+        action = action.strip()
+        persona_id = persona_id.strip()
         umo = message.unified_msg_origin
 
         curr_persona_name = "none"
@@ -93,7 +99,7 @@ class PersonaCommands:
             curr_cid_title = conv.title or "new conversation"
             curr_cid_title += f" ({cid[:4]})"
 
-        if len(tokens) == 1:
+        if not action:
             message.set_result(
                 MessageEventResult()
                 .message(
@@ -117,7 +123,6 @@ class PersonaCommands:
             )
             return
 
-        action = tokens[1].strip()
         if action == "list":
             folder_tree = await self.context.persona_manager.get_folder_tree()
             all_personas = self.context.persona_manager.personas
@@ -145,7 +150,7 @@ class PersonaCommands:
             return
 
         if action == "view":
-            if len(tokens) < 3 or not tokens[2].strip():
+            if not persona_id:
                 message.set_result(
                     MessageEventResult().message(
                         "Usage: /persona view <persona_id>",
@@ -153,7 +158,6 @@ class PersonaCommands:
                 )
                 return
 
-            persona_id = tokens[2].strip()
             persona = self.context.persona_manager.get_runtime_persona_by_id(persona_id)
             if persona is None:
                 message.set_result(
@@ -191,7 +195,7 @@ class PersonaCommands:
             )
             return
 
-        persona_id = " ".join(tokens[1:]).strip()
+        persona_id = " ".join(part for part in (action, persona_id) if part)
         if not cid:
             message.set_result(
                 MessageEventResult().message(

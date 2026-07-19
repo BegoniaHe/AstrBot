@@ -529,7 +529,7 @@ async def test_persona_command_switches_current_conversation_persona():
 
     command = PersonaCommands(context)
     event = DummyEvent(message_str="persona assistant")
-    await command.persona(event)
+    await command.persona(event, "assistant")
 
     assert updates == [("napcat:FriendMessage:42", "assistant")]
     assert "Persona updated" in _plain_text(event.result)

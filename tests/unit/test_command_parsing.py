@@ -3,6 +3,7 @@ from typing import Annotated
 
 import pytest
 
+from astrbot.builtin_stars.builtin_commands.main import Main
 from astrbot.core.star.filter.command import CommandFilter, GreedyStr, option
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
@@ -89,6 +90,36 @@ def test_command_filter_keeps_greedy_string_after_tokenization() -> None:
 
     assert command.filter(event, _dummy_config()) is True
     assert event.get_extra("parsed_params") == {"alias": "Alice Bob senior"}
+
+
+def test_command_filter_parses_persona_action_and_id() -> None:
+    command = CommandFilter("persona")
+    command.init_handler_md(_handler_metadata(Main.persona))
+    event = DummyEvent('persona view "Alice Bot"')
+
+    assert command.filter(event, _dummy_config()) is True
+    assert event.get_extra("parsed_params") == {
+        "action": "view",
+        "persona_id": "Alice Bot",
+    }
+
+
+def test_command_filter_parses_rename_title() -> None:
+    command = CommandFilter("rename")
+    command.init_handler_md(_handler_metadata(Main.rename))
+    event = DummyEvent('rename "Weekly planning"')
+
+    assert command.filter(event, _dummy_config()) is True
+    assert event.get_extra("parsed_params") == {"title": "Weekly planning"}
+
+
+def test_command_filter_allows_name_without_an_alias() -> None:
+    command = CommandFilter("name")
+    command.init_handler_md(_handler_metadata(Main.name))
+    event = DummyEvent("name")
+
+    assert command.filter(event, _dummy_config()) is True
+    assert event.get_extra("parsed_params") == {"alias": ""}
 
 
 def test_command_group_filter_rejects_similar_prefixes() -> None:

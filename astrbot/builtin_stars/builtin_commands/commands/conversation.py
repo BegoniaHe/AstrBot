@@ -504,9 +504,9 @@ class ConversationCommands:
             ),
         )
 
-    async def rename_conv(self, message: AstrMessageEvent) -> None:
+    async def rename_conv(self, message: AstrMessageEvent, title: str) -> None:
         """Rename the current conversation."""
-        new_name = message.message_str.partition(" ")[2].strip()
+        new_name = title.strip()
         if not new_name:
             message.set_result(
                 MessageEventResult().message("Usage: /rename <new title>."),

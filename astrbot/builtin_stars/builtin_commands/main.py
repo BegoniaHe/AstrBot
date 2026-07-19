@@ -49,7 +49,7 @@ class Main(star.Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("name")
-    async def name(self, event: AstrMessageEvent, alias: GreedyStr) -> None:
+    async def name(self, event: AstrMessageEvent, alias: GreedyStr = "") -> None:
         """Set display name for current UMO"""
         await self.name_c.name(event, alias)
 
@@ -150,9 +150,13 @@ class Main(star.Star):
         await self.conversation_c.switch_conv(event, index)
 
     @filter.command("rename")
-    async def rename(self, event: AstrMessageEvent) -> None:
+    async def rename(
+        self,
+        event: AstrMessageEvent,
+        title: GreedyStr = "",
+    ) -> None:
         """Rename the current conversation"""
-        await self.conversation_c.rename_conv(event)
+        await self.conversation_c.rename_conv(event, title)
 
     @filter.command("del")
     async def delete(self, event: AstrMessageEvent) -> None:
@@ -161,9 +165,14 @@ class Main(star.Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("persona")
-    async def persona(self, event: AstrMessageEvent) -> None:
+    async def persona(
+        self,
+        event: AstrMessageEvent,
+        action: str = "",
+        persona_id: GreedyStr = "",
+    ) -> None:
         """View or switch persona"""
-        await self.persona_c.persona(event)
+        await self.persona_c.persona(event, action, persona_id)
 
     @filter.command_group("plugin")
     def plugin(self) -> None:
