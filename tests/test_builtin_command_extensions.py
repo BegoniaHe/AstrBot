@@ -505,7 +505,7 @@ async def test_persona_command_switches_current_conversation_persona():
 
     async def resolve_selected_persona(**kwargs):
         _ = kwargs
-        return (None, None, None, False)
+        return ("default", {"name": "default"}, None, False)
 
     context = SimpleNamespace(
         conversation_manager=SimpleNamespace(

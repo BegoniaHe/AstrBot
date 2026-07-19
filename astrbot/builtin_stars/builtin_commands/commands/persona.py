@@ -77,7 +77,7 @@ class PersonaCommands:
                 {},
             )
             (
-                persona_id,
+                selected_persona_id,
                 _,
                 force_applied_persona_id,
                 _,
@@ -88,10 +88,10 @@ class PersonaCommands:
                 provider_settings=provider_settings,
             )
 
-            if persona_id == "[%None]":
+            if selected_persona_id == "[%None]":
                 curr_persona_name = "none"
-            elif persona_id:
-                curr_persona_name = persona_id
+            elif selected_persona_id:
+                curr_persona_name = selected_persona_id
 
             if force_applied_persona_id:
                 curr_persona_name = f"{curr_persona_name} (session rule)"
