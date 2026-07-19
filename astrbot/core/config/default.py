@@ -150,7 +150,7 @@ DEFAULT_CONFIG = {
         "max_quoted_fallback_images": 20,
         "tool_history_policy": {
             "mode": "full",
-            "placeholder": "[已消费的历史工具结果已省略，需要时请重新调用工具]",
+            "placeholder": "[Stale tool result omitted, call the tool again if needed]",
         },
         "quoted_message_parser": {
             "max_component_chain_depth": 4,

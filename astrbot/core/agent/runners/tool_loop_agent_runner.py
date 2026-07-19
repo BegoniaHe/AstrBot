@@ -313,7 +313,7 @@ class ToolLoopAgentRunner(BaseAgentRunner[TContext]):
             contexts = compact_consumed_tool_history(
                 contexts,
                 request.tool_history_placeholder
-                or "[已消费的历史工具结果已省略，需要时请重新调用工具]",
+                or "[Stale tool result omitted, call the tool again if needed]",
             )
         messages = bind_checkpoint_messages(contexts)
         if (
