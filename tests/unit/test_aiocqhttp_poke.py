@@ -10,9 +10,10 @@ from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
 )
 
 
-def test_poke_to_dict_matches_onebot_v11_segment_format():
+@pytest.mark.asyncio
+async def test_poke_to_dict_matches_onebot_v11_segment_format():
     poke = Comp.Poke(id=2003)
-    assert poke.toDict() == {
+    assert await poke.to_dict() == {
         "type": "poke",
         "data": {"type": "126", "id": "2003"},
     }

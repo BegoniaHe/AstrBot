@@ -29,6 +29,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -72,12 +73,18 @@ class ComponentType(StrEnum):
     Unknown = "Unknown"
 
 
+class _FileTokenRegistrar(Protocol):
+    """Runtime capability required to publish local message attachments."""
+
+    async def register_file(self, file_path: str) -> str: ...
+
+
 class BaseMessageComponent(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     type: ComponentType
     _callback_api_base: str = PrivateAttr(default="")
-    _file_token_service: object | None = PrivateAttr(default=None)
+    _file_token_service: _FileTokenRegistrar | None = PrivateAttr(default=None)
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -101,7 +108,7 @@ class BaseMessageComponent(BaseModel):
         for key, value in super().__repr_args__():
             yield key, truncate(value)
 
-    def toDict(self):
+    async def to_dict(self) -> dict:
         data = {}
         for k, v in self.__dict__.items():
             if k == "type" or v is None:
@@ -111,12 +118,10 @@ class BaseMessageComponent(BaseModel):
             data[k] = v
         return {"type": self.type.lower(), "data": data}
 
-    async def to_dict(self) -> dict:
-        # Default async bridge for components that still implement only toDict().
-        return self.toDict()
-
     def bind_file_service(
-        self, callback_api_base: str, file_token_service: object
+        self,
+        callback_api_base: str,
+        file_token_service: _FileTokenRegistrar,
     ) -> None:
         """Bind the runtime file capability needed for callback URLs."""
         self._callback_api_base = callback_api_base.rstrip("/")
@@ -168,9 +173,6 @@ class Plain(BaseMessageComponent):
     def __init__(self, text: str, convert: bool = True, **_) -> None:
         super().__init__(text=text, convert=convert, **_)
 
-    def toDict(self) -> dict:
-        return {"type": "text", "data": {"text": self.text}}
-
     async def to_dict(self) -> dict:
         return {"type": "text", "data": {"text": self.text}}
 
@@ -190,7 +192,7 @@ class Anonymous(BaseMessageComponent):
     def __init__(self, *, ignore: int | None = None, **_) -> None:
         super().__init__(ignore=ignore, **_)
 
-    def toDict(self) -> dict:
+    async def to_dict(self) -> dict:
         data: dict[str, int] = {}
         if self.ignore is not None:
             data["ignore"] = int(self.ignore)
@@ -230,13 +232,6 @@ class Record(DeferredMediaSourceComponent):
     text: str | None = None
     # 额外
     path: str | None = None
-
-    def __init__(self, file: str | None, **_) -> None:
-        for k in _:
-            if k == "url":
-                pass
-                # Protocol.warn(f"go-cqhttp doesn't support send {self.type} by {k}")
-        super().__init__(file=file, **_)
 
     @staticmethod
     def fromFileSystem(path, **_):
@@ -374,9 +369,6 @@ class Video(DeferredMediaSourceComponent):
     # 额外
     path: str | None = ""
 
-    def __init__(self, file: str, **_) -> None:
-        super().__init__(file=file, **_)
-
     @staticmethod
     def fromFileSystem(path, **_):
         file_path = Path(path).resolve(strict=False)
@@ -459,8 +451,8 @@ class Video(DeferredMediaSourceComponent):
         file_path = await self.convert_to_file_path()
         return await self._register_runtime_file(file_path)
 
-    async def to_dict(self):
-        """需要和 toDict 区分开，toDict 是同步方法"""
+    async def to_dict(self) -> dict:
+        """Serialize the video after resolving its public file reference."""
         url_or_path = self.file
         if url_or_path.startswith("http"):
             payload_file = url_or_path
@@ -484,7 +476,7 @@ class At(BaseMessageComponent):
     def __init__(self, **_) -> None:
         super().__init__(**_)
 
-    def toDict(self):
+    async def to_dict(self) -> dict:
         return {
             "type": "at",
             "data": {"qq": str(self.qq)},
@@ -593,7 +585,7 @@ class OnlineFile(BaseMessageComponent):
             **_,
         )
 
-    def toDict(self) -> dict:
+    async def to_dict(self) -> dict:
         return {
             "type": "onlinefile",
             "data": {
@@ -631,9 +623,6 @@ class Image(DeferredMediaSourceComponent):
     # 额外
     path: str | None = ""
 
-    def __init__(self, file: str | None, **_) -> None:
-        super().__init__(file=file, **_)
-
     @staticmethod
     def fromURL(url: str, **_):
         if url.startswith("http://") or url.startswith("https://"):
@@ -647,7 +636,7 @@ class Image(DeferredMediaSourceComponent):
 
     @staticmethod
     def fromBase64(base64: str, **_):
-        return Image(f"base64://{base64}", **_)
+        return Image(file=f"base64://{base64}", **_)
 
     @staticmethod
     def fromBytes(byte: bytes):
@@ -723,7 +712,7 @@ class Reply(BaseMessageComponent):
     def __init__(self, **_) -> None:
         super().__init__(**_)
 
-    def toDict(self):
+    async def to_dict(self) -> dict:
         """仅输出 id 字段，符合 OneBot V11 reply 段标准格式。"""
         return {"type": "reply", "data": {"id": str(self.id)}}
 
@@ -740,7 +729,7 @@ class Poke(BaseMessageComponent):
             poke_type = "126"
         super().__init__(id=id, poke_type=str(poke_type), **_)
 
-    def toDict(self):
+    async def to_dict(self) -> dict:
         data = {"type": str(self.poke_type or "126")}
         if self.id is not None:
             target_id = str(self.id).strip()
@@ -755,6 +744,9 @@ class Forward(BaseMessageComponent):
 
     def __init__(self, **_) -> None:
         super().__init__(**_)
+
+    async def to_dict(self) -> dict:
+        return {"type": "forward", "data": {"id": self.id}}
 
 
 class Node(BaseMessageComponent):
@@ -774,7 +766,7 @@ class Node(BaseMessageComponent):
             content = [content]
         super().__init__(content=content, **_)
 
-    async def to_dict(self):
+    async def to_dict(self) -> dict:
         data_content = []
         for comp in self.content:
             if isinstance(comp, Image | Record):
@@ -786,20 +778,8 @@ class Node(BaseMessageComponent):
                         "data": {"file": f"base64://{bs64}"},
                     },
                 )
-            elif isinstance(comp, Plain):
-                # For Plain segments, we need to handle the plain differently
-                d = await comp.to_dict()
-                data_content.append(d)
-            elif isinstance(comp, File):
-                # For File segments, we need to handle the file differently
-                d = await comp.to_dict()
-                data_content.append(d)
-            elif isinstance(comp, Node | Nodes):
-                # For Node segments, we recursively convert them to dict
-                d = await comp.to_dict()
-                data_content.append(d)
             else:
-                d = comp.toDict()
+                d = await comp.to_dict()
                 data_content.append(d)
         return {
             "type": "node",
@@ -818,16 +798,6 @@ class Nodes(BaseMessageComponent):
     def __init__(self, nodes: list[Node], **_) -> None:
         super().__init__(nodes=nodes, **_)
 
-    def toDict(self):
-        """Deprecated. Use to_dict instead"""
-        ret = {
-            "messages": [],
-        }
-        for node in self.nodes:
-            d = node.toDict()
-            ret["messages"].append(d)
-        return ret
-
     async def to_dict(self) -> dict:
         """将 Nodes 转换为字典格式，适用于 OneBot JSON 格式"""
         ret = {"messages": []}
@@ -840,7 +810,7 @@ class Nodes(BaseMessageComponent):
 def bind_file_service(
     components: list[BaseMessageComponent],
     callback_api_base: str,
-    file_token_service: object,
+    file_token_service: _FileTokenRegistrar,
 ) -> None:
     """Bind file capabilities to a message chain before it reaches an adapter."""
     for component in components:
@@ -877,7 +847,7 @@ class FlashTransfer(BaseMessageComponent):
     def __init__(self, *, file_set_id: str, **_) -> None:
         super().__init__(file_set_id=file_set_id, **_)
 
-    def toDict(self) -> dict:
+    async def to_dict(self) -> dict:
         return {
             "type": "flashtransfer",
             "data": {
@@ -1069,8 +1039,8 @@ class File(BaseMessageComponent):
         file_path = await self.get_file()
         return await self._register_runtime_file(file_path)
 
-    async def to_dict(self):
-        """需要和 toDict 区分开，toDict 是同步方法"""
+    async def to_dict(self) -> dict:
+        """Serialize the file after resolving its public file reference."""
         url_or_path = await self.get_file(allow_return_url=True)
         if url_or_path.startswith("http"):
             payload_file = url_or_path

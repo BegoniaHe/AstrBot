@@ -3,7 +3,7 @@
 Bug 背景：在私聊中引用上文消息时，OneBot 协议端返回
 ActionFailed status='failed', retcode=100, wording='message not found'。
 
-根因：Reply.toDict() 继承了 BaseMessageComponent.toDict()，
+根因：Reply 使用通用组件序列化时，
 会将所有非 None 的默认字段（chain, sender_id, qq, seq 等）序列化到
 OneBot 协议的 message 数组中。OneBot V11 标准只期望
 {"type": "reply", "data": {"id": "..."}}，多余的字段可能导致
@@ -24,20 +24,21 @@ from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
 )
 
 # ============================================================
-# Reply.toDict() 输出格式测试
+# Reply.to_dict() 输出格式测试
 # ============================================================
 
 
-def test_reply_to_dict_contains_only_id_in_data():
-    """Reply.toDict() 应当只输出 id 字段，不含 chain、sender_id 等多余字段。
+@pytest.mark.asyncio
+async def test_reply_to_dict_contains_only_id_in_data():
+    """Reply.to_dict() 应当只输出 id 字段，不含 chain、sender_id 等多余字段。
 
-    当前实际行为：继承了 BaseMessageComponent.toDict()，会将所有
+    通用组件序列化会将所有
     非 None 的默认值（chain: [], sender_id: 0, qq: 0, seq: 0 等）
     一起序列化，违反了 OneBot V11 的 reply 段格式约定。
     """
     reply = Comp.Reply(id="123456")
 
-    result = reply.toDict()
+    result = await reply.to_dict()
 
     assert result["type"] == "reply"
     assert "id" in result["data"]
@@ -47,20 +48,21 @@ def test_reply_to_dict_contains_only_id_in_data():
     for field in unexpectedFields:
         if field in result["data"]:
             pytest.fail(
-                f"Reply.toDict() 的 data 中不应包含 '{field}' 字段，"
+                f"Reply.to_dict() 的 data 中不应包含 '{field}' 字段，"
                 f"但实际输出了 {field}={result['data'][field]!r}。"
                 f"完整输出: {result}"
             )
 
 
-def test_reply_to_dict_outputs_only_id():
-    """Reply.toDict() 应当只输出 id 字段，不含任何多余字段。"""
+@pytest.mark.asyncio
+async def test_reply_to_dict_outputs_only_id():
+    """Reply.to_dict() 应当只输出 id 字段，不含任何多余字段。"""
     reply = Comp.Reply(id="123456")
-    result = reply.toDict()
+    result = await reply.to_dict()
 
     assert result["type"] == "reply"
     assert set(result["data"].keys()) == {"id"}, (
-        f"Reply.toDict() data 中包含多余字段: {set(result['data'].keys()) - {'id'}}"
+        f"Reply.to_dict() data 中包含多余字段: {set(result['data'].keys()) - {'id'}}"
     )
     assert result["data"]["id"] == "123456"
 
@@ -181,7 +183,8 @@ async def test_send_group_msg_with_reply_also_includes_extra_fields():
 # ============================================================
 
 
-def test_reply_to_dict_matches_onebot_v11_format():
+@pytest.mark.asyncio
+async def test_reply_to_dict_matches_onebot_v11_format():
     """OneBot V11 标准 reply 段格式：
     {"type": "reply", "data": {"id": "..."}}
     """
@@ -191,8 +194,8 @@ def test_reply_to_dict_matches_onebot_v11_format():
     }
 
     reply = Comp.Reply(id="123456")
-    actual = reply.toDict()
+    actual = await reply.to_dict()
 
     assert actual == expected, (
-        f"Reply.toDict() 输出不符合 OneBot V11 标准。\n期望: {expected}\n实际: {actual}"
+        f"Reply.to_dict() 输出不符合 OneBot V11 标准。\n期望: {expected}\n实际: {actual}"
     )

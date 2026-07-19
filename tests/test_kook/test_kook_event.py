@@ -28,7 +28,7 @@ from tests.test_kook.shared import (
     "input_message,upload_asset_return, expected_output, expected_error",
     [
         (
-            Image("test image"),
+            Image(file="test image"),
             "test image",
             OrderMessage(
                 index=1,
@@ -38,7 +38,7 @@ from tests.test_kook.shared import (
             None,
         ),
         (
-            Video("test video"),
+            Video(file="test video"),
             "test video",
             OrderMessage(
                 index=1,

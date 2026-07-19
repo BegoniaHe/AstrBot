@@ -71,8 +71,7 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
         if isinstance(segment, Video):
             d = await segment.to_dict()
             return d
-        # For other segments, we simply convert them to a dict by calling toDict
-        return segment.toDict()
+        return await segment.to_dict()
 
     @staticmethod
     async def _parse_onebot_json(message_chain: MessageChain):

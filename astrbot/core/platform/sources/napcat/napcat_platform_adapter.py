@@ -901,7 +901,7 @@ class NapCatPlatformAdapter(Platform):
                 continue
 
             if isinstance(component, Poke):
-                poke_payload = component.toDict().get("data", {})
+                poke_payload = (await component.to_dict()).get("data", {})
                 segments.append(
                     self.client.poke(
                         poke_type=poke_payload.get("type"),

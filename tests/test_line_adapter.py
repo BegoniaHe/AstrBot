@@ -702,7 +702,7 @@ def test_line_build_message_str_covers_known_components_and_unknown_fallback():
             At(qq="u1", name="Alice"),
             Image.fromURL("https://example.test/a.png"),
             Video.fromURL("https://example.test/v.mp4"),
-            Record("voice.wav"),
+            Record(file="voice.wav"),
             File(name="report.pdf", file="report.pdf"),
             UnknownComponent(),
         ]
