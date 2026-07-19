@@ -1,7 +1,9 @@
 """Tests for config module."""
 
+import asyncio
 import json
 import os
+import threading
 
 import pytest
 
@@ -572,6 +574,74 @@ class TestConfigHotReload:
             loaded_config = json.load(f)
 
         assert loaded_config["new_field"] == "new_value"
+
+    @pytest.mark.asyncio
+    async def test_save_config_async_writes_a_stable_snapshot(
+        self, temp_config_path, minimal_default_config, monkeypatch
+    ):
+        config = AstrBotConfig(
+            config_path=temp_config_path,
+            default_config=minimal_default_config,
+        )
+        dump_started = threading.Event()
+        finish_dump = threading.Event()
+        original_dump = json.dump
+
+        def blocking_dump(snapshot, file_obj, **kwargs):
+            dump_started.set()
+            assert finish_dump.wait(timeout=5)
+            original_dump(snapshot, file_obj, **kwargs)
+
+        monkeypatch.setattr(json, "dump", blocking_dump)
+        config["snapshot_field"] = "captured"
+
+        save_task = asyncio.create_task(config.save_config_async())
+        assert await asyncio.to_thread(dump_started.wait, 5)
+        config["snapshot_field"] = "changed-after-save-started"
+        finish_dump.set()
+        assert await save_task is True
+
+        with open(temp_config_path, encoding="utf-8-sig") as f:
+            assert json.load(f)["snapshot_field"] == "captured"
+
+    @pytest.mark.asyncio
+    async def test_save_config_async_discards_an_older_late_write(
+        self, temp_config_path, minimal_default_config, monkeypatch
+    ):
+        config = AstrBotConfig(
+            config_path=temp_config_path,
+            default_config=minimal_default_config,
+        )
+        first_write_started = threading.Event()
+        finish_first_write = threading.Event()
+        fsync_call_count = 0
+        fsync_call_lock = threading.Lock()
+        original_fsync = os.fsync
+
+        def reorder_fsync(fd):
+            nonlocal fsync_call_count
+            with fsync_call_lock:
+                fsync_call_count += 1
+                call_number = fsync_call_count
+            if call_number == 1:
+                first_write_started.set()
+                assert finish_first_write.wait(timeout=5)
+            original_fsync(fd)
+
+        monkeypatch.setattr(os, "fsync", reorder_fsync)
+        config["save_order"] = "older"
+        older_save = asyncio.create_task(config.save_config_async())
+        assert await asyncio.to_thread(first_write_started.wait, 5)
+
+        config["save_order"] = "newer"
+        newer_save_committed = await config.save_config_async()
+        finish_first_write.set()
+        older_save_committed = await older_save
+
+        assert newer_save_committed is True
+        assert older_save_committed is False
+        with open(temp_config_path, encoding="utf-8-sig") as f:
+            assert json.load(f)["save_order"] == "newer"
 
     def test_save_config_with_replace(self, temp_config_path, minimal_default_config):
         """Test saving config with replacement."""
