@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from astrbot.core.platform.sources.webchat.webchat_queue_mgr import webchat_queue_mgr
 from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 from astrbot.dashboard.services.live_chat_service import LiveChatService
 
@@ -162,6 +163,185 @@ async def test_run_websocket_session_handles_disconnect_without_error_log(
         }
     ]
     assert service.sessions == {}
+
+
+@pytest.mark.asyncio
+async def test_run_websocket_session_multiplexes_chat_requests(monkeypatch):
+    service = _service()
+    started = asyncio.Event()
+    started_requests: list[str] = []
+    messages = iter(
+        [
+            {
+                "ct": "chat",
+                "t": "send",
+                "session_id": "chat-session",
+                "message_id": "request-1",
+            },
+            {
+                "ct": "chat",
+                "t": "send",
+                "session_id": "chat-session",
+                "message_id": "request-2",
+            },
+        ]
+    )
+
+    monkeypatch.setattr(service, "authenticate_token", lambda _token: "alice")
+
+    async def handle_chat_message(_session, message, _send_json) -> None:
+        started_requests.append(message["message_id"])
+        if len(started_requests) == 2:
+            started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(service, "handle_chat_message", handle_chat_message)
+
+    async def receive_json() -> dict:
+        try:
+            return next(messages)
+        except StopIteration as exc:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            raise WebSocketDisconnect(1000) from exc
+
+    async def send_json(_payload: dict) -> None:
+        pass
+
+    async def close(_code: int, _reason: str) -> None:
+        raise AssertionError("close should not be called")
+
+    await service.run_websocket_session(
+        token="valid",
+        force_ct=None,
+        receive_json=receive_json,
+        send_json=send_json,
+        close=close,
+    )
+
+    assert started_requests == ["request-1", "request-2"]
+    assert service.sessions == {}
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_interrupt_without_message_id_targets_all_requests():
+    service = _service()
+    session = service.create_session("alice")
+    sent: list[dict] = []
+    tasks = {
+        "request-1": asyncio.create_task(asyncio.Event().wait()),
+        "request-2": asyncio.create_task(asyncio.Event().wait()),
+    }
+    session.chat_request_tasks.update(tasks)
+
+    async def send_json(payload: dict) -> None:
+        sent.append(payload)
+
+    try:
+        await service.handle_chat_message(session, {"t": "interrupt"}, send_json)
+
+        assert session.interrupted_chat_requests == set(tasks)
+        assert sent == [
+            {
+                "ct": "chat",
+                "t": "error",
+                "data": "INTERRUPTED",
+                "code": "INTERRUPTED",
+            }
+        ]
+    finally:
+        await service.cleanup_session(session)
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_interrupt_with_message_id_targets_one_request():
+    service = _service()
+    session = service.create_session("alice")
+    sent: list[dict] = []
+    tasks = {
+        "request-1": asyncio.create_task(asyncio.Event().wait()),
+        "request-2": asyncio.create_task(asyncio.Event().wait()),
+    }
+    session.chat_request_tasks.update(tasks)
+
+    async def send_json(payload: dict) -> None:
+        sent.append(payload)
+
+    try:
+        await service.handle_chat_message(
+            session,
+            {"t": "interrupt", "message_id": "request-2"},
+            send_json,
+        )
+
+        assert session.interrupted_chat_requests == {"request-2"}
+        assert sent == [
+            {
+                "ct": "chat",
+                "t": "error",
+                "data": "INTERRUPTED",
+                "code": "INTERRUPTED",
+                "message_id": "request-2",
+            }
+        ]
+    finally:
+        await service.cleanup_session(session)
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_message_scopes_events_to_request():
+    service = _service()
+    session = service.create_session("alice")
+    session_id = "multiplexed-chat-session"
+    message_id = "request-1"
+    sent: list[dict] = []
+    service.platform_history_mgr.insert = AsyncMock(
+        return_value=SimpleNamespace(id=1, created_at=datetime.now(UTC))
+    )
+    service.build_chat_message_parts = AsyncMock(
+        return_value=[{"type": "plain", "text": "hello"}]
+    )
+    service.ensure_chat_subscription = AsyncMock(return_value="subscription-1")
+
+    async def send_json(payload: dict) -> None:
+        sent.append(payload)
+
+    task = asyncio.create_task(
+        service.handle_chat_message(
+            session,
+            {
+                "t": "send",
+                "session_id": session_id,
+                "message_id": message_id,
+                "message": [{"type": "plain", "text": "hello"}],
+            },
+            send_json,
+        )
+    )
+
+    try:
+        input_queue = webchat_queue_mgr.get_or_create_queue(session_id)
+        await asyncio.wait_for(input_queue.get(), timeout=1)
+        await webchat_queue_mgr.put_back_queue(
+            message_id,
+            {
+                "type": "end",
+                "data": "",
+                "streaming": False,
+                "message_id": message_id,
+            },
+        )
+        await asyncio.wait_for(task, timeout=1)
+
+        assert sent[0]["type"] == "user_message_saved"
+        assert sent[0]["message_id"] == message_id
+        assert sent[-1]["type"] == "end"
+        assert sent[-1]["message_id"] == message_id
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await service.cleanup_session(session)
+        webchat_queue_mgr.remove_queues(session_id)
 
 
 @pytest.mark.asyncio
@@ -615,7 +795,7 @@ async def test_forward_chat_subscription_cleans_state_when_send_fails(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_handle_chat_message_interrupt_sets_flag_and_sends_interrupted_error():
+async def test_handle_chat_message_interrupt_without_request_id_targets_active_requests():
     service = _service()
     session = service.create_session("alice")
     sent_payloads: list[dict] = []
@@ -625,7 +805,8 @@ async def test_handle_chat_message_interrupt_sets_flag_and_sends_interrupted_err
 
     await service.handle_chat_message(session, {"t": "interrupt"}, send_json)
 
-    assert session.should_interrupt is True
+    assert session.should_interrupt is False
+    assert session.interrupted_chat_requests == set()
     assert sent_payloads == [
         {
             "ct": "chat",
@@ -695,8 +876,9 @@ async def test_handle_chat_message_bind_reuses_existing_subscription_request_id(
 
 
 @pytest.mark.asyncio
-async def test_handle_chat_message_send_rejects_busy_session():
+async def test_handle_chat_message_send_is_not_blocked_by_live_processing():
     service = _service()
+    service.build_chat_message_parts = AsyncMock(return_value=[])
     session = service.create_session("alice")
     session.is_processing = True
     sent_payloads: list[dict] = []
@@ -706,7 +888,11 @@ async def test_handle_chat_message_send_rejects_busy_session():
 
     await service.handle_chat_message(
         session,
-        {"t": "send", "message": [{"type": "plain", "text": "hello"}]},
+        {
+            "t": "send",
+            "message_id": "request-while-live",
+            "message": [{"type": "plain", "text": "hello"}],
+        },
         send_json,
     )
 
@@ -714,8 +900,9 @@ async def test_handle_chat_message_send_rejects_busy_session():
         {
             "ct": "chat",
             "t": "error",
-            "data": "Session is busy",
-            "code": "PROCESSING_ERROR",
+            "data": "Message content is empty",
+            "code": "INVALID_MESSAGE_FORMAT",
+            "message_id": "request-while-live",
         }
     ]
     assert session.is_processing is True
@@ -732,7 +919,7 @@ async def test_handle_chat_message_send_rejects_non_list_message_payload():
 
     await service.handle_chat_message(
         session,
-        {"t": "send", "message": "not-a-list"},
+        {"t": "send", "message_id": "not-a-list", "message": "not-a-list"},
         send_json,
     )
 
@@ -742,6 +929,7 @@ async def test_handle_chat_message_send_rejects_non_list_message_payload():
             "t": "error",
             "data": "message must be list",
             "code": "INVALID_MESSAGE_FORMAT",
+            "message_id": "not-a-list",
         }
     ]
     assert session.is_processing is False
@@ -760,7 +948,11 @@ async def test_handle_chat_message_send_rejects_empty_message_parts():
 
     await service.handle_chat_message(
         session,
-        {"t": "send", "message": [{"type": "plain", "text": ""}]},
+        {
+            "t": "send",
+            "message_id": "empty-message",
+            "message": [{"type": "plain", "text": ""}],
+        },
         send_json,
     )
 
@@ -770,6 +962,7 @@ async def test_handle_chat_message_send_rejects_empty_message_parts():
             "t": "error",
             "data": "Message content is empty",
             "code": "INVALID_MESSAGE_FORMAT",
+            "message_id": "empty-message",
         }
     ]
     assert session.is_processing is False
@@ -819,6 +1012,7 @@ async def test_handle_chat_message_send_reports_processing_failure_and_cleans_qu
             "t": "error",
             "data": "Unable to process the message.",
             "code": "PROCESSING_ERROR",
+            "message_id": "msg-error",
         }
     ]
     assert "queue boom" in caplog.text
@@ -1020,6 +1214,7 @@ async def test_handle_chat_message_send_enqueues_and_persists_messages(monkeypat
                 "created_at": "2026-01-01T00:00:00+00:00",
                 "llm_checkpoint_id": llm_checkpoint_id,
             },
+            "message_id": "msg-1",
         },
     ]
     assert sent_payloads[5] == {
@@ -1294,11 +1489,18 @@ async def test_handle_chat_message_send_persists_agent_stats_and_attachment(
             "ct": "chat",
             "type": "attachment_saved",
             "data": {"id": "att-1", "type": "image"},
+            "message_id": "msg-2",
         }
         for payload in sent_payloads
     )
     assert any(
-        payload == {"ct": "chat", "type": "agent_stats", "data": {"latency": 12}}
+        payload
+        == {
+            "ct": "chat",
+            "type": "agent_stats",
+            "data": {"latency": 12},
+            "message_id": "msg-2",
+        }
         for payload in sent_payloads
     )
     assert removed_request_ids == ["msg-2"]
