@@ -122,7 +122,11 @@ sets test-mode environment flags, prioritizes unit tests, and classifies slow,
 provider/platform, and integration tests into tiers. Put a regression test next
 to the nearest existing coverage (`tests/unit/`, `tests/test_*.py`,
 `tests/agent/`, or a specialist directory). Dashboard Vitest files live under
-`dashboard/tests/` as `*.vitest.ts`.
+`dashboard/tests/` as `*.vitest.ts`. Browser-level Dashboard tests live under
+`dashboard/tests/e2e/` and use `dashboard/playwright.config.ts`; the plugin UI
+suite starts its isolated backend through `tests/e2e/plugin_ui_test_server.py`.
+Install the required Playwright browsers before running `corepack pnpm
+test:e2e` from `dashboard/`.
 
 The repository gates are deliberately separate:
 
@@ -204,6 +208,14 @@ adapter.
 The scheduler supports async stages and async-generator onion middleware.
 Preserve stage ordering, stop-propagation, and cancellation semantics.
 
+Group wake behavior is explicit. `platform_settings.group_wake_policy`
+controls whether mentioning or replying to the bot wakes a group message, and
+`WakingCheckStage` records the selected `wake_reasons` on the event. Do not
+restore implicit mention/reply wakeups. Built-in command availability is stored
+per handler in the command database; the removed `disable_builtin_commands`
+flag exists only as a startup migration input and must not become a pipeline
+switch again.
+
 ### Agents, providers, and runners
 
 - `astrbot/core/agent/` contains the local LLM agent runtime, tool execution,
@@ -219,12 +231,23 @@ Preserve stage ordering, stop-propagation, and cancellation semantics.
   runners** under `astrbot/core/agent/runners/`, not chat-provider source
   implementations. Keep their lifecycle and response mapping in the runner
   path even when their configuration records are provider-like.
+- The tool-loop runner emits an `agent_stats` event after every completed model
+  call, including intermediate calls before tools. WebChat consumes those
+  events as request-scoped protocol messages. Preserve their ordering and do
+  not collapse them back into a final-only summary.
 
 ### Stars and supporting subsystems
 
 - The plugin system is under `astrbot/core/star/`; built-in Stars live in
   `astrbot/builtin_stars/`, and user Stars load from `data/plugins/`.
   Plugin-facing code imports the supported SDK from `astrbot.api`.
+- Dashboard Extension Protocol v1 is owned by
+  `astrbot/core/star/dashboard_extension.py` and exposed to plugins only through
+  `astrbot.api.dashboard`. Extensions declare `requires.dashboard_extension: 1`,
+  content-addressed `assets.v1.json` manifests, and structured Actions during
+  plugin `initialize()`. Keep the sandboxed iframe and host-managed Action
+  boundary; do not add arbitrary Dashboard HTTP proxies, legacy page metadata,
+  or direct access to Dashboard authentication state.
 - Long-lived resources must be owned by the lifecycle that creates them and
   have explicit termination. Re-raise `asyncio.CancelledError` when broad
   exception handling is unavoidable.
@@ -246,6 +269,23 @@ Preserve stage ordering, stop-propagation, and cancellation semantics.
 - The contract source is `openspec/openapi-v1.yaml`. Runtime routes, the source
   spec, generated clients/docs, frontend call sites, and backend/frontend tests
   must change together.
+- Live Chat WebSockets multiplex concurrent chat runs by unique `message_id`.
+  Request tasks, interrupts, follow-up capture, `run_started`, and streamed
+  `agent_stats` metadata are request-scoped. Do not reintroduce a session-wide
+  busy flag or emit a response without the originating request identity.
+
+### Persistent state consistency
+
+- `AstrBotConfig.save_config_async()` snapshots the configuration before
+  leaving the event loop and uses monotonically increasing revisions so a late
+  older write cannot replace a newer committed snapshot. Preserve atomic
+  temporary-file replacement and use this API for async save paths instead of
+  ad-hoc `to_thread(save_config)` calls.
+- Knowledge-base uploads span parsed media, metadata storage, document storage,
+  and FAISS vectors. Validate vector shape before local writes and keep
+  compensating cleanup for every store when an upload fails before metadata
+  commit. A partial document must never remain queryable after a reported
+  upload failure.
 
 The `astrbot` console entry point is in `astrbot/cli/__main__.py`. In this fork,
 exercise it from the source checkout with `uv run astrbot ...`; installing the

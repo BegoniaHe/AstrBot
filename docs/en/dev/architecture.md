@@ -64,6 +64,8 @@ The order in `astrbot/core/pipeline/stage_order.py` is:
 
 `ProcessStage` runs plugin handlers and the Agent. `ResultDecorateStage` applies prefixes, segmentation, TTS, local text-to-image rendering, quoting, and related transformations. `RespondStage` uses the platform's unified send API. The scheduler supports both ordinary async stages and async-generator onion middleware; preserve stop-propagation and finalization semantics.
 
+Group wake behavior is explicit. `platform_settings.group_wake_policy` separately controls whether mentioning or replying to the bot wakes a group message, and both values default to false. `WakingCheckStage` records the actual `wake_reasons` on the event. Built-in command availability is stored per handler in the command database; the old `disable_builtin_commands` value is only a startup migration input and no longer filters the Pipeline.
+
 ## Agents, Tools, and Skills
 
 The Agent runtime is under `astrbot/core/agent/`, with main-request assembly in `astrbot/core/astr_main_agent.py`. Provider abstractions live in `astrbot/core/provider/`; concrete OpenAI, Anthropic, Gemini, and similar sources live in `provider/sources/` and are lazily registered through `provider_modules.py`. Dify, Coze, DashScope, and DeerFlow are external Agent Runners under `astrbot/core/agent/runners/`, not ordinary model providers.
@@ -74,17 +76,21 @@ Skills can come from `data/skills`, plugin `skills/` directories, the sandbox, o
 
 SubAgents are exposed to the main Agent as `transfer_to_*` handoff tools. Enabling orchestration keeps the main Agent's own tools by default. Only the duplicate-tool option removes tools that overlap with enabled SubAgents.
 
+The Tool Loop emits `agent_stats` after every completed model call, including intermediate model turns before tool execution. WebChat forwards each one as a request-identified protocol event instead of producing only one summary when the entire Agent finishes.
+
 ## Plugin Boundaries
 
 Plugins are called Stars. Built-in Stars live in `astrbot/builtin_stars/`; user plugins load from `<runtime-root>/data/plugins/`.
 
-Plugins and built-in Stars should use the SDK under `astrbot.api`, not concrete platform or provider sources. Only registration/discovery owners in shared core, such as the platform manager and Provider module registry, may intentionally import concrete sources; ordinary shared modules must go through those owners. `tests/unit/test_import_boundaries.py` checks key absolute-import paths, but review is still required for relative imports and ownership:
+Plugins and built-in Stars should use the SDK under `astrbot.api`, not concrete platform or provider sources. Only registration/discovery owners in shared core, such as `astrbot/core/platform/discovery.py` and the Provider module registry, may intentionally import concrete sources; ordinary shared modules must go through those owners. `tests/unit/test_import_boundaries.py` checks key absolute-import paths, but review is still required for relative imports and ownership:
 
 - `astrbot/api/` cannot depend on Dashboard or concrete sources.
 - only registration/discovery owners in shared `astrbot/core/` may directly import concrete platform or provider sources.
 - `astrbot/builtin_stars/` cannot directly import concrete sources.
 
 Use the Star KV API for small persistent values. Import the public interface with `from astrbot.api.star import StarTools`, then store files in the `data/plugin_data/<plugin>` directory returned by `StarTools.get_data_dir()`, not beside plugin source code.
+
+Plugin Dashboard pages use Extension Protocol v1. Metadata declares both `requires.dashboard_extension: 1` and `dashboard`, `assets.v1.json` fully lists content-addressed static assets, and Python Actions can be registered only during `initialize()` through `astrbot.api.dashboard`. Pages run in a sandboxed iframe with only `allow-scripts`; privileged work must cross host-managed structured Actions. Legacy Page metadata, arbitrary HTTP proxies, and direct access to Dashboard authentication state are not supported. See the [Plugin Dashboard Extension Development Guide](/dev/star/plugin-dashboard-extension) for the complete contract.
 
 ## Dashboard and HTTP API
 
@@ -93,6 +99,14 @@ The Dashboard backend is a FastAPI application served by Hypercorn. HTTP routes 
 Ordinary JSON APIs use a `status` / `message` / `data` envelope. Common statuses are `ok` and `error`, with `warning` in explicitly supported cases. File downloads, SSE, webhooks, static assets, and other protocol-native responses should use the appropriate FastAPI or Starlette response directly.
 
 `astrbot/dashboard/api/router.py` assembles all `/api/v1` routes. The source specification is `openspec/openapi-v1.yaml`; both the Hey API Dashboard client and `docs/public/openapi.json` are generated from it. Do not hand-edit generated clients.
+
+Live Chat WebSockets can run multiple requests concurrently on one connection. A unique `message_id` correlates each task, response, and interrupt. Follow-up capture, `run_started`, and per-call `agent_stats` must retain the originating request identity; do not reduce the protocol to a session-wide busy flag and one serialized request.
+
+## Persistent Consistency
+
+`AstrBotConfig.save_config_async()` deep-copies a stable snapshot before leaving the event loop and commits monotonically increasing revisions. An older write that finishes late cannot replace a newer configuration. Async callers should use this API and preserve its temporary-file, `fsync`, and atomic-replace semantics instead of assembling concurrent saves with `to_thread(save_config)`.
+
+Knowledge-base uploads span media files, document metadata, chunk storage, and FAISS vectors. Validate vector shape and dimension before local writes. If any step fails before metadata commit, compensating cleanup must remove every already-written store so an API-reported failure never leaves a partially queryable document.
 
 ## Runtime Root
 
@@ -121,12 +135,15 @@ Runtime-root helpers in `astrbot.core.utils.astrbot_path` currently return strin
 
 ## Where to Make Changes
 
-| Change              | Primary location                                    | Also verify                                                      |
-| ------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
-| Messaging platform  | `astrbot/core/platform/sources/`                    | registration, config metadata, platform docs, send/cleanup tests |
-| Model provider      | `astrbot/core/provider/sources/`                    | `provider_modules.py`, metadata, provider tests                  |
-| Agent Runner        | `astrbot/core/agent/runners/`                       | provider config, runner docs, tools and streaming behavior       |
-| Pipeline behavior   | `astrbot/core/pipeline/`                            | stage order, stop propagation, streaming/non-streaming tests     |
-| Dashboard API       | `astrbot/dashboard/api/`, `services/`, `schemas.py` | OpenAPI, generated client, backend/frontend tests                |
-| Plugin SDK          | `astrbot/api/`, `astrbot/core/star/`                | import boundaries, plugin docs, built-in Stars                   |
-| NapCat event models | `scripts/napcat/`                                   | run `make napcat-check`; do not edit generated models            |
+| Change                    | Primary location                                    | Also verify                                                     |
+| ------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
+| Messaging platform        | `astrbot/core/platform/sources/`                    | discovery, config metadata, platform docs, send/cleanup tests   |
+| Model provider            | `astrbot/core/provider/sources/`                    | `provider_modules.py`, metadata, provider tests                 |
+| Agent Runner              | `astrbot/core/agent/runners/`                       | provider config, runner docs, tools and streaming behavior      |
+| Pipeline or wake behavior | `astrbot/core/pipeline/`                            | stage order, wake reasons, stop propagation, streaming tests    |
+| Dashboard API             | `astrbot/dashboard/api/`, `services/`, `schemas.py` | OpenAPI, generated client, backend/frontend tests               |
+| Live Chat protocol        | `live_chat_service.py`, `webchat/`                  | request identity, concurrency, interrupts, frontend state tests |
+| Plugin SDK/page protocol  | `astrbot/api/`, `astrbot/core/star/`                | import boundaries, plugin docs, Vitest, Playwright              |
+| Configuration persistence | `astrbot/core/config/`                              | defaults/metadata, revisions, concurrent-save tests             |
+| Knowledge-base writes     | `knowledge_base/`, `db/vec_db/`                     | multi-store rollback, failure injection, residual/query checks  |
+| NapCat event models       | `scripts/napcat/`                                   | run `make napcat-check`; do not edit generated models           |

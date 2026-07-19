@@ -94,6 +94,20 @@ cd dashboard
 corepack pnpm test
 ```
 
+插件 Dashboard Extension Protocol 使用 Playwright 做浏览器级 E2E。首次运行先安装
+Chromium、Firefox 和 WebKit；`playwright.config.ts` 会自动启动隔离测试后端与 Vite，
+不需要占用开发者真实的 `data/`：
+
+```bash
+cd dashboard
+corepack pnpm exec playwright install chromium firefox webkit
+corepack pnpm test:e2e
+```
+
+用例位于 `dashboard/tests/e2e/`，隔离后端入口是
+`tests/e2e/plugin_ui_test_server.py`。Linux CI 使用 `playwright install
+--with-deps` 同时安装系统依赖。
+
 ## 格式、检查与质量门禁
 
 常用命令：

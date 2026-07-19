@@ -94,6 +94,21 @@ cd dashboard
 corepack pnpm test
 ```
 
+The plugin Dashboard Extension Protocol also has browser-level Playwright E2E
+coverage. Install Chromium, Firefox, and WebKit once; `playwright.config.ts`
+starts the isolated test backend and Vite automatically without using a
+developer's real `data/` directory:
+
+```bash
+cd dashboard
+corepack pnpm exec playwright install chromium firefox webkit
+corepack pnpm test:e2e
+```
+
+The specs live in `dashboard/tests/e2e/`, and the isolated backend entry point
+is `tests/e2e/plugin_ui_test_server.py`. Linux CI uses `playwright install
+--with-deps` to install system dependencies as well.
+
 ## Formatting, Checks, and Quality Gates
 
 Common commands:
