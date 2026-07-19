@@ -191,16 +191,14 @@ def try_capture_follow_up(event: AstrMessageEvent) -> FollowUpCapture | None:
         event.unified_msg_origin,
         order_seq,
     )
+    runner_message = getattr(runner_event, "message_obj", None)
+    runner_message_id = getattr(runner_message, "message_id", None)
     return FollowUpCapture(
         umo=event.unified_msg_origin,
         ticket=ticket,
         order_seq=order_seq,
         monitor_task=monitor_task,
-        target_run_id=(
-            str(runner_event.message_obj.message_id)
-            if getattr(runner_event.message_obj, "message_id", None) is not None
-            else None
-        ),
+        target_run_id=str(runner_message_id) if runner_message_id is not None else None,
     )
 
 
