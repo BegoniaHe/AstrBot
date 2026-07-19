@@ -44,3 +44,50 @@ async def test_insert_batch_raises_friendly_error_for_embedding_count_mismatch()
     assert "期望 2，实际 1" in str(exc_info.value)
     vec_db.document_storage.insert_documents_batch.assert_not_awaited()
     vec_db.embedding_storage.insert_batch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_insert_batch_validates_dimension_before_writing_documents() -> None:
+    vec_db = FaissVecDB.__new__(FaissVecDB)
+    vec_db.embedding_provider = AsyncMock()
+    vec_db.embedding_provider.get_embeddings_batch.return_value = [[0.1, 0.2, 0.3]]
+    vec_db.document_storage = AsyncMock()
+    vec_db.embedding_storage = AsyncMock()
+    vec_db.embedding_storage.dimension = 2
+
+    with pytest.raises(
+        KnowledgeBaseUploadError, match="维度与当前知识库索引维度不一致"
+    ):
+        await FaissVecDB.insert_batch(
+            vec_db,
+            contents=["chunk-1"],
+            metadatas=[{}],
+            ids=["doc-1"],
+        )
+
+    vec_db.document_storage.insert_documents_batch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_insert_batch_rolls_back_documents_when_faiss_write_fails() -> None:
+    vec_db = FaissVecDB.__new__(FaissVecDB)
+    vec_db.embedding_provider = AsyncMock()
+    vec_db.embedding_provider.get_embeddings_batch.return_value = [[0.1, 0.2]]
+    vec_db.document_storage = AsyncMock()
+    vec_db.document_storage.insert_documents_batch.return_value = [11]
+    vec_db.embedding_storage = AsyncMock()
+    vec_db.embedding_storage.dimension = 2
+    vec_db.embedding_storage.insert_batch.side_effect = RuntimeError(
+        "index write failed"
+    )
+
+    with pytest.raises(RuntimeError, match="index write failed"):
+        await FaissVecDB.insert_batch(
+            vec_db,
+            contents=["chunk-1"],
+            metadatas=[{}],
+            ids=["doc-1"],
+        )
+
+    vec_db.embedding_storage.delete.assert_awaited_once_with([11])
+    vec_db.document_storage.delete_document_by_doc_id.assert_awaited_once_with("doc-1")
