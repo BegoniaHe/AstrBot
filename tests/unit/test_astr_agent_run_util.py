@@ -160,6 +160,13 @@ def _response(resp_type: str, chain: MessageChain | None = None):
     return SimpleNamespace(type=resp_type, data={"chain": chain or MessageChain()})
 
 
+def _stats_response(stats: dict):
+    return _response(
+        "agent_stats",
+        MessageChain(type="agent_stats", chain=[Json(data=stats)]),
+    )
+
+
 def test_should_buffer_llm_result_only_when_non_streaming_general_buffering_enabled():
     runner = SimpleNamespace(streaming=False)
 
@@ -957,6 +964,7 @@ async def test_run_agent_streaming_hides_reasoning_and_sends_webchat_stats():
         [
             _response("streaming_delta", reasoning),
             _response("streaming_delta", delta),
+            _stats_response({"steps": 2}),
         ],
         event=event,
         streaming=True,
@@ -975,7 +983,10 @@ async def test_run_agent_streaming_hides_reasoning_and_sends_webchat_stats():
 async def test_run_agent_non_streaming_webchat_sends_agent_stats_after_completion():
     event = FakeEvent(platform_name="webchat")
     runner = FakeRunner(
-        [_response("llm_result", MessageChain().message("done"))],
+        [
+            _stats_response({"steps": 1}),
+            _response("llm_result", MessageChain().message("done")),
+        ],
         event=event,
     )
 
@@ -991,34 +1002,29 @@ async def test_run_agent_non_streaming_webchat_sends_agent_stats_after_completio
 
 
 @pytest.mark.asyncio
-async def test_run_agent_webchat_stats_send_failure_reports_execution_error(
+async def test_run_agent_webchat_stats_send_failure_preserves_model_response(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        util,
-        "get_agent_error_message",
-        lambda event: "Error occurred during AI execution.",
-    )
     event = FakeEvent(platform_name="webchat")
     event.send.side_effect = RuntimeError("stats send failed")
     runner = FakeRunner(
-        [_response("llm_result", MessageChain().message("done"))],
+        [
+            _stats_response({"steps": 1}),
+            _response("llm_result", MessageChain().message("done")),
+        ],
         event=event,
     )
+    logger_error = MagicMock()
+    monkeypatch.setattr(util.logger, "error", logger_error)
 
     outputs = [chain async for chain in util.run_agent(runner)]
 
     assert [chain.get_plain_text() for chain in outputs] == ["done"]
-    assert len(event.result_history) == 2
+    assert len(event.result_history) == 1
     assert event.result_history[0].get_plain_text() == "done"
-    assert (
-        event.result_history[1].get_plain_text()
-        == "Error occurred during AI execution."
-    )
-    runner.agent_hooks.on_agent_done.assert_awaited_once()
-    llm_response = runner.agent_hooks.on_agent_done.await_args.args[1]
-    assert llm_response.role == "err"
-    assert llm_response.completion_text == "Error occurred during AI execution."
+    runner.agent_hooks.on_agent_done.assert_not_awaited()
+    logger_error.assert_called_once()
+    assert "Failed to send agent statistics" in logger_error.call_args.args[0]
 
 
 @pytest.mark.asyncio

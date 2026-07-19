@@ -185,7 +185,13 @@ async def _emit_agent_response(
     """Handle one non-aborted runner response in its original delivery order."""
     if resp.type == "agent_stats":
         if astr_event.get_platform_name() == "webchat":
-            await astr_event.send(resp.data["chain"])
+            try:
+                await astr_event.send(resp.data["chain"])
+            except Exception as exc:
+                logger.error(
+                    "Failed to send agent statistics: %s",
+                    safe_error("", exc),
+                )
         return
 
     if resp.type == "tool_call" and agent_runner.streaming and show_tool_use:
