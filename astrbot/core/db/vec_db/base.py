@@ -70,4 +70,9 @@ class BaseVecDB:
         ...
 
     @abc.abstractmethod
+    async def delete_documents(self, metadata_filters: dict) -> None:
+        """Delete documents matching the supplied metadata filters."""
+        ...
+
+    @abc.abstractmethod
     async def close(self): ...
