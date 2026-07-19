@@ -32,7 +32,8 @@ def main() -> None:
     args = parse_args()
     if not args.type_name.strip():
         raise SystemExit("TypeName must not be empty.")
-    for command in ("git", "pnpm"):
+    pnpm_command = "pnpm.cmd" if os.name == "nt" else "pnpm"
+    for command in ("git", pnpm_command):
         if shutil.which(command) is None:
             raise SystemExit(f"Required command not found: {command}")
 
@@ -108,7 +109,7 @@ def main() -> None:
         environment[name] = str(path)
     run(
         [
-            "pnpm",
+            pnpm_command,
             "dlx",
             "typescript-json-schema",
             str(tsconfig_path),
