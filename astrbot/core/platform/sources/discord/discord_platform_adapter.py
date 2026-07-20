@@ -235,7 +235,7 @@ class DiscordPlatformAdapter(Platform):
                     "image/",
                 ):
                     message_chain.append(
-                        Image(file=attachment.url, filename=attachment.filename),
+                        Image(file=attachment.url),
                     )
                 elif attachment.content_type and attachment.content_type.startswith(
                     "audio/",
