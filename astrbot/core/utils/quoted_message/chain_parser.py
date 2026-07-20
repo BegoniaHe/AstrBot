@@ -1,5 +1,6 @@
 import json
 import re
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from astrbot.core.message.components import (
@@ -259,165 +260,218 @@ def _extract_text_from_multimsg_json(raw_json: str) -> str | None:
     return "\n".join(texts).strip() or None
 
 
+@dataclass
+class _OneBotSegmentParseState:
+    text_parts: list[str]
+    forward_ids: list[str]
+    image_refs: list[str]
+
+
+def _parse_simple_onebot_segment(seg_type: str, seg_data: dict[Any, Any]) -> str | None:
+    labels = {
+        "video": "[Video]",
+        "record": "[Audio]",
+        "voice": "[Audio]",
+        "dice": "[Dice]",
+        "rps": "[Rock Paper Scissors]",
+        "shake": "[Window Shake]",
+        "miniapp": "[MiniApp]",
+        "xml": "[XML]",
+        "reply": "[Quoted Message]",
+        "flashtransfer": "[Flash Transfer]",
+    }
+    if label := labels.get(seg_type):
+        return label
+    if seg_type in ("text", "plain"):
+        text = seg_data.get("text")
+        return text if isinstance(text, str) and text else None
+    if seg_type == "at":
+        target = seg_data.get("name") or seg_data.get("qq")
+        return f"@{target}" if target is not None else None
+    if seg_type == "face":
+        return f"[Face:{seg_data.get('id', '')}]"
+    if seg_type == "mface":
+        summary = seg_data.get("summary")
+        return summary if isinstance(summary, str) else "[Market Face]"
+    if seg_type == "poke":
+        return f"[Poke:{seg_data.get('id', '')}]"
+    if seg_type == "share":
+        return f"[Share:{seg_data.get('title', '')} {seg_data.get('url', '')}]"
+    if seg_type == "contact":
+        return f"[Contact:{seg_data.get('type', '')} {seg_data.get('id', '')}]"
+    if seg_type == "location":
+        return (
+            f"[Location:{seg_data.get('title', '')} "
+            f"({seg_data.get('lat', '')}, {seg_data.get('lon', '')})]"
+        )
+    if seg_type == "music":
+        return f"[Music:{seg_data.get('title') or seg_data.get('type') or seg_data.get('id', '')}]"
+    if seg_type == "markdown":
+        content = seg_data.get("content")
+        return f"[Markdown]{content}" if isinstance(content, str) else "[Markdown]"
+    if seg_type == "onlinefile":
+        return f"[Online File:{seg_data.get('fileName', '')}]"
+    return None
+
+
+def _parse_onebot_image_segment(
+    seg_data: dict[Any, Any],
+    state: _OneBotSegmentParseState,
+    *,
+    forward_depth: int,
+    settings: QuotedMessageParserSettings,
+) -> None:
+    del forward_depth, settings
+    state.text_parts.append("[Image]")
+    candidate = seg_data.get("url") or seg_data.get("file")
+    if isinstance(candidate, str) and candidate.strip():
+        state.image_refs.append(candidate.strip())
+
+
+def _parse_onebot_file_segment(
+    seg_data: dict[Any, Any],
+    state: _OneBotSegmentParseState,
+    *,
+    forward_depth: int,
+    settings: QuotedMessageParserSettings,
+) -> None:
+    del forward_depth, settings
+    file_name = (
+        seg_data.get("name")
+        or seg_data.get("file_name")
+        or seg_data.get("file")
+        or "file"
+    )
+    state.text_parts.append(f"[File:{file_name}]")
+    candidate_url = seg_data.get("url", "")
+    if (
+        isinstance(candidate_url, str)
+        and candidate_url.strip()
+        and looks_like_image_file_name(candidate_url)
+    ):
+        state.image_refs.append(candidate_url.strip())
+    candidate_file = seg_data.get("file")
+    if (
+        isinstance(candidate_file, str)
+        and candidate_file.strip()
+        and looks_like_image_file_name(
+            seg_data.get("name") or seg_data.get("file_name") or candidate_file
+        )
+    ):
+        state.image_refs.append(candidate_file.strip())
+
+
+def _parse_onebot_node_segment(
+    seg_data: dict[Any, Any],
+    state: _OneBotSegmentParseState,
+    *,
+    forward_depth: int,
+    settings: QuotedMessageParserSettings,
+) -> None:
+    raw_content = seg_data.get("content") or seg_data.get("message") or []
+    nested_text, nested_forward_ids, nested_images = (
+        _extract_text_forward_ids_and_images_from_forward_nodes(
+            [
+                {
+                    "sender": {
+                        "nickname": seg_data.get("nickname") or seg_data.get("name"),
+                        "user_id": seg_data.get("user_id") or seg_data.get("uin"),
+                    },
+                    "message": raw_content,
+                }
+            ],
+            depth=forward_depth + 1,
+            settings=settings,
+        )
+    )
+    if nested_text:
+        state.text_parts.append(nested_text)
+    state.forward_ids.extend(nested_forward_ids)
+    state.image_refs.extend(nested_images)
+
+
+def _parse_onebot_forward_segment(
+    seg_data: dict[Any, Any],
+    state: _OneBotSegmentParseState,
+    *,
+    forward_depth: int,
+    settings: QuotedMessageParserSettings,
+) -> None:
+    nested_nodes = seg_data.get("content")
+    forward_id = seg_data.get("id") or seg_data.get("message_id")
+    if isinstance(nested_nodes, list) and nested_nodes:
+        nested_text, nested_forward_ids, nested_images = (
+            _extract_text_forward_ids_and_images_from_forward_nodes(
+                nested_nodes,
+                depth=forward_depth + 1,
+                settings=settings,
+            )
+        )
+        if nested_text:
+            state.text_parts.append(nested_text)
+        if nested_forward_ids:
+            state.forward_ids.extend(nested_forward_ids)
+        if nested_images:
+            state.image_refs.extend(nested_images)
+    elif isinstance(forward_id, (str, int)) and str(forward_id):
+        state.forward_ids.append(str(forward_id))
+
+
+def _parse_onebot_json_segment(
+    seg_data: dict[Any, Any],
+    state: _OneBotSegmentParseState,
+    *,
+    forward_depth: int,
+    settings: QuotedMessageParserSettings,
+) -> None:
+    del forward_depth, settings
+    raw_json = seg_data.get("data")
+    if isinstance(raw_json, str) and raw_json.strip():
+        multimsg_text = _extract_text_from_multimsg_json(raw_json.replace("&#44;", ","))
+        state.text_parts.append(multimsg_text or "[JSON]")
+
+
+_COMPLEX_ONEBOT_SEGMENT_PARSERS = {
+    "image": _parse_onebot_image_segment,
+    "file": _parse_onebot_file_segment,
+    "node": _parse_onebot_node_segment,
+    "forward": _parse_onebot_forward_segment,
+    "forward_msg": _parse_onebot_forward_segment,
+    "nodes": _parse_onebot_forward_segment,
+    "json": _parse_onebot_json_segment,
+}
+
+
 def _parse_onebot_segments(
     segments: list[Any],
     *,
     forward_depth: int = 0,
     settings: QuotedMessageParserSettings = SETTINGS,
 ) -> ParsedOneBotPayload:
-    text_parts: list[str] = []
-    forward_ids: list[str] = []
-    image_refs: list[str] = []
-
+    state = _OneBotSegmentParseState([], [], [])
     for seg in segments:
         if not isinstance(seg, dict):
             continue
-
         seg_type = seg.get("type")
+        if not isinstance(seg_type, str):
+            continue
         seg_data = seg.get("data", {}) if isinstance(seg.get("data"), dict) else {}
-
-        if seg_type in ("text", "plain"):
-            text = seg_data.get("text")
-            if isinstance(text, str) and text:
-                text_parts.append(text)
-        elif seg_type == "at":
-            target = seg_data.get("name") or seg_data.get("qq")
-            if target is not None:
-                text_parts.append(f"@{target}")
-        elif seg_type == "image":
-            text_parts.append("[Image]")
-            candidate = seg_data.get("url") or seg_data.get("file")
-            if isinstance(candidate, str) and candidate.strip():
-                image_refs.append(candidate.strip())
-        elif seg_type == "video":
-            text_parts.append("[Video]")
-        elif seg_type in ("record", "voice"):
-            text_parts.append("[Audio]")
-        elif seg_type == "file":
-            file_name = (
-                seg_data.get("name")
-                or seg_data.get("file_name")
-                or seg_data.get("file")
-                or "file"
+        parser = _COMPLEX_ONEBOT_SEGMENT_PARSERS.get(seg_type)
+        if parser is not None:
+            parser(
+                seg_data,
+                state,
+                forward_depth=forward_depth,
+                settings=settings,
             )
-            text_parts.append(f"[File:{file_name}]")
-            candidate_url = seg_data.get("url", "")
-            if (
-                isinstance(candidate_url, str)
-                and candidate_url.strip()
-                and looks_like_image_file_name(candidate_url)
-            ):
-                image_refs.append(candidate_url.strip())
-            candidate_file = seg_data.get("file")
-            if (
-                isinstance(candidate_file, str)
-                and candidate_file.strip()
-                and looks_like_image_file_name(
-                    seg_data.get("name") or seg_data.get("file_name") or candidate_file
-                )
-            ):
-                image_refs.append(candidate_file.strip())
-        elif seg_type == "face":
-            text_parts.append(f"[Face:{seg_data.get('id', '')}]")
-        elif seg_type == "mface":
-            summary = seg_data.get("summary")
-            text_parts.append(summary if isinstance(summary, str) else "[Market Face]")
-        elif seg_type == "poke":
-            text_parts.append(f"[Poke:{seg_data.get('id', '')}]")
-        elif seg_type == "dice":
-            text_parts.append("[Dice]")
-        elif seg_type == "rps":
-            text_parts.append("[Rock Paper Scissors]")
-        elif seg_type == "shake":
-            text_parts.append("[Window Shake]")
-        elif seg_type == "share":
-            text_parts.append(
-                f"[Share:{seg_data.get('title', '')} {seg_data.get('url', '')}]"
-            )
-        elif seg_type == "contact":
-            text_parts.append(
-                f"[Contact:{seg_data.get('type', '')} {seg_data.get('id', '')}]"
-            )
-        elif seg_type == "location":
-            text_parts.append(
-                f"[Location:{seg_data.get('title', '')} "
-                f"({seg_data.get('lat', '')}, {seg_data.get('lon', '')})]"
-            )
-        elif seg_type == "music":
-            text_parts.append(
-                f"[Music:{seg_data.get('title') or seg_data.get('type') or seg_data.get('id', '')}]"
-            )
-        elif seg_type == "markdown":
-            content = seg_data.get("content")
-            text_parts.append(
-                f"[Markdown]{content}" if isinstance(content, str) else "[Markdown]"
-            )
-        elif seg_type == "miniapp":
-            text_parts.append("[MiniApp]")
-        elif seg_type == "xml":
-            text_parts.append("[XML]")
-        elif seg_type == "reply":
-            text_parts.append("[Quoted Message]")
-        elif seg_type == "onlinefile":
-            text_parts.append(f"[Online File:{seg_data.get('fileName', '')}]")
-        elif seg_type == "flashtransfer":
-            text_parts.append("[Flash Transfer]")
-        elif seg_type == "node":
-            raw_content = seg_data.get("content") or seg_data.get("message") or []
-            nested_text, nested_forward_ids, nested_images = (
-                _extract_text_forward_ids_and_images_from_forward_nodes(
-                    [
-                        {
-                            "sender": {
-                                "nickname": seg_data.get("nickname")
-                                or seg_data.get("name"),
-                                "user_id": seg_data.get("user_id")
-                                or seg_data.get("uin"),
-                            },
-                            "message": raw_content,
-                        }
-                    ],
-                    depth=forward_depth + 1,
-                    settings=settings,
-                )
-            )
-            if nested_text:
-                text_parts.append(nested_text)
-            forward_ids.extend(nested_forward_ids)
-            image_refs.extend(nested_images)
-        elif seg_type in ("forward", "forward_msg", "nodes"):
-            nested_nodes = seg_data.get("content")
-            fid = seg_data.get("id") or seg_data.get("message_id")
-            if isinstance(nested_nodes, list) and nested_nodes:
-                nested_text, nested_forward_ids, nested_images = (
-                    _extract_text_forward_ids_and_images_from_forward_nodes(
-                        nested_nodes,
-                        depth=forward_depth + 1,
-                        settings=settings,
-                    )
-                )
-                if nested_text:
-                    text_parts.append(nested_text)
-                if nested_forward_ids:
-                    forward_ids.extend(nested_forward_ids)
-                if nested_images:
-                    image_refs.extend(nested_images)
-            elif isinstance(fid, (str, int)) and str(fid):
-                forward_ids.append(str(fid))
-        elif seg_type == "json":
-            raw_json = seg_data.get("data")
-            if isinstance(raw_json, str) and raw_json.strip():
-                raw_json = raw_json.replace("&#44;", ",")
-                multimsg_text = _extract_text_from_multimsg_json(raw_json)
-                if multimsg_text:
-                    text_parts.append(multimsg_text)
-                else:
-                    text_parts.append("[JSON]")
+            continue
+        if text := _parse_simple_onebot_segment(seg_type, seg_data):
+            state.text_parts.append(text)
 
     return _build_parsed_payload(
-        _join_text_parts(text_parts),
-        forward_ids,
-        normalize_and_dedupe_strings(image_refs),
+        _join_text_parts(state.text_parts),
+        state.forward_ids,
+        normalize_and_dedupe_strings(state.image_refs),
     )
 
 

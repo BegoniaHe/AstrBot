@@ -70,6 +70,64 @@ def _is_usable_media_ref(value: str) -> bool:
     )
 
 
+def _render_simple_component(
+    component: BaseMessageComponent,
+    *,
+    include_plain: bool,
+) -> str:
+    if isinstance(component, Plain):
+        return component.text if include_plain else ""
+    if isinstance(component, At):
+        return f"@{component.name or component.qq}" if include_plain else ""
+    if isinstance(component, AtAll):
+        return "@all" if include_plain else ""
+    if isinstance(component, Reply):
+        return component.message_str or "[Quoted Message]" if include_plain else ""
+    return _render_metadata_component(component)
+
+
+def _render_metadata_component(component: BaseMessageComponent) -> str:
+    for component_type, prefix, attribute in (
+        (Json, "[JSON]\n", "data"),
+        (Xml, "[XML]\n", "data"),
+        (Markdown, "[Markdown]\n", "content"),
+        (MiniApp, "[MiniApp]\n", "data"),
+    ):
+        if isinstance(component, component_type):
+            return f"{prefix}{_limited_text(getattr(component, attribute))}"
+    for component_type, label in (
+        (Dice, "[Dice]"),
+        (RPS, "[Rock Paper Scissors]"),
+        (Shake, "[Window Shake]"),
+    ):
+        if isinstance(component, component_type):
+            return label
+    if isinstance(component, Music):
+        return f"[Music: {component.title or component.sub_type or component.id}]"
+    if isinstance(component, Contact):
+        return f"[Contact: {component.sub_type} {component.id}]"
+    if isinstance(component, Location):
+        return (
+            f"[Location: {component.title or ''} "
+            f"({component.lat}, {component.lon}) {component.content or ''}]"
+        )
+    if isinstance(component, Share):
+        return f"[Share: {component.title} {component.url}]"
+    if isinstance(component, MFace):
+        return component.summary or "[Market Face]"
+    if isinstance(component, Face):
+        return f"[Face: {component.id}]"
+    if isinstance(component, Poke):
+        return f"[Poke: {component.id}]"
+    if isinstance(component, OnlineFile):
+        return f"[Online File: {component.file_name}]"
+    if isinstance(component, FlashTransfer):
+        return f"[Flash Transfer: {component.file_set_id}]"
+    if isinstance(component, Unknown):
+        return component.text or f"[Unsupported: {component.segment_type}]"
+    return ""
+
+
 @dataclass(slots=True)
 class MessageContextContent:
     text: str | None = None
@@ -316,128 +374,124 @@ class MessageContextRenderer:
         if depth > self._settings.max_component_chain_depth:
             return MessageContextContent(text="[Message component depth limit reached]")
 
-        text_parts: list[str] = []
         result = MessageContextContent()
         for component in components:
-            text = ""
-            if isinstance(component, Plain):
-                if include_plain:
-                    text = component.text
-            elif isinstance(component, At):
-                if include_plain:
-                    text = f"@{component.name or component.qq}"
-            elif isinstance(component, AtAll):
-                if include_plain:
-                    text = "@all"
-            elif isinstance(component, Image):
-                if depth > 0:
-                    text = "[Image]"
-                    result.nested_media.append(component)
-            elif isinstance(component, Record):
-                if depth > 0:
-                    text = "[Audio]"
-                    result.nested_media.append(component)
-            elif isinstance(component, Video):
-                if depth > 0:
-                    text = "[Video]"
-                    result.nested_media.append(component)
-            elif isinstance(component, File):
-                if depth > 0:
-                    text = f"[File: {component.name or 'file'}]"
-                    result.nested_media.append(component)
-            elif isinstance(component, Forward):
-                nested = await self._render_forward(component, depth=depth)
-                result.image_refs.extend(nested.image_refs)
-                result.nested_media.extend(nested.nested_media)
-                if nested.text:
-                    text = f"<Forwarded Message>\n{nested.text}\n</Forwarded Message>"
-            elif isinstance(component, Node):
-                if component.content:
-                    nested = await self._render_components(
-                        component.content,
-                        include_plain=True,
-                        depth=depth + 1,
-                    )
-                else:
-                    nested = await self._render_existing_node(
-                        component,
-                        depth=depth,
-                    )
-                result.image_refs.extend(nested.image_refs)
-                result.nested_media.extend(nested.nested_media)
-                sender = component.name or component.uin or "Unknown User"
-                preview = ""
-                if component.news:
-                    preview = "\n".join(
-                        str(item.get("text") or "")
-                        for item in component.news
-                        if item.get("text")
-                    )
-                node_text = (
-                    nested.text
-                    or component.summary
-                    or component.prompt
-                    or preview
-                    or component.source
-                    or "[Empty Node]"
+            result.extend(
+                await self._render_component(
+                    component,
+                    include_plain=include_plain,
+                    depth=depth,
                 )
-                text = f"{sender}: {node_text}"
-            elif isinstance(component, Nodes):
-                nested = await self._render_components(
-                    [*component.nodes],
-                    include_plain=True,
-                    depth=depth + 1,
-                )
-                result.image_refs.extend(nested.image_refs)
-                result.nested_media.extend(nested.nested_media)
-                text = nested.text or "[Empty Forward Nodes]"
-            elif isinstance(component, Json):
-                text = f"[JSON]\n{_limited_text(component.data)}"
-            elif isinstance(component, Xml):
-                text = f"[XML]\n{_limited_text(component.data)}"
-            elif isinstance(component, Markdown):
-                text = f"[Markdown]\n{_limited_text(component.content)}"
-            elif isinstance(component, MiniApp):
-                text = f"[MiniApp]\n{_limited_text(component.data)}"
-            elif isinstance(component, Music):
-                text = (
-                    f"[Music: {component.title or component.sub_type or component.id}]"
-                )
-            elif isinstance(component, Contact):
-                text = f"[Contact: {component.sub_type} {component.id}]"
-            elif isinstance(component, Location):
-                text = (
-                    f"[Location: {component.title or ''} "
-                    f"({component.lat}, {component.lon}) {component.content or ''}]"
-                )
-            elif isinstance(component, Share):
-                text = f"[Share: {component.title} {component.url}]"
-            elif isinstance(component, MFace):
-                text = component.summary or "[Market Face]"
-            elif isinstance(component, Face):
-                text = f"[Face: {component.id}]"
-            elif isinstance(component, Poke):
-                text = f"[Poke: {component.id}]"
-            elif isinstance(component, Dice):
-                text = "[Dice]"
-            elif isinstance(component, RPS):
-                text = "[Rock Paper Scissors]"
-            elif isinstance(component, Shake):
-                text = "[Window Shake]"
-            elif isinstance(component, OnlineFile):
-                text = f"[Online File: {component.file_name}]"
-            elif isinstance(component, FlashTransfer):
-                text = f"[Flash Transfer: {component.file_set_id}]"
-            elif isinstance(component, Reply):
-                if include_plain:
-                    text = component.message_str or "[Quoted Message]"
-            elif isinstance(component, Unknown):
-                text = component.text or f"[Unsupported: {component.segment_type}]"
-
-            if text:
-                text_parts.append(text)
-
-        if text_parts:
-            rendered = "\n".join(text_parts)
-            result.text = "\n".join(part for part in (result.text, rendered) if part)
+            )
         return result
+
+    async def _render_component(
+        self,
+        component: BaseMessageComponent,
+        *,
+        include_plain: bool,
+        depth: int,
+    ) -> MessageContextContent:
+        nested_media = self._render_nested_media(component, depth=depth)
+        if nested_media is not None:
+            return nested_media
+        if isinstance(component, Forward):
+            return await self._render_forward_component(component, depth=depth)
+        if isinstance(component, Node):
+            return await self._render_node_component(component, depth=depth)
+        if isinstance(component, Nodes):
+            return await self._render_nodes_component(component, depth=depth)
+        return MessageContextContent(
+            text=_render_simple_component(component, include_plain=include_plain)
+        )
+
+    @staticmethod
+    def _render_nested_media(
+        component: BaseMessageComponent,
+        *,
+        depth: int,
+    ) -> MessageContextContent | None:
+        if depth == 0:
+            return None
+        for component_type, label in (
+            (Image, "[Image]"),
+            (Record, "[Audio]"),
+            (Video, "[Video]"),
+        ):
+            if isinstance(component, component_type):
+                return MessageContextContent(text=label, nested_media=[component])
+        if isinstance(component, File):
+            return MessageContextContent(
+                text=f"[File: {component.name or 'file'}]",
+                nested_media=[component],
+            )
+        return None
+
+    async def _render_forward_component(
+        self,
+        component: Forward,
+        *,
+        depth: int,
+    ) -> MessageContextContent:
+        nested = await self._render_forward(component, depth=depth)
+        text = (
+            f"<Forwarded Message>\n{nested.text}\n</Forwarded Message>"
+            if nested.text
+            else None
+        )
+        return MessageContextContent(
+            text=text,
+            image_refs=nested.image_refs,
+            nested_media=nested.nested_media,
+        )
+
+    async def _render_node_component(
+        self,
+        component: Node,
+        *,
+        depth: int,
+    ) -> MessageContextContent:
+        if component.content:
+            nested = await self._render_components(
+                component.content,
+                include_plain=True,
+                depth=depth + 1,
+            )
+        else:
+            nested = await self._render_existing_node(component, depth=depth)
+        preview = "\n".join(
+            str(item.get("text") or "")
+            for item in component.news or []
+            if item.get("text")
+        )
+        node_text = (
+            nested.text
+            or component.summary
+            or component.prompt
+            or preview
+            or component.source
+            or "[Empty Node]"
+        )
+        sender = component.name or component.uin or "Unknown User"
+        return MessageContextContent(
+            text=f"{sender}: {node_text}",
+            image_refs=nested.image_refs,
+            nested_media=nested.nested_media,
+        )
+
+    async def _render_nodes_component(
+        self,
+        component: Nodes,
+        *,
+        depth: int,
+    ) -> MessageContextContent:
+        nested = await self._render_components(
+            [*component.nodes],
+            include_plain=True,
+            depth=depth + 1,
+        )
+        return MessageContextContent(
+            text=nested.text or "[Empty Forward Nodes]",
+            image_refs=nested.image_refs,
+            nested_media=nested.nested_media,
+        )
