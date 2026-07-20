@@ -1,13 +1,12 @@
 """Cross-platform startup smoke check for AstrBot."""
 
+import http.client
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,14 +24,20 @@ def _tail(path: Path, lines: int = 80) -> str:
 
 
 def _is_ready() -> bool:
+    connection = http.client.HTTPConnection(
+        "127.0.0.1",
+        6185,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     try:
-        with urllib.request.urlopen(  # noqa: S310
-            HEALTH_URL,
-            timeout=REQUEST_TIMEOUT_SECONDS,
-        ) as response:
-            return response.status < 400
-    except OSError, urllib.error.URLError:
+        connection.request("GET", "/")
+        response = connection.getresponse()
+        response.read()
+        return response.status < 400
+    except OSError, http.client.HTTPException:
         return False
+    finally:
+        connection.close()
 
 
 def _stop_process(proc: subprocess.Popen[bytes]) -> None:
@@ -50,6 +55,7 @@ def _stop_process(proc: subprocess.Popen[bytes]) -> None:
 def main() -> int:
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
+    env["PYTHONUNBUFFERED"] = "1"
     env.setdefault("TESTING", "true")
 
     smoke_root = Path(tempfile.mkdtemp(prefix="astrbot-smoke-root-"))
