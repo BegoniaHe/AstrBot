@@ -86,6 +86,25 @@ async def test_platform_manager_run_with_platform_limit_without_registered_limit
 
 
 @pytest.mark.asyncio
+async def test_platform_manager_refreshes_native_commands_on_all_adapters(caplog):
+    manager = _make_manager()
+    healthy = MagicMock()
+    healthy.refresh_registered_commands = AsyncMock()
+    failing = MagicMock()
+    failing.meta.return_value.name = "discord"
+    failing.refresh_registered_commands = AsyncMock(
+        side_effect=RuntimeError("sync failed")
+    )
+    manager._platform_insts = [healthy, failing]
+
+    await manager.refresh_registered_commands()
+
+    healthy.refresh_registered_commands.assert_awaited_once()
+    failing.refresh_registered_commands.assert_awaited_once()
+    assert "Failed to refresh native commands for platform discord" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_platform_manager_invoke_action_uses_registered_platform_limit():
     manager = _make_manager()
     manager.set_platform_concurrency_limit("telegram", 1)

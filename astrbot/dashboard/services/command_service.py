@@ -27,6 +27,22 @@ class CommandService:
             raise CommandServiceError("Core lifecycle is required")
         return self.core_lifecycle.services
 
+    async def _refresh_command_surfaces(self) -> None:
+        plugin_manager = (
+            getattr(self.core_lifecycle, "plugin_manager", None)
+            if self.core_lifecycle
+            else None
+        )
+        if plugin_manager is not None:
+            plugin_manager.refresh_command_catalogs()
+        platform_manager = (
+            getattr(self.core_lifecycle, "platform_manager", None)
+            if self.core_lifecycle
+            else None
+        )
+        if platform_manager is not None:
+            await platform_manager.refresh_registered_commands()
+
     async def list_commands(self, config_id: str = "") -> dict:
         commands = await list_commands(self._services().db)
         summary = {
@@ -56,6 +72,7 @@ class CommandService:
         except ValueError as exc:
             raise CommandServiceError(str(exc)) from exc
 
+        await self._refresh_command_surfaces()
         return await self._get_command_payload(handler_full_name)
 
     async def bulk_toggle_builtin_commands(self, enabled: bool) -> dict:
@@ -74,6 +91,7 @@ class CommandService:
                 continue
             await toggle_command(db, handler_full_name, enabled)
             updated.append(handler_full_name)
+        await self._refresh_command_surfaces()
         return {"enabled": enabled, "updated": updated}
 
     async def rename_command(
@@ -95,6 +113,7 @@ class CommandService:
         except ValueError as exc:
             raise CommandServiceError(str(exc)) from exc
 
+        await self._refresh_command_surfaces()
         return await self._get_command_payload(handler_full_name)
 
     async def update_permission(

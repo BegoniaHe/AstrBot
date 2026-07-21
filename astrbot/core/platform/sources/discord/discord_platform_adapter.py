@@ -1,4 +1,6 @@
 import asyncio
+import enum
+import inspect
 import re
 from typing import Any, cast, override
 
@@ -7,6 +9,7 @@ from discord.abc import GuildChannel, Messageable, PrivateChannel
 from discord.channel import DMChannel
 
 from astrbot import logger
+from astrbot.core.command.schema import CommandParamSpec, CommandSchema
 from astrbot.core.message.components import File, Image, Plain, Record
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform import (
@@ -48,6 +51,8 @@ class DiscordPlatformAdapter(Platform):
         self.activity_name = self.config.get("discord_activity_name", None)
         self.shutdown_event = asyncio.Event()
         self._polling_task = None
+        self._command_refresh_lock = asyncio.Lock()
+        self._registered_application_commands: list[Any] = []
 
     @override
     async def send_by_session(
@@ -388,44 +393,82 @@ class DiscordPlatformAdapter(Platform):
 
     async def _collect_and_register_commands(self) -> None:
         """收集所有指令并注册到Discord"""
+        async with self._command_refresh_lock:
+            await self._collect_and_register_commands_unlocked()
+
+    async def _collect_and_register_commands_unlocked(self) -> None:
+        """Rebuild and synchronize Discord application commands."""
         logger.info("[Discord] Collecting and registering slash commands...")
-        registered_commands = []
+        registered_commands: list[str] = []
+        registered_names: set[str] = set()
+
+        for command in self._registered_application_commands:
+            self.client.remove_application_command(command)
+        self._registered_application_commands.clear()
 
         for handler_md in star_handlers_registry:
-            if not star_map[handler_md.handler_module_path].activated:
+            plugin = star_map.get(handler_md.handler_module_path)
+            if not plugin or not plugin.activated:
                 continue
             if not handler_md.enabled:
                 continue
             for event_filter in handler_md.event_filters:
+                if (
+                    isinstance(event_filter, CommandGroupFilter)
+                    and event_filter.parent_group is None
+                ):
+                    for group_name in [
+                        event_filter.group_name,
+                        *sorted(event_filter.alias),
+                    ]:
+                        if group_name in registered_names:
+                            continue
+                        group = self._create_discord_command_group(
+                            group_name,
+                            event_filter,
+                            handler_md,
+                        )
+                        if group is None:
+                            continue
+                        self.client.add_application_command(group)
+                        self._registered_application_commands.append(group)
+                        registered_names.add(group_name)
+                        registered_commands.append(group_name)
+                    continue
+
                 cmd_info = self._extract_command_info(event_filter, handler_md)
                 if not cmd_info:
                     continue
 
                 cmd_name, description, cmd_filter_instance = cmd_info
+                for registered_name in [
+                    cmd_name,
+                    *sorted(cmd_filter_instance.alias),
+                ]:
+                    if (
+                        registered_name in registered_names
+                        or not self._is_valid_discord_command_name(registered_name)
+                    ):
+                        continue
+                    options, callback_schema = self._create_discord_parameter_options(
+                        cmd_filter_instance
+                    )
+                    callback = self._create_dynamic_callback(
+                        registered_name,
+                        callback_schema,
+                    )
 
-                # 创建动态回调
-                callback = self._create_dynamic_callback(cmd_name)
-
-                # 创建一个通用的参数选项来接收所有文本输入
-                options = [
-                    discord.Option(
-                        name="params",
-                        description="指令的所有参数",
-                        type=discord.SlashCommandOptionType.string,
-                        required=False,
-                    ),
-                ]
-
-                # 创建SlashCommand
-                slash_command = discord.SlashCommand(
-                    name=cmd_name,
-                    description=description,
-                    func=callback,
-                    options=options,
-                    guild_ids=[self.guild_id] if self.guild_id else None,
-                )
-                self.client.add_application_command(slash_command)
-                registered_commands.append(cmd_name)
+                    slash_command = discord.SlashCommand(
+                        name=registered_name,
+                        description=description,
+                        func=callback,
+                        options=options,
+                        guild_ids=[self.guild_id] if self.guild_id else None,
+                    )
+                    self.client.add_application_command(slash_command)
+                    self._registered_application_commands.append(slash_command)
+                    registered_names.add(registered_name)
+                    registered_commands.append(registered_name)
 
         if registered_commands:
             logger.info(
@@ -449,15 +492,228 @@ class DiscordPlatformAdapter(Platform):
                 return
             logger.warning(f"[Discord] Sync commands failed: {e}")
 
+    @override
+    async def refresh_registered_commands(self) -> None:
+        client = getattr(self, "client", None)
+        if (
+            self.enable_command_register
+            and client is not None
+            and client.user is not None
+        ):
+            await self._collect_and_register_commands()
+
+    def _create_discord_command_group(
+        self,
+        group_name: str,
+        group_filter: CommandGroupFilter,
+        handler_metadata: StarHandlerMetadata,
+    ):
+        if not self._is_valid_discord_command_name(group_name):
+            logger.debug(
+                "[Discord] Skipping invalid slash command group: %s", group_name
+            )
+            return None
+
+        group = discord.SlashCommandGroup(
+            name=group_name,
+            description=self._discord_description(
+                handler_metadata.desc,
+                f"Command group: {group_name}",
+            ),
+            guild_ids=[self.guild_id] if self.guild_id else None,
+        )
+        self._add_discord_group_children(
+            group,
+            group_filter,
+            (group_name,),
+            depth=0,
+        )
+        return group if group.subcommands else None
+
+    def _add_discord_group_children(
+        self,
+        discord_group,
+        command_group: CommandGroupFilter,
+        parent_path: tuple[str, ...],
+        *,
+        depth: int,
+    ) -> None:
+        registered_child_names = {command.name for command in discord_group.subcommands}
+        for child in command_group.sub_command_filters:
+            if isinstance(child, CommandFilter):
+                handler_md = child.get_handler_md()
+                if not handler_md or not self._handler_is_active(handler_md):
+                    continue
+                for child_name in [child.command_name, *sorted(child.alias)]:
+                    if (
+                        child_name in registered_child_names
+                        or not self._is_valid_discord_command_name(child_name)
+                    ):
+                        continue
+                    command_path = (*parent_path, child_name)
+                    options, callback_schema = self._create_discord_parameter_options(
+                        child
+                    )
+                    subcommand = discord.SlashCommand(
+                        name=child_name,
+                        description=self._discord_description(
+                            handler_md.desc,
+                            f"Command: {' '.join(command_path)}",
+                        ),
+                        func=self._create_dynamic_callback(
+                            " ".join(command_path),
+                            callback_schema,
+                        ),
+                        options=options,
+                        parent=discord_group,
+                    )
+                    discord_group.add_command(subcommand)
+                    registered_child_names.add(child_name)
+                continue
+
+            if depth >= 1:
+                logger.debug(
+                    "[Discord] Skipping command group deeper than Discord supports: %s",
+                    " ".join((*parent_path, child.group_name)),
+                )
+                continue
+            for child_name in [child.group_name, *sorted(child.alias)]:
+                if (
+                    child_name in registered_child_names
+                    or not self._is_valid_discord_command_name(child_name)
+                ):
+                    continue
+                nested_group = discord.SlashCommandGroup(
+                    name=child_name,
+                    description=f"Command group: {' '.join((*parent_path, child_name))}",
+                    parent=discord_group,
+                )
+                self._add_discord_group_children(
+                    nested_group,
+                    child,
+                    (*parent_path, child_name),
+                    depth=depth + 1,
+                )
+                if nested_group.subcommands:
+                    discord_group.add_command(nested_group)
+                    registered_child_names.add(child_name)
+
+    def _create_discord_parameter_options(
+        self,
+        command_filter: CommandFilter,
+    ) -> tuple[list[Any], CommandSchema | None]:
+        schema = command_filter.schema
+        positionals = tuple(param for param in schema.params if param.option is None)
+        has_unrepresentable_gap = any(
+            param.has_default and param.default is None for param in positionals[:-1]
+        )
+        if (
+            len(schema.params) > 25
+            or has_unrepresentable_gap
+            or any(
+                not self._is_valid_discord_option_name(param.name)
+                for param in schema.params
+            )
+        ):
+            logger.debug(
+                "[Discord] Falling back to a raw argument field for command %s",
+                command_filter.command_name,
+            )
+            return self._create_discord_raw_parameter_option(), None
+
+        options: list[Any] = []
+        for param in schema.params:
+            kwargs: dict[str, Any] = {
+                "name": param.name,
+                "description": self._discord_description(
+                    self._discord_parameter_description(param),
+                    f"Command argument: {param.name}",
+                ),
+                "required": param.is_required,
+            }
+            choices = self._discord_option_choices(param)
+            if choices is not None:
+                kwargs["choices"] = choices
+            options.append(
+                discord.Option(self._discord_option_input_type(param), **kwargs)
+            )
+        return options, schema
+
+    @staticmethod
+    def _create_discord_raw_parameter_option() -> list[Any]:
+        return [
+            discord.Option(
+                str,
+                name="params",
+                description="Command arguments",
+                required=False,
+            )
+        ]
+
+    @staticmethod
+    def _discord_parameter_description(param: CommandParamSpec) -> str:
+        description = f"{param.name} ({param.display_type})"
+        if param.option:
+            description += f"; flags: {', '.join(param.option.names)}"
+        return description
+
+    @staticmethod
+    def _discord_option_input_type(param: CommandParamSpec) -> type:
+        value_type = param.input_type
+        if value_type in (str, int, float, bool):
+            return value_type
+        return str
+
+    @staticmethod
+    def _discord_option_choices(param: CommandParamSpec) -> list[Any] | None:
+        if param.literals:
+            choices = list(param.literals)
+        elif isinstance(param.value_type, type) and issubclass(
+            param.value_type,
+            enum.Enum,
+        ):
+            choices = [member.value for member in param.value_type]
+        else:
+            return None
+        if len(choices) > 25 or any(isinstance(choice, bool) for choice in choices):
+            return None
+        return choices
+
+    @staticmethod
+    def _handler_is_active(handler_md: StarHandlerMetadata) -> bool:
+        plugin = star_map.get(handler_md.handler_module_path)
+        return bool(plugin and plugin.activated and handler_md.enabled)
+
+    @staticmethod
+    def _is_valid_discord_command_name(command_name: str) -> bool:
+        return command_name == command_name.lower() and bool(
+            re.fullmatch(r"[-_'\w]{1,32}", command_name)
+        )
+
+    @staticmethod
+    def _is_valid_discord_option_name(option_name: str) -> bool:
+        return bool(re.fullmatch(r"[a-z0-9_-]{1,32}", option_name))
+
+    @staticmethod
+    def _discord_description(description: str, fallback: str) -> str:
+        value = description or fallback
+        return f"{value[:97]}..." if len(value) > 100 else value
+
     @staticmethod
     def _is_daily_command_quota_error(error: discord.HTTPException) -> bool:
         return getattr(error, "code", None) == 30034
 
-    def _create_dynamic_callback(self, cmd_name: str):
+    def _create_dynamic_callback(
+        self,
+        cmd_name: str,
+        schema: CommandSchema | None = None,
+    ):
         """为每个指令动态创建一个异步回调函数"""
 
         async def dynamic_callback(
-            ctx: discord.ApplicationContext, params: str | None = None
+            ctx: discord.ApplicationContext,
+            *args: Any,
+            **kwargs: Any,
         ) -> None:
             # 1. 嘗試立即响应，防止超时 (移到最前面)
             followup_webhook = None
@@ -476,17 +732,17 @@ class DiscordPlatformAdapter(Platform):
 
             # 将平台特定的前缀'/'剥离，以适配通用的CommandFilter
             logger.debug(f"[Discord] Callback triggered: {cmd_name}")
-            logger.debug(f"[Discord] Callback context: {ctx}")
-            logger.debug(f"[Discord] Callback params: {params}")
+            logger.debug("[Discord] Callback argument count: %d", len(args))
             message_str_for_filter = cmd_name
-            if params:
-                message_str_for_filter += f" {params}"
-
-            logger.debug(
-                f"[Discord] Slash command '{cmd_name}' triggered. "
-                f"Raw params: '{params}'. "
-                f"Built command string: '{message_str_for_filter}'",
+            command_arguments = self._build_discord_command_arguments(
+                schema,
+                args,
+                kwargs,
             )
+            if command_arguments:
+                message_str_for_filter += f" {command_arguments}"
+
+            logger.debug("[Discord] Slash command '%s' triggered", cmd_name)
 
             # 2. 构建 AstrBotMessage
             channel = ctx.channel
@@ -517,20 +773,101 @@ class DiscordPlatformAdapter(Platform):
             # 3. 将消息和 webhook 分别交给 handle_msg 处理
             await self.handle_msg(abm, followup_webhook)
 
+        signature_params = [
+            inspect.Parameter("ctx", inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        if schema is None:
+            signature_params.append(
+                inspect.Parameter(
+                    "params",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    default=None,
+                )
+            )
+        else:
+            for param in schema.params:
+                signature_params.append(
+                    inspect.Parameter(
+                        param.name,
+                        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        default=(
+                            inspect.Parameter.empty if param.is_required else None
+                        ),
+                    )
+                )
+        cast(Any, dynamic_callback).__signature__ = inspect.Signature(signature_params)
         return dynamic_callback
+
+    @classmethod
+    def _build_discord_command_arguments(
+        cls,
+        schema: CommandSchema | None,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> str:
+        if schema is None:
+            raw = kwargs.get("params", args[0] if args else None)
+            return str(raw) if raw is not None else ""
+
+        option_parts: list[str] = []
+        positional_values: list[tuple[CommandParamSpec, Any]] = []
+        for index, param in enumerate(schema.params):
+            value = kwargs.get(
+                param.name,
+                args[index] if index < len(args) else None,
+            )
+            if param.option:
+                if value is None:
+                    continue
+                literal = cls._quote_orbit_word(cls._discord_argument_value(value))
+                option_parts.append(f"{param.option.names[0]}={literal}")
+            else:
+                positional_values.append((param, value))
+
+        last_provided = max(
+            (
+                index
+                for index, (_, value) in enumerate(positional_values)
+                if value is not None
+            ),
+            default=-1,
+        )
+        positional_parts: list[str] = []
+        for param, value in positional_values[: last_provided + 1]:
+            if value is None:
+                value = param.default
+            positional_parts.append(
+                cls._quote_orbit_word(cls._discord_argument_value(value))
+            )
+
+        if positional_parts:
+            option_parts.append("--")
+            option_parts.extend(positional_parts)
+        return " ".join(option_parts)
+
+    @staticmethod
+    def _discord_argument_value(value: Any) -> str:
+        if isinstance(value, enum.Enum):
+            value = value.value
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    @staticmethod
+    def _quote_orbit_word(value: str) -> str:
+        return "'" + value.replace("'", "'\\''") + "'"
 
     @staticmethod
     def _extract_command_info(
         event_filter: Any,
         handler_metadata: StarHandlerMetadata,
-    ) -> tuple[str, str, CommandFilter | None] | None:
+    ) -> tuple[str, str, CommandFilter] | None:
         """从事件过滤器中提取指令信息"""
         cmd_name = None
         # is_group = False
         cmd_filter_instance = None
 
         if isinstance(event_filter, CommandFilter):
-            # 暂不支持子指令注册为斜杠指令
             if (
                 event_filter.parent_command_names
                 and event_filter.parent_command_names != [""]
@@ -540,19 +877,20 @@ class DiscordPlatformAdapter(Platform):
             cmd_filter_instance = event_filter
 
         elif isinstance(event_filter, CommandGroupFilter):
-            # 暂不支持指令组直接注册为斜杠指令，因为它们没有 handle 方法
             return None
 
         if not cmd_name:
             return None
+        assert cmd_filter_instance is not None
 
         # Discord 斜杠指令名称规范
-        if cmd_name != cmd_name.lower() or not re.match(r"^[-_'\\w]{1,32}$", cmd_name):
+        if not DiscordPlatformAdapter._is_valid_discord_command_name(cmd_name):
             logger.debug(f"[Discord] Skipping invalid slash command format: {cmd_name}")
             return None
 
-        description = handler_metadata.desc or f"Command: {cmd_name}"
-        if len(description) > 100:
-            description = f"{description[:97]}..."
+        description = DiscordPlatformAdapter._discord_description(
+            handler_metadata.desc,
+            f"Command: {cmd_name}",
+        )
 
         return cmd_name, description, cmd_filter_instance

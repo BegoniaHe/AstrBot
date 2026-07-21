@@ -68,7 +68,8 @@ class TelegramPlatformAdapter(Platform):
             "telegram_command_auto_refresh",
             True,
         )
-        self.last_command_hash = None
+        self._last_command_snapshot: tuple[tuple[str, str], ...] | None = None
+        self._command_refresh_lock = asyncio.Lock()
 
         self.scheduler = AsyncIOScheduler()
         self.scheduler.add_listener(
@@ -310,21 +311,30 @@ class TelegramPlatformAdapter(Platform):
 
     async def register_commands(self) -> None:
         """收集所有注册的指令并注册到 Telegram"""
-        try:
-            commands = self.collect_commands()
-
-            if commands:
-                current_hash = hash(
-                    tuple((cmd.command, cmd.description) for cmd in commands),
-                )
-                if current_hash == self.last_command_hash:
+        async with self._command_refresh_lock:
+            try:
+                commands = self.collect_commands()
+                snapshot = tuple((cmd.command, cmd.description) for cmd in commands)
+                if snapshot == self._last_command_snapshot:
                     return
-                self.last_command_hash = current_hash
                 await self.client.delete_my_commands()
-                await self.client.set_my_commands(commands)
+                if commands:
+                    await self.client.set_my_commands(commands)
+                self._last_command_snapshot = snapshot
 
-        except Exception as e:
-            logger.error(f"向 Telegram 注册指令时发生错误: {e!s}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"向 Telegram 注册指令时发生错误: {e!s}")
+
+    @override
+    async def refresh_registered_commands(self) -> None:
+        if (
+            self.enable_command_register
+            and self._application_started
+            and self.client is not None
+        ):
+            await self.register_commands()
 
     def collect_commands(self) -> list[BotCommand]:
         """从注册的处理器中收集所有指令"""
@@ -380,7 +390,7 @@ class TelegramPlatformAdapter(Platform):
         elif isinstance(event_filter, CommandGroupFilter):
             if event_filter.parent_group:
                 return None
-            cmd_names = [event_filter.group_name]
+            cmd_names = [event_filter.group_name, *sorted(event_filter.alias)]
             is_group = True
 
         result = []

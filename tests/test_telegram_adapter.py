@@ -553,11 +553,11 @@ async def test_telegram_register_commands_updates_commands_only_when_hash_change
 
     adapter.client.delete_my_commands.assert_awaited_once()
     adapter.client.set_my_commands.assert_awaited_once_with([command])
-    assert adapter.last_command_hash is not None
+    assert adapter._last_command_snapshot == (("ask", "Ask something"),)
 
 
 @pytest.mark.asyncio
-async def test_telegram_register_commands_skips_client_calls_when_no_commands():
+async def test_telegram_register_commands_clears_stale_menu_when_no_commands():
     TelegramPlatformAdapter = _load_telegram_adapter()
     adapter = TelegramPlatformAdapter(
         make_platform_config("telegram"),
@@ -569,10 +569,29 @@ async def test_telegram_register_commands_skips_client_calls_when_no_commands():
     adapter.collect_commands = MagicMock(return_value=[])
 
     await adapter.register_commands()
+    await adapter.register_commands()
 
-    adapter.client.delete_my_commands.assert_not_awaited()
+    adapter.client.delete_my_commands.assert_awaited_once()
     adapter.client.set_my_commands.assert_not_awaited()
-    assert adapter.last_command_hash is None
+    assert adapter._last_command_snapshot == ()
+
+
+@pytest.mark.asyncio
+async def test_telegram_native_command_refresh_requires_started_application():
+    TelegramPlatformAdapter = _load_telegram_adapter()
+    adapter = TelegramPlatformAdapter(
+        make_platform_config("telegram"),
+        {},
+        asyncio.Queue(),
+    )
+    adapter.register_commands = AsyncMock()
+
+    await adapter.refresh_registered_commands()
+    adapter.register_commands.assert_not_awaited()
+
+    adapter._application_started = True
+    await adapter.refresh_registered_commands()
+    adapter.register_commands.assert_awaited_once()
 
 
 def test_telegram_collect_commands_filters_duplicates_invalid_and_inactive_handlers():
@@ -606,7 +625,7 @@ def test_telegram_collect_commands_filters_duplicates_invalid_and_inactive_handl
         dup_filter = CommandFilter("ask")
         invalid_filter = CommandFilter("Bad-Name")
         nested_filter = CommandFilter("child", parent_command_names=["root"])
-        group_filter = CommandGroupFilter("tools")
+        group_filter = CommandGroupFilter("tools", alias={"toolbox"})
 
         star_handlers_registry.append(
             StarHandlerMetadata(
@@ -672,6 +691,7 @@ def test_telegram_collect_commands_filters_duplicates_invalid_and_inactive_handl
         assert [(cmd.command, cmd.description) for cmd in commands] == [
             ("ask", "Primary ask command"),
             ("ask_alias", "Primary ask command"),
+            ("toolbox", "Duplicate ask command should l..."),
             ("tools", "Duplicate ask command should l..."),
         ]
     finally:
@@ -724,7 +744,9 @@ async def test_telegram_message_handler_routes_media_groups_and_regular_messages
     regular_update = create_mock_update(media_group_id=None)
     await adapter.message_handler(regular_update, context)
 
-    adapter.handle_media_group_message.assert_awaited_once_with(media_group_update, context)
+    adapter.handle_media_group_message.assert_awaited_once_with(
+        media_group_update, context
+    )
     adapter.convert_message.assert_awaited_once_with(regular_update, context)
     adapter.handle_msg.assert_awaited_once_with(converted)
 
@@ -834,8 +856,13 @@ async def test_telegram_process_media_group_merges_media_without_later_reply_cha
 
     adapter.handle_msg.assert_awaited_once()
     merged_message = adapter.handle_msg.await_args.args[0]
-    assert sum(isinstance(component, Comp.Reply) for component in merged_message.message) == 1
-    assert any(isinstance(component, Comp.Image) for component in merged_message.message)
+    assert (
+        sum(isinstance(component, Comp.Reply) for component in merged_message.message)
+        == 1
+    )
+    assert any(
+        isinstance(component, Comp.Image) for component in merged_message.message
+    )
     assert any(isinstance(component, Comp.File) for component in merged_message.message)
     plain_texts = [
         component.text
@@ -978,7 +1005,9 @@ async def test_telegram_send_voice_with_privacy_fallback_sends_document():
 
     send_voice_error = FakeBadRequest("Voice_messages_forbidden by privacy")
     client.send_voice.side_effect = send_voice_error
-    tg_event_module = _load_telegram_module("astrbot.core.platform.sources.telegram.tg_event")
+    tg_event_module = _load_telegram_module(
+        "astrbot.core.platform.sources.telegram.tg_event"
+    )
 
     with patch.object(tg_event_module, "BadRequest", FakeBadRequest):
         await TelegramPlatformEvent._send_voice_with_fallback(
@@ -1034,7 +1063,9 @@ async def test_telegram_send_with_client_uses_animation_for_gif(monkeypatch):
     client = MockTelegramBuilder.create_bot()
     client.send_animation = AsyncMock()
     image = Comp.Image(file="C:/tmp/anim.gif")
-    tg_event_module = _load_telegram_module("astrbot.core.platform.sources.telegram.tg_event")
+    tg_event_module = _load_telegram_module(
+        "astrbot.core.platform.sources.telegram.tg_event"
+    )
     monkeypatch.setattr(tg_event_module, "_is_gif", lambda _path: True)
 
     with patch.object(
@@ -1048,7 +1079,9 @@ async def test_telegram_send_with_client_uses_animation_for_gif(monkeypatch):
             "456",
         )
 
-    client.send_animation.assert_awaited_once_with(animation="C:/tmp/anim.gif", chat_id="456")
+    client.send_animation.assert_awaited_once_with(
+        animation="C:/tmp/anim.gif", chat_id="456"
+    )
     client.send_photo.assert_not_awaited()
 
 
@@ -1059,15 +1092,18 @@ async def test_telegram_send_with_client_sends_record_caption_as_document_fallba
     record = Comp.Record(file="voice.wav")
     record.text = "voice caption"
 
-    with patch.object(
-        type(record),
-        "convert_to_file_path",
-        AsyncMock(return_value="voice.wav"),
-    ), patch.object(
-        TelegramPlatformEvent,
-        "_send_voice_with_fallback",
-        AsyncMock(),
-    ) as send_voice_with_fallback:
+    with (
+        patch.object(
+            type(record),
+            "convert_to_file_path",
+            AsyncMock(return_value="voice.wav"),
+        ),
+        patch.object(
+            TelegramPlatformEvent,
+            "_send_voice_with_fallback",
+            AsyncMock(),
+        ) as send_voice_with_fallback,
+    ):
         await TelegramPlatformEvent.send_with_client(
             client,
             MessageChain([record]),
@@ -1137,8 +1173,8 @@ async def test_telegram_streaming_draft_break_flushes_real_message_and_resets_dr
     event._send_message_draft = AsyncMock()
     event._send_final_segment = AsyncMock()
     event._process_chain_items = AsyncMock(
-        side_effect=lambda chain, payload, user_name, message_thread_id, on_text: on_text(
-            chain.get_plain_text()
+        side_effect=lambda chain, payload, user_name, message_thread_id, on_text: (
+            on_text(chain.get_plain_text())
         )
     )
     allocated = iter([11, 12])
@@ -1177,8 +1213,8 @@ async def test_telegram_streaming_edit_break_resets_message_id_and_sends_new_mes
     event = TelegramPlatformEvent("msg", MagicMock(), MagicMock(), "session", client)
     event._ensure_typing = AsyncMock()
     event._process_chain_items = AsyncMock(
-        side_effect=lambda chain, payload, user_name, message_thread_id, on_text: on_text(
-            chain.get_plain_text()
+        side_effect=lambda chain, payload, user_name, message_thread_id, on_text: (
+            on_text(chain.get_plain_text())
         )
     )
 
@@ -1282,7 +1318,7 @@ async def test_telegram_run_rebuilds_application_after_repeated_polling_errors()
 
     assert builder.build.call_count == 2
     app_one.updater.stop.assert_awaited()
-    app_one.bot.delete_my_commands.assert_not_awaited()
+    app_one.bot.delete_my_commands.assert_awaited_once()
     app_one.stop.assert_awaited()
     app_one.shutdown.assert_awaited()
     app_two.initialize.assert_awaited()

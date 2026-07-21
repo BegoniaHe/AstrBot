@@ -54,6 +54,7 @@ def create_mock_discord_modules():
 
     # Mock discord.SlashCommand
     mock_discord.SlashCommand = MagicMock
+    mock_discord.SlashCommandGroup = MagicMock
 
     # Mock discord.Option
     mock_discord.Option = MagicMock
@@ -61,6 +62,9 @@ def create_mock_discord_modules():
     # Mock discord.SlashCommandOptionType
     mock_discord.SlashCommandOptionType = MagicMock()
     mock_discord.SlashCommandOptionType.string = 3
+    mock_discord.SlashCommandOptionType.integer = 4
+    mock_discord.SlashCommandOptionType.boolean = 5
+    mock_discord.SlashCommandOptionType.number = 10
 
     # Mock discord.errors
     mock_discord.errors = MagicMock()
@@ -135,6 +139,7 @@ class MockDiscordBuilder:
         client.close = AsyncMock()
         client.is_closed = MagicMock(return_value=False)
         client.add_application_command = MagicMock()
+        client.remove_application_command = MagicMock()
         client.sync_commands = AsyncMock()
         client.change_presence = AsyncMock()
         return client

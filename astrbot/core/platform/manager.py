@@ -388,6 +388,23 @@ class PlatformManager:
             lambda: action_handler(**kwargs),
         )
 
+    async def refresh_registered_commands(self) -> None:
+        """Refresh native commands on every loaded platform adapter."""
+
+        async def refresh(inst: Platform) -> None:
+            try:
+                await inst.refresh_registered_commands()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Failed to refresh native commands for platform %s: %s",
+                    inst.meta().name,
+                    exc,
+                )
+
+        await asyncio.gather(*(refresh(inst) for inst in self._platform_insts))
+
     def create_event(
         self,
         platform: str,

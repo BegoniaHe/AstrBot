@@ -167,6 +167,9 @@ class Platform(abc.ABC):
     async def terminate(self) -> None:
         """终止一个平台的运行实例。"""
 
+    async def refresh_registered_commands(self) -> None:
+        """Refresh platform-native command registrations when supported."""
+
     @abc.abstractmethod
     def meta(self) -> PlatformMetadata:
         """得到一个平台的元数据。"""

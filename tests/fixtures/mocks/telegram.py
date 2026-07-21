@@ -4,6 +4,7 @@
 """
 
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -28,7 +29,10 @@ def create_mock_telegram_modules():
         dict: 包含 telegram 和相关模块的 mock 对象
     """
     mock_telegram = MagicMock()
-    mock_telegram.BotCommand = MagicMock
+    mock_telegram.BotCommand = lambda command, description: SimpleNamespace(
+        command=command,
+        description=description,
+    )
     mock_telegram.Update = MagicMock
     mock_telegram.constants = MagicMock()
     mock_telegram.constants.ChatType = MagicMock()
