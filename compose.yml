@@ -19,3 +19,18 @@ services:
       - ./data:/AstrBot/data
       # - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    image: astrbot-docs:local
+    container_name: astrbotdocs
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    ports:
+      - '6186:8080' # AstrBot documentation

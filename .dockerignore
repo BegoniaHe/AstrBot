@@ -19,6 +19,7 @@ ENV/
 dashboard/node_modules/
 docs/node_modules/
 dashboard/dist/
+docs/.vitepress/dist/
 data/
 tests/
 .ruff_cache/

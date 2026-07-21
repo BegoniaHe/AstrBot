@@ -1,14 +1,14 @@
 # 使用 Docker 部署 AstrBot
 
 > [!WARNING]
-> 当前 fork 不发布预构建 Docker 镜像。请从本仓库克隆源码，并使用仓库根目录的 `Dockerfile` 和 Compose 文件在本地构建。
+> 当前 fork 不发布预构建 Docker 镜像。请从本仓库克隆源码，并使用仓库根目录的 `Dockerfile`、`Dockerfile.docs` 和 Compose 文件在本地构建。
 
 ## 选择 Compose 文件
 
 仓库提供两条本地构建路径：
 
-- `compose.yml`：只运行 AstrBot，适合接入 QQ 官方机器人、Telegram、Discord 等平台，或独立管理其他机器人协议端。
-- `compose-with-napcat.yml`：同时运行 AstrBot 和 NapCat，适合 QQ 个人号；AstrBot 仍由本地源码构建，NapCat 使用其官方容器镜像。
+- `compose.yml`：运行 AstrBot 和本仓库构建的静态文档站点，适合接入 QQ 官方机器人、Telegram、Discord 等平台，或独立管理其他机器人协议端。
+- `compose-with-napcat.yml`：运行 AstrBot、静态文档站点和 NapCat，适合 QQ 个人号；AstrBot 与文档仍由本地源码构建，NapCat 使用其官方容器镜像。
 
 先克隆仓库：
 
@@ -34,13 +34,13 @@ environment:
 > [!CAUTION]
 > `0.0.0.0` 会让 WebUI 监听容器的所有网络接口。不要把管理面板无保护地暴露到公网；至少应限制防火墙来源，并使用反向代理、HTTPS、强密码和 TOTP。
 
-## 只启动 AstrBot
+## 启动 AstrBot 和文档
 
-根 `compose.yml` 会把当前仓库构建为本地镜像 `astrbot:local`：
+根 `compose.yml` 会把当前仓库构建为本地镜像 `astrbot:local` 和 `astrbot-docs:local`：
 
 ```bash
 docker compose up -d --build
-docker compose logs -f astrbot
+docker compose logs -f astrbot docs
 ```
 
 默认挂载和端口为：
@@ -48,6 +48,9 @@ docker compose logs -f astrbot
 - `./data` -> `/AstrBot/data`：配置、数据库、插件等运行时数据。
 - `6185:6185`：AstrBot WebUI。
 - `6199:6199`：可选的 OneBot v11 反向 WebSocket 入口。
+- `6186:8080`：本仓库构建的文档站点，可通过 `http://localhost:6186` 访问。
+
+文档是独立的只读静态服务，不读取 `data/`，也不复用 WebUI 的登录状态。仅在需要对外提供文档时才发布 `6186`，并按部署环境使用防火墙或 HTTPS 反向代理保护该端口。
 
 发布 `6199` 并不会自动让 OneBot 入口监听外部接口。仅当 OneBot 客户端位于 AstrBot 容器之外时，才把该平台的 `ws_reverse_host` 改为 `0.0.0.0`；同时配置 `ws_reverse_token`，并限制端口的网络访问范围。
 
@@ -65,7 +68,7 @@ docker compose logs -f astrbot
 
 ```bash
 docker compose -f compose-with-napcat.yml up -d --build
-docker compose -f compose-with-napcat.yml logs -f astrbot napcat
+docker compose -f compose-with-napcat.yml logs -f astrbot docs napcat
 ```
 
 Linux 上可让 NapCat 使用当前宿主用户的 UID/GID，以减少挂载目录权限问题：
@@ -78,6 +81,7 @@ NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) \
 该 Compose 默认发布：
 
 - `6185`：AstrBot WebUI。
+- `6186`：本仓库构建的文档站点。
 - `6099`：NapCat WebUI。
 
 并持久化：

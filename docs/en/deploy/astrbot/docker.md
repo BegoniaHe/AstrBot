@@ -1,14 +1,14 @@
 # Deploy AstrBot with Docker
 
 > [!WARNING]
-> This fork does not publish a prebuilt Docker image. Clone this repository and build from its root `Dockerfile` and Compose files.
+> This fork does not publish prebuilt Docker images. Clone this repository and build from its root `Dockerfile`, `Dockerfile.docs`, and Compose files.
 
 ## Choose a Compose File
 
 The repository provides two locally built deployment paths:
 
-- `compose.yml`: runs AstrBot only. Use it for QQ Official Bot, Telegram, Discord, and other platforms, or when you manage the bot protocol implementation separately.
-- `compose-with-napcat.yml`: runs AstrBot and NapCat together for personal QQ accounts. AstrBot is still built from the local checkout; NapCat uses its official container image.
+- `compose.yml`: runs AstrBot and the locally built static documentation site. Use it for QQ Official Bot, Telegram, Discord, and other platforms, or when you manage the bot protocol implementation separately.
+- `compose-with-napcat.yml`: runs AstrBot, the static documentation site, and NapCat together for personal QQ accounts. AstrBot and the documentation are still built from the local checkout; NapCat uses its official container image.
 
 Clone the repository first:
 
@@ -34,13 +34,13 @@ environment:
 > [!CAUTION]
 > `0.0.0.0` makes the WebUI listen on every container interface. Do not expose the admin panel directly to the public internet. Restrict firewall access and use a reverse proxy, HTTPS, a strong password, and TOTP.
 
-## Start AstrBot Only
+## Start AstrBot and the Documentation Site
 
-The root `compose.yml` builds the current checkout as the local image `astrbot:local`:
+The root `compose.yml` builds the current checkout as the local images `astrbot:local` and `astrbot-docs:local`:
 
 ```bash
 docker compose up -d --build
-docker compose logs -f astrbot
+docker compose logs -f astrbot docs
 ```
 
 Its default mount and published ports are:
@@ -48,6 +48,9 @@ Its default mount and published ports are:
 - `./data` -> `/AstrBot/data`: configuration, database, plugins, and other runtime data.
 - `6185:6185`: AstrBot WebUI.
 - `6199:6199`: optional OneBot v11 reverse WebSocket endpoint.
+- `6186:8080`: the locally built documentation site, available at `http://localhost:6186`.
+
+The documentation is an independent read-only static service. It neither reads `data/` nor shares the WebUI login state. Publish port `6186` only when you need to serve the documentation externally, and protect it with firewall rules or an HTTPS reverse proxy as appropriate.
 
 Publishing `6199` does not change the OneBot listener address. Only set that platform's `ws_reverse_host` to `0.0.0.0` when its OneBot client runs outside the AstrBot container. Also configure `ws_reverse_token` and restrict network access to the port.
 
@@ -65,7 +68,7 @@ The file currently also sets NapCat `MODE=astrbot`. On every NapCat startup, tha
 
 ```bash
 docker compose -f compose-with-napcat.yml up -d --build
-docker compose -f compose-with-napcat.yml logs -f astrbot napcat
+docker compose -f compose-with-napcat.yml logs -f astrbot docs napcat
 ```
 
 On Linux, you can run NapCat with your host user's UID/GID to reduce bind-mount permission issues:
@@ -78,6 +81,7 @@ NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) \
 This Compose file publishes:
 
 - `6185`: AstrBot WebUI.
+- `6186`: the locally built documentation site.
 - `6099`: NapCat WebUI.
 
 It persists:

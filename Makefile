@@ -420,4 +420,4 @@ format-eol:
 check-docker:
 	@command -v hadolint >/dev/null 2>&1 || { echo "hadolint is required; run 'make doctor' for setup guidance." >&2; exit 2; }
 	@echo "==> [docker] hadolint"
-	@hadolint --config .hadolint.yaml Dockerfile
+	@hadolint --config .hadolint.yaml Dockerfile Dockerfile.docs
