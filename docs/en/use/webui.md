@@ -119,7 +119,7 @@ Use the `Command Management` menu on the left to centrally manage all registered
 
 Filter by plugin, type (command / command group / subcommand), permission, and status, and combine with the search box for quick lookup. Command group rows can expand to show subcommands, badges display the subcommand count, and subcommand rows are indented to indicate hierarchy.
 
-You can enable/disable and rename each command.
+You can enable/disable, rename, and edit aliases for each command. Saving immediately rebuilds the immutable command catalog owned by the plugin lifecycle. Telegram and Discord adapters with native command registration enabled also refresh their menus or slash commands immediately instead of waiting for the next message.
 
 ## Trace
 
@@ -134,7 +134,7 @@ You can enable or disable trace recording using the switch at the top of the pag
 
 This fork does not currently publish an independent downloadable Dashboard release. Source deployments should rebuild `dashboard/dist` after updating the checkout and run `uv run python scripts/sync_dashboard_dist.py`; see [Update the Checkout](/en/deploy/astrbot/cli#update-the-checkout).
 
-The `/dashboard_update` command and automatic download path may consume upstream release assets, which are not guaranteed to include this fork's frontend behavior. Prefer a local build when validating the current branch.
+Message commands and the `astrbot` CLI never download, install, or update Dashboard assets. Upstream Dashboard static files are incompatible with this fork's backend API and frontend behavior and must not be copied into `data/dist`. Startup uses only an explicit `--webui-dir`, a build from the current source tree, bundled assets, or a version-matched `data/dist`. Without a compatible build, the backend continues to run but the WebUI is unavailable.
 
 ## Customizing WebUI Port
 

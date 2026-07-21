@@ -92,7 +92,7 @@ Admin IDs can be configured in:
 
 - `Config -> Other Config -> Admin ID`
 
-Users can get their own ID with `/sid`.
+Users can get their own ID with `/session info`.
 
 ## Sandbox Mode
 

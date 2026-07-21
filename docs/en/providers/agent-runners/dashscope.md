@@ -40,12 +40,12 @@ Go to the Configuration page in the left sidebar, click "Agent Execution Method"
 
 For the two workflow applications, you can dynamically set input variables in the chat area.
 
-Use the `/set` command to dynamically set input variables, as shown in the figure below:
+Use the `/variable set` command to dynamically set input variables, as shown in the figure below:
 
 ![alt text](https://files.astrbot.app/docs/source/images/dify/image-5.png)
 
 After setting variables, AstrBot will attach the variables you set in the next request to Alibaba Cloud Bailian Application, flexibly adapting to your Workflow.
 
-Of course, you can use the `/unset` command to cancel the variables you set. For example, `/unset name`
+Use `/variable unset` to remove a variable, for example `/variable unset name`.
 
 Variables are permanently valid in the current session.

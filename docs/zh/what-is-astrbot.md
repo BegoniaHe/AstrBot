@@ -34,7 +34,7 @@ AstrBot 是一个开源的一站式 Agentic 个人和群聊助手，可在 QQ、
 - `uv tool install astrbot` 与 `uv tool upgrade astrbot`；
 - 以 AstrBot 命名的 AUR 包；
 - `soulter/astrbot` 等上游镜像；
-- 从上游 Release 自动下载的 Dashboard 静态资源。
+- 上游 Release 中的 Dashboard 静态资源；启动入口不会下载或使用这些资源。
 
 源码部署应直接使用当前 checkout；容器部署应通过 `compose.yml` 或 `compose-with-napcat.yml` 构建仓库根目录的 `Dockerfile`。WebUI 首次启动会生成随机密码，并且默认只监听 `127.0.0.1:6185`；远程或容器外访问需要显式修改监听地址，同时配置防火墙和反向代理保护。
 

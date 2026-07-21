@@ -90,7 +90,7 @@ data/workspaces/{normalized_umo}/notes/todo.txt
 
 - `配置 -> 其他配置 -> 管理员 ID`
 
-中配置。用户可通过 `/sid` 获取自己的 ID。
+中配置。用户可通过 `/session info` 获取自己的 ID。
 
 ## Sandbox 模式
 

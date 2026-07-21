@@ -53,3 +53,4 @@ If requests are not being executed through DeerFlow correctly, check the followi
 - whether `API Base URL` is reachable from the AstrBot environment
 - whether the authentication settings are correct
 - whether `Assistant ID` matches an actual available assistant in DeerFlow
+- When `/conversation reset`, `/conversation create`, or `/conversation delete` resets a DeerFlow session, AstrBot attempts to delete the remote DeerFlow thread as well. If the DeerFlow gateway is unreachable, only AstrBot's local session identifier is cleared.

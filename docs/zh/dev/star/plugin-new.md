@@ -181,6 +181,11 @@ class ExamplePlugin(Star):
 例如取消后台任务、关闭 HTTP 客户端和释放文件句柄。不要使用已废弃的析构方法代替
 显式生命周期清理。
 
+设计带参数、子指令或 option 的入口前，请阅读
+[Orbit 指令设计规范](./guides/listen-message-event#orbit-指令设计规范)。该规范说明
+指令头命名、确定性参数语法、支持的 handler 签名，以及 Telegram/Discord 原生指令
+的兼容约束。
+
 ## 调试插件
 
 插件修改后，在 WebUI 的插件管理页打开插件菜单并选择“重载插件”。如果插件加载

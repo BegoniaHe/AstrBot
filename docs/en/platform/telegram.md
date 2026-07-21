@@ -35,6 +35,12 @@ Fill in the configuration fields that appear:
 
 Please ensure your network environment can access Telegram. You may need to configure a proxy using `Configuration -> Other Settings -> HTTP Proxy`.
 
+## Native Command Menu
+
+When Telegram command registration is enabled, AstrBot synchronizes every enabled built-in and extension-plugin root command, root group, and root alias to Telegram's native command menu; entries that violate Telegram's naming constraints are skipped. Telegram menus do not support subcommands or named parameters, so selecting a group such as `/persona`, `/provider`, or `/plugin` still leaves its subcommand and arguments to Orbit Command Syntax.
+
+Plugin load, unload, reload, enable, and disable operations immediately request a menu refresh, as do command enablement, rename, and alias changes from Dashboard. The periodic refresh remains as recovery for network failures or external state changes. When no commands are eligible, AstrBot clears stale commands from the Telegram menu.
+
 ## Streaming Output
 
 The Telegram platform supports streaming output. Enable the "Streaming Output" switch in "AI Configuration" -> "Other Settings".

@@ -1,162 +1,118 @@
 # 内置指令
 
-AstrBot 的指令通过插件机制注册。为了保持主程序轻量，当前只有少量基础指令随 AstrBot 主程序内置加载；更多管理类、扩展类指令已经迁移到独立插件中维护。
+AstrBot 的指令通过插件机制注册。内置指令统一采用“单数名词根命令 + 完整动词子命令 + 长选项”的 CLI 命名方式，例如 `/plugin list`、`/conversation create` 和 `/provider set llm 1`。
 
-使用 `/help` 可以查看当前已经启用的指令。
+使用 `/help` 查看当前已经启用的根指令；使用 `/help --image` 或 `/help -i` 请求图片版帮助。如果修改了唤醒前缀，所有示例中的 `/` 也要替换为实际前缀。
 
-> [!NOTE]
->
-> 1. `/help`、`/set`、`/unset` 默认不会显示在 `/help` 输出的指令清单中，但这些指令仍然可用。
-> 2. 如果您修改了唤醒前缀，去掉了默认的 `/`，那么指令也需要使用新的唤醒前缀触发。例如将唤醒前缀改为 `!` 后，应使用 `!help`、`!reset`，而不是 `/help`、`/reset`。
+## Orbit 指令参数语法
 
-## 主程序内置指令
+AstrBot 使用 **Orbit Command Syntax** 解析已注册指令的参数。Orbit 不是 shell，也不会执行 shell。只有消息命中完整指令名、指令组或别名后才会严格解析参数；完全未知的根指令仍可进入普通插件过滤器或 LLM。
 
-以下指令由 AstrBot 主程序自带，默认随 AstrBot 加载：
+Orbit 支持确定性的 POSIX quoting 和 escaping 子集：
 
-- `/help`：查看当前启用的指令和 AstrBot 版本信息。
-- `/sid`：查看当前消息来源信息，包括 UMO、用户 ID、平台 ID、消息类型和会话 ID。常用于配置管理员、白名单或路由规则。
-- `/name`：为当前 UMO（统一消息来源，即某个平台上的一个群聊或私聊会话）设置展示别名，让 WebUI 中的会话来源更容易识别。该指令需要管理员权限。
-- `/reset`：重置当前会话的 LLM 上下文。
-- `/stop`：停止当前会话中正在运行的 Agent 任务。
-- `/new`：创建并切换到一个新对话。
-- `/stats`：查看当前会话的 Token 用量统计。
-- `/provider`：查看或切换 LLM Provider。该指令需要管理员权限。
-- `/dashboard_update`：更新 AstrBot WebUI。该指令需要管理员权限。
-- `/set`：设置当前会话变量，常用于 Dify、Coze、DashScope 等 Agent 执行器的输入变量。
-- `/unset`：移除当前会话变量。
+- 只有 ASCII 空格和 Tab 分隔参数。
+- 单引号内所有字符都是字面值。
+- 双引号内的反斜杠只转义 `$`、反引号、反斜杠、双引号和换行；其他反斜杠会原样保留。
+- 未引用的反斜杠转义下一个字符；反斜杠加换行会执行 line continuation。
+- 相邻的引用和未引用片段属于同一个参数，例如 `ab"cd"'ef'` 得到 `abcdef`。
+- `""` 和 `''` 都会产生一个空参数。Unicode 原样保留，指令匹配区分大小写。
 
-## 核心指令详解
+Orbit 不执行变量、命令、算术或波浪号展开，也不执行 glob、重定向、管道、列表或子 shell。任何未转义且不在单引号内的 `$` 或反引号，以及未引用的词首 `~`、`*`、`?`、`[`、`|`、`&`、`;`、`<`、`>`、`(`、`)`、词首 `#` 和换行都会返回结构化语法错误。
 
-### `/sid`
+需要把这些字符作为普通数据传入时，请引用或转义：
 
-`/sid` 用于查看当前消息来源信息，主要输出：
+```text
+/session name '$HOME'
+/session name "a|b"
+/session name \*.txt
+/session name "C:\Users\bot"
+/session name '^user#[0-9]+$'
+/plugin install 'https://example.com?a=1&b=2#readme'
+```
 
-- `UMO`：当前消息来源的统一标识。它通常用于白名单、配置文件路由等按会话生效的配置。
-- `UID`：当前发送者的用户 ID。它通常用于添加 AstrBot 管理员。
-- `Bot ID`：当前机器人所在平台实例的 ID。
-- `Message Type`：消息类型，例如私聊或群聊。
-- `Session ID`：平台侧会话 ID。
+已声明的 option 可以位于位置参数前后，支持 `--name=value`。`--` 会终止 option 解析，例如 `/session name -- -x` 会把 `-x` 当作普通参数。`-1` 等负数可以直接用于数值位置参数。
 
-在群聊中，如果开启了 `unique_session`（会话隔离），`/sid` 还会额外提示当前群 ID。这个群 ID 可用于把整个群加入白名单。
+## 指令列表
 
-常见用途：
+### 帮助
 
-- 添加管理员：先发送 `/sid` 获取 `UID`，再在 WebUI 的 `配置 -> 其他配置 -> 管理员 ID` 中添加。
-- 配置白名单：使用 `UMO` 或群 ID 控制哪些会话可以使用机器人。
-- 配置路由规则：使用 `UMO` 区分不同平台、群聊或私聊来源。
+- `/help`：显示当前启用的根指令和版本信息。
+- `/help --image` 或 `/help -i`：生成图片版帮助。
 
-### `/name`
+### 会话信息
 
-`/name` 用于给当前 UMO 设置一个更容易识别的展示别名。UMO 是 Unified Message Origin 的缩写，可以理解为“统一消息来源”：它用 `平台 ID:消息类型:会话 ID` 的形式标识一个具体的消息来源，例如某个 QQ 群、某个 Telegram 群，或某个平台上的一个私聊会话。
+- `/session info`：显示 UMO、用户 ID、平台 ID、消息类型和会话 ID。
+- `/session name`：显示当前自动名称和已保存别名，需要管理员权限。
+- `/session name <名称>`：设置当前 UMO 的展示别名，需要管理员权限。名称由 `GreedyStr` 接收，可以包含空格。
 
-原始 UMO 往往比较长，也不一定能直接看出它对应哪个群或哪个用户。设置 `/name` 后，AstrBot 会在 WebUI 的 UMO 列表、会话来源选择、定时任务投递目标、对话数据等位置优先展示这个别名，帮助管理员更快识别和选择目标会话，降低配置路由规则、Cron 投递目标或会话规则时选错来源的概率。
+使用 `/session info` 得到的用户 ID 可以添加到 WebUI 的 `配置 -> 其他配置 -> 管理员 ID`。群聊开启 `unique_session` 时，该指令也会显示可用于白名单的群 ID。
 
-`/name` 还会记录当前平台可识别的自动名称，例如群聊通常是群名，私聊通常是发送者昵称或发送者 ID。这样即使没有手动设置别名，WebUI 也可以尽量显示一个可读名称。
+### 对话
 
-用法：
+- `/conversation create`：创建并切换到新对话。
+- `/conversation reset`：清空当前对话上下文，同时清理对应的第三方 Agent Runner 会话状态。
+- `/conversation stats`：显示当前对话的输入、缓存输入和输出 Token 统计。
+- `/conversation history [--page N|-p N]`：显示当前对话历史。
+- `/conversation list [--page N|-p N]`：列出对话。
+- `/conversation switch <序号>`：切换到列表中的对话。
+- `/conversation rename <新标题>`：重命名当前对话，标题可以包含空格。
+- `/conversation delete`：删除当前对话。
+- `/conversation create-for <会话 ID>`：为指定群会话创建新对话，需要管理员权限。
 
-- `/name <别名>`：设置或更新当前 UMO 的别名。该指令可以重复使用，后一次设置会覆盖前一次别名。
-- `/name`：不带参数时，不会修改别名，只会显示用法、当前 UMO、当前自动名称和已经保存的别名。
+`reset` 和 `delete` 在未开启群聊会话隔离时可能要求管理员权限；Dashboard 中的指令权限配置优先于默认行为。
 
-名称显示规则：
+### 运行任务
 
-- 如果同时存在别名和自动名称，优先显示 `别名（自动名称）`。
-- 如果只有自动名称，显示自动名称。
-- 如果没有别名和自动名称，显示原始 UMO。
+- `/task stop`：停止当前会话中正在运行的 Agent 或第三方 Agent Runner 任务，不删除历史。
 
-`/name` 需要管理员权限。
+### Provider 与模型
 
-### `/reset`
+- `/provider list`：列出 LLM、TTS 和 STT Provider，以及当前选中项和可达性状态。
+- `/provider set llm <序号>`：切换 LLM Provider。
+- `/provider set tts <序号>`：切换 TTS Provider。
+- `/provider set stt <序号>`：切换 STT Provider。
+- `/model list`：列出当前 LLM Provider 可用模型。
+- `/model set <名称或序号>`：切换模型；名称也可以解析到其他已配置 Provider。
 
-`/reset` 用于重置当前会话的 LLM 上下文。
+这些指令需要管理员权限。
 
-对于 AstrBot 内置 Agent Runner，它会：
+### 会话变量
 
-- 停止当前会话中正在运行的任务。
-- 清空当前对话的上下文消息。
-- 通知长期记忆会话清理当前上下文状态。
+- `/variable set <键> <值>`：设置 Agent Runner 输入变量。
+- `/variable unset <键>`：删除输入变量。
 
-对于第三方 Agent Runner，例如 `dify`、`coze`、`dashscope`、`deerflow`，它会：
+### LLM 聊天状态
 
-- 停止当前会话中正在运行的任务。
-- 删除当前会话保存的第三方会话 ID，让下一轮对话重新开始。
+- `/chat status`：显示当前会话是否启用 LLM 聊天。
+- `/chat enable`：启用当前会话的 LLM 聊天。
+- `/chat disable`：停用当前会话的 LLM 聊天。
 
-权限说明：
+这些指令需要管理员权限。`enable` 和 `disable` 都是幂等操作。
 
-- 私聊中默认普通用户可使用。
-- 群聊开启会话隔离时，默认普通用户可使用。
-- 群聊未开启会话隔离时，默认需要管理员权限。
-- 如果管理员修改过指令权限配置，则以实际配置为准。
+### 管理员
 
-### `/stop`
+- `/admin list`：列出当前配置中生效的管理员用户 ID。
+- `/admin grant <用户 ID>`：授予 AstrBot 管理员权限。
+- `/admin revoke <用户 ID>`：撤销 AstrBot 管理员权限。
 
-`/stop` 用于停止当前会话中正在运行的 Agent 任务。
+三个子指令都需要管理员权限。
 
-它不会清空对话历史，也不会创建新对话。它只对当前会话正在执行的任务发出停止请求。
+### Persona
 
-对于内置 Agent Runner，`/stop` 会请求 Agent Runner 停止当前任务。  
-对于第三方 Agent Runner，例如 `dify`、`coze`、`dashscope`、`deerflow`，`/stop` 会直接停止当前会话中登记的运行任务。
+- `/persona status`：显示默认 Persona 和当前对话实际使用的 Persona。
+- `/persona list`：列出 Persona。
+- `/persona show <persona_id>`：显示 Persona 的系统提示词。
+- `/persona set <persona_id>`：为当前对话选择 Persona。
+- `/persona unset`：让当前对话显式不使用 Persona。
 
-如果当前会话没有正在运行的任务，AstrBot 会提示当前会话没有运行中的任务。
+Persona 子指令需要管理员权限。仅输入 `/persona` 会显示子指令树。
 
-### `/stats`
+### 插件
 
-`/stats` 用于查看当前会话的 Token 用量统计。
+- `/plugin list`：列出已加载插件。
+- `/plugin show <插件名>`：显示插件版本、作者和已注册指令。
+- `/plugin enable <插件名>`：启用插件，需要管理员权限。
+- `/plugin disable <插件名>`：停用插件，需要管理员权限。
+- `/plugin install <仓库 URL>`：安装插件，需要管理员权限。
 
-它从数据库中查询当前对话的所有 Provider 调用记录，汇总并展示：
-
-- 总 Token 用量（输入 Token + 输出 Token）。
-- 输入 Token（缓存命中），即被提供商缓存并跳过计费的输入 Token。
-- 输入 Token（其他），即未被缓存、正常计费的输入 Token。
-- 输出 Token，即模型生成的输出 Token。
-
-如果当前不在任何对话中，AstrBot 会提示先使用 `/new` 创建对话。
-
-### `/provider`
-
-`/provider` 用于查看或切换当前 UMO 使用的 Provider（LLM / TTS / STT）。
-
-**查看 Provider 列表：**
-
-不带参数时，`/provider` 会列出所有已配置的 Provider，按 LLM、TTS、STT 分类展示。每个 Provider 旁会显示：
-
-- 序号，用于后续切换。
-- Provider ID 和当前使用的模型（LLM 类型）。
-- 可达性标记：`✅` 表示连接正常，`❌` 表示连接失败（附带错误码）。
-- 当前正在使用的 Provider 末尾会标注 `(当前使用)`。
-
-> [!NOTE]
-> 可达性检测需要在 WebUI 的 `配置 -> 普通配置 -> AI 配置` 中，展开底部的「更多配置」，开启「提供商可达性检测」后才会生效。关闭后不显示可达性标记，列表加载更快。
-
-**切换 Provider：**
-
-使用 `/provider <序号>` 可以将当前会话的 LLM Provider 切换为列表中对应序号的 Provider。
-
-- `/provider <序号>`：切换到指定序号的 LLM Provider。
-- `/provider tts <序号>`：切换到指定序号的 TTS Provider。
-- `/provider stt <序号>`：切换到指定序号的 STT Provider。
-
-该指令需要管理员权限。
-
-## 内置指令扩展
-
-此外，AstrBot 现在内置提供以下扩展管理指令：
-
-- `/plugin`：查看、启用、停用或安装插件。
-- `/op`、`/deop`：添加或移除管理员。
-- `/provider`：查看或切换 LLM Provider。
-- `/model`：查看或切换模型。
-- `/history`：查看当前对话历史。
-- `/ls`：查看对话列表。
-- `/groupnew`：为指定群聊创建新对话。
-- `/switch`：切换到指定对话。
-- `/rename`：重命名当前对话。
-- `/del`：删除当前对话。
-- `/persona`：查看或切换 Persona。
-- `/llm`：开启或关闭当前会话的 LLM 聊天功能。
-
-## 权限说明
-
-部分指令需要 AstrBot 管理员权限，例如 `/dashboard_update`、`/name`、`/op`、`/deop`、`/provider`、`/model`、`/persona` 等。
-
-可以通过 `/sid` 获取用户 ID，然后在 WebUI 的 `配置 -> 其他配置 -> 管理员 ID` 中添加管理员。
+插件加载、卸载、重载或启禁后，AstrBot 会立即重建指令 catalog，并刷新已启用的 Telegram/Discord 原生命令入口。

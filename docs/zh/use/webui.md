@@ -119,7 +119,7 @@ ChatUI 支持以下常用能力：
 
 支持按插件、类型（指令 / 指令组 / 子指令）、权限与状态过滤，配合搜索框快速定位。指令组行可展开查看子指令，徽章显示子指令数量，子指令行会缩进区分层级。
 
-可以对每个指令 启用/禁用、重命名。
+可以对每个指令启用/禁用、重命名并修改别名。保存后，插件生命周期持有的不可变指令 catalog 会立即重建；已启用原生命令注册的 Telegram 和 Discord 适配器也会立即刷新菜单或 slash commands，不需要等待下一次消息处理。
 
 ## 追踪 (Trace)
 
@@ -134,7 +134,7 @@ ChatUI 支持以下常用能力：
 
 当前 fork 不发布可供下载的独立 Dashboard Release。源码部署应在更新 checkout 后重新构建 `dashboard/dist`，再运行 `uv run python scripts/sync_dashboard_dist.py`，具体命令见[源码部署](/deploy/astrbot/cli#更新-checkout)。
 
-`/dashboard_update` 和自动下载路径可能使用上游发行资产，不能保证包含本 fork 的前端功能。要验证当前分支，请优先使用本地构建产物。
+消息指令和 `astrbot` CLI 都不会下载、安装或更新 Dashboard。上游 Dashboard 静态资源与当前 fork 的后端 API 和前端功能不兼容，不应复制到 `data/dist`。启动时只使用显式 `--webui-dir`、当前源码树构建产物、随包资源或版本匹配的 `data/dist`；没有兼容构建时，后端继续运行，但 WebUI 不可用。
 
 ## 自定义 WebUI 端口
 

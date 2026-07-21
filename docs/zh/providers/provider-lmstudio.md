@@ -27,4 +27,4 @@ API Key 填写 `lm-studio`
 
 模型名称填写 LM Studio 当前暴露的模型名，保存配置即可。
 
-> 输入 /provider 查看 AstrBot 配置的模型
+> 输入 `/provider list` 查看 AstrBot 配置的 Provider；输入 `/model list` 查看当前 Provider 的模型。

@@ -101,7 +101,73 @@ async def add(self, event: AstrMessageEvent, a: int, b: int):
     yield event.plain_result(f"Wow! The answer is {a + b}!")
 ```
 
-参数会按照函数签名转换为对应类型。带空格的单个字符串参数可以使用单引号或双引号包裹，例如 `"hello world"`。
+参数由 **Orbit Command Syntax** 解析，并按照函数签名转换为对应类型。Orbit 只在消息命中已注册的完整指令名、指令组或别名后解析参数；完全未知的根指令仍会进入普通插件过滤器或 LLM。
+
+命令 catalog 由插件生命周期按 Pipeline 配置显式拥有，并在插件加载、卸载、重载、启禁以及指令重命名、别名或启用状态修改后原子替换不可变 snapshot。消息处理热路径只读取当前 snapshot，不会重新遍历 handler 或构建索引。
+
+Orbit 不是 shell，也不会执行 shell。它支持确定性的 POSIX quoting 和 escaping 子集：ASCII 空格和 Tab 分隔参数；单引号中的字符都是字面值；双引号支持 `\$`、`` \` ``、`\\`、`\"` 和反斜杠换行；未引用的反斜杠转义下一个字符。相邻片段属于同一个参数，因此 `ab"cd"'ef'` 等价于 `abcdef`，而 `""` 和 `''` 都会产生空参数。
+
+对于 Orbit 成功接受的参数表达式，相同表达式在 POSIX shell 中会产生相同且不依赖环境的 `argv`。Orbit 不执行变量、命令、算术或波浪号展开，不执行字段拆分、glob，也不支持重定向、管道、列表、子 shell、注释或未引用换行。未转义且不在单引号内的 `$` 和反引号会被保守拒绝。
+
+需要把特殊字符作为普通数据传入时，请引用或转义它们：
+
+```text
+/session name '$HOME'
+/session name "a|b"
+/session name \*.txt
+/plugin install 'https://example.com?a=1&b=2#readme'
+/session name "C:\Users\bot"
+/match '^user#[0-9]+$'
+```
+
+双引号中的反斜杠只转义上面列出的五类字符，所以 `"C:\Users\bot"` 会保留 Windows 路径中的反斜杠。Unicode 会原样保留，指令匹配区分大小写。
+
+### Orbit 指令设计规范
+
+Orbit 只定义已注册指令头之后的参数语言；唤醒前缀、根指令和子指令属于 AstrBot framing。一个符合 Orbit Command Syntax 的参数表达式必须能被拆成确定的 `argv`，每个 word 恰好对应一个字段，并且相同表达式在 POSIX shell 中产生相同且不依赖环境的结果。它不能依赖环境变量、当前目录、文件、locale、glob 结果或 shell 执行。
+
+插件指令应遵循以下设计约定：
+
+- 根指令使用表示领域或资源的单数英文名，例如 `project`、`persona`。为兼容 Telegram 原生菜单，推荐使用不超过 32 个字符的 ASCII 小写字母、数字和下划线，并以字母开头。
+- 指令组使用名词，子指令使用完整、明确且小写的动词，例如 `list`、`show`、`create`、`delete`、`set`、`unset`、`enable` 和 `disable`。复合子指令使用连字符，例如 `create-for`。
+- 查询、状态切换和修改操作分别使用显式子指令。状态修改应采用幂等的 `enable`/`disable` 或 `set`/`unset`，不要让同一入口根据当前状态隐式 toggle。
+- 长 option 使用 `--kebab-case`；常用 option 可以额外提供一个单字母短名。布尔行为使用 flag，有限选项使用 `Enum` 或 `Literal`，可省略值使用 `T | None` 和默认值 `None`。
+- 一个位置参数表达一个概念。可能包含空格的末尾自由文本使用 `GreedyStr`；不要在 handler 中对 `event.message_str` 再做 `split()` 或自行解释引号。
+- handler 的类型标注就是参数 schema。只使用受支持的标量、`Enum`、`Literal`、Optional、`GreedyStr` 和 `Annotated[..., option(...)]`；不支持的签名会在插件注册时失败。
+- 别名也应遵守同样的命名约束，并只用于真实同义入口。帮助文本和文档应始终使用主名称。
+- 为 handler 编写简短、可独立理解的 docstring；Telegram 和 Discord 会用它生成原生指令描述。不满足平台名称约束的入口仍可用于文本消息，但不会注册为对应平台的原生指令。
+
+例如，资源型插件可以使用 `/project list`、`/project show <name>`、`/project create <name> --template <id>` 和 `/project delete <name> --force`。参数中的 `$`、`#`、glob、URL 查询串或 operator 是数据时，由调用者按 Orbit 规则引用；插件收到的是已经完成确定性分词的值，不应再进行 shell 展开。
+
+开发和测试时至少覆盖普通值、空参数、带空格值、Unicode、`--name=value`、`--`、负数、未知 option，以及经过引用的 `$`、`#`、glob 和 URL。未引用的 expansion 或 operator 应产生结构化指令诊断，而不是进入 handler。
+
+### 参数类型与 GreedyStr
+
+第一版支持 `str`、`int`、`float`、`bool`、`Enum`、`Literal[...]` 和 `T | None`（或 `Optional[T]`）。类型标注是转换依据；只有未标注参数才会从默认值推断类型，否则默认为 `str`。Enum 的所有成员值必须统一使用受支持的标量类型，因此字符串、整数、浮点数和布尔值 Enum 都可以绑定；空 Enum、混合值类型或其他值类型会在注册期失败。多类型 Union（例如 `str | int | None`）同样不受支持，插件会在注册 handler 时立即得到包含插件与 handler 名称的错误。
+
+`GreedyStr` 会接收所有剩余位置参数，并用单个空格连接已经完成 quoting/escaping 的字段。它必须是最后一个位置参数；没有默认值时至少需要一个字段，只有显式默认值才允许省略。
+
+```python
+from enum import Enum
+from typing import Literal
+
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event.filter import GreedyStr
+
+class Mode(Enum):
+    FAST = "fast"
+    SAFE = "safe"
+
+@filter.command("search")
+async def search(
+    self,
+    event: AstrMessageEvent,
+    mode: Mode,
+    scope: Literal["local", "all"],
+    query: GreedyStr,
+):
+    yield event.plain_result(f"{mode.value}: {scope}: {query}")
+```
 
 ### 可选项与布尔标志
 
@@ -131,6 +197,8 @@ async def deploy(
 - `bool` 可选项不带值时是 `True`；也可以显式传入 `true/false`、`yes/no` 或 `1/0`，例如 `--force=false`。
 - `--` 会终止可选项解析，后面的内容都按位置参数处理。例如 `/deploy -- --force` 会把 `--force` 解析为 `target`，而不是布尔标志。
 - 可省略的值可以写成 `T | None` 或 `typing.Optional[T]`，并将默认值设为 `None`；未提供该可选项时，处理函数会收到 `None`。
+- 未知或重复 option、缺少 option 值会分别报告错误。未知 option 会建议最接近的已声明名称。
+- `-1` 等负数可以直接绑定到数值位置参数。要把 `-x` 传给字符串位置参数，请写成 `-- -x`。
 
 ## 指令组
 
@@ -154,7 +222,7 @@ async def sub(self, event: AstrMessageEvent, a: int, b: int):
 
 指令组函数内不需要实现任何函数，请直接 `pass` 或者添加函数内注释。指令组的子指令使用 `指令组名.command` 来注册。
 
-当用户没有输入子指令时，会报错并，并渲染出该指令组的树形结构。
+当用户没有输入子指令时，会报告不完整指令并列出该组的子指令树。根指令组已识别、但子指令不存在时会报告 `UNKNOWN_SUBCOMMAND`，不会再落入 LLM；只有完全未知的根指令保持 LLM fallback。
 
 ![image](https://files.astrbot.app/docs/source/images/plugin/image-1.png)
 
@@ -204,6 +272,22 @@ async def calc_help(self, event: AstrMessageEvent):
 async def help(self, event: AstrMessageEvent):
     yield event.plain_result("这是一个计算器插件，拥有 add, sub 指令。")
 ```
+
+### 直接解析参数
+
+插件可以通过受支持的 `astrbot.api.command` API 在指令 handler 之外复用同一参数语法。`parse_arguments()` 返回只读的 `CommandInvocation`，其中 `words`、fragment 和 Unicode code-point span 均不可变；失败时抛出带结构化 `CommandDiagnostic` 的 `CommandSyntaxError`。
+
+```python
+from astrbot.api.command import CommandSyntaxError, parse_arguments
+
+try:
+    invocation = parse_arguments(r'''one "two three" C:\Users\bot''')
+    argv = invocation.argv
+except CommandSyntaxError as exc:
+    diagnostic = exc.diagnostic
+```
+
+`option` 和 `GreedyStr` 应从 `astrbot.api.event.filter` 导入；插件不要导入内部 catalog、engine 或 handler metadata。
 
 ### 事件类型过滤
 

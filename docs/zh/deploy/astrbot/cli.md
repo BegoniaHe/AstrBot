@@ -39,7 +39,7 @@ cd ..
 uv run python scripts/sync_dashboard_dist.py
 ```
 
-不要跳过这一步并依赖自动下载的上游 Dashboard；上游静态资源不保证与当前 fork 的 FastAPI 路由和前端功能一致。
+不要跳过这一步。`astrbot init`、`astrbot run` 和根启动入口都不会下载 Dashboard；上游静态资源与当前 fork 的 FastAPI 路由和前端功能不兼容。
 
 ## 可选：安装本地文转图浏览器
 

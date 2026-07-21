@@ -27,8 +27,8 @@ outline: deep
 
 源码入口和 CLI 入口的前置流程并不相同，但最后都会显式创建 `RuntimeServices` 并交给 `InitialLoader`：
 
-- 根目录 `main.py` 先调用 `runtime_bootstrap.initialize_runtime_bootstrap()` 配置受信任 CA，再导入核心模块、应用启动环境参数并校验 Python 与运行目录。Dashboard 解析优先使用显式 `--webui-dir`，然后依次检查版本匹配的源码树 `dashboard/dist`、运行目录 `data/dist`、包内置资源和下载资源；下载失败时，仍带 `index.html` 的失配 `data/dist` 只作为降级回退。
-- `astrbot` CLI 先解析并锁定 CLI runtime root，要求存在 `.astrbot` 标记，并运行自己的交互式 Dashboard 资源检查。它当前不会调用根入口的 `runtime_bootstrap`，因此修改启动安全或资源解析时必须分别检查两条路径。
+- 根目录 `main.py` 先调用 `runtime_bootstrap.initialize_runtime_bootstrap()` 配置受信任 CA，再导入核心模块、应用启动环境参数并校验 Python 与运行目录。Dashboard 解析优先使用显式 `--webui-dir`，然后依次检查版本匹配的源码树 `dashboard/dist`、运行目录 `data/dist` 和包内置资源。它不访问网络，也不会使用版本失配或不完整的静态资源；没有兼容构建时只停用 WebUI。
+- `astrbot` CLI 先解析并锁定 CLI runtime root，要求存在 `.astrbot` 标记。CLI 的 `init` 和 `run` 不下载或更新 Dashboard，也不调用根入口的 `runtime_bootstrap`，因此修改启动安全或资源解析时必须分别检查两条路径。
 - 两条路径随后都调用 `create_runtime_services()` 创建配置、数据库、共享偏好、HTML 渲染器、文件 token 服务和依赖安装器等实例，再由 `InitialLoader` 初始化 `AstrBotCoreLifecycle`，并行运行核心任务与 FastAPI Dashboard。
 - 初始化中途失败时会调用生命周期清理；停止逻辑必须能处理“只初始化了一部分”的状态并允许重复调用。导入 `astrbot.core` 本身不得创建运行时服务或访问用户数据。
 
@@ -65,6 +65,14 @@ outline: deep
 `ProcessStage` 负责插件处理与 Agent 调用；`ResultDecorateStage` 处理前缀、分段、TTS、本地文转图、引用等结果装饰；`RespondStage` 统一调用平台发送接口。流水线同时支持普通异步 stage 和用异步生成器实现的洋葱式前后处理，修改时必须保留停止传播和收尾语义。
 
 群聊唤醒规则是显式配置。`platform_settings.group_wake_policy` 分别控制“提及机器人”和“回复机器人”是否唤醒，默认都关闭；`WakingCheckStage` 会把实际原因写入事件的 `wake_reasons`。内置命令是否可用则按 handler 存储在命令数据库中，旧的 `disable_builtin_commands` 只用于启动迁移，不再参与 Pipeline 过滤。
+
+### 指令解析子系统
+
+指令参数由 `astrbot/core/command/` 下的 Orbit Command Syntax 子系统处理。`catalog.py` 为已启用指令、指令组和各级别名建立不可变最长匹配索引；`lexer.py` 实现不执行 expansion 或 operator 的确定性 POSIX word 子集；`schema.py` 在 handler 注册期编译签名；`binder.py` 负责位置参数、option、默认值和类型转换；`engine.py` 统一执行 resolve、lex 和 bind。
+
+插件管理器按 Pipeline 配置显式拥有 `CommandCatalogStore`。插件加载、卸载、重载、启禁，以及 Dashboard 中的指令启禁、重命名和别名修改都会构建新 snapshot 并原子替换引用。`WakingCheckStage` 的消息热路径只读取 snapshot：先完成 wake prefix 移除和最长指令头匹配，命中后只 lex 一次，再按 `handler_full_name` 分别绑定所有匹配 handler。完全未知根指令不会进入 Orbit，因此带 `$`、URL 或不完整引号的普通 LLM prompt 不会被指令解析器拦截。
+
+核心结构化诊断只保存稳定错误码、Unicode code-point span、参数和 hint code；zh-CN/en-US 文本及源码 caret 在展示边界渲染。插件公开入口是 `astrbot.api.command` 以及 `astrbot.api.event.filter` 中的 `option`、`GreedyStr`，内部 catalog、engine 和 handler metadata 不属于插件 API。
 
 ## Agent、工具与 Skills
 
@@ -135,15 +143,16 @@ Live Chat WebSocket 允许同一连接并发运行多个请求，以唯一 `mess
 
 ## 修改位置速查
 
-| 变更类型          | 主要位置                                            | 同步检查                                           |
-| ----------------- | --------------------------------------------------- | -------------------------------------------------- |
-| 新消息平台        | `astrbot/core/platform/sources/`                    | discovery、配置元数据、平台文档、发送/清理测试     |
-| 新模型 Provider   | `astrbot/core/provider/sources/`                    | `provider_modules.py`、配置元数据、Provider 测试   |
-| 新 Agent Runner   | `astrbot/core/agent/runners/`                       | Provider 配置、Runner 文档、工具/流式行为          |
-| Pipeline/唤醒行为 | `astrbot/core/pipeline/`                            | stage 顺序、wake reason、停止传播、流式测试        |
-| Dashboard API     | `astrbot/dashboard/api/`、`services/`、`schemas.py` | OpenAPI、生成客户端、前后端测试                    |
-| Live Chat 协议    | `live_chat_service.py`、`webchat/`                  | request identity、并发、interrupt、前端状态测试    |
-| 插件 SDK/页面协议 | `astrbot/api/`、`astrbot/core/star/`                | import boundary、插件指南、Vitest、Playwright      |
-| 配置持久化        | `astrbot/core/config/`                              | 默认值/metadata、revision、并发保存测试            |
-| 知识库写入        | `knowledge_base/`、`db/vec_db/`                     | 多存储回滚、失败注入、残留文件与可检索性           |
-| NapCat 事件模型   | `scripts/napcat/`                                   | 运行 `make napcat-check`，不要手改 generated model |
+| 变更类型          | 主要位置                                             | 同步检查                                                    |
+| ----------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
+| 新消息平台        | `astrbot/core/platform/sources/`                     | discovery、配置元数据、平台文档、发送/清理测试              |
+| 新模型 Provider   | `astrbot/core/provider/sources/`                     | `provider_modules.py`、配置元数据、Provider 测试            |
+| 新 Agent Runner   | `astrbot/core/agent/runners/`                        | Provider 配置、Runner 文档、工具/流式行为                   |
+| Pipeline/唤醒行为 | `astrbot/core/pipeline/`                             | stage 顺序、wake reason、停止传播、流式测试                 |
+| 指令语法与绑定    | `astrbot/core/command/`、`astrbot/core/star/filter/` | lexer/binder property tests、catalog 生命周期、原生平台同步 |
+| Dashboard API     | `astrbot/dashboard/api/`、`services/`、`schemas.py`  | OpenAPI、生成客户端、前后端测试                             |
+| Live Chat 协议    | `live_chat_service.py`、`webchat/`                   | request identity、并发、interrupt、前端状态测试             |
+| 插件 SDK/页面协议 | `astrbot/api/`、`astrbot/core/star/`                 | import boundary、插件指南、Vitest、Playwright               |
+| 配置持久化        | `astrbot/core/config/`                               | 默认值/metadata、revision、并发保存测试                     |
+| 知识库写入        | `knowledge_base/`、`db/vec_db/`                      | 多存储回滚、失败注入、残留文件与可检索性                    |
+| NapCat 事件模型   | `scripts/napcat/`                                    | 运行 `make napcat-check`，不要手改 generated model          |

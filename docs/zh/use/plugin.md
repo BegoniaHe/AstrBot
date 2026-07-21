@@ -2,6 +2,20 @@
 
 AstrBot 将插件称为 `Star`。AstrBot 是一个高度模块化的项目，通过插件可以发挥这种模块化的能力，实现各种功能。
 
-使用 `/plugin` 可以看到所有插件。在管理面板中也可管理已经安装的插件。
+插件管理使用原生指令组：
+
+- `/plugin list`：列出当前已加载插件。
+- `/plugin show <插件名>`：查看指定插件的版本、作者和已注册指令。
+- `/plugin disable <插件名>`：停用插件，需要管理员权限。
+- `/plugin enable <插件名>`：启用插件，需要管理员权限。
+- `/plugin install <仓库 URL>`：安装插件，需要管理员权限。
+
+仅输入 `/plugin` 会显示可用子指令树。仓库 URL 如果包含 `&`、`#` 等特殊字符，应使用单引号，例如：
+
+```text
+/plugin install 'https://example.com/plugin.git?ref=main&source=manual#install'
+```
+
+插件加载、卸载、重载或启禁后，AstrBot 会立即重建指令 catalog，并刷新已启用的 Telegram/Discord 原生命令入口。在管理面板中也可以管理已经安装的插件。
 
 如果想自己开发插件，详见 [AstrBot 插件开发指南](/dev/star/plugin-new)。

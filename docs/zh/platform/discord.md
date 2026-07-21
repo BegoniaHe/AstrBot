@@ -14,7 +14,15 @@
 - 启用：勾选后启用该适配器
 - Bot Token：在 Discord 创建 App 后获取的 Token（见下文）
 - Discord 代理地址：如果你需要使用代理访问 Discord，可以在这里填写代理地址（可选）
-- 是否自动将插件指令注册为 Discord 斜杠指令：勾选后，AstrBot 会自动将已安装插件中的指令注册为 Discord 斜杠指令，方便用户使用。
+- 是否自动将插件指令注册为 Discord 斜杠指令：勾选后，AstrBot 会自动将已安装插件中的指令注册为 Discord 斜杠指令，方便用户使用。AstrBot 原生命令组会映射为 Discord 子命令，指令 schema 中的字符串、整数、浮点数、布尔值、Enum 和 Literal 参数会映射为具名 Discord 选项。插件生命周期和 Dashboard 指令启禁、重命名或别名修改会立即重建 slash commands。Discord 最多支持根命令、子命令组和子命令三层，更深的 AstrBot 命令组不会注册到 Discord；超过 Discord 资源限制或使用无效选项名的指令会退回单一原始参数字段。
+
+## 原生 Slash Commands
+
+启用原生注册后，当前所有已启用的内置和扩展插件指令都会参与同步，而不仅是 AstrBot 内置指令。根指令、指令组、子指令以及各级别名会映射为 Discord application commands；同一 AstrBot 指令的参数 schema 会生成 Discord 具名选项，并保持必填项、默认值、Enum/Literal choices 和布尔标志语义。
+
+Discord 回调会把用户选择安全地重新编码为 Orbit 参数，不会执行 shell expansion。包含空格、`$`、`#` 或以 `-` 开头的值仍会作为单个字面参数传入。参数超过 25 个、参数名不符合 Discord 约束，或可空位置参数形成 Discord 无法表达的缺口时，该指令会退回一个 `params` 原始字符串字段，内容继续由 Orbit 解析。
+
+Discord 只支持根命令、一个可选的子命令组和子命令。更深层的 AstrBot 指令组仍可通过普通消息文本使用，但不会出现在原生 slash command 列表中。
 
 ## 在 Discord 创建 App
 

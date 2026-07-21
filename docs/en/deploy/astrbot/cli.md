@@ -39,7 +39,7 @@ cd ..
 uv run python scripts/sync_dashboard_dist.py
 ```
 
-Do not skip this step and rely on an automatically downloaded upstream Dashboard. Upstream static assets are not guaranteed to match this fork's FastAPI routes and frontend features.
+Do not skip this step. `astrbot init`, `astrbot run`, and the root startup entry point never download Dashboard assets; upstream static files are incompatible with this fork's FastAPI routes and frontend behavior.
 
 ## Optional: Install the Local T2I Browser
 

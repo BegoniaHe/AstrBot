@@ -28,4 +28,4 @@ If LM Studio itself is deployed in Docker, ensure port 1234 is mapped to the hos
 
 Set the model name to the one currently exposed by LM Studio, then save the configuration.
 
-> Run `/provider` to view the models configured in AstrBot.
+> Run `/provider list` to view configured Providers, or `/model list` to view models for the current Provider.

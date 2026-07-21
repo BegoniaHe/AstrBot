@@ -27,8 +27,8 @@ The reproducible development and CI baseline is currently Python 3.14.6, Node.js
 
 The source and CLI entry points have different preparation paths, but both eventually construct `RuntimeServices` explicitly and hand them to `InitialLoader`:
 
-- The root `main.py` calls `runtime_bootstrap.initialize_runtime_bootstrap()` to configure the trusted CA before importing core modules, then applies startup environment options and validates Python and runtime paths. Dashboard resolution first honors an explicit `--webui-dir`, then checks a version-matched source-tree `dashboard/dist`, runtime `data/dist`, bundled assets, and downloadable assets. A mismatched `data/dist` that still has `index.html` is only a fallback when download fails.
-- The `astrbot` CLI resolves and locks its CLI runtime root, requires the `.astrbot` marker, and performs its own interactive Dashboard check. It does not currently invoke the root `runtime_bootstrap` path, so changes to startup security or asset resolution must inspect both entry points.
+- The root `main.py` calls `runtime_bootstrap.initialize_runtime_bootstrap()` to configure the trusted CA before importing core modules, then applies startup environment options and validates Python and runtime paths. Dashboard resolution first honors an explicit `--webui-dir`, then checks a version-matched source-tree `dashboard/dist`, runtime `data/dist`, and bundled assets. It performs no network access and never serves mismatched or incomplete static files; without a compatible build, only the WebUI is disabled.
+- The `astrbot` CLI resolves and locks its CLI runtime root and requires the `.astrbot` marker. Its `init` and `run` commands do not download or update Dashboard assets, and it does not invoke the root `runtime_bootstrap` path. Changes to startup security or asset resolution must therefore inspect both entry points.
 - Both paths then call `create_runtime_services()` for configuration, database, preferences, HTML rendering, file-token, and dependency-installation services. `InitialLoader` initializes `AstrBotCoreLifecycle` and runs the core tasks and FastAPI Dashboard together.
 - Failed initialization triggers cleanup. Shutdown must tolerate partial initialization and repeated calls. Importing `astrbot.core` alone must not construct runtime services or access user data.
 
@@ -65,6 +65,14 @@ The order in `astrbot/core/pipeline/stage_order.py` is:
 `ProcessStage` runs plugin handlers and the Agent. `ResultDecorateStage` applies prefixes, segmentation, TTS, local text-to-image rendering, quoting, and related transformations. `RespondStage` uses the platform's unified send API. The scheduler supports both ordinary async stages and async-generator onion middleware; preserve stop-propagation and finalization semantics.
 
 Group wake behavior is explicit. `platform_settings.group_wake_policy` separately controls whether mentioning or replying to the bot wakes a group message, and both values default to false. `WakingCheckStage` records the actual `wake_reasons` on the event. Built-in command availability is stored per handler in the command database; the old `disable_builtin_commands` value is only a startup migration input and no longer filters the Pipeline.
+
+### Command Parsing Subsystem
+
+Command arguments are handled by the Orbit Command Syntax subsystem under `astrbot/core/command/`. `catalog.py` builds an immutable longest-match index for enabled commands, groups, and aliases at every level. `lexer.py` implements a deterministic POSIX word subset without expansions or operators. `schema.py` compiles handler signatures during registration, `binder.py` handles positionals, options, defaults, and conversion, and `engine.py` provides the resolve, lex, and bind flow.
+
+The plugin manager explicitly owns a `CommandCatalogStore` for each Pipeline configuration. Plugin load, unload, reload, enablement changes, and Dashboard command enablement, rename, or alias updates build a new snapshot and atomically replace the reference. The `WakingCheckStage` hot path only reads the snapshot: it removes the wake prefix, performs longest command-header matching, lexes once after a match, and binds every matching handler independently by `handler_full_name`. A completely unknown root never enters Orbit, so ordinary LLM prompts containing `$`, URLs, or incomplete quotes are not intercepted by command parsing.
+
+Core diagnostics retain only stable error codes, Unicode code-point spans, parameters, and hint codes. The zh-CN/en-US message and source caret are rendered at the presentation boundary. Supported plugin entry points are `astrbot.api.command` and `option`/`GreedyStr` from `astrbot.api.event.filter`; the internal catalog, engine, and handler metadata are not plugin APIs.
 
 ## Agents, Tools, and Skills
 
@@ -135,15 +143,16 @@ Runtime-root helpers in `astrbot.core.utils.astrbot_path` currently return strin
 
 ## Where to Make Changes
 
-| Change                    | Primary location                                    | Also verify                                                     |
-| ------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
-| Messaging platform        | `astrbot/core/platform/sources/`                    | discovery, config metadata, platform docs, send/cleanup tests   |
-| Model provider            | `astrbot/core/provider/sources/`                    | `provider_modules.py`, metadata, provider tests                 |
-| Agent Runner              | `astrbot/core/agent/runners/`                       | provider config, runner docs, tools and streaming behavior      |
-| Pipeline or wake behavior | `astrbot/core/pipeline/`                            | stage order, wake reasons, stop propagation, streaming tests    |
-| Dashboard API             | `astrbot/dashboard/api/`, `services/`, `schemas.py` | OpenAPI, generated client, backend/frontend tests               |
-| Live Chat protocol        | `live_chat_service.py`, `webchat/`                  | request identity, concurrency, interrupts, frontend state tests |
-| Plugin SDK/page protocol  | `astrbot/api/`, `astrbot/core/star/`                | import boundaries, plugin docs, Vitest, Playwright              |
-| Configuration persistence | `astrbot/core/config/`                              | defaults/metadata, revisions, concurrent-save tests             |
-| Knowledge-base writes     | `knowledge_base/`, `db/vec_db/`                     | multi-store rollback, failure injection, residual/query checks  |
-| NapCat event models       | `scripts/napcat/`                                   | run `make napcat-check`; do not edit generated models           |
+| Change                     | Primary location                                     | Also verify                                                     |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------------------------------- |
+| Messaging platform         | `astrbot/core/platform/sources/`                     | discovery, config metadata, platform docs, send/cleanup tests   |
+| Model provider             | `astrbot/core/provider/sources/`                     | `provider_modules.py`, metadata, provider tests                 |
+| Agent Runner               | `astrbot/core/agent/runners/`                        | provider config, runner docs, tools and streaming behavior      |
+| Pipeline or wake behavior  | `astrbot/core/pipeline/`                             | stage order, wake reasons, stop propagation, streaming tests    |
+| Command syntax and binding | `astrbot/core/command/`, `astrbot/core/star/filter/` | lexer/binder properties, catalog lifecycle, native command sync |
+| Dashboard API              | `astrbot/dashboard/api/`, `services/`, `schemas.py`  | OpenAPI, generated client, backend/frontend tests               |
+| Live Chat protocol         | `live_chat_service.py`, `webchat/`                   | request identity, concurrency, interrupts, frontend state tests |
+| Plugin SDK/page protocol   | `astrbot/api/`, `astrbot/core/star/`                 | import boundaries, plugin docs, Vitest, Playwright              |
+| Configuration persistence  | `astrbot/core/config/`                               | defaults/metadata, revisions, concurrent-save tests             |
+| Knowledge-base writes      | `knowledge_base/`, `db/vec_db/`                      | multi-store rollback, failure injection, residual/query checks  |
+| NapCat event models        | `scripts/napcat/`                                    | run `make napcat-check`; do not edit generated models           |

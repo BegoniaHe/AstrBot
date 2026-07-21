@@ -40,12 +40,12 @@ AstrBot 支持接入阿里云百炼应用。
 
 对于两种工作流应用，可在聊天区动态设置输入的变量。
 
-使用 `/set` 指令可以动态设置输入变量，如下图所示：
+使用 `/variable set` 指令可以动态设置输入变量，如下图所示：
 
 ![alt text](https://files.astrbot.app/docs/source/images/dify/image-5.png)
 
 当设置变量后，AstrBot 会在下次向阿里云百炼应用请求时附上您设置的变量，以灵活适配您的 Workflow。
 
-当然，可以使用 `/unset` 指令来取消您所设置的变量。如 `/unset name`
+可以使用 `/variable unset` 指令取消已设置的变量，例如 `/variable unset name`。
 
 变量在当前会话永久有效。

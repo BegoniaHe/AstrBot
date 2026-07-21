@@ -34,7 +34,7 @@ This fork currently publishes no independent PyPI package, GitHub release assets
 - `uv tool install astrbot` and `uv tool upgrade astrbot`;
 - AUR packages named after AstrBot;
 - images such as `soulter/astrbot`;
-- Dashboard assets downloaded from upstream releases.
+- Dashboard assets from upstream releases; startup entry points neither download nor use them.
 
 Use the current checkout for source deployments, or build the root `Dockerfile` through `compose.yml` or `compose-with-napcat.yml`. The WebUI generates a random initial password and binds to `127.0.0.1:6185` by default; remote or container access requires an explicit bind-address change plus firewall and reverse-proxy protection.
 

@@ -101,7 +101,73 @@ async def add(self, event: AstrMessageEvent, a: int, b: int):
     yield event.plain_result(f"Wow! The answer is {a + b}!")
 ```
 
-Arguments are converted according to the function signature. Wrap a single string argument in single or double quotes when it contains spaces, for example `"hello world"`.
+Arguments are parsed by **Orbit Command Syntax** and converted according to the function signature. Orbit parses arguments only after the message matches a complete registered command, command group, or alias. A completely unknown root command still reaches ordinary plugin filters or the LLM.
+
+The plugin lifecycle explicitly owns one command catalog per Pipeline configuration. Plugin load, unload, reload, enablement changes, command rename, alias changes, and command enablement atomically replace its immutable snapshot. The message hot path only reads the current snapshot and never walks handlers or rebuilds the index.
+
+Orbit is not a shell and never executes a shell. It supports a deterministic subset of POSIX quoting and escaping: ASCII spaces and tabs separate arguments; everything inside single quotes is literal; double quotes recognize `\$`, `` \` ``, `\\`, `\"`, and backslash-newline; an unquoted backslash escapes the next character. Adjacent fragments form one argument, so `ab"cd"'ef'` is `abcdef`, while `""` and `''` each produce an empty argument.
+
+Every argument expression accepted by Orbit produces the same environment-independent `argv` in a POSIX shell. Orbit performs no parameter, command, arithmetic, or tilde expansion; field splitting or globbing; redirection, pipelines, lists, subshells, comments, or unquoted command separators. An unescaped `$` or backtick outside single quotes is conservatively rejected.
+
+Quote or escape special characters when they are data:
+
+```text
+/session name '$HOME'
+/session name "a|b"
+/session name \*.txt
+/plugin install 'https://example.com?a=1&b=2#readme'
+/session name "C:\Users\bot"
+/match '^user#[0-9]+$'
+```
+
+A backslash inside double quotes only escapes the five character classes listed above, so `"C:\Users\bot"` preserves the backslashes in a Windows path. Unicode is preserved without normalization, and command matching is case-sensitive.
+
+### Orbit Command Design Specification
+
+Orbit defines the argument language after a registered command header. The wake prefix, root command, and subcommands are AstrBot framing. An argument expression conforms to Orbit Command Syntax when it produces a deterministic `argv`, with exactly one field per word, and the same expression produces the same environment-independent result in a POSIX shell. It cannot depend on environment variables, the working directory, files, locale, glob results, or shell execution.
+
+Plugin commands should follow these conventions:
+
+- Use a singular English noun for the root command, such as `project` or `persona`. For Telegram native-menu compatibility, prefer at most 32 ASCII lowercase letters, digits, and underscores, starting with a letter.
+- Use nouns for groups and complete, explicit lowercase verbs for subcommands, such as `list`, `show`, `create`, `delete`, `set`, `unset`, `enable`, and `disable`. Use hyphens in compound subcommands, such as `create-for`.
+- Give queries, state transitions, and mutations explicit subcommands. State changes should use idempotent `enable`/`disable` or `set`/`unset` operations rather than one entry that implicitly toggles based on current state.
+- Write long options as `--kebab-case`; a frequently used option may also have one single-letter short name. Use flags for Boolean behavior, `Enum` or `Literal` for closed choices, and `T | None` with a `None` default for an omissible value.
+- Let each positional represent one concept. Use `GreedyStr` for trailing free text that may contain spaces. Do not split `event.message_str` again or implement another quoting layer inside the handler.
+- Treat handler annotations as the parameter schema. Use only supported scalars, `Enum`, `Literal`, Optional, `GreedyStr`, and `Annotated[..., option(...)]`; an unsupported signature fails when the plugin registers.
+- Apply the same naming constraints to aliases and reserve them for genuine synonymous entries. Help text and documentation should use the primary name.
+- Give each handler a short, self-contained docstring; Telegram and Discord use it for native command descriptions. An entry outside a platform's naming constraints can still work in text messages but is not registered as that platform's native command.
+
+For example, a resource-oriented plugin can expose `/project list`, `/project show <name>`, `/project create <name> --template <id>`, and `/project delete <name> --force`. When `$`, `#`, globs, URL query strings, or operators are data, the caller quotes them according to Orbit rules. The plugin receives the deterministically tokenized value and must not perform shell expansion.
+
+At minimum, development tests should cover ordinary values, empty arguments, values with spaces, Unicode, `--name=value`, `--`, negative numbers, unknown options, and quoted `$`, `#`, globs, and URLs. An unquoted expansion or operator should produce a structured command diagnostic and never enter the handler.
+
+### Parameter Types and GreedyStr
+
+The first version supports `str`, `int`, `float`, `bool`, `Enum`, `Literal[...]`, and `T | None` (or `Optional[T]`). An annotation is the source of truth for conversion. Only an unannotated parameter infers its type from its default; otherwise it defaults to `str`. Every member of an Enum must use one supported scalar value type, so string-, integer-, float-, and Boolean-valued Enums bind correctly. Empty Enums, mixed value types, and other value types fail during registration. Multi-type unions such as `str | int | None` are also unsupported and fail with the plugin and handler name.
+
+`GreedyStr` consumes all remaining positional fields and joins their already quoted/escaped values with one space. It must be the last positional parameter. A required `GreedyStr` needs at least one field; omission is allowed only when it has an explicit default.
+
+```python
+from enum import Enum
+from typing import Literal
+
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event.filter import GreedyStr
+
+class Mode(Enum):
+    FAST = "fast"
+    SAFE = "safe"
+
+@filter.command("search")
+async def search(
+    self,
+    event: AstrMessageEvent,
+    mode: Mode,
+    scope: Literal["local", "all"],
+    query: GreedyStr,
+):
+    yield event.plain_result(f"{mode.value}: {scope}: {query}")
+```
 
 ### Options and Boolean Flags
 
@@ -131,6 +197,8 @@ async def deploy(
 - A `bool` option without a value becomes `True`. You can also pass `true/false`, `yes/no`, or `1/0` explicitly, such as `--force=false`.
 - `--` stops option parsing, so every following token is treated as a positional argument. For example, `/deploy -- --force` parses `--force` as `target`, not as a Boolean flag.
 - An omissible value can use `T | None` or `typing.Optional[T]` with a default of `None`. The handler receives `None` when that option is absent.
+- Unknown options, duplicate options, and missing option values produce distinct errors. An unknown option suggests the closest declared name.
+- Negative numbers such as `-1` bind directly to numeric positionals. Use `-- -x` to pass `-x` to a string positional.
 
 ## Command Groups
 
@@ -154,7 +222,7 @@ async def sub(self, event: AstrMessageEvent, a: int, b: int):
 
 The command group function doesn't need to implement any logic; just use `pass` directly or add comments within the function. Subcommands of the command group are registered using `command_group_name.command`.
 
-When a user doesn't input a subcommand, an error will be reported and the tree structure of the command group will be rendered.
+When a user omits the subcommand, AstrBot reports an incomplete command and lists the group's subcommand tree. A recognized root group with an unknown child reports `UNKNOWN_SUBCOMMAND` instead of falling back to the LLM. Only a completely unknown root keeps the LLM fallback.
 
 ![image](https://files.astrbot.app/docs/source/images/plugin/image-1.png)
 
@@ -204,6 +272,22 @@ You can add different aliases for commands or command groups:
 async def help(self, event: AstrMessageEvent):
     yield event.plain_result("This is a calculator plugin with add and sub commands.")
 ```
+
+### Direct Argument Parsing
+
+Plugins can reuse the same argument syntax outside a command handler through the supported `astrbot.api.command` API. `parse_arguments()` returns a read-only `CommandInvocation`; its words, fragments, and Unicode code-point spans are immutable. A failure raises `CommandSyntaxError` with a structured `CommandDiagnostic`.
+
+```python
+from astrbot.api.command import CommandSyntaxError, parse_arguments
+
+try:
+    invocation = parse_arguments(r'''one "two three" C:\Users\bot''')
+    argv = invocation.argv
+except CommandSyntaxError as exc:
+    diagnostic = exc.diagnostic
+```
+
+Import `option` and `GreedyStr` from `astrbot.api.event.filter`. Plugins must not import the internal catalog, engine, or handler metadata.
 
 ### Event Type Filtering
 

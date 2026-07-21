@@ -37,7 +37,7 @@ Message receiving mode: WebSocket
    - Bot Token: Paste the Token generated from the [Kook Developer Center].
 
 6. Click `Save` after filling in the details.
-7. Finally, in a Kook server channel (create one first if you haven't), @ the bot and type `/sid`. If the bot responds, the configuration is successful.
+7. Finally, in a Kook server channel (create one first if you haven't), @ the bot and type `/session info`. If the bot responds, the configuration is successful.
 
 [Kook Developer Center]: https://developer.kookapp.cn/app
 [kmarkdown]: https://developer.kookapp.cn/doc/kmarkdown

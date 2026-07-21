@@ -25,6 +25,10 @@ Session rules are useful for pinning a role to a platform, group, or user. Witho
 
 Updating a Persona refreshes the runtime cache immediately, so an AstrBot restart is normally unnecessary. Existing history is not rewritten; subsequent model requests use the new definition.
 
+## Conversation commands
+
+Admins can use `/persona status` to inspect the current selection, `/persona list` to list Personas, `/persona show <persona_id>` to inspect one, `/persona set <persona_id>` to switch the current conversation, and `/persona unset` to explicitly disable Personas. Entering `/persona` alone displays the subcommand tree.
+
 ## Folders and deletion
 
 Folders affect WebUI organization and ordering only. They do not change runtime permissions or scope. Deleting a folder moves its Personas to the root instead of deleting them.

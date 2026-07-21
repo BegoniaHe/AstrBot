@@ -1,168 +1,118 @@
 # Built-in Commands
 
-AstrBot commands are registered through the plugin system. To keep the core lightweight, only a small set of basic commands are loaded with AstrBot itself. Other management and extended commands have been moved into a separate plugin.
+AstrBot commands are registered through the plugin system. Built-in commands now follow a consistent CLI convention: a singular noun root command, a full-word verb subcommand, and long options. Examples include `/plugin list`, `/conversation create`, and `/provider set llm 1`.
 
-Use `/help` to view currently enabled commands.
+Use `/help` to show enabled root commands. Use `/help --image` or `/help -i` for image-formatted help. If the wake prefix changes, replace `/` in every example with the configured prefix.
 
-> [!NOTE]
->
-> 1. `/help`, `/set`, and `/unset` are not shown in the `/help` command list by default, but they are still available.
-> 2. If you change the wake prefix and remove the default `/`, commands must use the new wake prefix as well. For example, after changing the wake prefix to `!`, use `!help` and `!reset` instead of `/help` and `/reset`.
+## Orbit Command Argument Syntax
 
-## Core Built-in Commands
+AstrBot uses **Orbit Command Syntax** for arguments of registered commands. Orbit is not a shell and never executes a shell. Strict argument parsing starts only after a complete command, command group, or alias matches; a completely unknown root command can still reach ordinary plugin filters or the LLM.
 
-The following commands are shipped with AstrBot and loaded by default:
+Orbit supports a deterministic subset of POSIX quoting and escaping:
 
-- `/help`: View currently enabled commands and AstrBot version information.
-- `/sid`: View current message source information, including UMO, user ID, platform ID, message type, and session ID. This is commonly used when configuring admins, allowlists, or routing rules.
-- `/name`: Set a display alias for the current UMO, which means one concrete group or private-chat message source on a platform, so it is easier to recognize in WebUI. This command requires admin permission.
-- `/reset`: Reset the current conversation's LLM context.
-- `/stop`: Stop Agent tasks currently running in the current session.
-- `/new`: Create and switch to a new conversation.
-- `/stats`: View token usage statistics for the current conversation.
-- `/provider`: View or switch LLM Provider. This command requires admin permission.
-- `/dashboard_update`: Update AstrBot WebUI. This command requires admin permission.
-- `/set`: Set a session variable, commonly used for Agent Runner input variables such as Dify, Coze, or DashScope.
-- `/unset`: Remove a session variable.
+- Only ASCII spaces and tabs separate arguments.
+- Everything inside single quotes is literal.
+- Inside double quotes, backslash escapes only `$`, backtick, backslash, double quote, and newline. Other backslashes are preserved.
+- An unquoted backslash escapes the next character; backslash-newline performs line continuation.
+- Adjacent quoted and unquoted fragments form one argument, so `ab"cd"'ef'` becomes `abcdef`.
+- `""` and `''` each produce an empty argument. Unicode is preserved, and command matching is case-sensitive.
 
-These commands are located in:
+Orbit performs no parameter, command, arithmetic, or tilde expansion and no globbing, redirection, pipelines, lists, or subshells. Any unescaped `$` or backtick outside single quotes, plus an unquoted word-initial `~`, `*`, `?`, `[`, `|`, `&`, `;`, `<`, `>`, `(`, `)`, word-initial `#`, or newline produces a structured syntax error.
+
+Quote or escape these characters when they are data:
 
 ```text
-astrbot/builtin_stars/builtin_commands
+/session name '$HOME'
+/session name "a|b"
+/session name \*.txt
+/session name "C:\Users\bot"
+/session name '^user#[0-9]+$'
+/plugin install 'https://example.com?a=1&b=2#readme'
 ```
 
-## Core Command Details
+Declared options can appear before or after positional arguments and support `--name=value`. `--` stops option parsing; for example, `/session name -- -x` passes `-x` as data. Negative numeric positionals such as `-1` do not require the terminator.
 
-### `/sid`
+## Command Reference
 
-`/sid` shows information about the current message source. It mainly returns:
+### Help
 
-- `UMO`: The unified message origin of the current message. It is commonly used for allowlists and per-session config routing.
-- `UID`: The sender's user ID. It is commonly used when adding AstrBot admins.
-- `Bot ID`: The platform instance ID of the current bot.
-- `Message Type`: The message type, such as private chat or group chat.
-- `Session ID`: The platform-side session ID.
+- `/help`: Show enabled root commands and version information.
+- `/help --image` or `/help -i`: Generate image-formatted help.
 
-In group chats, if `unique_session` is enabled, `/sid` also shows the current group ID. This group ID can be used to allowlist the entire group.
+### Session Information
 
-Common uses:
+- `/session info`: Show the UMO, user ID, platform ID, message type, and session ID.
+- `/session name`: Show the current auto name and saved alias; admin permission is required.
+- `/session name <name>`: Set the current UMO display alias; admin permission is required. `GreedyStr` allows spaces.
 
-- Add an admin: run `/sid` to get the `UID`, then add it in WebUI under `Config -> Other Config -> Admin ID`.
-- Configure allowlists: use `UMO` or group ID to control which sessions can use the bot.
-- Configure routing rules: use `UMO` to distinguish different platforms, groups, or private chats.
+The user ID from `/session info` can be added under `Config -> Other Config -> Admin ID`. With group `unique_session` enabled, the command also reports the group ID used for allowlists.
 
-### `/name`
+### Conversations
 
-`/name` sets a human-readable display alias for the current UMO. UMO stands for Unified Message Origin. It identifies one concrete message source in the form `platform ID:message type:session ID`, such as a QQ group, a Telegram group, or a private chat on a specific platform.
+- `/conversation create`: Create and switch to a new conversation.
+- `/conversation reset`: Clear the current context and corresponding third-party Agent Runner state.
+- `/conversation stats`: Show input, cached-input, and output token statistics.
+- `/conversation history [--page N|-p N]`: Show conversation history.
+- `/conversation list [--page N|-p N]`: List conversations.
+- `/conversation switch <index>`: Switch to a listed conversation.
+- `/conversation rename <new-title>`: Rename the current conversation; spaces are accepted.
+- `/conversation delete`: Delete the current conversation.
+- `/conversation create-for <session-id>`: Create a conversation for another group session; admin permission is required.
 
-Raw UMOs are often long and are not always easy to recognize at a glance. After setting `/name`, AstrBot shows this alias first in WebUI UMO lists, session source selectors, cron delivery targets, conversation data, and other places where administrators need to identify or select a target session. This reduces the chance of choosing the wrong source when configuring routing rules, cron delivery targets, or per-session rules.
+`reset` and `delete` may require admin permission in groups without session isolation. Dashboard command permissions take precedence over defaults.
 
-`/name` also records the readable auto name provided by the current platform when available, such as a group name in group chats or a sender nickname/ID in private chats. This lets WebUI show a readable name even when no manual alias has been set.
+### Running Tasks
 
-Usage:
+- `/task stop`: Stop running Agent or third-party Agent Runner tasks in the current session without deleting history.
 
-- `/name <alias>`: Set or update the alias for the current UMO. This command can be used repeatedly; the latest value overwrites the previous alias.
-- `/name`: With no argument, it does not modify the alias. It only shows usage, the current UMO, the current auto name, and the saved alias.
+### Providers and Models
 
-Display rules:
+- `/provider list`: List LLM, TTS, and STT Providers, the current selections, and reachability status.
+- `/provider set llm <index>`: Select an LLM Provider.
+- `/provider set tts <index>`: Select a TTS Provider.
+- `/provider set stt <index>`: Select an STT Provider.
+- `/model list`: List models available from the current LLM Provider.
+- `/model set <name-or-index>`: Select a model; a name can also resolve to another configured Provider.
 
-- If both alias and auto name exist, AstrBot displays `alias (auto name)`.
-- If only the auto name exists, AstrBot displays the auto name.
-- If neither exists, AstrBot displays the raw UMO.
+These commands require admin permission.
 
-`/name` requires admin permission.
+### Session Variables
 
-### `/reset`
+- `/variable set <key> <value>`: Set an Agent Runner input variable.
+- `/variable unset <key>`: Remove an input variable.
 
-`/reset` resets the LLM context of the current session.
+### LLM Chat State
 
-For AstrBot's built-in Agent Runner, it:
+- `/chat status`: Show whether LLM chat is enabled for the current session.
+- `/chat enable`: Enable LLM chat for the current session.
+- `/chat disable`: Disable LLM chat for the current session.
 
-- Stops running tasks in the current session.
-- Clears the context messages of the current conversation.
-- Notifies long-term memory to clear the current session state.
+These commands require admin permission. Both `enable` and `disable` are idempotent.
 
-For third-party Agent Runners such as `dify`, `coze`, `dashscope`, and `deerflow`, it:
+### Administrators
 
-- Stops running tasks in the current session.
-- Removes the saved third-party conversation ID for this session, so the next turn starts a new conversation.
+- `/admin list`: List the administrator user IDs active in the current configuration.
+- `/admin grant <user-id>`: Grant AstrBot administrator permission.
+- `/admin revoke <user-id>`: Revoke AstrBot administrator permission.
 
-Permission notes:
+All three subcommands require admin permission.
 
-- In private chat, regular users can use it by default.
-- In group chat with `unique_session` enabled, regular users can use it by default.
-- In group chat without `unique_session`, admin permission is required by default.
-- If command permission settings have been customized, the actual configuration takes precedence.
+### Personas
 
-### `/stop`
+- `/persona status`: Show the default Persona and the Persona effectively used by the current conversation.
+- `/persona list`: List Personas.
+- `/persona show <persona_id>`: Show a Persona's system prompt.
+- `/persona set <persona_id>`: Select a Persona for the current conversation.
+- `/persona unset`: Explicitly select no Persona for the current conversation.
 
-`/stop` stops Agent tasks currently running in the current session.
+Persona subcommands require admin permission. Entering `/persona` alone displays the subcommand tree.
 
-It does not clear conversation history and does not create a new conversation. It only sends a stop request to tasks currently executing in this session.
+### Plugins
 
-For the built-in Agent Runner, `/stop` asks the Agent Runner to stop the current task.  
-For third-party Agent Runners such as `dify`, `coze`, `dashscope`, and `deerflow`, `/stop` directly stops registered running tasks in the current session.
+- `/plugin list`: List loaded plugins.
+- `/plugin show <plugin-name>`: Show plugin version, author, and registered commands.
+- `/plugin enable <plugin-name>`: Enable a plugin; admin permission is required.
+- `/plugin disable <plugin-name>`: Disable a plugin; admin permission is required.
+- `/plugin install <repository-url>`: Install a plugin; admin permission is required.
 
-If there are no running tasks in the current session, AstrBot will report that no task is running.
-
-### `/stats`
-
-`/stats` shows token usage statistics for the current conversation.
-
-It queries the database for all Provider call records in the current conversation and displays:
-
-- Total tokens (input + output).
-- Input tokens (cached) — input tokens that were cached by the provider and skipped for billing.
-- Input tokens (other) — input tokens that were not cached and billed normally.
-- Output tokens — tokens generated by the model.
-
-If you are not in a conversation, AstrBot will prompt you to create one with `/new`.
-
-### `/provider`
-
-`/provider` views or switches the Provider (LLM / TTS / STT) used by the current UMO.
-
-**Viewing the Provider list:**
-
-With no arguments, `/provider` lists all configured Providers grouped by LLM, TTS, and STT. Each Provider shows:
-
-- An index number for switching.
-- Provider ID and the model currently in use (LLM type).
-- Reachability status: `✅` means the connection is healthy, `❌` means a connection failure (with an error code).
-- The currently active Provider is marked with `(currently in use)` at the end.
-
-> [!NOTE]
-> Reachability checks must be enabled in WebUI under `Config -> General Config -> AI Config`, expand the "More Settings" section at the bottom, and enable "Provider Reachability Check". When disabled, reachability markers are not shown and the list loads faster.
-
-**Switching Providers:**
-
-Use `/provider <index>` to switch the current session's LLM Provider to the Provider at the given index in the list.
-
-- `/provider <index>`: Switch to the LLM Provider at the given index.
-- `/provider tts <index>`: Switch to the TTS Provider at the given index.
-- `/provider stt <index>`: Switch to the STT Provider at the given index.
-
-This command requires admin permission.
-
-## Built-in Commands Extension
-
-AstrBot also ships the following built-in extended management commands:
-
-- `/plugin`: View, enable, disable, or install plugins.
-- `/op`, `/deop`: Add or remove admins.
-- `/provider`: View or switch LLM Providers.
-- `/model`: View or switch models.
-- `/history`: View current conversation history.
-- `/ls`: View the conversation list.
-- `/groupnew`: Create a new conversation for a specified group.
-- `/switch`: Switch to a specified conversation.
-- `/rename`: Rename the current conversation.
-- `/del`: Delete the current conversation.
-- `/persona`: View or switch Persona.
-- `/llm`: Enable or disable LLM chat for the current session.
-
-## Permission Notes
-
-Some commands require AstrBot admin permission, such as `/dashboard_update`, `/name`, `/op`, `/deop`, `/provider`, `/model`, and `/persona`.
-
-You can use `/sid` to get a user ID, then add it in WebUI under `Config -> Other Config -> Admin ID`.
+Plugin load, unload, reload, enable, and disable operations immediately rebuild the command catalog and refresh enabled Telegram/Discord native command surfaces.

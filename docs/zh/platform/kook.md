@@ -39,7 +39,7 @@
    - 机器人 Token: 填写在 [Kook 开发者平台] 中创建机器人时生成的 Token。
 
 6. 完成适配器配置填写后，点击 `保存`。
-7. 最后，在kook服务器频道（若没有属于自己的服务器频道，请先创建一个服务器频道）中，@ 刚刚创建的机器人，输入 `/sid`，如果机器人成功回复，则测试成功。
+7. 最后，在kook服务器频道（若没有属于自己的服务器频道，请先创建一个服务器频道）中，@ 刚刚创建的机器人，输入 `/session info`，如果机器人成功回复，则测试成功。
 
 [Kook 开发者平台]: https://developer.kookapp.cn/app
 [kmarkdown]: https://developer.kookapp.cn/doc/kmarkdown

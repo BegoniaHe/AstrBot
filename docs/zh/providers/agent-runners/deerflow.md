@@ -56,4 +56,4 @@ AstrBot 支持接入 [DeerFlow](https://github.com/bytedance/deer-flow) Agent Ru
 - `API Base URL` 是否能从 AstrBot 所在环境访问
 - 鉴权配置是否填写正确
 - `Assistant ID` 是否与 DeerFlow 中实际可用的 assistant 一致
-- 如果通过 `/reset`、`/new`、`/del` 重置 DeerFlow 会话，AstrBot 会尝试同步清理 DeerFlow 远端 thread；若 DeerFlow 网关不可达，则只会清理 AstrBot 本地会话标识
+- 如果通过 `/conversation reset`、`/conversation create`、`/conversation delete` 重置 DeerFlow 会话，AstrBot 会尝试同步清理 DeerFlow 远端 thread；若 DeerFlow 网关不可达，则只会清理 AstrBot 本地会话标识

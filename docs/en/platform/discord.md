@@ -14,7 +14,15 @@ Open AstrBot Dashboard, click `Bots` in the left sidebar, click `+ Create Bot`, 
 - Enable: Check to enable this adapter
 - Bot Token: Token obtained after creating an App in Discord (see below)
 - Discord Proxy Address: If you need to use a proxy to access Discord, you can enter the proxy address here (optional)
-- Auto-register Plugin Commands as Discord Slash Commands: When checked, AstrBot will automatically register commands from installed plugins as Discord slash commands for user convenience.
+- Auto-register Plugin Commands as Discord Slash Commands: When checked, AstrBot automatically registers commands from installed plugins as Discord slash commands. Native AstrBot command groups become Discord subcommands, while string, integer, number, boolean, Enum, and Literal parameters from the command schema become named Discord options. Plugin lifecycle changes and command enablement, rename, or alias updates from Dashboard immediately rebuild slash commands. Discord supports at most a root command, a subcommand group, and a subcommand, so deeper AstrBot command groups are not registered. Commands that exceed Discord resource limits or use invalid option names fall back to one raw argument field.
+
+## Native Slash Commands
+
+When native registration is enabled, every enabled built-in and extension-plugin command participates in synchronization, not only AstrBot's built-in commands. Root commands, groups, subcommands, and aliases at every supported level map to Discord application commands. The AstrBot parameter schema generates named Discord options while preserving required/default state, Enum/Literal choices, and Boolean flag semantics.
+
+Discord callbacks safely encode selected values back into Orbit arguments and never perform shell expansion. Values containing spaces, `$`, `#`, or a leading `-` still arrive as one literal argument. A command falls back to one raw `params` string field when it has more than 25 parameters, an option name that Discord cannot represent, or nullable positional gaps that Discord cannot express. Orbit continues to parse that raw field.
+
+Discord supports only a root command, one optional subcommand group, and a subcommand. Deeper AstrBot command groups remain available through ordinary text messages but are not added to the native slash-command list.
 
 ## Create an App in Discord
 

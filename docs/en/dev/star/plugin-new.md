@@ -195,6 +195,11 @@ Use `initialize()` to create runtime resources such as clients or tasks.
 clients, and releasing file handles. Do not replace explicit lifecycle cleanup
 with the deprecated destructor path.
 
+Before adding parameters, subcommands, or options, read the
+[Orbit Command Design Specification](./guides/listen-message-event#orbit-command-design-specification).
+It defines command-header naming, deterministic argument syntax, supported
+handler signatures, and Telegram/Discord native-command constraints.
+
 ## Debug the Plugin
 
 After changing plugin code, open the plugin menu in the WebUI and select
