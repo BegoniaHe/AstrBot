@@ -3,6 +3,8 @@ from subprocess import CompletedProcess
 
 from scripts import doctor
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_version_runs_resolved_executable(monkeypatch, tmp_path: Path) -> None:
     resolved = str(tmp_path / "corepack.cmd")
@@ -32,3 +34,12 @@ def test_version_treats_process_start_failure_as_missing(
     monkeypatch.setattr(doctor.subprocess, "run", run)
 
     assert doctor.version(("corepack", "--version"), tmp_path) is None
+
+
+def test_ci_pytest_runner_does_not_bypass_interpreter_teardown() -> None:
+    """The CI runner must preserve pytest's normal process cleanup path."""
+    script = (REPO_ROOT / "scripts" / "run_pytests_ci.sh").read_text(encoding="utf-8")
+
+    assert "os._exit" not in script
+    assert "pytest.main(" not in script
+    assert 'uv run pytest "${PYTEST_TARGETS[@]}"' in script

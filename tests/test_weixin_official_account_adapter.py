@@ -12,6 +12,8 @@ from astrbot.core.platform.sources.weixin_official_account.weixin_offacc_adapter
     WeixinOfficialAccountPlatformAdapter,
 )
 
+pytestmark = pytest.mark.platform
+
 
 def _adapter() -> WeixinOfficialAccountPlatformAdapter:
     adapter = WeixinOfficialAccountPlatformAdapter(
@@ -31,9 +33,13 @@ def _adapter() -> WeixinOfficialAccountPlatformAdapter:
 
 
 @pytest.mark.asyncio
-async def test_weixin_offacc_convert_message_voice_resolves_lazily(monkeypatch, tmp_path):
+async def test_weixin_offacc_convert_message_voice_resolves_lazily(
+    monkeypatch, tmp_path
+):
     adapter = _adapter()
-    adapter.client.media.download = MagicMock(return_value=SimpleNamespace(content=b"amr"))
+    adapter.client.media.download = MagicMock(
+        return_value=SimpleNamespace(content=b"amr")
+    )
     monkeypatch.setattr(
         weixin_offacc_adapter,
         "get_astrbot_temp_path",
@@ -57,7 +63,9 @@ async def test_weixin_offacc_convert_message_voice_resolves_lazily(monkeypatch, 
     assert record.file == ""
     adapter.client.media.download.assert_not_called()
 
-    media_resolver = SimpleNamespace(to_path=AsyncMock(return_value="/tmp/weixin-offacc.wav"))
+    media_resolver = SimpleNamespace(
+        to_path=AsyncMock(return_value="/tmp/weixin-offacc.wav")
+    )
     with patch(
         "astrbot.core.platform.sources.weixin_official_account.weixin_offacc_adapter.MediaResolver",
         return_value=media_resolver,
@@ -80,7 +88,9 @@ async def test_weixin_offacc_convert_message_voice_keeps_raw_audio_when_conversi
     tmp_path,
 ):
     adapter = _adapter()
-    adapter.client.media.download = MagicMock(return_value=SimpleNamespace(content=b"amr"))
+    adapter.client.media.download = MagicMock(
+        return_value=SimpleNamespace(content=b"amr")
+    )
     monkeypatch.setattr(
         weixin_offacc_adapter,
         "get_astrbot_temp_path",
@@ -101,7 +111,9 @@ async def test_weixin_offacc_convert_message_voice_keeps_raw_audio_when_conversi
 
     abm = adapter.handle_msg.await_args.args[0]
     record = abm.message[0]
-    media_resolver = SimpleNamespace(to_path=AsyncMock(side_effect=RuntimeError("ffmpeg missing")))
+    media_resolver = SimpleNamespace(
+        to_path=AsyncMock(side_effect=RuntimeError("ffmpeg missing"))
+    )
     with patch(
         "astrbot.core.platform.sources.weixin_official_account.weixin_offacc_adapter.MediaResolver",
         return_value=media_resolver,

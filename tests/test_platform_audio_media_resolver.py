@@ -19,6 +19,9 @@ from astrbot.core.platform.sources.qqofficial.qqofficial_platform_adapter import
     QQOfficialPlatformAdapter,
 )
 
+pytestmark = pytest.mark.platform
+
+
 WAV_PATH = "/tmp/astrbot-platform-audio.wav"
 
 

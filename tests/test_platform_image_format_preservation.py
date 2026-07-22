@@ -14,6 +14,8 @@ from astrbot.core.platform.sources.satori.satori_event import SatoriPlatformEven
 from astrbot.core.platform.sources.slack.slack_event import SlackMessageEvent
 from astrbot.core.platform.sources.webchat import webchat_event
 
+pytestmark = pytest.mark.platform
+
 
 @pytest.mark.asyncio
 async def test_satori_image_data_url_preserves_png_mime_type():

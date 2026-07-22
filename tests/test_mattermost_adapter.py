@@ -18,6 +18,8 @@ from astrbot.core.platform.sources.mattermost.mattermost_event import (
 )
 from tests.fixtures.helpers import make_platform_config
 
+pytestmark = pytest.mark.platform
+
 
 def _build_adapter() -> MattermostPlatformAdapter:
     adapter = MattermostPlatformAdapter(

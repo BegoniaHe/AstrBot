@@ -2,7 +2,6 @@
 
 import asyncio
 import threading
-import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
@@ -87,13 +86,14 @@ class TestCrossLoopIsolation:
         """Test that locks from different loops are isolated."""
         manager = SessionLockManager()
         session_id = "shared-session"
-        results = []
+        results: list[str] = []
+        acquired_together = threading.Barrier(2, timeout=1)
 
         async def acquire_in_loop(loop_id: int):
             """Acquire lock in a new event loop."""
             async with manager.acquire_lock(session_id):
                 results.append(f"loop-{loop_id}-acquired")
-                await asyncio.sleep(0.05)
+                acquired_together.wait()
                 results.append(f"loop-{loop_id}-released")
 
         def run_in_thread(loop_id: int):
@@ -110,32 +110,56 @@ class TestCrossLoopIsolation:
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(run_in_thread, i) for i in range(2)]
             for f in futures:
-                f.result()
+                f.result(timeout=2)
 
-        # Both loops should acquire immediately (no blocking between loops)
-        # Order should show interleaved acquisitions, not sequential
-        assert len(results) == 4
+        assert set(results) == {
+            "loop-0-acquired",
+            "loop-0-released",
+            "loop-1-acquired",
+            "loop-1-released",
+        }
+        first_release = min(
+            results.index("loop-0-released"), results.index("loop-1-released")
+        )
+        assert results.index("loop-0-acquired") < first_release
+        assert results.index("loop-1-acquired") < first_release
 
     @pytest.mark.asyncio
     async def test_same_loop_blocks_on_same_session(self):
         """Test that same loop blocks when acquiring same session lock."""
         manager = SessionLockManager()
         session_id = "test-session"
-        execution_order = []
+        execution_order: list[str] = []
+        first_acquired = asyncio.Event()
+        second_attempted = asyncio.Event()
+        second_acquired = asyncio.Event()
+        release_first = asyncio.Event()
 
         async def task1():
             async with manager.acquire_lock(session_id):
                 execution_order.append("task1-start")
-                await asyncio.sleep(0.1)
+                first_acquired.set()
+                await release_first.wait()
                 execution_order.append("task1-end")
 
         async def task2():
-            await asyncio.sleep(0.01)  # Let task1 start first
+            await first_acquired.wait()
+            execution_order.append("task2-attempt")
+            second_attempted.set()
             async with manager.acquire_lock(session_id):
+                second_acquired.set()
                 execution_order.append("task2-start")
                 execution_order.append("task2-end")
 
-        await asyncio.gather(task1(), task2())
+        first_task = asyncio.create_task(task1())
+        second_task = asyncio.create_task(task2())
+        try:
+            await asyncio.wait_for(first_acquired.wait(), timeout=1)
+            await asyncio.wait_for(second_attempted.wait(), timeout=1)
+            assert not second_acquired.is_set()
+        finally:
+            release_first.set()
+            await asyncio.gather(first_task, second_task)
 
         # task2 should wait for task1 to finish
         assert execution_order.index("task1-start") < execution_order.index("task1-end")
@@ -152,21 +176,31 @@ class TestConcurrency:
         session_id = "concurrent-session"
         acquired_count = 0
         max_concurrent = 0
-        lock = asyncio.Lock()
+        attempted = [asyncio.Event() for _ in range(5)]
+        first_acquired = asyncio.Event()
+        release = asyncio.Event()
 
-        async def acquire_and_check():
+        async def acquire_and_check(index: int):
             nonlocal acquired_count, max_concurrent
+            attempted[index].set()
             async with manager.acquire_lock(session_id):
-                async with lock:
-                    acquired_count += 1
-                    max_concurrent = max(max_concurrent, acquired_count)
-                await asyncio.sleep(0.01)
-                async with lock:
-                    acquired_count -= 1
+                acquired_count += 1
+                max_concurrent = max(max_concurrent, acquired_count)
+                first_acquired.set()
+                await release.wait()
+                acquired_count -= 1
 
         # Run multiple concurrent tasks
-        tasks = [acquire_and_check() for _ in range(5)]
-        await asyncio.gather(*tasks)
+        tasks = [asyncio.create_task(acquire_and_check(index)) for index in range(5)]
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(event.wait() for event in attempted)), timeout=1
+            )
+            await asyncio.wait_for(first_acquired.wait(), timeout=1)
+            assert max_concurrent == 1
+        finally:
+            release.set()
+            await asyncio.gather(*tasks)
 
         # Max concurrent should be 1 (lock serializes access)
         assert max_concurrent == 1
@@ -314,8 +348,6 @@ class TestIssue5464:
                     for session_id in session_ids:
                         try:
                             async with session_lock_manager.acquire_lock(session_id):
-                                # Simulate message processing
-                                await asyncio.sleep(0.01)
                                 results.append(f"instance-{instance_id}-{session_id}")
                         except Exception as e:
                             errors.append(e)
@@ -368,7 +400,7 @@ class TestIssue5464:
                         with lock_id_lock:
                             lock_ids.add(id(lock))
                     async with manager.acquire_lock(session_id):
-                        await asyncio.sleep(0.01)
+                        pass
 
                 loop.run_until_complete(acquire_and_capture())
             finally:
@@ -393,11 +425,11 @@ class TestIssue5464:
         This verifies the fix: locks are isolated per event loop,
         so different loops can acquire the "same" session lock concurrently.
         """
-        from astrbot.core.utils.session_lock import session_lock_manager
-
+        manager = SessionLockManager()
         session_id = "global-session"
-        acquisition_times: list[float] = []
-        time_lock = threading.Lock()
+        entered_loop_ids: list[int] = []
+        entered_lock = threading.Lock()
+        acquired_together = threading.Barrier(3, timeout=1)
 
         def acquire_lock_in_loop(loop_id: int):
             loop = asyncio.new_event_loop()
@@ -405,37 +437,22 @@ class TestIssue5464:
             try:
 
                 async def acquire():
-                    import time
-
-                    start = time.time()
-                    async with session_lock_manager.acquire_lock(session_id):
-                        with time_lock:
-                            acquisition_times.append(start)
-                        await asyncio.sleep(0.1)  # Hold the lock
+                    async with manager.acquire_lock(session_id):
+                        with entered_lock:
+                            entered_loop_ids.append(loop_id)
+                        acquired_together.wait()
 
                 loop.run_until_complete(acquire())
             finally:
                 loop.close()
                 asyncio.set_event_loop(None)
 
-        # Start 3 threads nearly simultaneously
-        threads = [
-            threading.Thread(target=acquire_lock_in_loop, args=(i,)) for i in range(3)
-        ]
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(acquire_lock_in_loop, i) for i in range(3)]
+            for future in futures:
+                future.result(timeout=2)
 
-        start_time = time.time()
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        total_time = time.time() - start_time
-
-        # If locks were NOT isolated, we'd need ~0.3s (3 * 0.1s serial)
-        # With isolation, all should complete in ~0.1s (parallel)
-        # Allow some overhead, but should be much less than 0.3s
-        assert total_time < 0.25, (
-            f"Locks should be isolated per loop, but took {total_time:.2f}s"
-        )
+        assert set(entered_loop_ids) == {0, 1, 2}
 
 
 class TestEdgeCases:
@@ -527,22 +544,37 @@ class TestEdgeCases:
         """Test reentrant locking on same session (should block)."""
         manager = SessionLockManager()
         session_id = "test-session"
-        order = []
+        order: list[str] = []
+        outer_acquired = asyncio.Event()
+        inner_attempted = asyncio.Event()
+        inner_acquired = asyncio.Event()
+        release_outer = asyncio.Event()
 
         async def outer():
             async with manager.acquire_lock(session_id):
                 order.append("outer-acquired")
-                await asyncio.sleep(0.1)
+                outer_acquired.set()
+                await release_outer.wait()
                 order.append("outer-done")
 
         async def inner():
-            await asyncio.sleep(0.01)  # Let outer acquire first
+            await outer_acquired.wait()
             order.append("inner-attempt")
+            inner_attempted.set()
             async with manager.acquire_lock(session_id):
+                inner_acquired.set()
                 order.append("inner-acquired")
                 order.append("inner-done")
 
-        await asyncio.gather(outer(), inner())
+        outer_task = asyncio.create_task(outer())
+        inner_task = asyncio.create_task(inner())
+        try:
+            await asyncio.wait_for(outer_acquired.wait(), timeout=1)
+            await asyncio.wait_for(inner_attempted.wait(), timeout=1)
+            assert not inner_acquired.is_set()
+        finally:
+            release_outer.set()
+            await asyncio.gather(outer_task, inner_task)
 
         # Inner should wait for outer to complete
         assert order.index("outer-acquired") < order.index("outer-done")

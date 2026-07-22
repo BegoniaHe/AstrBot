@@ -1,4 +1,3 @@
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,6 +7,8 @@ import astrbot.api.message_components as Comp
 import astrbot.core.platform.sources.lark.lark_adapter as lark_adapter_module
 from astrbot.api.platform import MessageType
 from astrbot.core.platform.sources.lark.lark_adapter import LarkPlatformAdapter
+
+pytestmark = pytest.mark.platform
 
 
 def _adapter() -> LarkPlatformAdapter:
@@ -366,12 +367,7 @@ async def test_lark_build_reply_from_parent_id_builds_reply_chain_from_message()
 @pytest.mark.asyncio
 async def test_lark_build_reply_from_parent_id_falls_back_to_lightweight_reply_on_timeout():
     adapter = _adapter()
-
-    async def _slow_aget(_request):
-        await asyncio.sleep(1)
-        return SimpleNamespace(success=lambda: True, data=SimpleNamespace(items=[]))
-
-    adapter.lark_api.im.v1.message.aget = _slow_aget
+    adapter.lark_api.im.v1.message.aget = AsyncMock(side_effect=TimeoutError)
 
     reply = await adapter._build_reply_from_parent_id("parent-timeout")
 

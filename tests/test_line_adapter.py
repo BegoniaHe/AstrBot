@@ -11,6 +11,8 @@ from astrbot.api.platform import AstrBotMessage, MessageMember, MessageType
 from astrbot.core.platform.sources.line.line_adapter import LinePlatformAdapter
 from astrbot.core.platform.sources.line.line_event import LineMessageEvent
 
+pytestmark = pytest.mark.platform
+
 
 def _adapter() -> LinePlatformAdapter:
     adapter = LinePlatformAdapter.__new__(LinePlatformAdapter)
@@ -304,7 +306,9 @@ async def test_line_send_by_session_pushes_built_messages(monkeypatch):
         AsyncMock(),
     ) as super_send:
         await adapter.send_by_session(
-            SimpleNamespace(session_id="user-1", message_type=MessageType.FRIEND_MESSAGE),
+            SimpleNamespace(
+                session_id="user-1", message_type=MessageType.FRIEND_MESSAGE
+            ),
             MessageChain([Plain("hello")]),
         )
 
@@ -329,7 +333,9 @@ async def test_line_send_by_session_skips_push_for_empty_built_messages(monkeypa
         AsyncMock(),
     ) as super_send:
         await adapter.send_by_session(
-            SimpleNamespace(session_id="user-1", message_type=MessageType.FRIEND_MESSAGE),
+            SimpleNamespace(
+                session_id="user-1", message_type=MessageType.FRIEND_MESSAGE
+            ),
             MessageChain(chain=[]),
         )
 
@@ -541,7 +547,9 @@ async def test_line_webhook_callback_accepts_valid_payload():
 
 
 @pytest.mark.asyncio
-async def test_line_build_audio_component_uses_external_url_with_media_resolver(monkeypatch):
+async def test_line_build_audio_component_uses_external_url_with_media_resolver(
+    monkeypatch,
+):
     adapter = _adapter()
 
     media_resolver = MagicMock()
@@ -576,7 +584,9 @@ async def test_line_build_audio_component_uses_external_url_with_media_resolver(
 
 
 @pytest.mark.asyncio
-async def test_line_build_audio_component_downloads_and_converts_content(monkeypatch, tmp_path):
+async def test_line_build_audio_component_downloads_and_converts_content(
+    monkeypatch, tmp_path
+):
     adapter = _adapter()
     adapter.line_api.get_message_content = AsyncMock(
         return_value=(b"audio-bytes", "audio/mp4", "voice.m4a")
@@ -627,7 +637,9 @@ async def test_line_build_video_component_returns_none_when_download_fails():
 
 
 @pytest.mark.asyncio
-async def test_line_build_video_component_stores_downloaded_video(monkeypatch, tmp_path):
+async def test_line_build_video_component_stores_downloaded_video(
+    monkeypatch, tmp_path
+):
     adapter = _adapter()
     adapter.line_api.get_message_content = AsyncMock(
         return_value=(b"video-bytes", "video/mp4", "clip.mp4")
@@ -656,7 +668,9 @@ async def test_line_build_video_component_stores_downloaded_video(monkeypatch, t
 
 
 def test_line_guess_suffix_prefers_mimetype_and_falls_back():
-    assert LinePlatformAdapter._guess_suffix("audio/mp4; charset=utf-8", ".wav") == ".m4a"
+    assert (
+        LinePlatformAdapter._guess_suffix("audio/mp4; charset=utf-8", ".wav") == ".m4a"
+    )
     assert LinePlatformAdapter._guess_suffix(None, ".wav") == ".wav"
 
 
@@ -688,8 +702,15 @@ def test_line_get_external_content_url_requires_external_provider():
         )
         == "https://a"
     )
-    assert LinePlatformAdapter._get_external_content_url({"contentProvider": {"type": "line"}}) == ""
-    assert LinePlatformAdapter._get_external_content_url({"contentProvider": "bad"}) == ""
+    assert (
+        LinePlatformAdapter._get_external_content_url(
+            {"contentProvider": {"type": "line"}}
+        )
+        == ""
+    )
+    assert (
+        LinePlatformAdapter._get_external_content_url({"contentProvider": "bad"}) == ""
+    )
 
 
 def test_line_build_message_str_covers_known_components_and_unknown_fallback():
@@ -751,7 +772,9 @@ def test_line_clean_expired_events_removes_only_old_entries(monkeypatch):
         "expired": 100.0,
         "fresh": 1000.0,
     }
-    monkeypatch.setattr("astrbot.core.platform.sources.line.line_adapter.time.time", lambda: 2000.1)
+    monkeypatch.setattr(
+        "astrbot.core.platform.sources.line.line_adapter.time.time", lambda: 2000.1
+    )
 
     adapter._clean_expired_events()
 

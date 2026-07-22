@@ -85,7 +85,7 @@ uv run pytest tests/unit/test_event_bus.py::TestEventBusDispatch::test_dispatch_
 uv run pytest --test-profile blocking
 ```
 
-`blocking` profile 排除自动归类为 `tier_c` 的慢速/平台/Provider 测试和 `tier_d` 的集成测试。回归测试应放在离被改代码最近的现有测试文件，不要机械地全部放入 `tests/unit/`。
+`blocking` profile 只运行未标记为 `slow`、`platform`、`provider` 或 `integration` 的确定性测试。`tests/integration/` 和 `tests/e2e/` 下的测试会自动归类为集成测试；其他位置请显式使用这些命名标记。回归测试应放在离被改代码最近的现有测试文件，不要机械地全部放入 `tests/unit/`。
 
 Dashboard 使用 Vitest：
 

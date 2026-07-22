@@ -12,6 +12,8 @@ from astrbot.core.platform.sources.misskey.misskey_adapter import (
     MisskeyPlatformAdapter,
 )
 
+pytestmark = pytest.mark.platform
+
 
 def make_adapter(**config):
     adapter = MisskeyPlatformAdapter({"id": "misskey-test", **config}, {}, Queue())

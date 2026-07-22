@@ -23,6 +23,9 @@ from astrbot.core.platform.sources.discord.discord_platform_event import (
     DiscordPlatformEvent,
 )
 
+pytestmark = pytest.mark.platform
+
+
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 )
@@ -392,6 +395,7 @@ async def test_discord_handle_msg_slash_command_wakes_without_mention_checks():
 async def test_discord_send_by_session_guesses_group_when_channel_id_is_invalid():
     adapter = DiscordPlatformAdapter.__new__(DiscordPlatformAdapter)
     adapter.config = {"id": "test_discord"}
+    adapter._background_tasks = set()
     adapter.bot_self_id = "1"
     adapter.client = SimpleNamespace(user=SimpleNamespace(display_name="bot"))
     temp_event = SimpleNamespace(send=AsyncMock())
@@ -439,6 +443,7 @@ async def test_discord_send_by_session_returns_early_when_client_not_ready():
 async def test_discord_send_by_session_uses_friend_message_for_dm_channel():
     adapter = DiscordPlatformAdapter.__new__(DiscordPlatformAdapter)
     adapter.config = {"id": "test_discord"}
+    adapter._background_tasks = set()
     adapter.bot_self_id = "1"
     adapter.client = SimpleNamespace(
         user=SimpleNamespace(display_name="bot"),

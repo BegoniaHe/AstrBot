@@ -20,6 +20,8 @@ from astrbot.core.platform.sources.dingtalk.dingtalk_adapter import (
 )
 from astrbot.core.platform.sources.dingtalk.dingtalk_event import DingtalkMessageEvent
 
+pytestmark = pytest.mark.platform
+
 
 def _dingtalk_platform_meta():
     return SimpleNamespace(id="dingtalk", name="dingtalk")
@@ -54,6 +56,7 @@ def test_dingtalk_reconnect_delay_is_capped():
 def _build_adapter() -> DingtalkPlatformAdapter:
     adapter = DingtalkPlatformAdapter.__new__(DingtalkPlatformAdapter)
     adapter.config = {"id": "test_dingtalk"}
+    adapter._background_tasks = set()
     adapter.client_id = "robot-code"
     adapter.client_secret = "client-secret"
     adapter.preferences = SimpleNamespace(

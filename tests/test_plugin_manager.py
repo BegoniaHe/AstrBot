@@ -9,6 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import pytest_asyncio
 import yaml
 from pydantic import BaseModel, ConfigDict
 
@@ -27,6 +28,7 @@ from astrbot.core.star.star_handler import (
 from astrbot.core.star.star_manager import PluginDependencyInstallError, PluginManager
 from astrbot.core.utils.pip_installer import PipInstallError
 from astrbot.core.utils.requirements_utils import MissingRequirementsPlan
+from astrbot.core.utils.task_utils import cancel_tracked_tasks
 
 # --- Test Data & Helpers ---
 
@@ -731,8 +733,8 @@ def _assert_dependency_install_event_matches(
 # --- Fixtures ---
 
 
-@pytest.fixture
-def plugin_manager_pm(tmp_path, monkeypatch):
+@pytest_asyncio.fixture
+async def plugin_manager_pm(tmp_path, monkeypatch):
     """Provides a fully isolated PluginManager instance for testing."""
     # Clear module cache before setup to ensure isolation
     _clear_module_cache()
@@ -773,8 +775,19 @@ def plugin_manager_pm(tmp_path, monkeypatch):
         "astrbot.core.star.star_manager.get_astrbot_plugin_path",
         lambda: str(plugin_dir),
     )
+    # Installation metrics own a process-wide periodic flush task. Plugin-manager
+    # tests exercise install state transitions, not telemetry delivery, so keep the
+    # fixture offline and make its manager-owned tasks explicitly cancellable.
+    monkeypatch.setattr(
+        star_manager_module.Metric,
+        "upload",
+        AsyncMock(return_value=None),
+    )
 
-    return pm
+    try:
+        yield pm
+    finally:
+        await cancel_tracked_tasks(pm._background_tasks)
 
 
 def test_plugin_manager_atomically_replaces_owned_command_catalog(

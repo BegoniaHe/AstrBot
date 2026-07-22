@@ -10,6 +10,8 @@ import pytest
 from astrbot.api.message_components import Plain
 from astrbot.core.platform.sources.satori.satori_adapter import SatoriPlatformAdapter
 
+pytestmark = pytest.mark.platform
+
 
 @pytest.mark.asyncio
 async def test_satori_handle_message_background_dispatches_event_handlers():

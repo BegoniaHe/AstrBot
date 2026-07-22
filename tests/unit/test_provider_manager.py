@@ -18,6 +18,8 @@ from astrbot.core.provider.provider import (
 )
 from astrbot.core.provider.register import provider_cls_map
 
+pytestmark = pytest.mark.provider
+
 _original_persona_mgr = sys.modules.get("astrbot.core.persona_mgr")
 _stub_persona_mgr = types.ModuleType("astrbot.core.persona_mgr")
 

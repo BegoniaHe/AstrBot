@@ -19,6 +19,8 @@ from astrbot.core.platform.sources.wecom.wecom_adapter import (
     _extract_wecom_media_filename,
 )
 
+pytestmark = pytest.mark.platform
+
 
 def _response(content: bytes, disposition: str | None = None) -> Response:
     resp = Response()
@@ -31,6 +33,7 @@ def _response(content: bytes, disposition: str | None = None) -> Response:
 def _adapter() -> WecomPlatformAdapter:
     adapter = WecomPlatformAdapter.__new__(WecomPlatformAdapter)
     adapter.config = {"id": "wecom-test"}
+    adapter._background_tasks = set()
     adapter._event_queue = SimpleNamespace(put_nowait=MagicMock())
     adapter.client = SimpleNamespace(media=SimpleNamespace(download=MagicMock()))
     adapter.server = SimpleNamespace(

@@ -4,9 +4,11 @@ AstrBot 测试配置
 提供共享的 pytest fixtures 和测试工具。
 """
 
+import asyncio
 import json
 import os
 import sys
+import threading
 from asyncio import Queue
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -24,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # 设置测试环境变量
 os.environ.setdefault("TESTING", "true")
 os.environ.setdefault("ASTRBOT_TEST_MODE", "true")
+os.environ.setdefault("ASTRBOT_DISABLE_METRICS", "1")
 
 
 # ============================================================
@@ -31,72 +34,157 @@ os.environ.setdefault("ASTRBOT_TEST_MODE", "true")
 # ============================================================
 
 
-def pytest_collection_modifyitems(session, config, items):  # noqa: ARG001
-    """重新排序测试：单元测试优先，集成测试在后。"""
-    unit_tests = []
-    integration_tests = []
-    deselected = []
-    profile = config.getoption("--test-profile") or os.environ.get(
-        "ASTRBOT_TEST_PROFILE", "all"
+TEST_PROFILES = frozenset({"all", "blocking"})
+NON_BLOCKING_MARKERS = frozenset({"provider", "platform", "slow", "integration"})
+
+
+def get_test_profile(config) -> str:
+    """Return the selected test profile and reject invalid environment values."""
+    profile = config.getoption("--test-profile")
+    if profile is None:
+        profile = os.environ.get("ASTRBOT_TEST_PROFILE", "all")
+    if profile not in TEST_PROFILES:
+        raise pytest.UsageError(
+            f"Unknown test profile {profile!r}; expected one of {sorted(TEST_PROFILES)}"
+        )
+    return profile
+
+
+def _relative_test_path(item) -> Path:
+    """Return a collected item's path relative to the repository when possible."""
+    item_path = Path(str(item.path)).resolve()
+    try:
+        return item_path.relative_to(PROJECT_ROOT)
+    except ValueError:
+        return item_path
+
+
+def _is_integration_path(relative_path: Path) -> bool:
+    """Return whether a test lives in an integration-owned directory."""
+    parts = relative_path.parts
+    return (
+        len(parts) >= 2 and parts[0] == "tests" and parts[1] in {"integration", "e2e"}
     )
 
+
+def _is_unit_path(relative_path: Path) -> bool:
+    """Return whether a test lives in a unit-owned directory."""
+    parts = relative_path.parts
+    return len(parts) >= 2 and (
+        (parts[0] == "tests" and parts[1] in {"unit", "agent"})
+        or (parts[0] == "docs" and parts[1] == "tests")
+    )
+
+
+def pytest_collection_modifyitems(session, config, items):  # noqa: ARG001
+    """Classify tests and select the requested profile."""
+    profile = get_test_profile(config)
+
     for item in items:
-        item_path = Path(str(item.path))
-        is_integration = "integration" in item_path.parts
+        relative_path = _relative_test_path(item)
+        is_integration = _is_integration_path(relative_path) or (
+            item.get_closest_marker("integration") is not None
+        )
 
-        if is_integration:
-            if item.get_closest_marker("integration") is None:
-                item.add_marker(pytest.mark.integration)
-            item.add_marker(pytest.mark.tier_d)
-            integration_tests.append(item)
-        else:
-            if item.get_closest_marker("unit") is None:
-                item.add_marker(pytest.mark.unit)
-            if any(
-                item.get_closest_marker(marker) is not None
-                for marker in ("platform", "provider", "slow")
-            ):
-                item.add_marker(pytest.mark.tier_c)
-            unit_tests.append(item)
+        if is_integration and item.get_closest_marker("integration") is None:
+            item.add_marker(pytest.mark.integration)
+        elif _is_unit_path(relative_path) and item.get_closest_marker("unit") is None:
+            item.add_marker(pytest.mark.unit)
 
-    # 单元测试 -> 集成测试
-    ordered_items = unit_tests + integration_tests
-    if profile == "blocking":
-        selected_items = []
-        for item in ordered_items:
-            if item.get_closest_marker("tier_c") or item.get_closest_marker("tier_d"):
-                deselected.append(item)
-            else:
-                selected_items.append(item)
-        if deselected:
-            config.hook.pytest_deselected(items=deselected)
-        items[:] = selected_items
+        if not any(
+            item.get_closest_marker(marker) is not None
+            for marker in NON_BLOCKING_MARKERS
+        ):
+            item.add_marker(pytest.mark.blocking)
+
+    if profile != "blocking":
         return
 
-    items[:] = ordered_items
+    selected_items = []
+    deselected_items = []
+    for item in items:
+        if item.get_closest_marker("blocking") is None:
+            deselected_items.append(item)
+        else:
+            selected_items.append(item)
+
+    if deselected_items:
+        config.hook.pytest_deselected(items=deselected_items)
+    items[:] = selected_items
 
 
 def pytest_addoption(parser):
-    """增加测试执行档位选择。"""
+    """Add test profile selection."""
     parser.addoption(
         "--test-profile",
         action="store",
         default=None,
-        choices=["all", "blocking"],
-        help="Select test profile. 'blocking' excludes auto-classified tier_c/tier_d tests.",
+        choices=sorted(TEST_PROFILES),
+        help="Select the test profile. 'blocking' excludes provider/platform/slow/integration tests.",
     )
 
 
 def pytest_configure(config):
-    """注册自定义标记。"""
-    config.addinivalue_line("markers", "unit: 单元测试")
-    config.addinivalue_line("markers", "integration: 集成测试")
-    config.addinivalue_line("markers", "slow: 慢速测试")
-    config.addinivalue_line("markers", "platform: 平台适配器测试")
-    config.addinivalue_line("markers", "provider: LLM Provider 测试")
-    config.addinivalue_line("markers", "db: 数据库相关测试")
-    config.addinivalue_line("markers", "tier_c: C-tier tests (optional / non-blocking)")
-    config.addinivalue_line("markers", "tier_d: D-tier tests (extended / integration)")
+    """Register repository test markers."""
+    config.addinivalue_line("markers", "unit: isolated unit or component test")
+    config.addinivalue_line("markers", "blocking: deterministic blocking-gate test")
+    config.addinivalue_line("markers", "integration: integration or end-to-end test")
+    config.addinivalue_line("markers", "slow: test with a larger execution budget")
+    config.addinivalue_line("markers", "platform: platform-domain test")
+    config.addinivalue_line("markers", "provider: provider-domain test")
+    config.addinivalue_line("markers", "db: database-related test")
+
+
+def pytest_runtest_call(item) -> None:
+    """Record live threads after fixture setup and before a test body runs."""
+    item._astrbot_test_threads = set(threading.enumerate())  # noqa: SLF001
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item, nextitem):  # noqa: ARG001
+    """Report threads that a test left alive after its fixtures tear down."""
+    yield
+
+    existing_threads = getattr(item, "_astrbot_test_threads", None)
+    if existing_threads is None:
+        return
+    leaked_threads = [
+        thread
+        for thread in threading.enumerate()
+        if thread not in existing_threads and thread.is_alive()
+    ]
+    if leaked_threads:
+        thread_names = ", ".join(thread.name for thread in leaked_threads)
+        pytest.fail(f"Leaked threads: {thread_names}")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _cleanup_leaked_asyncio_tasks():
+    """Fail tests that leave event-loop tasks behind after cancelling them.
+
+    The fixture records the loop state after fixture setup, so pytest-asyncio's
+    own runner tasks and tasks established by the test harness are ignored.
+    Any task created by the test remains the test's responsibility.
+    """
+    existing_tasks = set(asyncio.all_tasks())
+
+    yield
+
+    current_task = asyncio.current_task()
+    leaked_tasks = [
+        task
+        for task in asyncio.all_tasks() - existing_tasks
+        if task is not current_task and not task.done()
+    ]
+    if not leaked_tasks:
+        return
+
+    for task in leaked_tasks:
+        task.cancel()
+    await asyncio.gather(*leaked_tasks, return_exceptions=True)
+
+    task_names = ", ".join(task.get_name() for task in leaked_tasks)
+    pytest.fail(f"Leaked asyncio tasks: {task_names}")
 
 
 # ============================================================
@@ -352,28 +440,3 @@ def provider_request():
         contexts=[],
         system_prompt="You are a helpful assistant.",
     )
-
-
-# ============================================================
-# 跳过条件
-# ============================================================
-
-
-def pytest_runtest_setup(item):
-    """在测试运行前检查跳过条件。"""
-    # 跳过需要 API Key 但未设置的 Provider 测试
-    if item.get_closest_marker("provider"):
-        if not os.environ.get("TEST_PROVIDER_API_KEY"):
-            pytest.skip("TEST_PROVIDER_API_KEY not set")
-
-    # 跳过需要特定平台的测试
-    if item.get_closest_marker("platform"):
-        required_platform = None
-        marker = item.get_closest_marker("platform")
-        if marker and marker.args:
-            required_platform = marker.args[0]
-
-        if required_platform and not os.environ.get(
-            f"TEST_{required_platform.upper()}_ENABLED"
-        ):
-            pytest.skip(f"TEST_{required_platform.upper()}_ENABLED not set")

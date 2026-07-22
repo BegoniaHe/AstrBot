@@ -8,6 +8,9 @@ from astrbot.api.message_components import Image, Record
 from astrbot.core.platform.sources.weixin_oc import weixin_oc_adapter
 from astrbot.core.platform.sources.weixin_oc.weixin_oc_adapter import WeixinOCAdapter
 
+pytestmark = pytest.mark.platform
+
+
 WAV_PATH = "/tmp/astrbot-weixin-oc.wav"
 
 

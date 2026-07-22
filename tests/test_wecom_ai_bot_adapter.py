@@ -19,6 +19,8 @@ from astrbot.core.platform.sources.wecom_ai_bot.wecomai_long_connection import (
     WecomAIBotLongConnectionClient,
 )
 
+pytestmark = pytest.mark.platform
+
 
 def _adapter() -> WecomAIBotAdapter:
     adapter = WecomAIBotAdapter.__new__(WecomAIBotAdapter)
@@ -45,12 +47,16 @@ def _adapter() -> WecomAIBotAdapter:
 def test_wecom_ai_bot_extract_session_id_uses_group_or_user_scope():
     adapter = _adapter()
 
-    assert adapter._extract_session_id(
-        {"chattype": "group", "chatid": "group-1"}
-    ) == "wecom_ai_bot_wecomai_group-1"
-    assert adapter._extract_session_id(
-        {"chattype": "single", "from": {"userid": "user-1"}}
-    ) == "wecom_ai_bot_wecomai_user-1"
+    assert (
+        adapter._extract_session_id({"chattype": "group", "chatid": "group-1"})
+        == "wecom_ai_bot_wecomai_group-1"
+    )
+    assert (
+        adapter._extract_session_id(
+            {"chattype": "single", "from": {"userid": "user-1"}}
+        )
+        == "wecom_ai_bot_wecomai_user-1"
+    )
 
 
 @pytest.mark.asyncio
@@ -127,7 +133,9 @@ async def test_wecom_ai_bot_convert_message_mixed_collects_text_and_images(monke
 
 
 @pytest.mark.asyncio
-async def test_wecom_ai_bot_convert_message_ignores_failed_image_processing(monkeypatch):
+async def test_wecom_ai_bot_convert_message_ignores_failed_image_processing(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(
         "astrbot.core.platform.sources.wecom_ai_bot.wecomai_adapter.process_encrypted_image",
@@ -211,7 +219,9 @@ async def test_wecom_ai_bot_process_message_enqueues_and_returns_initial_respons
 ):
     adapter = _adapter()
     adapter.initial_respond_text = "processing"
-    adapter.api_client = SimpleNamespace(encrypt_message=AsyncMock(return_value="encrypted"))
+    adapter.api_client = SimpleNamespace(
+        encrypt_message=AsyncMock(return_value="encrypted")
+    )
     adapter.queue_mgr = SimpleNamespace(set_pending_response=MagicMock())
     adapter._enqueue_message = AsyncMock()
     monkeypatch.setattr(
@@ -290,7 +300,9 @@ async def test_wecom_ai_bot_process_message_with_webhook_only_skips_initial_resp
 @pytest.mark.asyncio
 async def test_wecom_ai_bot_process_stream_without_back_queue_returns_finish_message():
     adapter = _adapter()
-    adapter.api_client = SimpleNamespace(encrypt_message=AsyncMock(return_value="encrypted-end"))
+    adapter.api_client = SimpleNamespace(
+        encrypt_message=AsyncMock(return_value="encrypted-end")
+    )
     adapter.queue_mgr = SimpleNamespace(
         has_back_queue=MagicMock(return_value=False),
         is_stream_finished=MagicMock(return_value=False),
@@ -329,7 +341,9 @@ async def test_wecom_ai_bot_process_stream_returns_none_when_queue_empty():
 @pytest.mark.asyncio
 async def test_wecom_ai_bot_process_stream_aggregates_plain_and_images_and_marks_finish():
     adapter = _adapter()
-    adapter.api_client = SimpleNamespace(encrypt_message=AsyncMock(return_value="encrypted-mixed"))
+    adapter.api_client = SimpleNamespace(
+        encrypt_message=AsyncMock(return_value="encrypted-mixed")
+    )
     queue = asyncio.Queue()
     await queue.put({"type": "plain", "data": "Hello", "streaming": True})
     await queue.put({"type": "image", "image_data": "aW1n"})
@@ -378,7 +392,9 @@ async def test_wecom_ai_bot_process_stream_aggregates_plain_and_images_and_marks
 async def test_wecom_ai_bot_process_event_enter_chat_returns_welcome_message():
     adapter = _adapter()
     adapter.friend_message_welcome_text = "welcome"
-    adapter.api_client = SimpleNamespace(encrypt_message=AsyncMock(return_value="encrypted-welcome"))
+    adapter.api_client = SimpleNamespace(
+        encrypt_message=AsyncMock(return_value="encrypted-welcome")
+    )
 
     result = await adapter._process_message(
         {"msgtype": "event", "event": "enter_chat"},

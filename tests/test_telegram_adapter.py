@@ -31,6 +31,9 @@ from tests.fixtures.mocks.telegram import (
     create_mock_telegram_modules,
 )
 
+pytestmark = pytest.mark.platform
+
+
 _TELEGRAM_PLATFORM_ADAPTER = None
 _TELEGRAM_PLATFORM_EVENT = None
 _TELEGRAM_MODULES: dict[str, object] = {}

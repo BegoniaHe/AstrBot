@@ -14,6 +14,8 @@ from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.star.star_handler import star_handlers_registry
 
+pytestmark = pytest.mark.platform
+
 
 class _FakeEvent(dict):
     def __getattr__(self, name: str):

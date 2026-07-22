@@ -85,7 +85,7 @@ uv run pytest tests/unit/test_event_bus.py::TestEventBusDispatch::test_dispatch_
 uv run pytest --test-profile blocking
 ```
 
-The `blocking` profile excludes auto-classified `tier_c` slow/platform/provider tests and `tier_d` integration tests. Put regression coverage beside the closest existing tests instead of assuming every focused test belongs in `tests/unit/`.
+The `blocking` profile runs deterministic tests without the `slow`, `platform`, `provider`, or `integration` markers. Tests under `tests/integration/` and `tests/e2e/` are classified as integration automatically; use the named markers explicitly for other test locations. Put regression coverage beside the closest existing tests instead of assuming every focused test belongs in `tests/unit/`.
 
 The Dashboard uses Vitest:
 

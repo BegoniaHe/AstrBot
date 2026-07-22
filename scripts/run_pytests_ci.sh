@@ -19,17 +19,4 @@ echo "[ci] syncing dependencies with uv"
 uv sync --group dev --locked
 
 echo "[ci] running tests: ${PYTEST_TARGETS[*]}"
-# Some tests may leave non-daemon worker threads alive (e.g. aiosqlite warning path),
-# which can block pytest process exit in CI. Run pytest via python and force process exit
-# with pytest's return code to avoid hanging workflow jobs.
-uv run python - "${PYTEST_TARGETS[@]}" <<'PY'
-import os
-import sys
-
-import pytest
-
-exit_code = int(pytest.main(sys.argv[1:]))
-sys.stdout.flush()
-sys.stderr.flush()
-os._exit(exit_code)
-PY
+uv run pytest "${PYTEST_TARGETS[@]}"
