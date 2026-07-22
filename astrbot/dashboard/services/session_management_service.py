@@ -9,6 +9,7 @@ from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import ConversationV2, Preference
 from astrbot.core.provider.entities import ProviderType
 from astrbot.core.umo_alias import build_umo_alias_map, parse_umo, serialize_umo_alias
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
 
 AVAILABLE_SESSION_RULE_KEYS = [
@@ -19,6 +20,9 @@ AVAILABLE_SESSION_RULE_KEYS = [
     f"provider_perf_{ProviderType.SPEECH_TO_TEXT.value}",
     f"provider_perf_{ProviderType.TEXT_TO_SPEECH.value}",
 ]
+_SESSION_CONFIG_RULE_KEYS = frozenset(
+    {"session_service_config", "session_plugin_config", "kb_config"}
+)
 
 
 class SessionManagementServiceError(Exception):
@@ -62,6 +66,38 @@ class SessionManagementService:
             return ProviderType(rule_key.removeprefix(prefix))
         except ValueError:
             return None
+
+    @staticmethod
+    def _validate_umo_list(umos: object) -> list[str]:
+        if not isinstance(umos, list) or not all(
+            isinstance(umo, str) and umo for umo in umos
+        ):
+            raise SessionManagementServiceError("参数 umos 必须是非空字符串数组")
+        return umos
+
+    @staticmethod
+    def _normalize_group_umos(umos: object) -> list[str]:
+        if not isinstance(umos, list):
+            return []
+
+        normalized = []
+        seen = set()
+        for umo in umos:
+            if not isinstance(umo, str) or not umo or umo in seen:
+                continue
+            normalized.append(umo)
+            seen.add(umo)
+        return normalized
+
+    @staticmethod
+    def _session_config_name(config: dict) -> str:
+        custom_name = config.get("custom_name", "")
+        return custom_name if isinstance(custom_name, str) else ""
+
+    @staticmethod
+    def _session_config_enabled(config: dict, key: str) -> bool:
+        value = config.get(key, True)
+        return value if isinstance(value, bool) else True
 
     async def list_known_umos(self) -> list[str]:
         async with self.db_helper.get_db() as session:
@@ -132,12 +168,41 @@ class SessionManagementService:
             prefs = result.scalars().all()
             for pref in prefs:
                 umo_id = pref.scope_id
-                if umo_id not in umo_rules:
-                    umo_rules[umo_id] = {}
-                if pref.key == "session_plugin_config" and umo_id in pref.value["val"]:
-                    umo_rules[umo_id][pref.key] = pref.value["val"][umo_id]
-                else:
-                    umo_rules[umo_id][pref.key] = pref.value["val"]
+                raw_value = pref.value
+                if not isinstance(raw_value, dict) or "val" not in raw_value:
+                    logger.warning(
+                        "忽略格式错误的会话规则: umo=%s, key=%s",
+                        umo_id,
+                        pref.key,
+                    )
+                    continue
+
+                rule_value = raw_value["val"]
+                if pref.key == "session_plugin_config":
+                    if not isinstance(rule_value, dict):
+                        logger.warning("忽略格式错误的会话插件规则: umo=%s", umo_id)
+                        continue
+                    rule_value = rule_value.get(umo_id)
+
+                if pref.key in _SESSION_CONFIG_RULE_KEYS:
+                    if not isinstance(rule_value, dict):
+                        logger.warning(
+                            "忽略格式错误的会话配置规则: umo=%s, key=%s",
+                            umo_id,
+                            pref.key,
+                        )
+                        continue
+                elif self._provider_type_from_rule_key(pref.key) is not None and (
+                    not isinstance(rule_value, str) or not rule_value
+                ):
+                    logger.warning(
+                        "忽略格式错误的会话 Provider 规则: umo=%s, key=%s",
+                        umo_id,
+                        pref.key,
+                    )
+                    continue
+
+                umo_rules.setdefault(umo_id, {})[pref.key] = rule_value
 
         alias_map = await self.get_umo_alias_map(list(umo_rules.keys()))
 
@@ -150,7 +215,11 @@ class SessionManagementService:
                     continue
 
                 svc_config = rules.get("session_service_config", {})
-                custom_name = svc_config.get("custom_name", "") if svc_config else ""
+                custom_name = (
+                    self._session_config_name(svc_config)
+                    if isinstance(svc_config, dict)
+                    else ""
+                )
                 if custom_name and search_lower in custom_name.lower():
                     filtered_rules[umo_id] = rules
                     continue
@@ -165,7 +234,7 @@ class SessionManagementService:
             umo_rules = filtered_rules
 
         total = len(umo_rules)
-        all_umo_ids = list(umo_rules.keys())
+        all_umo_ids = sorted(umo_rules)
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         paginated_umo_ids = all_umo_ids[start_idx:end_idx]
@@ -229,7 +298,7 @@ class SessionManagementService:
                     for kb in kbs
                 ]
             except Exception as exc:
-                logger.warning(f"获取知识库列表失败: {exc!s}")
+                logger.warning("获取知识库列表失败: %s", safe_error("", exc))
 
         return {
             "rules": rules_list,
@@ -263,6 +332,11 @@ class SessionManagementService:
             raise SessionManagementServiceError("缺少必要参数: rule_key")
         if rule_key not in AVAILABLE_SESSION_RULE_KEYS:
             raise SessionManagementServiceError(f"不支持的规则键: {rule_key}")
+
+        if rule_key in _SESSION_CONFIG_RULE_KEYS and not isinstance(rule_value, dict):
+            raise SessionManagementServiceError(
+                f"规则 {rule_key} 需要对象类型的 rule_value"
+            )
 
         if rule_key == "session_plugin_config":
             rule_value = {umo: rule_value}
@@ -327,6 +401,7 @@ class SessionManagementService:
             raise SessionManagementServiceError("缺少必要参数: umos 或有效的 scope")
         if not isinstance(umos, list):
             raise SessionManagementServiceError("参数 umos 必须是数组")
+        self._validate_umo_list(umos)
         if rule_key and rule_key not in AVAILABLE_SESSION_RULE_KEYS:
             raise SessionManagementServiceError(f"不支持的规则键: {rule_key}")
 
@@ -350,7 +425,7 @@ class SessionManagementService:
                     await self.preferences.clear_async("umo", umo)
                 success_count += 1
             except Exception as exc:
-                logger.error(f"删除 umo {umo} 的规则失败: {exc!s}")
+                logger.error("删除会话规则失败: %s", safe_error("", exc))
                 failed_umos.append(umo)
 
         message = f"已删除 {success_count} 条规则"
@@ -408,13 +483,15 @@ class SessionManagementService:
 
             rules = umo_rules.get(umo, {})
             svc_config = rules.get("session_service_config", {})
+            if not isinstance(svc_config, dict):
+                svc_config = {}
 
-            custom_name = svc_config.get("custom_name", "") if svc_config else ""
-            session_enabled = (
-                svc_config.get("session_enabled", True) if svc_config else True
+            custom_name = self._session_config_name(svc_config)
+            session_enabled = self._session_config_enabled(
+                svc_config, "session_enabled"
             )
-            llm_enabled = svc_config.get("llm_enabled", True) if svc_config else True
-            tts_enabled = svc_config.get("tts_enabled", True) if svc_config else True
+            llm_enabled = self._session_config_enabled(svc_config, "llm_enabled")
+            tts_enabled = self._session_config_enabled(svc_config, "tts_enabled")
 
             if search:
                 search_lower = search.lower()
@@ -454,7 +531,7 @@ class SessionManagementService:
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         paginated = umos_with_status[start_idx:end_idx]
-        platforms = list({u["platform"] for u in umos_with_status})
+        platforms = sorted({u["platform"] for u in umos_with_status})
         provider_manager = self.core_lifecycle.provider_manager
 
         return {
@@ -491,6 +568,7 @@ class SessionManagementService:
 
         if not umos:
             raise SessionManagementServiceError("没有找到符合条件的会话")
+        umos = self._validate_umo_list(umos)
 
         success_count = 0
         failed_umos = []
@@ -515,7 +593,7 @@ class SessionManagementService:
                 )
                 success_count += 1
             except Exception as exc:
-                logger.error(f"更新 {umo} 服务状态失败: {exc!s}")
+                logger.error("更新会话服务状态失败: %s", safe_error("", exc))
                 failed_umos.append(umo)
 
         status_changes = []
@@ -561,6 +639,7 @@ class SessionManagementService:
 
         if not umos:
             raise SessionManagementServiceError("没有找到符合条件的会话")
+        umos = self._validate_umo_list(umos)
 
         success_count = 0
         failed_umos = []
@@ -575,7 +654,7 @@ class SessionManagementService:
                 )
                 success_count += 1
             except Exception as exc:
-                logger.error(f"更新 {umo} Provider 失败: {exc!s}")
+                logger.error("更新会话 Provider 失败: %s", safe_error("", exc))
                 failed_umos.append(umo)
 
         return {
@@ -586,8 +665,27 @@ class SessionManagementService:
         }
 
     async def get_groups(self) -> dict:
-        groups = await self.preferences.global_get("session_groups", {})
-        return groups if isinstance(groups, dict) else {}
+        try:
+            groups = await self.preferences.global_get("session_groups", {})
+        except (AttributeError, KeyError, TypeError) as exc:
+            logger.warning("忽略格式错误的会话分组偏好: %s", safe_error("", exc))
+            return {}
+        if not isinstance(groups, dict):
+            return {}
+
+        normalized_groups = {}
+        for group_id, group_data in groups.items():
+            if not isinstance(group_id, str) or not group_id:
+                continue
+            if not isinstance(group_data, dict):
+                logger.warning("忽略格式错误的会话分组: id=%s", group_id)
+                continue
+            name = group_data.get("name", "")
+            normalized_groups[group_id] = {
+                "name": name.strip() if isinstance(name, str) else "",
+                "umos": self._normalize_group_umos(group_data.get("umos", [])),
+            }
+        return normalized_groups
 
     async def save_groups(self, groups: dict) -> None:
         await self.preferences.global_put("session_groups", groups)
@@ -608,17 +706,19 @@ class SessionManagementService:
 
     async def create_group(self, data: object) -> dict:
         payload = self._payload(data)
-        name = str(payload.get("name", "")).strip()
+        raw_name = payload.get("name", "")
+        name = raw_name.strip() if isinstance(raw_name, str) else ""
         umos = payload.get("umos", [])
 
         if not name:
             raise SessionManagementServiceError("分组名称不能为空")
+        umos = self._validate_umo_list(umos)
 
         groups = await self.get_groups()
         group_id = str(uuid.uuid4())[:8]
         groups[group_id] = {
             "name": name,
-            "umos": umos,
+            "umos": self._normalize_group_umos(umos),
         }
         await self.save_groups(groups)
 
@@ -627,8 +727,8 @@ class SessionManagementService:
             "group": {
                 "id": group_id,
                 "name": name,
-                "umos": umos,
-                "umo_count": len(umos),
+                "umos": self._normalize_group_umos(umos),
+                "umo_count": len(self._normalize_group_umos(umos)),
             },
         }
 
@@ -649,17 +749,22 @@ class SessionManagementService:
 
         group = groups[group_id]
         if name is not None:
+            if not isinstance(name, str) or not name.strip():
+                raise SessionManagementServiceError("分组名称不能为空")
             group["name"] = name.strip()
 
         if umos is not None:
-            group["umos"] = umos
+            group["umos"] = self._normalize_group_umos(self._validate_umo_list(umos))
         else:
-            current_umos = set(group.get("umos", []))
+            add_umos = self._validate_umo_list(add_umos)
+            remove_umos = self._validate_umo_list(remove_umos)
+            current_umos = self._normalize_group_umos(group.get("umos", []))
             if add_umos:
-                current_umos.update(add_umos)
+                current_umos.extend(umo for umo in add_umos if umo not in current_umos)
             if remove_umos:
-                current_umos.difference_update(remove_umos)
-            group["umos"] = list(current_umos)
+                remove_set = set(remove_umos)
+                current_umos = [umo for umo in current_umos if umo not in remove_set]
+            group["umos"] = current_umos
 
         await self.save_groups(groups)
 
