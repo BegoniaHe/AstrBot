@@ -10,7 +10,7 @@ from time import monotonic
 from typing import Any, cast
 
 from websockets.asyncio.client import ClientConnection, connect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from astrbot import logger
 
@@ -82,9 +82,12 @@ class NapCatForwardWebSocketClient:
         self._socket: ClientConnection | None = None
         self._connected_event = asyncio.Event()
         self._stop_event = asyncio.Event()
+        self._authentication_failed_event = asyncio.Event()
+        self._authentication_error: NapCatApiError | None = None
         self._send_lock = asyncio.Lock()
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._payload_tasks: set[asyncio.Task[None]] = set()
+        self._connection_generation = 0
 
     def _build_api_error(
         self, operation: str, payload: Mapping[str, Any]
@@ -102,6 +105,7 @@ class NapCatForwardWebSocketClient:
         )
 
     async def start(self) -> None:
+        self._raise_authentication_error()
         if self._runner_task is not None:
             if not self._runner_task.done():
                 return
@@ -113,7 +117,11 @@ class NapCatForwardWebSocketClient:
 
         self._stop_event.clear()
         self._runner_task = asyncio.create_task(self._run_loop())
-        await self._wait_until_connected("start")
+        try:
+            await self._wait_until_connected("start")
+        except BaseException:
+            await self.close()
+            raise
 
     async def close(self) -> None:
         self._stop_event.set()
@@ -132,11 +140,13 @@ class NapCatForwardWebSocketClient:
                     pass
                 if self._runner_task is runner_task:
                     self._runner_task = None
-        payload_tasks = list(self._payload_tasks)
-        if payload_tasks:
-            await asyncio.gather(*payload_tasks, return_exceptions=True)
-        self._payload_tasks.clear()
-        self._connected_event.clear()
+            payload_tasks = list(self._payload_tasks)
+            if payload_tasks:
+                await asyncio.gather(*payload_tasks, return_exceptions=True)
+            self._payload_tasks.clear()
+            self._fail_pending("client closed")
+            self._socket = None
+            self._connected_event.clear()
 
     async def _run_loop(self) -> None:
         try:
@@ -145,6 +155,30 @@ class NapCatForwardWebSocketClient:
                     await self._connect_and_listen()
                 except asyncio.CancelledError:
                     raise
+                except InvalidStatus as exc:
+                    if exc.response.status_code in {401, 403}:
+                        self._set_authentication_error(
+                            NapCatApiError(
+                                "forward_ws",
+                                status="failed",
+                                retcode=exc.response.status_code,
+                                message="WebSocket authentication failed",
+                                wording=None,
+                            )
+                        )
+                        logger.error(
+                            "[NapCat] Forward WebSocket authentication failed with HTTP %s",
+                            exc.response.status_code,
+                        )
+                        break
+                    if self._stop_event.is_set():
+                        break
+                    logger.warning(
+                        "[NapCat] Forward WebSocket disconnected from %s: %s. Retrying in %.1fs.",
+                        self.ws_url,
+                        exc,
+                        self.reconnect_interval_seconds,
+                    )
                 except Exception as exc:
                     if self._stop_event.is_set():
                         break
@@ -157,17 +191,20 @@ class NapCatForwardWebSocketClient:
 
                 if self._stop_event.is_set():
                     break
-                try:
-                    await asyncio.wait_for(
-                        self._stop_event.wait(),
-                        timeout=self.reconnect_interval_seconds,
-                    )
-                except TimeoutError:
-                    pass
+                await self._wait_for_reconnect()
         finally:
             self._fail_pending("client stopped")
             self._socket = None
             self._connected_event.clear()
+
+    async def _wait_for_reconnect(self) -> None:
+        try:
+            await asyncio.wait_for(
+                self._stop_event.wait(),
+                timeout=self.reconnect_interval_seconds,
+            )
+        except TimeoutError:
+            pass
 
     async def _connect_and_listen(self) -> None:
         ssl_context: ssl.SSLContext | bool | None = None
@@ -192,6 +229,8 @@ class NapCatForwardWebSocketClient:
             ssl=ssl_context,
         ) as websocket:
             self._socket = websocket
+            self._connection_generation += 1
+            connection_generation = self._connection_generation
             self._connected_event.set()
             logger.info(
                 "[NapCat] Forward WebSocket transport connected to %s", self.ws_url
@@ -199,7 +238,10 @@ class NapCatForwardWebSocketClient:
 
             try:
                 async for payload in websocket:
-                    self._start_payload_task(payload)
+                    self._start_payload_task(
+                        payload,
+                        connection_generation=connection_generation,
+                    )
             except ConnectionClosed as exc:
                 raise NapCatTransportError(
                     "forward_ws",
@@ -210,9 +252,17 @@ class NapCatForwardWebSocketClient:
                 self._connected_event.clear()
                 self._fail_pending("connection lost")
 
-    def _start_payload_task(self, payload: str | bytes) -> None:
+    def _start_payload_task(
+        self,
+        payload: str | bytes,
+        *,
+        connection_generation: int | None = None,
+    ) -> None:
         task = asyncio.create_task(
-            self._handle_ws_payload(payload),
+            self._handle_ws_payload(
+                payload,
+                connection_generation=connection_generation,
+            ),
             name="napcat:forward-ws-payload",
         )
         self._payload_tasks.add(task)
@@ -228,7 +278,12 @@ class NapCatForwardWebSocketClient:
                 "[NapCat] Forward WebSocket payload handling failed", exc_info=exc
             )
 
-    async def _handle_ws_payload(self, payload: str | bytes) -> None:
+    async def _handle_ws_payload(
+        self,
+        payload: str | bytes,
+        *,
+        connection_generation: int | None = None,
+    ) -> None:
         started_at = monotonic()
         if isinstance(payload, bytes):
             try:
@@ -253,6 +308,16 @@ class NapCatForwardWebSocketClient:
             )
             return
 
+        if (
+            connection_generation is not None
+            and connection_generation != self._connection_generation
+        ):
+            logger.debug(
+                "[NapCat] Forward WebSocket ignored payload from stale connection %s",
+                connection_generation,
+            )
+            return
+
         if await dispatch_inbound_event(
             parsed,
             self.on_event,
@@ -272,6 +337,8 @@ class NapCatForwardWebSocketClient:
                 )
                 self._fail_pending_with_exception(error)
                 socket = self._socket
+                if error.retcode == 1403:
+                    self._set_authentication_error(error)
                 if error.retcode == 1403 and socket is not None:
                     await socket.close(
                         code=1008,
@@ -330,18 +397,55 @@ class NapCatForwardWebSocketClient:
             ) from exc
 
     async def _wait_until_connected(self, operation: str) -> None:
+        self._raise_authentication_error()
         if self._connected_event.is_set():
             return
+
+        connected_wait = asyncio.create_task(self._connected_event.wait())
+        authentication_failure_wait = asyncio.create_task(
+            self._authentication_failed_event.wait()
+        )
         try:
-            await asyncio.wait_for(
-                self._connected_event.wait(),
+            done, _ = await asyncio.wait(
+                {connected_wait, authentication_failure_wait},
                 timeout=self.action_timeout_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
             )
-        except TimeoutError as exc:
-            raise NapCatTransportError(
-                operation,
-                f"forward websocket did not connect within {self.action_timeout_seconds:.1f}s",
-            ) from exc
+        finally:
+            for task in (connected_wait, authentication_failure_wait):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(
+                connected_wait,
+                authentication_failure_wait,
+                return_exceptions=True,
+            )
+
+        if authentication_failure_wait in done:
+            self._raise_authentication_error()
+        if connected_wait in done and self._connected_event.is_set():
+            return
+        raise NapCatTransportError(
+            operation,
+            f"forward websocket did not connect within {self.action_timeout_seconds:.1f}s",
+        )
+
+    def _set_authentication_error(self, error: NapCatApiError) -> None:
+        self._authentication_error = error
+        self._authentication_failed_event.set()
+        self._stop_event.set()
+
+    def _raise_authentication_error(self) -> None:
+        error = self._authentication_error
+        if error is None:
+            return
+        raise NapCatApiError(
+            error.operation,
+            status=error.status,
+            retcode=error.retcode,
+            message=error.message,
+            wording=error.wording,
+        )
 
     def _fail_pending(self, detail: str) -> None:
         self._fail_pending_with_exception(

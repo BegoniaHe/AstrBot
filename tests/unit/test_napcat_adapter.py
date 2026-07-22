@@ -1,9 +1,11 @@
 import asyncio
 import json
+from collections import deque
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from websockets.exceptions import InvalidStatus
 
 from astrbot.core.command import CommandCatalogStore
 from astrbot.core.message.components import (
@@ -41,6 +43,7 @@ from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.platform.send_result import PlatformSendResult
+from astrbot.core.platform.sources.napcat import forward_ws_client
 from astrbot.core.platform.sources.napcat.exceptions import (
     NapCatApiError,
     NapCatTransportError,
@@ -51,6 +54,67 @@ from astrbot.core.platform.sources.napcat.napcat_platform_adapter import (
 )
 from astrbot.core.platform.sources.napcat.types import NapCatFetchedMessage
 from astrbot.core.star.star_handler import star_handlers_registry
+
+pytestmark = pytest.mark.platform
+
+
+class _ControlledForwardSocket:
+    """A deterministic async WebSocket double for transport lifecycle tests."""
+
+    def __init__(
+        self,
+        payloads: tuple[str, ...] = (),
+        *,
+        disconnect_error: Exception | None = None,
+    ) -> None:
+        self._payloads = deque(payloads)
+        self._release_event = asyncio.Event()
+        self._disconnect_error = disconnect_error
+        self.entered = asyncio.Event()
+        self.closed = asyncio.Event()
+        self.exited = asyncio.Event()
+        self.sent_payloads: list[dict[str, object]] = []
+
+    async def send(self, payload: str) -> None:
+        self.sent_payloads.append(json.loads(payload))
+
+    async def close(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        self.closed.set()
+        self._release_event.set()
+
+    def release(self) -> None:
+        self._release_event.set()
+
+    def __aiter__(self) -> _ControlledForwardSocket:
+        return self
+
+    async def __anext__(self) -> str:
+        if self._payloads:
+            return self._payloads.popleft()
+        await self._release_event.wait()
+        if self._disconnect_error is not None:
+            raise self._disconnect_error
+        raise StopAsyncIteration
+
+
+class _ControlledForwardConnection:
+    """Async context manager yielding a controlled forward WebSocket."""
+
+    def __init__(self, socket: _ControlledForwardSocket) -> None:
+        self.socket = socket
+
+    async def __aenter__(self) -> _ControlledForwardSocket:
+        self.socket.entered.set()
+        return self.socket
+
+    async def __aexit__(
+        self,
+        _exc_type: object,
+        _exc: object,
+        _traceback: object,
+    ) -> None:
+        self.socket.exited.set()
 
 
 def _make_adapter(event_queue: asyncio.Queue) -> NapCatPlatformAdapter:
@@ -207,7 +271,12 @@ def test_napcat_forward_ws_client_exposes_message_segment_builders() -> None:
 async def test_napcat_adapter_run_and_terminate_manage_forward_ws_lifecycle():
     queue: asyncio.Queue = asyncio.Queue()
     adapter = _make_forward_ws_adapter(queue)
-    adapter.client.start = AsyncMock()
+    startup_called = asyncio.Event()
+
+    async def start_client() -> None:
+        startup_called.set()
+
+    adapter.client.start = AsyncMock(side_effect=start_client)
     adapter.client.get_version_info = AsyncMock(
         return_value=SimpleNamespace(app_name="NapCat", app_version="4.18.7")
     )
@@ -220,7 +289,7 @@ async def test_napcat_adapter_run_and_terminate_manage_forward_ws_lifecycle():
     adapter.client.close = AsyncMock()
 
     run_task = asyncio.create_task(adapter.run())
-    await asyncio.sleep(0)
+    await asyncio.wait_for(startup_called.wait(), timeout=1)
 
     adapter.client.start.assert_awaited_once_with()
     assert run_task.done() is False
@@ -264,30 +333,31 @@ async def test_napcat_adapter_startup_failure_closes_forward_ws_client():
 async def test_napcat_adapter_retries_transient_startup_transport_failure():
     adapter = _make_forward_ws_adapter(asyncio.Queue())
     adapter.client.reconnect_interval_seconds = 0
-    adapter.client.start = AsyncMock(
-        side_effect=[
-            NapCatTransportError(
+    startup_checked = asyncio.Event()
+
+    async def start_client() -> None:
+        if adapter.client.start.await_count == 1:
+            raise NapCatTransportError(
                 "start", "forward websocket did not connect within 5.0s"
-            ),
-            None,
-        ]
-    )
+            )
+
+    adapter.client.start = AsyncMock(side_effect=start_client)
     adapter.client.get_version_info = AsyncMock(
         return_value=SimpleNamespace(app_name="NapCat", app_version="4.18.7")
     )
     adapter.client.get_status = AsyncMock(
         return_value=SimpleNamespace(online=True, good=True)
     )
-    adapter.client.get_login_info = AsyncMock(
-        return_value=SimpleNamespace(user_id=123456, nickname="tester")
-    )
+
+    async def get_login_info() -> SimpleNamespace:
+        startup_checked.set()
+        return SimpleNamespace(user_id=123456, nickname="tester")
+
+    adapter.client.get_login_info = AsyncMock(side_effect=get_login_info)
     adapter.client.close = AsyncMock()
 
     run_task = asyncio.create_task(adapter.run())
-    for _ in range(10):
-        if adapter.client.get_login_info.await_count == 1:
-            break
-        await asyncio.sleep(0)
+    await asyncio.wait_for(startup_checked.wait(), timeout=1)
 
     assert run_task.done() is False
     assert adapter.client.start.await_count == 2
@@ -300,6 +370,49 @@ async def test_napcat_adapter_retries_transient_startup_transport_failure():
 
 
 @pytest.mark.asyncio
+async def test_napcat_adapter_terminate_interrupts_startup_transport_backoff():
+    adapter = _make_forward_ws_adapter(asyncio.Queue())
+    adapter.client.reconnect_interval_seconds = 3600
+    startup_attempted = asyncio.Event()
+    backoff_started = asyncio.Event()
+    shutdown_event = asyncio.Event()
+
+    class ObservedShutdownEvent:
+        def is_set(self) -> bool:
+            return shutdown_event.is_set()
+
+        async def wait(self) -> None:
+            backoff_started.set()
+            await shutdown_event.wait()
+
+        def set(self) -> None:
+            shutdown_event.set()
+
+    async def start_client() -> None:
+        startup_attempted.set()
+        raise NapCatTransportError("start", "NapCat is unavailable")
+
+    adapter.shutdown_event = ObservedShutdownEvent()
+    adapter.client.start = AsyncMock(side_effect=start_client)
+    adapter.client.close = AsyncMock()
+    run_task = asyncio.create_task(adapter.run())
+
+    try:
+        await asyncio.wait_for(startup_attempted.wait(), timeout=1)
+        await asyncio.wait_for(backoff_started.wait(), timeout=1)
+
+        await adapter.terminate()
+        await run_task
+
+        assert adapter.client.start.await_count == 1
+        adapter.client.close.assert_awaited_once_with()
+    finally:
+        if not run_task.done():
+            await adapter.terminate()
+        await asyncio.gather(run_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_napcat_forward_ws_client_close_cancels_connecting_runner():
     adapter = _make_adapter(asyncio.Queue())
     runner_task = asyncio.create_task(asyncio.Event().wait())
@@ -309,6 +422,241 @@ async def test_napcat_forward_ws_client_close_cancels_connecting_runner():
 
     assert runner_task.cancelled() is True
     assert adapter.client._runner_task is None
+
+
+@pytest.mark.asyncio
+async def test_napcat_terminate_interrupts_forward_ws_reconnect_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    connection_attempted = asyncio.Event()
+    backoff_started = asyncio.Event()
+
+    def fail_connect(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        connection_attempted.set()
+        raise OSError("NapCat is unavailable")
+
+    async def wait_for_reconnect() -> None:
+        backoff_started.set()
+        await client._stop_event.wait()
+
+    monkeypatch.setattr(forward_ws_client, "connect", fail_connect)
+    monkeypatch.setattr(client, "_wait_for_reconnect", wait_for_reconnect)
+    runner_task = asyncio.create_task(client._run_loop())
+    client._runner_task = runner_task
+
+    await asyncio.wait_for(connection_attempted.wait(), timeout=1)
+    await asyncio.wait_for(backoff_started.wait(), timeout=1)
+
+    await adapter.terminate()
+
+    assert adapter.shutdown_event.is_set()
+    assert runner_task.cancelled() is True
+    assert client._runner_task is None
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_client_recovers_after_multiple_connect_failures(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    client.reconnect_interval_seconds = 0
+    recovered_socket = _ControlledForwardSocket()
+    attempts = 0
+
+    def connect_after_two_failures(*args: object, **kwargs: object) -> object:
+        nonlocal attempts
+        del args, kwargs
+        attempts += 1
+        if attempts <= 2:
+            raise OSError(f"connection attempt {attempts} failed")
+        return _ControlledForwardConnection(recovered_socket)
+
+    monkeypatch.setattr(forward_ws_client, "connect", connect_after_two_failures)
+
+    await asyncio.wait_for(client.start(), timeout=1)
+
+    assert attempts == 3
+    assert client._connected_event.is_set()
+    assert recovered_socket.entered.is_set()
+
+    await client.close()
+
+    assert recovered_socket.closed.is_set()
+    assert recovered_socket.exited.is_set()
+    assert client._runner_task is None
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_client_start_failure_cleans_up_runner(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    client.action_timeout_seconds = 0
+
+    def fail_connect(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise OSError("NapCat is unavailable")
+
+    monkeypatch.setattr(forward_ws_client, "connect", fail_connect)
+
+    try:
+        with pytest.raises(NapCatTransportError, match="did not connect"):
+            await client.start()
+
+        assert client._runner_task is None
+        assert client._stop_event.is_set()
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_disconnect_fails_and_clears_pending_actions(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    disconnecting_socket = _ControlledForwardSocket(
+        disconnect_error=OSError("connection lost")
+    )
+    monkeypatch.setattr(
+        forward_ws_client,
+        "connect",
+        lambda *args, **kwargs: _ControlledForwardConnection(disconnecting_socket),
+    )
+    pending: asyncio.Future[dict[str, object]] = (
+        asyncio.get_running_loop().create_future()
+    )
+    client._pending["old-echo"] = pending
+
+    listen_task = asyncio.create_task(client._connect_and_listen())
+    await asyncio.wait_for(disconnecting_socket.entered.wait(), timeout=1)
+    disconnecting_socket.release()
+
+    with pytest.raises(OSError, match="connection lost"):
+        await listen_task
+    with pytest.raises(NapCatTransportError, match="pending action old-echo failed"):
+        await pending
+
+    assert client._pending == {}
+    assert client._connected_event.is_set() is False
+    assert disconnecting_socket.exited.is_set()
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_client_ignores_stale_connection_response():
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    pending: asyncio.Future[dict[str, object]] = (
+        asyncio.get_running_loop().create_future()
+    )
+    client._pending["reused-echo"] = pending
+    client._connection_generation = 2
+
+    try:
+        await client._handle_ws_payload(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "retcode": 0,
+                    "data": {"from": "old connection"},
+                    "echo": "reused-echo",
+                }
+            ),
+            connection_generation=1,
+        )
+
+        assert pending.done() is False
+        assert client._pending["reused-echo"] is pending
+    finally:
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_authentication_failure_stops_reconnects(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    client.reconnect_interval_seconds = 0
+    authentication_payload = json.dumps(
+        {
+            "status": "failed",
+            "retcode": 1403,
+            "data": None,
+            "message": "token rejected",
+            "wording": "token rejected",
+            "echo": None,
+        }
+    )
+    rejected_socket = _ControlledForwardSocket((authentication_payload,))
+    reconnect_attempted = asyncio.Event()
+    replacement_socket = _ControlledForwardSocket()
+    attempts = 0
+
+    def connect_with_authentication_failure(*args: object, **kwargs: object) -> object:
+        nonlocal attempts
+        del args, kwargs
+        attempts += 1
+        if attempts == 1:
+            return _ControlledForwardConnection(rejected_socket)
+        reconnect_attempted.set()
+        return _ControlledForwardConnection(replacement_socket)
+
+    monkeypatch.setattr(
+        forward_ws_client,
+        "connect",
+        connect_with_authentication_failure,
+    )
+
+    with pytest.raises(NapCatApiError, match="token rejected"):
+        await asyncio.wait_for(client.start(), timeout=1)
+
+    assert rejected_socket.closed.is_set()
+    assert reconnect_attempted.is_set() is False
+    assert attempts == 1
+    assert client._runner_task is None
+    with pytest.raises(NapCatApiError, match="token rejected"):
+        await client.call_action("get_version_info")
+
+
+@pytest.mark.asyncio
+async def test_napcat_forward_ws_handshake_authentication_failure_stops_reconnects(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adapter = _make_adapter(asyncio.Queue())
+    client = adapter.client
+    client.reconnect_interval_seconds = 0
+    reconnect_attempted = asyncio.Event()
+    replacement_socket = _ControlledForwardSocket()
+    attempts = 0
+
+    def reject_handshake(*args: object, **kwargs: object) -> object:
+        nonlocal attempts
+        del args, kwargs
+        attempts += 1
+        if attempts == 1:
+            raise InvalidStatus(SimpleNamespace(status_code=401))
+        reconnect_attempted.set()
+        return _ControlledForwardConnection(replacement_socket)
+
+    monkeypatch.setattr(forward_ws_client, "connect", reject_handshake)
+
+    try:
+        with pytest.raises(NapCatApiError, match="WebSocket authentication failed"):
+            await asyncio.wait_for(client.start(), timeout=1)
+
+        assert reconnect_attempted.is_set() is False
+        assert attempts == 1
+        assert client._runner_task is None
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
