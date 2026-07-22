@@ -6,5 +6,8 @@
   },
   "hint": "当前仅记录部分 AstrBot 主 Agent 的模型调用路径，后续会不断完善。",
   "recording": "记录中",
-  "paused": "已暂停"
+  "paused": "已暂停",
+  "errors": {
+    "updateFailed": "无法更新追踪设置，请重试。"
+  }
 }

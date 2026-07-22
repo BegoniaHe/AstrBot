@@ -489,8 +489,8 @@ async function refreshStats(): Promise<void> {
       fetchT2iRuntimeStats(),
     ]);
     lastUpdatedAt.value = new Date();
-  } catch (error) {
-    console.error('Failed to load stats page data:', error);
+  } catch {
+    console.error('Failed to load stats page data');
     errorMessage.value = t('errors.loadFailed');
   } finally {
     loading.value = false;
@@ -806,8 +806,8 @@ watch(selectedRange, async () => {
   try {
     await Promise.all([fetchBaseStats(), fetchProviderStats()]);
     lastUpdatedAt.value = new Date();
-  } catch (error) {
-    console.error('Failed to refresh stats range:', error);
+  } catch {
+    console.error('Failed to refresh stats range');
     errorMessage.value = t('errors.rangeFailed');
   }
 });

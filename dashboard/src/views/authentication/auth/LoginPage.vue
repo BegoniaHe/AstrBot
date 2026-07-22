@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AuthLogin from '../authForms/AuthLogin.vue';
 import LanguageSwitcher from '@/components/shared/LanguageSwitcher.vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useCustomizerStore } from '@/stores/customizer';
@@ -16,6 +16,7 @@ const { tm: t } = useModuleI18n('features/auth');
 const authLoginRef = ref<InstanceType<typeof AuthLogin> | null>(null);
 const publicVersions = ref<PublicVersionData | null>(null);
 const versionDialogVisible = ref(false);
+let cardRevealTimer: ReturnType<typeof window.setTimeout> | null = null;
 type VersionItem = { key: string; label: string; value: string };
 type VersionWarning = { key: string; title: string; message: string };
 
@@ -130,9 +131,9 @@ onMounted(async () => {
     .then((res) => {
       publicVersions.value = res.data?.data || null;
     })
-    .catch((error) => {
+    .catch(() => {
       if (import.meta.env.DEV) {
-        console.warn('Failed to load public versions:', error);
+        console.warn('Failed to load public versions');
       }
     });
 
@@ -161,9 +162,17 @@ onMounted(async () => {
   }
 
   // 添加一个小延迟以获得更好的动画效果
-  setTimeout(() => {
+  cardRevealTimer = window.setTimeout(() => {
     cardVisible.value = true;
+    cardRevealTimer = null;
   }, 100);
+});
+
+onBeforeUnmount(() => {
+  if (cardRevealTimer !== null) {
+    window.clearTimeout(cardRevealTimer);
+    cardRevealTimer = null;
+  }
 });
 </script>
 

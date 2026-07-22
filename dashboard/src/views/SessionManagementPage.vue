@@ -1078,7 +1078,6 @@ import {
   askForConfirmation as askForConfirmationDialog,
   useConfirmDialog,
 } from '@/utils/confirmDialog';
-import { resolveErrorMessage } from '@/utils/errorUtils';
 
 const FOLLOW_CONFIG_VALUE = '__astrbot_follow_config__';
 
@@ -1990,8 +1989,8 @@ async function loadData() {
           .map((item) => normalizeKnowledgeBaseOption(item))
           .filter((item): item is KnowledgeBaseOption => item !== null)
       : [];
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.loadError')));
+  } catch {
+    showError(tm('messages.loadError'));
   } finally {
     loading.value = false;
   }
@@ -2019,8 +2018,8 @@ async function loadUmos() {
     const existingUmos = new Set(rulesList.value.map((item) => item.umo));
     const allUmos = normalizeStringArray(response.data.data.umos);
     availableUmos.value = allUmos.filter((umo) => !existingUmos.has(umo));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.loadError')));
+  } catch {
+    showError(tm('messages.loadError'));
   } finally {
     loadingUmos.value = false;
   }
@@ -2117,8 +2116,8 @@ async function saveServiceConfig() {
     const item = ensureRuleItem(selectedUmo.value.umo);
     item.rules = { ...item.rules, session_service_config: config };
     showSuccess(tm('messages.saveSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveError')));
+  } catch {
+    showError(tm('messages.saveError'));
   } finally {
     saving.value = false;
   }
@@ -2180,8 +2179,8 @@ async function saveProviderConfig() {
       }
     });
     showSuccess(tm('messages.saveSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveError')));
+  } catch {
+    showError(tm('messages.saveError'));
   } finally {
     saving.value = false;
   }
@@ -2233,8 +2232,8 @@ async function savePluginConfig() {
     const item = ensureRuleItem(selectedUmo.value.umo);
     item.rules.session_plugin_config = config;
     showSuccess(tm('messages.saveSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveError')));
+  } catch {
+    showError(tm('messages.saveError'));
   } finally {
     saving.value = false;
   }
@@ -2284,8 +2283,8 @@ async function saveKbConfig() {
     const item = ensureRuleItem(selectedUmo.value.umo);
     item.rules.kb_config = config;
     showSuccess(tm('messages.saveSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveError')));
+  } catch {
+    showError(tm('messages.saveError'));
   } finally {
     saving.value = false;
   }
@@ -2323,8 +2322,8 @@ async function deleteAllRules() {
     deleteTarget.value = null;
     await loadData();
     showSuccess(tm('messages.deleteSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.deleteError')));
+  } catch {
+    showError(tm('messages.deleteError'));
   } finally {
     deleting.value = false;
   }
@@ -2362,8 +2361,8 @@ async function batchDeleteRules() {
     selectedItems.value = [];
     await loadData();
     showSuccess(message);
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.batchDeleteError')));
+  } catch {
+    showError(tm('messages.batchDeleteError'));
   } finally {
     deleting.value = false;
   }
@@ -2427,8 +2426,8 @@ async function saveQuickEditName() {
     quickEditNameTarget.value = null;
     quickEditNameValue.value = '';
     showSuccess(tm('messages.saveSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveError')));
+  } catch {
+    showError(tm('messages.saveError'));
   } finally {
     saving.value = false;
   }
@@ -2530,8 +2529,8 @@ async function applyBatchChanges() {
     batchTtsProvider.value = null;
     await loadData();
     showSuccess(tm('messages.batchUpdateSuccess'));
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.batchUpdateError')));
+  } catch {
+    showError(tm('messages.batchUpdateError'));
   } finally {
     batchUpdating.value = false;
   }
@@ -2660,8 +2659,8 @@ async function saveGroup() {
     groupDialog.value = false;
     await loadGroups();
     showSuccess(message);
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.saveGroupError')));
+  } catch {
+    showError(tm('messages.saveGroupError'));
   }
 }
 
@@ -2689,8 +2688,8 @@ async function deleteGroup(group: GroupItem) {
 
     await loadGroups();
     showSuccess(successMessage);
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.deleteGroupError')));
+  } catch {
+    showError(tm('messages.deleteGroupError'));
   }
 }
 
@@ -2716,8 +2715,8 @@ async function addSelectedToGroup(groupId: string) {
         count: selectedItems.value.length,
       }),
     );
-  } catch (error) {
-    showError(resolveErrorMessage(error, tm('messages.addToGroupError')));
+  } catch {
+    showError(tm('messages.addToGroupError'));
   }
 }
 </script>

@@ -529,8 +529,8 @@ const loadKnowledgeBases = async (refreshStats = false) => {
     } else {
       showSnackbar(response.data.message || t('messages.loadError'), 'error');
     }
-  } catch (error) {
-    console.error('Failed to load knowledge bases:', error);
+  } catch {
+    console.error('Failed to load knowledge bases');
     showSnackbar(t('messages.loadError'), 'error');
   } finally {
     loading.value = false;
@@ -550,8 +550,8 @@ const loadProviders = async () => {
         (p) => p.provider_type === 'rerank',
       );
     }
-  } catch (error) {
-    console.error('Failed to load providers:', error);
+  } catch {
+    console.error('Failed to load knowledge base providers');
   }
 };
 
@@ -594,8 +594,6 @@ const deleteKB = async () => {
   try {
     const response = await knowledgeApi.delete(deleteTarget.value.kb_id);
 
-    console.log('Delete response:', response.data); // 调试日志
-
     if (response.data.status === 'ok') {
       showSnackbar(t('messages.deleteSuccess'));
       // 先刷新列表，再关闭对话框
@@ -608,8 +606,8 @@ const deleteKB = async () => {
         'error',
       );
     }
-  } catch (error) {
-    console.error('Failed to delete knowledge base:', error);
+  } catch {
+    console.error('Failed to delete knowledge base');
     showSnackbar(t('messages.deleteFailed'), 'error');
   } finally {
     deleting.value = false;
@@ -658,8 +656,8 @@ const submitForm = async () => {
         'error',
       );
     }
-  } catch (error) {
-    console.error('Failed to save knowledge base:', error);
+  } catch {
+    console.error('Failed to save knowledge base');
     showSnackbar(
       editingKB.value ? t('messages.updateFailed') : t('messages.createFailed'),
       'error',

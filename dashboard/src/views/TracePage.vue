@@ -12,30 +12,41 @@ const theme = useTheme();
 
 const isDark = computed(() => theme.global.current.value.dark);
 const traceEnabled = ref(true);
+const confirmedTraceEnabled = ref(true);
 const loading = ref(false);
+const updateError = ref('');
 const traceDisplayerKey = ref(0);
 
 const fetchTraceSettings = async () => {
   try {
     const res = await traceApi.getSettings();
     if (res.data?.status === 'ok') {
-      traceEnabled.value = res.data.data?.enabled ?? true;
+      const enabled = res.data.data?.enabled ?? true;
+      traceEnabled.value = enabled;
+      confirmedTraceEnabled.value = enabled;
     }
-  } catch (err) {
-    console.error('Failed to fetch trace settings:', err);
+  } catch {
+    console.error('Failed to fetch trace settings');
   }
 };
 
 const updateTraceSettings = async () => {
   loading.value = true;
+  updateError.value = '';
   try {
-    await traceApi.updateSettings({
+    const response = await traceApi.updateSettings({
       enabled: traceEnabled.value,
     });
+    if (response.data?.status !== 'ok') {
+      throw new Error('Trace settings update was rejected');
+    }
+    confirmedTraceEnabled.value = traceEnabled.value;
     // Refresh the TraceDisplayer component to reconnect SSE
     traceDisplayerKey.value += 1;
-  } catch (err) {
-    console.error('Failed to update trace settings:', err);
+  } catch {
+    console.error('Failed to update trace settings');
+    traceEnabled.value = confirmedTraceEnabled.value;
+    updateError.value = tm('errors.updateFailed');
   } finally {
     loading.value = false;
   }
@@ -76,6 +87,9 @@ onMounted(() => {
         </div>
       </div>
       <div class="trace-body">
+        <v-alert v-if="updateError" type="error" variant="tonal" class="mb-4">
+          {{ updateError }}
+        </v-alert>
         <TraceDisplayer :key="traceDisplayerKey" />
       </div>
     </v-container>

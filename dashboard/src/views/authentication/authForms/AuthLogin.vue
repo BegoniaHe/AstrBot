@@ -56,8 +56,10 @@ async function submitAccountStage() {
     } else if (res === 'upgrade_recovery_required') {
       goToRecoveryStage();
     }
-  } catch (err) {
-    apiError.value = String(err || '') || 'Login failed';
+  } catch {
+    // Login errors may include transport or provider details. Keep the
+    // authentication surface deliberately non-enumerating and non-sensitive.
+    apiError.value = 'Login failed';
   } finally {
     loading.value = false;
   }
@@ -76,8 +78,8 @@ async function submitTotpStage() {
       totpCode.value,
       trustTotpDevice.value,
     );
-  } catch (err) {
-    apiError.value = String(err || '') || 'Verification failed';
+  } catch {
+    apiError.value = 'Verification failed';
   } finally {
     loading.value = false;
   }
@@ -93,8 +95,8 @@ async function submitRecoveryStage() {
   apiError.value = '';
   try {
     await authStore.login(username.value, password.value, recoveryCode.value);
-  } catch (err) {
-    apiError.value = String(err || '') || 'Recovery login failed';
+  } catch {
+    apiError.value = 'Recovery login failed';
   } finally {
     loading.value = false;
   }

@@ -301,7 +301,6 @@ import PersonaSelector from '@/components/shared/PersonaSelector.vue';
 import ProviderSelector from '@/components/shared/ProviderSelector.vue';
 import { useModuleI18n } from '@/i18n/composables';
 import { askForConfirmation, useConfirmDialog } from '@/utils/confirmDialog';
-import { resolveErrorMessage } from '@/utils/errorUtils';
 
 type SubAgentItem = {
   __key: string;
@@ -414,8 +413,8 @@ async function loadConfig() {
     } else {
       toast(res.data.message || tm('messages.loadConfigFailed'), 'error');
     }
-  } catch (e) {
-    toast(resolveErrorMessage(e, tm('messages.loadConfigFailed')), 'error');
+  } catch {
+    toast(tm('messages.loadConfigFailed'), 'error');
   } finally {
     loading.value = false;
   }
@@ -501,8 +500,8 @@ async function save() {
     } else {
       toast(res.data.message || tm('messages.saveFailed'), 'error');
     }
-  } catch (e) {
-    toast(resolveErrorMessage(e, tm('messages.saveFailed')), 'error');
+  } catch {
+    toast(tm('messages.saveFailed'), 'error');
   } finally {
     saving.value = false;
   }
