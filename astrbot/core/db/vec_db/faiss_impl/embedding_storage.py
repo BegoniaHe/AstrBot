@@ -71,7 +71,7 @@ class EmbeddingStorage:
             self.index = faiss.IndexIDMap(base_index)
 
     @staticmethod
-    def _read_index(path: str) -> "faiss.Index":
+    def _read_index(path: str) -> faiss.Index:
         """读取 Faiss 索引，兼容含非 ASCII 字符的 Windows 路径。"""
         try:
             return faiss.read_index(path)
@@ -91,7 +91,7 @@ class EmbeddingStorage:
                     pass
 
     @staticmethod
-    def _write_index(index: "faiss.Index", path: str) -> None:
+    def _write_index(index: faiss.Index, path: str) -> None:
         """保存 Faiss 索引，兼容含非 ASCII 字符的 Windows 路径。"""
         dirname = os.path.dirname(path)
         if dirname:
