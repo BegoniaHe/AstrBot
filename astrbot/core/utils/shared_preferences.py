@@ -29,6 +29,15 @@ class SharedPreferences:
             self._clear_temporary_cache, "interval", hours=24, id="clear_sp_temp_cache"
         )
         self._scheduler.start()
+        self._terminated = False
+
+    async def terminate(self) -> None:
+        """Stop the runtime-owned cache scheduler exactly once."""
+        if self._terminated:
+            return
+        if self._scheduler.running:
+            self._scheduler.shutdown(wait=False)
+        self._terminated = True
 
     def _clear_temporary_cache(self) -> None:
         self.temporary_cache.clear()

@@ -608,6 +608,20 @@ class AstrBotCoreLifecycle:
                 "HTML renderer",
                 self.services.html_renderer.terminate,
             )
+            try:
+                await self.services.preferences.terminate()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to terminate shared preferences: %s",
+                    safe_error("", exc),
+                )
+            try:
+                await Metric.shutdown()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to stop metrics: %s",
+                    safe_error("", exc),
+                )
             await cleanup_once(
                 "_db_initialization_started",
                 "database",

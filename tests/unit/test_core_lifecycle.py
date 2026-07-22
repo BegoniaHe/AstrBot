@@ -31,10 +31,12 @@ def mock_db():
     renderer = MagicMock()
     renderer.initialize = AsyncMock()
     renderer.terminate = AsyncMock()
+    preferences = MagicMock()
+    preferences.terminate = AsyncMock()
     return SimpleNamespace(
         config=config,
         db=db,
-        preferences=MagicMock(),
+        preferences=preferences,
         html_renderer=renderer,
         file_token_service=MagicMock(),
         pip_installer=MagicMock(),
@@ -125,8 +127,31 @@ class TestAstrBotCoreLifecycleStop:
         await lifecycle.stop()
         await lifecycle.stop()
 
+        mock_db.preferences.terminate.assert_awaited_once()
         mock_db.db.close.assert_not_awaited()
         mock_db.html_renderer.terminate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stop_terminates_preferences_before_database(
+        self, mock_log_broker, mock_db
+    ):
+        """Runtime-owned preferences must stop before their database is disposed."""
+        lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
+        lifecycle._db_initialization_started = True
+        cleanup_order: list[str] = []
+
+        async def terminate_preferences() -> None:
+            cleanup_order.append("preferences")
+
+        async def close_database() -> None:
+            cleanup_order.append("database")
+
+        mock_db.preferences.terminate.side_effect = terminate_preferences
+        mock_db.db.close.side_effect = close_database
+
+        await lifecycle.stop()
+
+        assert cleanup_order == ["preferences", "database"]
 
 
 class TestAstrBotCoreLifecycleTaskWrapper:

@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from astrbot.core.config.astrbot_config import AstrBotConfig
+from astrbot.core.db.sqlite import SQLiteDatabase
+from astrbot.core.file_token_service import FileTokenService
 from astrbot.core.message.components import BaseMessageComponent
+from astrbot.core.runtime_services import RuntimeServices
+from astrbot.core.utils.pip_installer import PipInstaller
+from astrbot.core.utils.shared_preferences import SharedPreferences
+from astrbot.core.utils.t2i.renderer import HtmlRenderer
 
 
 class NoopAwaitable:
@@ -23,6 +30,39 @@ class NoopAwaitable:
         if False:
             yield
         return None
+
+
+def create_isolated_runtime_services(
+    root: Path, database_path: Path
+) -> RuntimeServices:
+    """Create runtime services that only use a test-owned root directory.
+
+    Args:
+        root: Temporary AstrBot runtime root.
+        database_path: SQLite file used by the test runtime.
+
+    Returns:
+        Fully constructed services with no dependency on repository ``data/``.
+    """
+    data_path = root / "data"
+    data_path.mkdir(parents=True, exist_ok=True)
+    config = AstrBotConfig(config_path=str(data_path / "cmd_config.json"))
+    database = SQLiteDatabase(str(database_path))
+    return RuntimeServices(
+        config=config,
+        db=database,
+        preferences=SharedPreferences(
+            db_helper=database,
+            json_storage_path=str(data_path / "shared_preferences.json"),
+        ),
+        html_renderer=HtmlRenderer(),
+        file_token_service=FileTokenService(),
+        pip_installer=PipInstaller(
+            config.get("pip_install_arg", ""),
+            config.get("pypi_index_url", None),
+        ),
+        demo_mode=False,
+    )
 
 
 # ============================================================

@@ -34,9 +34,31 @@ class Metric:
     @staticmethod
     def _is_disabled() -> bool:
         """检查是否禁用指标上传（配置或环境变量）"""
+        if os.environ.get("ASTRBOT_TEST_MODE", "").lower() == "true":
+            return True
         if os.environ.get("ASTRBOT_DISABLE_METRICS", "0") == "1":
             return True
         return bool(Metric._config and Metric._config.get("disable_metrics", False))
+
+    @classmethod
+    async def shutdown(cls) -> None:
+        """Stop the runtime-owned metric scheduler without flushing telemetry.
+
+        Telemetry is best-effort, so shutdown discards queued batches instead of
+        extending application termination with network I/O.
+        """
+        flush_task = cls._flush_task
+        cls._flush_task = None
+        if flush_task is not None and not flush_task.done():
+            flush_task.cancel()
+            await asyncio.gather(flush_task, return_exceptions=True)
+
+        cls._pending_metrics = {}
+        cls._has_uploaded_once = False
+        cls._config = None
+        cls._db = None
+        cls._lock = None
+        cls._lock_loop = None
 
     @staticmethod
     def get_installation_id():
