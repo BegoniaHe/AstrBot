@@ -16,6 +16,7 @@ from astrbot.dashboard.services.session_management_service import (
 )
 
 from .auth import AuthContext, require_scope
+from .error_handling import internal_error_response
 
 router = APIRouter(tags=["Sessions"])
 
@@ -32,9 +33,8 @@ def _service_error(exc: SessionManagementServiceError) -> dict:
     return error(str(exc))
 
 
-def _unexpected_error(prefix: str, exc: Exception) -> dict:
-    logger.error(f"{prefix}: {exc!s}")
-    return error(f"{prefix}: {exc!s}")
+def _unexpected_error(prefix: str, exc: Exception):
+    return internal_error_response(logger, prefix, exc)
 
 
 async def _run(operation, *, label: str) -> dict:

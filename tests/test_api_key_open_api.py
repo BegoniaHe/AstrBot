@@ -9,9 +9,7 @@ from fastapi import FastAPI
 from werkzeug.datastructures import FileStorage
 
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
-from astrbot.core.db.sqlite import SQLiteDatabase
 from astrbot.core.log import LogBroker
-from astrbot.core.runtime_services import create_runtime_services
 from astrbot.core.utils.auth_password import (
     hash_dashboard_password,
     hash_md5_dashboard_password,
@@ -19,6 +17,7 @@ from astrbot.core.utils.auth_password import (
 from astrbot.dashboard.api import open_api as open_api_routes
 from astrbot.dashboard.responses import ok
 from astrbot.dashboard.server import AstrBotDashboard
+from tests.fixtures.helpers import create_isolated_runtime_services
 from tests.helpers.dashboard_test_adapter import DashboardTestClient
 
 _TEST_DASHBOARD_PASSWORD = "AstrbotTest123"
@@ -44,12 +43,10 @@ async def _create_api_key(
 
 @pytest_asyncio.fixture(scope="module")
 async def core_lifecycle_td(tmp_path_factory):
-    tmp_db_path = tmp_path_factory.mktemp("data") / "test_data_api_key.db"
-    db = SQLiteDatabase(str(tmp_db_path))
+    runtime_root = tmp_path_factory.mktemp("astrbot-runtime")
+    tmp_db_path = runtime_root / "data" / "test_data_api_key.db"
     log_broker = LogBroker()
-    services = create_runtime_services()
-    services.db = db
-    services.preferences.db_helper = db
+    services = create_isolated_runtime_services(runtime_root, tmp_db_path)
     core_lifecycle = AstrBotCoreLifecycle(log_broker, services)
     await core_lifecycle.initialize()
     generated_password = getattr(
@@ -758,7 +755,7 @@ async def test_open_send_message_error_paths(
     )
     invalid_umo_data = await invalid_umo_res.get_json()
     assert invalid_umo_data["status"] == "error"
-    assert invalid_umo_data["message"].startswith("Invalid umo:")
+    assert invalid_umo_data["message"] == "Invalid umo"
 
     missing_platform_res = await test_client.post(
         "/api/v1/im/messages",

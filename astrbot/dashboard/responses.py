@@ -1,12 +1,18 @@
 from dataclasses import dataclass
 from typing import Any
 
+INTERNAL_SERVER_ERROR_MESSAGE = "Internal server error"
+
 
 @dataclass
 class ApiError(Exception):
     message: str
     status_code: int = 400
     data: Any = None
+
+
+class DashboardValidationError(ValueError):
+    """A deliberate Dashboard validation failure that is safe to disclose."""
 
 
 def ok(data: Any = None, message: str | None = None) -> dict[str, Any]:

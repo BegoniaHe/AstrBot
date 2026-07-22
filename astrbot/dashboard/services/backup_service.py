@@ -5,7 +5,6 @@ import os
 import re
 import shutil
 import time
-import traceback
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -24,11 +23,13 @@ from astrbot.core.utils.astrbot_path import (
     get_astrbot_backups_path,
     get_astrbot_data_path,
 )
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.task_utils import create_tracked_task
 from astrbot.dashboard.services.auth_service import DashboardTokenValidator
 
 CHUNK_SIZE = 1024 * 1024
 UPLOAD_EXPIRE_SECONDS = 3600
+_BACKGROUND_TASK_ERROR = "Backup task failed"
 
 
 class BackupServiceError(Exception):
@@ -211,7 +212,7 @@ class BackupService:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.error(f"清理过期上传会话失败: {exc}")
+                logger.error("清理过期上传会话失败: %s", safe_error("", exc))
 
     async def cleanup_upload_session(self, upload_id: str) -> None:
         if upload_id in self.upload_sessions:
@@ -221,7 +222,7 @@ class BackupService:
                 try:
                     shutil.rmtree(chunk_dir)
                 except Exception as exc:
-                    logger.warning(f"清理分片目录失败: {exc}")
+                    logger.warning("清理分片目录失败: %s", safe_error("", exc))
             del self.upload_sessions[upload_id]
 
     def get_backup_manifest(self, zip_path: str) -> dict | None:
@@ -232,7 +233,7 @@ class BackupService:
                     return json.loads(manifest_data.decode("utf-8"))
                 return None
         except Exception as exc:
-            logger.debug(f"读取备份 manifest 失败: {exc}")
+            logger.debug("读取备份 manifest 失败: %s", safe_error("", exc))
         return None
 
     def list_backups(self, *, page: int, page_size: int) -> dict:
@@ -312,9 +313,12 @@ class BackupService:
                 },
             )
         except Exception as exc:
-            logger.error(f"后台导出任务 {task_id} 失败: {exc}")
-            logger.error(traceback.format_exc())
-            self._set_task_result(task_id, "failed", error=str(exc))
+            logger.error(
+                "后台导出任务 %s 失败: %s",
+                task_id,
+                safe_error("", exc),
+            )
+            self._set_task_result(task_id, "failed", error=_BACKGROUND_TASK_ERROR)
 
     async def upload_backup(self, file: Any | None) -> dict:
         if not file:
@@ -438,7 +442,7 @@ class BackupService:
 
             logger.debug(f"已标记备份为上传来源: {zip_path}")
         except Exception as exc:
-            logger.warning(f"标记备份来源失败: {exc}")
+            logger.warning("标记备份来源失败: %s", safe_error("", exc))
 
     async def upload_complete(self, data: object) -> dict:
         payload = self._payload(data)
@@ -566,15 +570,23 @@ class BackupService:
             if result.success:
                 self._set_task_result(task_id, "completed", result=result.to_dict())
             else:
+                logger.error(
+                    "后台导入任务 %s 失败: %s",
+                    task_id,
+                    safe_error("", "; ".join(result.errors)),
+                )
                 self._set_task_result(
                     task_id,
                     "failed",
-                    error="; ".join(result.errors),
+                    error=_BACKGROUND_TASK_ERROR,
                 )
         except Exception as exc:
-            logger.error(f"后台导入任务 {task_id} 失败: {exc}")
-            logger.error(traceback.format_exc())
-            self._set_task_result(task_id, "failed", error=str(exc))
+            logger.error(
+                "后台导入任务 %s 失败: %s",
+                task_id,
+                safe_error("", exc),
+            )
+            self._set_task_result(task_id, "failed", error=_BACKGROUND_TASK_ERROR)
 
     def get_progress(self, task_id: str | None) -> dict:
         if not task_id:

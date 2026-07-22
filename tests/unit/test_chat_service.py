@@ -668,6 +668,55 @@ async def test_chat_run_persists_native_refs_and_publishes_them(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chat_run_redacts_web_search_reference_exceptions(monkeypatch, caplog):
+    """Internal ref extraction failures must not leak into Dashboard logs."""
+    service = _service()
+    back_queue = asyncio.Queue()
+    run = ChatRunState(
+        run_id="redacted-refs",
+        username="alice",
+        session_id="session-redacted-refs",
+        llm_checkpoint_id="checkpoint-1",
+        platform_history_id="webchat",
+        back_queue=back_queue,
+    )
+    service.chat_runs[run.run_id] = run
+    service.chat_runs_by_session[run.session_id] = {run.run_id}
+    service._publish_chat_run = MagicMock()
+    service.save_bot_message = AsyncMock(
+        return_value=_history_record(10, {"type": "bot", "message": []})
+    )
+    sensitive_error = (
+        "api_key=api-key-top-secret Bearer bearer-secret-token "
+        "password=dashboard-password https://internal.example/private/config "
+        "C:\\private\\config\\secret.txt /srv/astrbot/private/config.json"
+    )
+    monkeypatch.setattr(
+        chat_service_module,
+        "extract_web_search_refs",
+        MagicMock(side_effect=RuntimeError(sensitive_error)),
+    )
+    monkeypatch.setattr(
+        chat_service_module.webchat_queue_mgr, "remove_back_queue", MagicMock()
+    )
+    await back_queue.put({"message_id": run.run_id, "type": "plain", "data": "Answer"})
+    await back_queue.put({"message_id": run.run_id, "type": "end", "data": ""})
+
+    with caplog.at_level("ERROR", logger="astrbot"):
+        await service._consume_chat_run(run)
+
+    for secret in (
+        "api-key-top-secret",
+        "bearer-secret-token",
+        "dashboard-password",
+        "https://internal.example/private/config",
+        "C:\\private\\config\\secret.txt",
+        "/srv/astrbot/private/config.json",
+    ):
+        assert secret not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_build_chat_stream_emits_attachment_saved_event_for_image(monkeypatch):
     service = _service()
     queue = AsyncMock()

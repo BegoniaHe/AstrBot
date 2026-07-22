@@ -1,7 +1,6 @@
 import os
 import re
 import shutil
-import traceback
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +16,7 @@ from astrbot.core.computer.computer_client import (
 from astrbot.core.skills.neo_skill_sync import NeoSkillSyncManager
 from astrbot.core.skills.skill_manager import SkillManager
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.dashboard.upload_utils import save_upload_to_path
 
 _SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -43,6 +43,10 @@ class SkillsServiceError(Exception):
     def __init__(self, message: str, *, status_code: int = 400) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+class _NeoClientConfigurationError(ValueError):
+    """Known Neo client configuration errors that are safe to return."""
 
 
 @dataclass
@@ -107,26 +111,36 @@ class SkillsService:
     def resolve_local_skill_dir(self, name: str) -> Path:
         skill_name = str(name or "").strip()
         if not skill_name:
-            raise ValueError("Missing skill name")
+            raise SkillsServiceError("Missing skill name")
         if not _SKILL_NAME_RE.match(skill_name):
-            raise ValueError("Invalid skill name")
+            raise SkillsServiceError("Invalid skill name")
 
         skill_mgr = SkillManager()
         if skill_mgr.is_sandbox_only_skill(skill_name):
-            raise PermissionError(
-                "Sandbox preset skill cannot be opened from local skill files."
+            raise SkillsServiceError(
+                "Sandbox preset skill cannot be opened from local skill files.",
+                status_code=403,
             )
 
         plugin_skill_dir = skill_mgr._get_plugin_skill_dir(skill_name)
         if plugin_skill_dir is not None:
-            return plugin_skill_dir.resolve(strict=True)
+            try:
+                return plugin_skill_dir.resolve(strict=True)
+            except FileNotFoundError as exc:
+                raise SkillsServiceError(
+                    "Local skill not found",
+                    status_code=404,
+                ) from exc
 
-        skills_root = Path(skill_mgr.skills_root).resolve(strict=True)
-        skill_dir = (skills_root / skill_name).resolve(strict=True)
+        try:
+            skills_root = Path(skill_mgr.skills_root).resolve(strict=True)
+            skill_dir = (skills_root / skill_name).resolve(strict=True)
+        except FileNotFoundError as exc:
+            raise SkillsServiceError("Local skill not found", status_code=404) from exc
         if not skill_dir.is_relative_to(skills_root):
-            raise PermissionError("Invalid skill path")
+            raise SkillsServiceError("Invalid skill path")
         if not skill_dir.is_dir() or not (skill_dir / "SKILL.md").exists():
-            raise FileNotFoundError("Local skill not found")
+            raise SkillsServiceError("Local skill not found", status_code=404)
         return skill_dir
 
     @staticmethod
@@ -139,15 +153,21 @@ class SkillsService:
         raw_path = str(relative_path or ".").strip() or "."
         normalized = Path(raw_path.replace("\\", "/"))
         if normalized.is_absolute() or ".." in normalized.parts:
-            raise ValueError("Invalid relative path")
+            raise SkillsServiceError("Invalid relative path")
 
-        target = (skill_dir / normalized).resolve(strict=True)
+        try:
+            target = (skill_dir / normalized).resolve(strict=True)
+        except FileNotFoundError as exc:
+            message = (
+                "Skill file not found" if expect_file else "Skill directory not found"
+            )
+            raise SkillsServiceError(message, status_code=404) from exc
         if not target.is_relative_to(skill_dir):
-            raise PermissionError("Path escapes skill directory")
+            raise SkillsServiceError("Path escapes skill directory")
         if expect_file and not target.is_file():
-            raise FileNotFoundError("Skill file not found")
+            raise SkillsServiceError("Skill file not found", status_code=404)
         if not expect_file and not target.is_dir():
-            raise FileNotFoundError("Skill directory not found")
+            raise SkillsServiceError("Skill directory not found", status_code=404)
         return target
 
     @staticmethod
@@ -197,7 +217,7 @@ class SkillsService:
             access_token = _discover_bay_credentials(endpoint)
 
         if not endpoint or not access_token:
-            raise ValueError(
+            raise _NeoClientConfigurationError(
                 "Shipyard Neo endpoint or access token not configured. "
                 "Set them in Dashboard or ensure Bay's credentials.json is accessible."
             )
@@ -220,12 +240,12 @@ class SkillsService:
                 if isinstance(result, SkillsOperationResult):
                     return result
                 return SkillsOperationResult(data=_to_jsonable(result))
-        except ValueError as exc:
-            logger.debug("[Neo] %s", exc)
+        except _NeoClientConfigurationError as exc:
+            logger.debug("[Neo] %s", safe_error("", exc))
             return SkillsOperationResult(ok=False, message=str(exc))
         except Exception as exc:
-            logger.error(traceback.format_exc())
-            return SkillsOperationResult(ok=False, message=str(exc))
+            logger.error("[Neo] operation failed: %s", safe_error("", exc))
+            return SkillsOperationResult(ok=False, message="Neo operation failed")
 
     def get_skills(self) -> dict:
         provider_settings = self.core_lifecycle.astrbot_config.get(
@@ -281,7 +301,7 @@ class SkillsService:
                 try:
                     os.remove(temp_path)
                 except Exception:
-                    logger.warning(f"Failed to remove temp skill file: {temp_path}")
+                    logger.warning("Failed to remove temporary skill file.")
 
     async def batch_upload_skills(
         self, file_list: list[UploadFile]
@@ -336,7 +356,8 @@ class SkillsService:
                 succeeded.append({"filename": filename, "name": skill_name})
 
             except Exception as exc:
-                failed.append({"filename": filename, "error": str(exc)})
+                logger.error("Skill batch upload failed: %s", safe_error("", exc))
+                failed.append({"filename": filename, "error": "Skill upload failed"})
             finally:
                 if temp_path and os.path.exists(temp_path):
                     try:
@@ -670,12 +691,13 @@ class SkillsService:
                 )
 
             if result.get("sync_error"):
+                logger.error(
+                    "[Neo] stable promotion sync failed: %s",
+                    safe_error("", result["sync_error"]),
+                )
                 return SkillsOperationResult(
                     ok=False,
-                    message=(
-                        "Stable promote synced failed and has been rolled back. "
-                        f"sync_error={result['sync_error']}"
-                    ),
+                    message="Stable promotion failed and has been rolled back.",
                     data={
                         "release": release_json,
                         "rollback": result.get("rollback"),

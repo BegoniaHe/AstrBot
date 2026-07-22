@@ -16,8 +16,17 @@ from astrbot.dashboard.services.backup_service import (
 )
 
 from .auth import AuthContext, require_scope
+from .error_handling import internal_error_response
 
 router = APIRouter(tags=["Backups"])
+_ARCHIVE_RESPONSE = {
+    200: {
+        "description": "Backup archive",
+        "content": {
+            "application/zip": {"schema": {"type": "string", "format": "binary"}}
+        },
+    }
+}
 
 
 def get_service(request: Request) -> BackupService:
@@ -54,8 +63,7 @@ async def _run(operation, *, prefix: str):
     except BackupServiceError as exc:
         return error(str(exc))
     except Exception as exc:
-        logger.error("%s: %s", prefix, exc, exc_info=True)
-        return error(f"{prefix}: {exc!s}")
+        return internal_error_response(logger, prefix, exc)
 
 
 def _download_response(download) -> FileResponse:
@@ -83,8 +91,7 @@ def _download_backup(
     except BackupServiceError as exc:
         return JSONResponse(error(str(exc)), status_code=exc.status_code)
     except Exception as exc:
-        logger.error("下载备份失败: %s", exc, exc_info=True)
-        return error(f"下载备份失败: {exc!s}")
+        return internal_error_response(logger, "下载备份失败", exc)
 
 
 @router.get("/backups")
@@ -180,7 +187,7 @@ async def get_backup_progress(
     return await _run(lambda: service.get_progress(task_id), prefix="获取任务进度失败")
 
 
-@router.get("/backups/{filename:path}")
+@router.get("/backups/{filename:path}", responses=_ARCHIVE_RESPONSE)
 async def download_backup(
     filename: str,
     token: str | None = Query(default=None),

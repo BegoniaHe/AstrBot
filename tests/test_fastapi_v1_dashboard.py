@@ -6,13 +6,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import SpooledTemporaryFile
 from types import SimpleNamespace
-
 import httpx
 import jwt
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI, Request
 
+import astrbot.dashboard.api.app as dashboard_api_app
+import astrbot.dashboard.api.backups as dashboard_backups_api
+import astrbot.dashboard.api.knowledge_bases as dashboard_knowledge_bases_api
+import astrbot.dashboard.api.memory as dashboard_memory_api
+import astrbot.dashboard.api.sessions as dashboard_sessions_api
+import astrbot.dashboard.api.skills as dashboard_skills_api
 import astrbot.dashboard.services.config_service as config_service
 from astrbot.core.file_token_service import FileTokenService
 from astrbot.core.platform.send_result import PlatformSendResult
@@ -23,10 +28,18 @@ from astrbot.dashboard.services.auth_service import (
     DASHBOARD_JWT_COOKIE_NAME,
     DashboardTokenValidator,
 )
+from astrbot.dashboard.services.backup_service import BackupServiceError
+from astrbot.dashboard.services.chat_service import ChatServiceError
+from astrbot.dashboard.services.knowledge_base_service import KnowledgeBaseServiceError
+from astrbot.dashboard.services.memory_service import MemoryServiceError
+from astrbot.dashboard.services.open_api_service import OpenApiServiceError
 from astrbot.dashboard.services.platform_service import PlatformServiceError
 from astrbot.dashboard.services.plugin_service import (
     PLUGIN_UPDATE_SOURCE_REQUIRED_MESSAGE,
     PluginServiceError,
+)
+from astrbot.dashboard.services.session_management_service import (
+    SessionManagementServiceError,
 )
 from astrbot.dashboard.services.skills_service import SkillArchive, SkillsServiceError
 
@@ -1023,6 +1036,7 @@ async def test_cookie_csrf_uses_trusted_proxy_external_origin(
     assert response.status_code == 200
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_v1_openapi_is_served_by_fastapi(asgi_client: httpx.AsyncClient):
     response = await asgi_client.get("/api/v1/openapi.json")
@@ -3370,3 +3384,274 @@ async def test_v1_platform_webhook_preserves_tuple_response(
     assert response.status_code == 202
     assert response.headers["content-type"] == "text/plain"
     assert response.text == "accepted"
+
+
+class _RecordingErrorLogger:
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def error(self, *args: object, **kwargs: object) -> None:
+        self.calls.append((args, kwargs))
+
+
+_SENSITIVE_INTERNAL_ERROR = (
+    "api_key=api-key-12345 "
+    "Authorization: Bearer bearer-token-12345 "
+    "password=dashboard-password "
+    "https://internal.example.test/control?api_key=internal-api-key "
+    r"C:\AstrBot\data\secrets.json "
+    "/srv/astrbot/data/secret.txt"
+)
+_SENSITIVE_ERROR_FRAGMENTS = (
+    "api-key-12345",
+    "bearer-token-12345",
+    "dashboard-password",
+    "internal.example.test",
+    r"C:\AstrBot\data\secrets.json",
+    "/srv/astrbot/data/secret.txt",
+)
+
+
+_DASHBOARD_API_ERROR_CASES = (
+    pytest.param(
+        "sessions",
+        "sessions",
+        "list_all_umos_with_status",
+        "GET",
+        "/api/v1/sessions",
+        None,
+        SessionManagementServiceError,
+        200,
+        dashboard_sessions_api,
+        id="sessions",
+    ),
+    pytest.param(
+        "backups",
+        "backups",
+        "list_backups",
+        "GET",
+        "/api/v1/backups",
+        None,
+        BackupServiceError,
+        200,
+        dashboard_backups_api,
+        id="backups",
+    ),
+    pytest.param(
+        "knowledge_bases",
+        "knowledge_bases",
+        "list_kbs",
+        "GET",
+        "/api/v1/knowledge-bases",
+        None,
+        KnowledgeBaseServiceError,
+        200,
+        dashboard_knowledge_bases_api,
+        id="knowledge_bases",
+    ),
+    pytest.param(
+        "memory",
+        "memory",
+        "list_facts",
+        "GET",
+        "/api/v1/memory/facts",
+        None,
+        MemoryServiceError,
+        200,
+        dashboard_memory_api,
+        id="memory",
+    ),
+    pytest.param(
+        "skills",
+        "skills",
+        "get_skills",
+        "GET",
+        "/api/v1/skills",
+        None,
+        SkillsServiceError,
+        200,
+        dashboard_skills_api,
+        id="skills",
+    ),
+    pytest.param(
+        "files",
+        "chat",
+        "resolve_webchat_file",
+        "GET",
+        "/api/v1/files/content",
+        None,
+        ChatServiceError,
+        200,
+        dashboard_api_app,
+        id="files",
+    ),
+    pytest.param(
+        "chat",
+        "chat",
+        "new_session",
+        "GET",
+        "/api/v1/chat/sessions/new",
+        None,
+        ChatServiceError,
+        200,
+        dashboard_api_app,
+        id="chat",
+    ),
+    pytest.param(
+        "open_api",
+        "open_api",
+        "send_message",
+        "POST",
+        "/api/v1/im/messages",
+        {
+            "umo": "webchat-main:FriendMessage:test-session",
+            "message": "hello",
+        },
+        OpenApiServiceError,
+        400,
+        dashboard_api_app,
+        id="open_api",
+    ),
+)
+
+
+async def _request_api_error_case(
+    client: httpx.AsyncClient,
+    *,
+    method: str,
+    path: str,
+    payload: dict | None,
+) -> httpx.Response:
+    request_kwargs: dict[str, object] = {"headers": _jwt_headers()}
+    if payload is not None:
+        request_kwargs["json"] = payload
+    return await client.request(method, path, **request_kwargs)
+
+
+def _assert_error_log_is_redacted(logger: _RecordingErrorLogger) -> None:
+    assert logger.calls
+    for args, kwargs in logger.calls:
+        assert "exc_info" not in kwargs
+        rendered = " ".join(str(arg) for arg in args)
+        for fragment in _SENSITIVE_ERROR_FRAGMENTS:
+            assert fragment not in rendered
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exception_type", [RuntimeError, ValueError])
+@pytest.mark.parametrize(
+    (
+        "surface",
+        "service_name",
+        "service_method",
+        "method",
+        "path",
+        "payload",
+        "service_error",
+        "business_status",
+        "logger_module",
+    ),
+    _DASHBOARD_API_ERROR_CASES,
+)
+async def test_v1_unknown_dashboard_api_errors_are_sanitized(
+    asgi_app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+    service_name: str,
+    service_method: str,
+    method: str,
+    path: str,
+    payload: dict | None,
+    service_error: type[Exception],
+    business_status: int,
+    logger_module,
+    exception_type: type[Exception],
+):
+    """Unknown service failures never disclose internal details to Dashboard users."""
+    _ = surface, service_error, business_status
+
+    async def raise_internal_error(*_args, **_kwargs):
+        raise exception_type(_SENSITIVE_INTERNAL_ERROR)
+
+    logger = _RecordingErrorLogger()
+    monkeypatch.setattr(logger_module, "logger", logger)
+    monkeypatch.setattr(
+        getattr(asgi_app.state.services, service_name),
+        service_method,
+        raise_internal_error,
+    )
+
+    transport = httpx.ASGITransport(app=asgi_app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await _request_api_error_case(
+            client,
+            method=method,
+            path=path,
+            payload=payload,
+        )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "status": "error",
+        "message": "Internal server error",
+    }
+    for fragment in _SENSITIVE_ERROR_FRAGMENTS:
+        assert fragment not in response.text
+    _assert_error_log_is_redacted(logger)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "surface",
+        "service_name",
+        "service_method",
+        "method",
+        "path",
+        "payload",
+        "service_error",
+        "business_status",
+        "logger_module",
+    ),
+    _DASHBOARD_API_ERROR_CASES,
+)
+async def test_v1_dashboard_api_service_errors_preserve_business_message(
+    asgi_app: FastAPI,
+    asgi_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+    service_name: str,
+    service_method: str,
+    method: str,
+    path: str,
+    payload: dict | None,
+    service_error: type[Exception],
+    business_status: int,
+    logger_module,
+):
+    """Expected service validation failures retain their deliberate messages."""
+    _ = logger_module
+    message = f"{surface} validation failed"
+
+    async def raise_service_error(*_args, **_kwargs):
+        raise service_error(message)
+
+    monkeypatch.setattr(
+        getattr(asgi_app.state.services, service_name),
+        service_method,
+        raise_service_error,
+    )
+
+    response = await _request_api_error_case(
+        asgi_client,
+        method=method,
+        path=path,
+        payload=payload,
+    )
+
+    assert response.status_code == business_status
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == message

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Request
 
-from astrbot.dashboard.responses import ok
+from astrbot.dashboard.responses import ApiError, ok
 from astrbot.dashboard.schemas import (
     EnabledPatch,
     ProviderConfigRequest,
@@ -29,9 +29,7 @@ def _reject_legacy_provider_query_params(
     legacy_fields = [key for key in forbidden if key in request.query_params]
     if legacy_fields:
         fields = ", ".join(sorted(legacy_fields))
-        raise ValueError(
-            f"Legacy provider query parameters are not supported: {fields}"
-        )
+        raise ApiError(f"Legacy provider query parameters are not supported: {fields}")
 
 
 def _model_dict(payload) -> dict:
@@ -82,7 +80,7 @@ async def create_provider_source(
     config = dict(payload.config)
     source_id = config.get("id")
     if not source_id:
-        raise ValueError("Provider source config must have an 'id' field")
+        raise ApiError("Provider source config must have an 'id' field")
     await service.upsert_provider_source(source_id, config)
     return ok(message="更新 provider source 成功")
 

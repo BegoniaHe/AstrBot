@@ -17,10 +17,8 @@ from fastapi import FastAPI
 from werkzeug.datastructures import FileStorage
 
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
-from astrbot.core.db.sqlite import SQLiteDatabase
 from astrbot.core.desktop_runtime import DESKTOP_MANAGED_RESTART_MESSAGE
 from astrbot.core.log import LogBroker
-from astrbot.core.runtime_services import create_runtime_services
 from astrbot.core.star.star import star_registry
 from astrbot.core.star.star_handler import star_handlers_registry
 from astrbot.core.utils.auth_password import (
@@ -50,6 +48,7 @@ from astrbot.dashboard.services.plugin_service import PluginService
 from astrbot.dashboard.services.static_file_service import StaticFileService
 from tests.fixtures.helpers import (
     MockPluginBuilder,
+    create_isolated_runtime_services,
     create_mock_updater_install,
     create_mock_updater_update,
 )
@@ -129,12 +128,10 @@ async def _wait_for_update_progress(
 @pytest_asyncio.fixture(scope="module")
 async def core_lifecycle_td(tmp_path_factory):
     """Creates and initializes a core lifecycle instance with a temporary database."""
-    tmp_db_path = tmp_path_factory.mktemp("data") / "test_data_v3.db"
-    db = SQLiteDatabase(str(tmp_db_path))
+    runtime_root = tmp_path_factory.mktemp("astrbot-runtime")
+    tmp_db_path = runtime_root / "data" / "test_data_v3.db"
     log_broker = LogBroker()
-    services = create_runtime_services()
-    services.db = db
-    services.preferences.db_helper = db
+    services = create_isolated_runtime_services(runtime_root, tmp_db_path)
     core_lifecycle = AstrBotCoreLifecycle(log_broker, services)
     await core_lifecycle.initialize()
     generated_password = getattr(
@@ -2503,6 +2500,7 @@ async def test_restart_core_rejects_desktop_managed_backend(
     assert restart_called is False
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_do_update(
     app: FastAPI,
@@ -3174,7 +3172,7 @@ async def test_batch_upload_skills_partial_success(
         {"filename": "ok_skill.zip", "name": "ok_skill"}
     ]
     assert data["data"]["failed"] == [
-        {"filename": "bad_skill.zip", "error": "install failed"}
+        {"filename": "bad_skill.zip", "error": "Skill upload failed"}
     ]
 
 
@@ -3220,7 +3218,7 @@ async def test_batch_upload_skills_does_not_retry_internal_type_error(
     data = await response.get_json()
     assert calls == 1
     assert data["data"]["failed"] == [
-        {"filename": "demo_skill.zip", "error": "internal archive parsing failure"}
+        {"filename": "demo_skill.zip", "error": "Skill upload failed"}
     ]
 
 

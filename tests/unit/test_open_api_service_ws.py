@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -12,6 +13,24 @@ from astrbot.dashboard.services.open_api_service import (
     OpenApiServiceError,
     OpenApiWebSocketChatBridge,
 )
+
+_SENSITIVE_INTERNAL_ERROR = (
+    "api_key=ws-secret Bearer ws-token password=ws-password "
+    "https://internal.example.test/ws C:\\private\\ws-secret.txt"
+)
+_SENSITIVE_FRAGMENTS = (
+    "ws-secret",
+    "ws-token",
+    "ws-password",
+    "internal.example.test",
+    "C:\\private\\ws-secret.txt",
+)
+
+
+def _assert_no_sensitive_fragments(*texts: str) -> None:
+    for text in texts:
+        for fragment in _SENSITIVE_FRAGMENTS:
+            assert fragment not in text
 
 
 def _service() -> OpenApiService:
@@ -84,6 +103,47 @@ async def test_run_chat_websocket_closes_when_api_key_is_invalid(monkeypatch):
         {"type": "error", "code": "UNAUTHORIZED", "data": "Invalid API key"}
     ]
     assert closed == [(1008, "Invalid API key")]
+
+
+@pytest.mark.asyncio
+async def test_run_chat_websocket_hides_authentication_failures(monkeypatch, caplog):
+    service = _service()
+    sent: list[dict] = []
+    closed: list[tuple[int, str]] = []
+
+    async def authenticate_api_key(_raw_key):
+        raise RuntimeError(_SENSITIVE_INTERNAL_ERROR)
+
+    monkeypatch.setattr(service, "authenticate_api_key", authenticate_api_key)
+
+    async def receive_json():
+        raise AssertionError("receive_json should not be called")
+
+    async def send_json(payload: dict) -> None:
+        sent.append(payload)
+
+    async def close(code: int, reason: str) -> None:
+        closed.append((code, reason))
+
+    with caplog.at_level(logging.ERROR, logger="astrbot"):
+        await service.run_chat_websocket(
+            raw_api_key="key",
+            receive_json=receive_json,
+            send_json=send_json,
+            close=close,
+            conf_list=[],
+            chat_bridge=_bridge(),
+        )
+
+    assert sent == [
+        {
+            "type": "error",
+            "code": "PROCESSING_ERROR",
+            "data": "Internal server error",
+        }
+    ]
+    assert closed == [(1011, "Internal server error")]
+    _assert_no_sensitive_fragments(caplog.text)
 
 
 @pytest.mark.asyncio
@@ -272,6 +332,95 @@ async def test_handle_chat_ws_send_reduces_queue_results_and_persists_native_ref
 
 
 @pytest.mark.asyncio
+async def test_handle_chat_ws_send_hides_internal_bridge_errors(monkeypatch):
+    service = _service()
+    back_queue = asyncio.Queue()
+    chat_queue = asyncio.Queue()
+    service.prepare_chat_send = AsyncMock(return_value=("alice", "session-1", None))
+    service.update_session_config_route = AsyncMock(return_value=None)
+    logger = MagicMock()
+    monkeypatch.setattr(open_api_service_module, "logger", logger)
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr,
+        "get_or_create_back_queue",
+        lambda *_args: back_queue,
+    )
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr,
+        "get_or_create_queue",
+        lambda *_args: chat_queue,
+    )
+    monkeypatch.setattr(
+        open_api_service_module.webchat_queue_mgr,
+        "remove_back_queue",
+        MagicMock(),
+    )
+
+    async def build_user_message_parts(_message):
+        return [{"type": "plain", "text": "question"}]
+
+    async def insert_user_message(*_args):
+        raise RuntimeError(_SENSITIVE_INTERNAL_ERROR)
+
+    bridge = OpenApiWebSocketChatBridge(
+        build_user_message_parts=build_user_message_parts,
+        create_attachment_from_file=AsyncMock(),
+        extract_web_search_refs=lambda *_args: {},
+        insert_user_message=insert_user_message,
+        save_bot_message=AsyncMock(),
+    )
+    errors: list[tuple[str, str]] = []
+
+    async def send_json(_payload):
+        return None
+
+    async def send_error(message: str, code: str) -> None:
+        errors.append((message, code))
+
+    await service.handle_chat_ws_send(
+        post_data={"message": "question", "message_id": "message-1"},
+        conf_list=[],
+        chat_bridge=bridge,
+        send_json=send_json,
+        send_error=send_error,
+    )
+
+    assert errors == [("Failed to process message", "PROCESSING_ERROR")]
+    rendered_logs = " ".join(
+        str(call)
+        for call in (*logger.error.call_args_list, *logger.exception.call_args_list)
+    )
+    _assert_no_sensitive_fragments(rendered_logs)
+
+
+@pytest.mark.asyncio
+async def test_open_api_session_and_route_errors_hide_internal_details(monkeypatch):
+    service = _service()
+    logger = MagicMock()
+    monkeypatch.setattr(open_api_service_module, "logger", logger)
+
+    service.db.get_platform_session_by_id = AsyncMock(return_value=None)
+    service.db.create_platform_session = AsyncMock(
+        side_effect=RuntimeError(_SENSITIVE_INTERNAL_ERROR)
+    )
+    session_error = await service.ensure_chat_session("alice", "session-1")
+
+    service.core_lifecycle.umop_config_router = SimpleNamespace(
+        update_route=AsyncMock(side_effect=RuntimeError(_SENSITIVE_INTERNAL_ERROR))
+    )
+    route_error = await service.update_session_config_route(
+        username="alice",
+        session_id="session-1",
+        config_id="custom",
+    )
+
+    assert session_error == "Failed to create session"
+    assert route_error == "Failed to update chat config route"
+    rendered_logs = " ".join(str(call) for call in logger.error.call_args_list)
+    _assert_no_sensitive_fragments(rendered_logs)
+
+
+@pytest.mark.asyncio
 async def test_open_api_send_message_delegates_to_platform_manager():
     service = _service()
     calls: list[tuple[object, object]] = []
@@ -298,6 +447,31 @@ async def test_open_api_send_message_delegates_to_platform_manager():
     session, message_chain = calls[0]
     assert str(session) == "webchat-main:FriendMessage:test-session"
     assert message_chain.chain[0].text == "hello"
+
+
+@pytest.mark.asyncio
+async def test_open_api_send_message_hides_malformed_umo_parser_details(
+    monkeypatch, caplog
+):
+    service = _service()
+
+    def fail_parse(_umo: str):
+        raise RuntimeError(_SENSITIVE_INTERNAL_ERROR)
+
+    monkeypatch.setattr(
+        open_api_service_module.MessageSession,
+        "from_str",
+        fail_parse,
+    )
+
+    with caplog.at_level(logging.ERROR, logger="astrbot"):
+        with pytest.raises(OpenApiServiceError) as exc_info:
+            await service.send_message({"umo": "malformed", "message": "hello"})
+
+    assert str(exc_info.value) == "Invalid umo"
+    assert exc_info.value.status_code == 400
+    assert caplog.records
+    _assert_no_sensitive_fragments(caplog.text)
 
 
 @pytest.mark.asyncio
@@ -328,8 +502,15 @@ async def test_open_api_send_message_raises_when_platform_missing():
 
 
 @pytest.mark.asyncio
-async def test_open_api_send_message_raises_with_adapter_error_message():
+async def test_open_api_send_message_redacts_adapter_error(monkeypatch):
     service = _service()
+    logger = MagicMock()
+    monkeypatch.setattr(open_api_service_module, "logger", logger)
+    sensitive_error = (
+        "api_key=adapter-secret Bearer adapter-token password=adapter-password "
+        "https://internal.example.test/adapter "
+        r"C:\\AstrBot\\data\\adapter.json /srv/astrbot/data/adapter.json"
+    )
 
     async def _send_to_session(session, message_chain):
         return PlatformSendResult(
@@ -337,18 +518,29 @@ async def test_open_api_send_message_raises_with_adapter_error_message():
             success=False,
             target=session.session_id,
             message_count=len(message_chain.chain),
-            error_message="adapter rejected payload",
+            error_message=sensitive_error,
         )
 
     service.platform_manager.send_to_session = _send_to_session
 
-    with pytest.raises(
-        OpenApiServiceError,
-        match="Failed to send message: adapter rejected payload",
-    ):
+    with pytest.raises(OpenApiServiceError) as exc_info:
         await service.send_message(
             {
                 "umo": "telegram:FriendMessage:test-session",
                 "message": "hello",
             }
         )
+
+    assert str(exc_info.value) == "Internal server error"
+    assert exc_info.value.status_code == 500
+    rendered_log = " ".join(str(arg) for arg in logger.error.call_args.args)
+    for sensitive_fragment in (
+        "adapter-secret",
+        "adapter-token",
+        "adapter-password",
+        "internal.example.test",
+        r"C:\\AstrBot\\data\\adapter.json",
+        "/srv/astrbot/data/adapter.json",
+    ):
+        assert sensitive_fragment not in rendered_log
+    assert "exc_info" not in logger.error.call_args.kwargs

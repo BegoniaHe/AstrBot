@@ -62,7 +62,7 @@ def _reject_legacy_plugin_query_params(request: Request, *forbidden: str) -> Non
     legacy_fields = [key for key in forbidden if key in request.query_params]
     if legacy_fields:
         fields = ", ".join(sorted(legacy_fields))
-        raise ValueError(f"Legacy plugin query parameters are not supported: {fields}")
+        raise ApiError(f"Legacy plugin query parameters are not supported: {fields}")
 
 
 def _model_dict(payload) -> dict[str, Any]:

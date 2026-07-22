@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.dashboard.async_utils import run_maybe_async
 from astrbot.dashboard.responses import error, ok
 from astrbot.dashboard.schemas import (
@@ -18,8 +19,17 @@ from astrbot.dashboard.services.skills_service import (
 )
 
 from .auth import AuthContext, require_scope
+from .error_handling import internal_error_response
 
 router = APIRouter(tags=["Skills"])
+_ARCHIVE_RESPONSE = {
+    200: {
+        "description": "Skill archive",
+        "content": {
+            "application/zip": {"schema": {"type": "string", "format": "binary"}}
+        },
+    }
+}
 
 
 def get_service(request: Request) -> SkillsService:
@@ -44,7 +54,7 @@ def _serialize_result(result: SkillsOperationResult):
     return error(result.message or "", result.data)
 
 
-async def _run(operation, *, trace: bool = True):
+async def _run(operation):
     try:
         result = await run_maybe_async(operation)
         if isinstance(result, SkillsOperationResult):
@@ -53,8 +63,7 @@ async def _run(operation, *, trace: bool = True):
     except SkillsServiceError as exc:
         return error(str(exc))
     except Exception as exc:
-        logger.error(str(exc), exc_info=trace)
-        return error(str(exc))
+        return internal_error_response(logger, "Skill operation failed", exc)
 
 
 def _archive_response(archive: SkillArchive):
@@ -72,7 +81,7 @@ async def _download_skill(service: SkillsService, name: str):
         message = str(exc)
         raise HTTPException(status_code=exc.status_code, detail=message) from exc
     except Exception as exc:
-        logger.error(str(exc), exc_info=True)
+        logger.error("Failed to prepare skill archive: %s", safe_error("", exc))
         raise HTTPException(
             status_code=500,
             detail="Failed to prepare skill archive",
@@ -105,7 +114,7 @@ async def upload_skills_batch(
     return await _run(lambda: service.batch_upload_skills(files))
 
 
-@router.get("/skills/{skill_name:path}/archive")
+@router.get("/skills/{skill_name:path}/archive", responses=_ARCHIVE_RESPONSE)
 async def download_skill(
     skill_name: str,
     _auth: AuthContext = Depends(require_skill_scope),

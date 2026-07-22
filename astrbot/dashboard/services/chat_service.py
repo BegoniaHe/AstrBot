@@ -27,6 +27,7 @@ from astrbot.core.platform.sources.webchat.webchat_queue_mgr import webchat_queu
 from astrbot.core.utils.active_event_registry import active_event_registry
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 from astrbot.core.utils.datetime_utils import to_utc_isoformat
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.media_utils import (
     MEDIA_MIME_EXTENSIONS,
     detect_image_mime_type_async,
@@ -807,9 +808,8 @@ class ChatService:
                 )
                 extracted_refs = merge_webchat_refs(extracted_refs, pending_refs)
             except Exception as exc:
-                logger.exception(
-                    f"Failed to extract web search refs: {exc}",
-                    exc_info=True,
+                logger.error(
+                    "Failed to extract web search refs: %s", safe_error("", exc)
                 )
                 extracted_refs = pending_refs
 
@@ -931,7 +931,7 @@ class ChatService:
             cancellation = exc
         except Exception as exc:
             run.status = "failed"
-            logger.exception(f"WebChat run unexpected error: {exc}", exc_info=True)
+            logger.error("WebChat run unexpected error: %s", safe_error("", exc))
             self._publish_chat_run(
                 run,
                 {"type": "error", "data": "WebChat run failed"},
@@ -956,9 +956,9 @@ class ChatService:
                             },
                         )
                 except Exception as exc:
-                    logger.exception(
-                        f"Failed to persist pending webchat message: {exc}",
-                        exc_info=True,
+                    logger.error(
+                        "Failed to persist pending webchat message: %s",
+                        safe_error("", exc),
                     )
                 finally:
                     webchat_queue_mgr.remove_back_queue(run.run_id)
@@ -1143,9 +1143,8 @@ class ChatService:
             await self.umop_config_router.delete_route(unified_msg_origin)
         except ValueError as exc:
             logger.warning(
-                "Failed to delete UMO route %s during session cleanup: %s",
-                unified_msg_origin,
-                exc,
+                "Failed to delete UMO route during session cleanup: %s",
+                safe_error("", exc),
             )
 
         if session.platform_id == "webchat":
@@ -1229,17 +1228,17 @@ class ChatService:
                     continue
                 try:
                     os.remove(attachment.path)
-                except OSError as e:
+                except OSError as exc:
                     logger.warning(
-                        f"Failed to delete attachment file {attachment.path}: {e}"
+                        "Failed to delete attachment file: %s", safe_error("", exc)
                     )
-        except Exception as e:
-            logger.warning(f"Failed to get attachments: {e}")
+        except Exception as exc:
+            logger.warning("Failed to get attachments: %s", safe_error("", exc))
 
         try:
             await self.db.delete_attachments(attachment_ids)
-        except Exception as e:
-            logger.warning(f"Failed to delete attachments: {e}")
+        except Exception as exc:
+            logger.warning("Failed to delete attachments: %s", safe_error("", exc))
 
     async def new_session(self, username: str, platform_id: str) -> dict:
         session = await self.db.create_platform_session(

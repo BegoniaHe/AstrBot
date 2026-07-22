@@ -14,6 +14,7 @@ from astrbot.dashboard.schemas import (
 from astrbot.dashboard.services.memory_service import MemoryService, MemoryServiceError
 
 from .auth import AuthContext, require_scope
+from .error_handling import internal_error_response
 
 router = APIRouter(tags=["Memory"])
 
@@ -40,11 +41,10 @@ async def _run(operation, *, prefix: str):
             data, message = result
             return ok(data, message)
         return ok(result)
-    except (MemoryServiceError, ValueError) as exc:
+    except MemoryServiceError as exc:
         return error(str(exc))
     except Exception as exc:
-        logger.error("%s: %s", prefix, exc, exc_info=True)
-        return error(f"{prefix}: {exc!s}")
+        return internal_error_response(logger, prefix, exc)
 
 
 @router.get("/memory/facts")

@@ -21,6 +21,12 @@ from astrbot.dashboard.services.chat_service import (
 from .auth import AuthContext, require_scope
 
 router = APIRouter(tags=["Chat"])
+_SSE_RESPONSE = {
+    200: {
+        "description": "Server-sent chat stream or an error envelope",
+        "content": {"text/event-stream": {"schema": {"type": "string"}}},
+    }
+}
 
 
 def get_service(request: Request) -> ChatService:
@@ -167,7 +173,7 @@ async def stop_chat_session(
     return await _run(lambda: service.stop_session(auth.username, session_id))
 
 
-@router.get("/chat/runs/{run_id}/stream")
+@router.get("/chat/runs/{run_id}/stream", responses=_SSE_RESPONSE)
 async def resume_chat_run(
     run_id: str,
     auth: AuthContext = Depends(require_chat_scope),
@@ -209,7 +215,10 @@ async def update_chat_message(
     )
 
 
-@router.post("/chat/sessions/{session_id}/messages/{message_id}/regenerate")
+@router.post(
+    "/chat/sessions/{session_id}/messages/{message_id}/regenerate",
+    responses=_SSE_RESPONSE,
+)
 async def regenerate_chat_message(
     session_id: str,
     message_id: str,
@@ -271,7 +280,7 @@ async def delete_chat_thread(
     return await _run(lambda: service.delete_thread(auth.username, thread_id))
 
 
-@router.post("/chat/threads/{thread_id}/messages")
+@router.post("/chat/threads/{thread_id}/messages", responses=_SSE_RESPONSE)
 async def send_chat_thread_message(
     thread_id: str,
     request: Request,

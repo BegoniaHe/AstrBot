@@ -12,5 +12,5 @@ class FileService:
     async def resolve_token_file(self, file_token: str) -> str:
         try:
             return await self.file_token_service.handle_file(file_token)
-        except (FileNotFoundError, KeyError) as exc:
-            raise FileServiceError(str(exc)) from exc
+        except (FileNotFoundError, KeyError, OSError) as exc:
+            raise FileServiceError("File not found") from exc

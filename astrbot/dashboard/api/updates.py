@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from astrbot import logger
 from astrbot.core.desktop_runtime import DESKTOP_MANAGED_RESTART_MESSAGE
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.dashboard.async_utils import run_maybe_async
 from astrbot.dashboard.schemas import PipInstallRequest, UpdateRequest
 from astrbot.dashboard.services.update_service import (
@@ -51,7 +52,7 @@ def _service_response(result: UpdateServiceResult) -> JSONResponse:
 
 
 def _service_error(exc: UpdateServiceError) -> JSONResponse:
-    logger.error(f"Dashboard update operation failed: {exc}", exc_info=True)
+    logger.error("Dashboard update operation failed: %s", safe_error("", exc))
     if exc.code == "desktop_managed":
         return JSONResponse(
             {

@@ -8,6 +8,12 @@ from astrbot.dashboard.services.log_service import LogService, LogServiceError
 from .auth import AuthContext, require_scope
 
 router = APIRouter(tags=["Logs"])
+_SSE_RESPONSE = {
+    200: {
+        "description": "Server-sent log stream",
+        "content": {"text/event-stream": {"schema": {"type": "string"}}},
+    }
+}
 
 
 async def require_system_scope(request: Request) -> AuthContext:
@@ -64,7 +70,7 @@ async def get_log_history(
     return _get_log_history(service)
 
 
-@router.get("/logs/live")
+@router.get("/logs/live", responses=_SSE_RESPONSE)
 async def live_logs(
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     _auth: AuthContext = Depends(require_system_scope),

@@ -10,8 +10,7 @@ from astrbot import logger
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
 from astrbot.core.db import BaseDatabase
 from astrbot.core.log import LogBroker
-from astrbot.core.utils.error_redaction import safe_error
-from astrbot.dashboard.responses import ApiError, error
+from astrbot.dashboard.responses import ApiError, DashboardValidationError, error
 from astrbot.dashboard.services.api_key_service import ApiKeyService
 from astrbot.dashboard.services.appearance_service import AppearanceService
 from astrbot.dashboard.services.auth_service import (
@@ -63,6 +62,7 @@ from astrbot.dashboard.services.update_service import (
     call_pip_install,
 )
 
+from .error_handling import internal_error_response
 from .plugin_files import router as plugin_files_router
 from .plugin_page_assets import router as plugin_page_assets_router
 from .router import API_V1_PREFIX, build_api_router
@@ -168,9 +168,20 @@ def create_dashboard_asgi_app(
             status_code=exc.status_code,
         )
 
+    @app.exception_handler(DashboardValidationError)
+    async def dashboard_validation_error_handler(
+        _request: Request,
+        exc: DashboardValidationError,
+    ):
+        return JSONResponse(error(str(exc)), status_code=400)
+
     @app.exception_handler(ValueError)
     async def value_error_handler(_request: Request, exc: ValueError):
-        return JSONResponse(error(str(exc)), status_code=400)
+        return internal_error_response(
+            logger,
+            "Unhandled dashboard API value error",
+            exc,
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error_handler(_request: Request, exc: StarletteHTTPException):
@@ -195,8 +206,11 @@ def create_dashboard_asgi_app(
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(_request: Request, exc: Exception):
-        logger.error("Unhandled dashboard API exception: %s", safe_error("", exc))
-        return JSONResponse(error("Internal server error"), status_code=500)
+        return internal_error_response(
+            logger,
+            "Unhandled dashboard API exception",
+            exc,
+        )
 
     app.include_router(build_api_router())
     app.include_router(plugin_page_assets_router)

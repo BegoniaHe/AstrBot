@@ -18,6 +18,23 @@ _IMAGE_HEADERS = {
     "Cache-Control": "private, max-age=300",
     "X-Content-Type-Options": "nosniff",
 }
+_WALLPAPER_RESPONSE = {
+    200: {
+        "description": "Wallpaper image bytes",
+        "content": {
+            "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+            "image/png": {"schema": {"type": "string", "format": "binary"}},
+            "image/webp": {"schema": {"type": "string", "format": "binary"}},
+            "image/gif": {"schema": {"type": "string", "format": "binary"}},
+        },
+    }
+}
+_THUMBNAIL_RESPONSE = {
+    200: {
+        "description": "WebP wallpaper thumbnail bytes",
+        "content": {"image/webp": {"schema": {"type": "string", "format": "binary"}}},
+    }
+}
 
 
 def get_service(request: Request) -> AppearanceService:
@@ -48,7 +65,10 @@ async def upload_wallpaper(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("/appearance/wallpapers/{wallpaper_id}/thumbnail")
+@router.get(
+    "/appearance/wallpapers/{wallpaper_id}/thumbnail",
+    responses=_THUMBNAIL_RESPONSE,
+)
 async def get_wallpaper_thumbnail(
     wallpaper_id: str,
     _auth: AuthContext = Depends(require_appearance_scope),
@@ -63,7 +83,7 @@ async def get_wallpaper_thumbnail(
     return FileResponse(path, media_type=content_type, headers=_IMAGE_HEADERS)
 
 
-@router.get("/appearance/wallpapers/{wallpaper_id}")
+@router.get("/appearance/wallpapers/{wallpaper_id}", responses=_WALLPAPER_RESPONSE)
 async def get_wallpaper(
     wallpaper_id: str,
     _auth: AuthContext = Depends(require_appearance_scope),

@@ -74,7 +74,7 @@ async def test_background_upload_task_aggregates_uploaded_and_failed_documents()
     assert service.upload_tasks["task-upload"]["result"] == {
         "task_id": "task-upload",
         "uploaded": [{"doc_id": "doc-1", "doc_name": "ok.txt"}],
-        "failed": [{"file_name": "bad.md", "error": "bad.md: embedding failed"}],
+        "failed": [{"file_name": "bad.md", "error": "bad.md: Document upload failed"}],
         "total": 2,
         "success_count": 1,
         "failed_count": 1,
@@ -104,7 +104,10 @@ async def test_background_upload_task_marks_failed_when_file_shape_breaks_outer_
     )
 
     assert service.upload_tasks["task-upload-broken"]["status"] == "failed"
-    assert service.upload_tasks["task-upload-broken"]["error"] == "'file_name'"
+    assert (
+        service.upload_tasks["task-upload-broken"]["error"]
+        == "Knowledge base task failed"
+    )
     assert service.upload_progress["task-upload-broken"]["status"] == "failed"
     kb_helper.upload_document.assert_not_awaited()
 
@@ -139,7 +142,7 @@ async def test_background_import_task_aggregates_failures_and_infers_file_types(
         "failed": [
             {
                 "file_name": "plain-text",
-                "error": "plain-text: chunk validation failed",
+                "error": "plain-text: Document upload failed",
             }
         ],
         "total": 2,
@@ -171,7 +174,10 @@ async def test_background_import_task_marks_failed_when_document_shape_breaks_ou
     )
 
     assert service.upload_tasks["task-import-broken"]["status"] == "failed"
-    assert "has no attribute 'get'" in service.upload_tasks["task-import-broken"]["error"]
+    assert (
+        service.upload_tasks["task-import-broken"]["error"]
+        == "Knowledge base task failed"
+    )
     assert service.upload_progress["task-import-broken"]["status"] == "failed"
     kb_helper.upload_document.assert_not_awaited()
 
@@ -399,7 +405,7 @@ async def test_list_kbs_clamps_pagination_and_includes_init_error():
             {
                 "kb_id": "kb-1",
                 "kb_name": "First",
-                "init_error": "index load failed",
+                "init_error": "Knowledge base initialization failed",
             }
         ],
         "page": 1,
@@ -441,7 +447,9 @@ async def test_update_kb_uses_existing_name_when_payload_omits_it():
     )
     service = _make_service(kb_manager=kb_manager)
 
-    result, message = await service.update_kb({"kb_id": "kb-1", "description": "updated"})
+    result, message = await service.update_kb(
+        {"kb_id": "kb-1", "description": "updated"}
+    )
 
     assert result == {"kb_id": "kb-1", "kb_name": "Current Name"}
     assert message == "更新知识库成功"
@@ -472,9 +480,7 @@ async def test_update_kb_rejects_missing_current_or_updated_kb():
         await service.update_kb({"kb_id": "kb-1", "description": "updated"})
 
     missing_updated_manager = MagicMock(
-        get_kb=AsyncMock(
-            return_value=MagicMock(kb=MagicMock(kb_name="Current Name"))
-        ),
+        get_kb=AsyncMock(return_value=MagicMock(kb=MagicMock(kb_name="Current Name"))),
         update_kb=AsyncMock(return_value=None),
     )
     service = _make_service(kb_manager=missing_updated_manager)
@@ -584,19 +590,32 @@ async def test_retrieve_rejects_invalid_request_shapes():
 
 
 @pytest.mark.asyncio
-async def test_retrieve_returns_empty_results_and_debug_error(monkeypatch):
+async def test_retrieve_redacts_debug_visualization_errors(monkeypatch):
     kb_manager = MagicMock(retrieve=AsyncMock(return_value=None))
     service = _make_service(kb_manager=kb_manager)
+    sensitive_error = (
+        "api_key=top-secret Bearer token-123 password=dashboard-password "
+        "https://internal.example/visualization C:\\private\\secret.txt"
+    )
+    logged_errors: list[tuple[object, ...]] = []
+
+    class RecordingLogger:
+        def error(self, *args: object) -> None:
+            logged_errors.append(args)
 
     async def fake_generate_tsne_visualization(query, kb_names, manager):
         assert query == "astrbot"
         assert kb_names == ["demo"]
         assert manager is kb_manager
-        raise RuntimeError("tsne failed")
+        raise RuntimeError(sensitive_error)
 
     monkeypatch.setattr(
         "astrbot.dashboard.services.knowledge_base_service.generate_tsne_visualization",
         fake_generate_tsne_visualization,
+    )
+    monkeypatch.setattr(
+        "astrbot.dashboard.services.knowledge_base_service.logger",
+        RecordingLogger(),
     )
 
     result = await service.retrieve(
@@ -607,8 +626,17 @@ async def test_retrieve_returns_empty_results_and_debug_error(monkeypatch):
         "results": [],
         "total": 0,
         "query": "astrbot",
-        "visualization_error": "tsne failed",
+        "visualization_error": "Visualization generation failed",
     }
+    rendered_logs = " ".join(str(args) for args in logged_errors)
+    for fragment in (
+        "top-secret",
+        "token-123",
+        "dashboard-password",
+        "internal.example",
+        "C:\\private\\secret.txt",
+    ):
+        assert fragment not in rendered_logs
     kb_manager.retrieve.assert_awaited_once_with(
         query="astrbot",
         kb_names=["demo"],
@@ -680,7 +708,7 @@ async def test_background_upload_from_url_task_records_failures():
     assert service.upload_tasks["url-task-failed"] == {
         "status": "failed",
         "result": None,
-        "error": "download failed",
+        "error": "Knowledge base task failed",
     }
     assert service.upload_progress["url-task-failed"]["status"] == "failed"
 
@@ -805,7 +833,9 @@ def test_validate_import_request_returns_defaults_and_values():
 async def test_upload_document_rejects_invalid_input_shapes():
     service = _make_service()
 
-    with pytest.raises(KnowledgeBaseServiceError, match="Content-Type 须为 multipart/form-data"):
+    with pytest.raises(
+        KnowledgeBaseServiceError, match="Content-Type 须为 multipart/form-data"
+    ):
         await service.upload_document(
             content_type="application/json",
             form_data={},
@@ -835,7 +865,9 @@ async def test_upload_document_rejects_invalid_input_shapes():
 
 
 @pytest.mark.asyncio
-async def test_upload_document_rejects_missing_kb_after_staging_files(monkeypatch, tmp_path):
+async def test_upload_document_rejects_missing_kb_after_staging_files(
+    monkeypatch, tmp_path
+):
     async def fake_save_upload_to_path(file, path):
         path.write_bytes(file.content)
 
@@ -991,11 +1023,15 @@ async def test_delete_document_and_chunk_validate_inputs_and_delegate():
     with pytest.raises(KnowledgeBaseServiceError, match="缺少参数 doc_id"):
         await service.delete_document({"kb_id": "kb-1"})
 
-    missing_service = _make_service(kb_manager=MagicMock(get_kb=AsyncMock(return_value=None)))
+    missing_service = _make_service(
+        kb_manager=MagicMock(get_kb=AsyncMock(return_value=None))
+    )
     with pytest.raises(KnowledgeBaseServiceError, match="知识库不存在"):
         await missing_service.delete_document({"kb_id": "kb-1", "doc_id": "doc-1"})
 
-    result, message = await service.delete_document({"kb_id": "kb-1", "doc_id": "doc-1"})
+    result, message = await service.delete_document(
+        {"kb_id": "kb-1", "doc_id": "doc-1"}
+    )
     assert result is None
     assert message == "删除文档成功"
     kb_helper.delete_document.assert_awaited_once_with("doc-1")
@@ -1029,11 +1065,17 @@ async def test_list_chunks_validates_kb_and_doc_and_delegates():
     with pytest.raises(KnowledgeBaseServiceError, match="缺少参数 doc_id"):
         await service.list_chunks(kb_id="kb-1", doc_id=None, page=1, page_size=5)
 
-    missing_service = _make_service(kb_manager=MagicMock(get_kb=AsyncMock(return_value=None)))
+    missing_service = _make_service(
+        kb_manager=MagicMock(get_kb=AsyncMock(return_value=None))
+    )
     with pytest.raises(KnowledgeBaseServiceError, match="知识库不存在"):
-        await missing_service.list_chunks(kb_id="kb-1", doc_id="doc-1", page=1, page_size=5)
+        await missing_service.list_chunks(
+            kb_id="kb-1", doc_id="doc-1", page=1, page_size=5
+        )
 
-    result = await service.list_chunks(kb_id="kb-1", doc_id="doc-1", page=2, page_size=5)
+    result = await service.list_chunks(
+        kb_id="kb-1", doc_id="doc-1", page=2, page_size=5
+    )
 
     assert result == {
         "items": [{"chunk_id": "chunk-1"}],

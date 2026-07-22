@@ -19,6 +19,12 @@ from astrbot.dashboard.services.open_api_service import (
 from .auth import AuthContext, require_scope
 
 router = APIRouter(tags=["Open API"])
+_SSE_RESPONSE = {
+    200: {
+        "description": "Server-sent chat stream or an error envelope",
+        "content": {"text/event-stream": {"schema": {"type": "string"}}},
+    }
+}
 
 
 async def require_im_scope(request: Request) -> AuthContext:
@@ -173,7 +179,7 @@ def _extract_ws_api_key(websocket: WebSocket) -> str | None:
     return None
 
 
-@router.post("/chat")
+@router.post("/chat", responses=_SSE_RESPONSE)
 async def chat(
     payload: OpenApiChatRequest,
     auth: AuthContext = Depends(require_chat_scope),
@@ -310,7 +316,7 @@ async def send_im_message(
     try:
         await service.send_message(body)
     except OpenApiServiceError as exc:
-        raise ApiError(str(exc)) from exc
+        raise ApiError(str(exc), status_code=exc.status_code) from exc
 
     return ok()
 

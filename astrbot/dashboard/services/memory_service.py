@@ -2,9 +2,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from astrbot import logger
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
 from astrbot.core.db import BaseDatabase
 from astrbot.core.memory.writeback.profile_refresher import MemoryProfileRefresher
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.task_utils import create_tracked_task
 
 
@@ -269,10 +271,11 @@ class MemoryService:
                 "updated_at": datetime.now(UTC).isoformat(),
             }
         except Exception as exc:  # noqa: BLE001
+            logger.error("Memory profile refresh failed: %s", safe_error("", exc))
             self.refresh_tasks[task_id] = {
                 "status": "failed",
                 "result": None,
-                "error": str(exc),
+                "error": "Memory profile refresh failed",
                 "updated_at": datetime.now(UTC).isoformat(),
             }
 

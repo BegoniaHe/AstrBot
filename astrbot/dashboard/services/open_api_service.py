@@ -15,6 +15,8 @@ from astrbot.core.platform.sources.webchat.message_parts_helper import (
 from astrbot.core.platform.sources.webchat.webchat_queue_mgr import webchat_queue_mgr
 from astrbot.core.star.dashboard_extension import ALL_OPEN_API_SCOPES
 from astrbot.core.utils.datetime_utils import to_utc_isoformat
+from astrbot.core.utils.error_redaction import safe_error
+from astrbot.dashboard.responses import INTERNAL_SERVER_ERROR_MESSAGE
 from astrbot.dashboard.services.api_key_service import ApiKeyService
 from astrbot.dashboard.services.chat_service import (
     collect_plain_text_from_message_parts,
@@ -32,7 +34,9 @@ CloseWebSocket = Callable[[int, str], Awaitable[None]]
 
 
 class OpenApiServiceError(Exception):
-    pass
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass
@@ -176,8 +180,8 @@ class OpenApiService:
             existing = await self.db.get_platform_session_by_id(session_id)
             if existing and existing.creator == username:
                 return None
-            logger.error("Failed to create chat session %s: %s", session_id, exc)
-            return f"Failed to create session: {exc}"
+            logger.error("Failed to create chat session: %s", safe_error("", exc))
+            return "Failed to create session"
 
         return None
 
@@ -227,7 +231,17 @@ class OpenApiService:
         conf_list: list[dict],
         chat_bridge: OpenApiWebSocketChatBridge,
     ) -> None:
-        authed, auth_err = await self.authenticate_api_key(raw_api_key)
+        try:
+            authed, auth_err = await self.authenticate_api_key(raw_api_key)
+        except Exception as exc:
+            logger.error("Open API WS authentication failed: %s", safe_error("", exc))
+            await self.send_chat_ws_error(
+                send_json,
+                INTERNAL_SERVER_ERROR_MESSAGE,
+                "PROCESSING_ERROR",
+            )
+            await close(1011, INTERNAL_SERVER_ERROR_MESSAGE)
+            return
         if not authed:
             message = auth_err or "Unauthorized"
             await self.send_chat_ws_error(send_json, message, "UNAUTHORIZED")
@@ -266,7 +280,7 @@ class OpenApiService:
                     send_error=send_error,
                 )
         except Exception as exc:
-            logger.debug("Open API WS connection closed: %s", exc)
+            logger.debug("Open API WS connection closed: %s", safe_error("", exc))
 
     async def update_session_config_route(
         self,
@@ -288,13 +302,10 @@ class OpenApiService:
                 )
         except Exception as exc:
             logger.error(
-                "Failed to update chat config route for %s with %s: %s",
-                umo,
-                config_id,
-                exc,
-                exc_info=True,
+                "Failed to update chat config route: %s",
+                safe_error("", exc),
             )
-            return f"Failed to update chat config route: {exc}"
+            return "Failed to update chat config route"
         return None
 
     async def insert_webchat_user_message(
@@ -468,9 +479,9 @@ class OpenApiService:
                         )
                         refs = merge_webchat_refs(extracted_refs, reducer.native_refs)
                     except Exception as exc:
-                        logger.exception(
-                            f"Open API WS failed to extract web search refs: {exc}",
-                            exc_info=True,
+                        logger.error(
+                            "Open API WS failed to extract web search refs: %s",
+                            safe_error("", exc),
                         )
 
                         refs = reducer.native_refs
@@ -498,8 +509,8 @@ class OpenApiService:
                 if msg_type == "end":
                     break
         except Exception as exc:
-            logger.exception(f"Open API WS chat failed: {exc}", exc_info=True)
-            await send_error(f"Failed to process message: {exc}", "PROCESSING_ERROR")
+            logger.error("Open API WS chat failed: %s", safe_error("", exc))
+            await send_error("Failed to process message", "PROCESSING_ERROR")
         finally:
             webchat_queue_mgr.remove_back_queue(message_id)
 
@@ -580,7 +591,8 @@ class OpenApiService:
         try:
             session = MessageSession.from_str(str(umo))
         except Exception as exc:
-            raise OpenApiServiceError(f"Invalid umo: {exc}") from exc
+            logger.error("Open API invalid UMO: %s", safe_error("", exc))
+            raise OpenApiServiceError("Invalid umo") from exc
 
         try:
             message_chain = await self.build_message_chain_from_payload(message_payload)
@@ -590,16 +602,25 @@ class OpenApiService:
                     raise OpenApiServiceError(
                         f"Bot not found or not running for platform: {session.platform_id}"
                     )
+                logger.error(
+                    "Open API platform send failed: %s",
+                    safe_error("", result.error_message or "unknown error"),
+                )
                 raise OpenApiServiceError(
-                    f"Failed to send message: {result.error_message or 'unknown error'}"
+                    INTERNAL_SERVER_ERROR_MESSAGE,
+                    status_code=500,
                 )
         except OpenApiServiceError:
             raise
         except ValueError as exc:
-            raise OpenApiServiceError(str(exc)) from exc
+            logger.error("Open API message payload rejected: %s", safe_error("", exc))
+            raise OpenApiServiceError("Invalid message payload") from exc
         except Exception as exc:
-            logger.error(f"Open API send_message failed: {exc}", exc_info=True)
-            raise OpenApiServiceError(f"Failed to send message: {exc}") from exc
+            logger.error("Open API send_message failed: %s", safe_error("", exc))
+            raise OpenApiServiceError(
+                INTERNAL_SERVER_ERROR_MESSAGE,
+                status_code=500,
+            ) from exc
 
     def get_bots(self) -> dict:
         bot_ids = []

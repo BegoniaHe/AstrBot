@@ -9,6 +9,16 @@ from astrbot.dashboard.services.file_service import FileService, FileServiceErro
 from .auth import AuthContext, require_scope
 
 router = APIRouter(tags=["Files"])
+_BINARY_FILE_RESPONSE = {
+    200: {
+        "description": "File bytes or an error envelope",
+        "content": {
+            "application/octet-stream": {
+                "schema": {"type": "string", "format": "binary"}
+            }
+        },
+    }
+}
 
 
 def get_service(request: Request) -> FileService:
@@ -53,7 +63,7 @@ async def _upload_file(file: UploadFile, service: ChatService):
     return ok(result)
 
 
-@router.get("/files/tokens/{file_token}")
+@router.get("/files/tokens/{file_token}", responses=_BINARY_FILE_RESPONSE)
 async def get_token_file(
     file_token: str,
     service: FileService = Depends(get_service),
@@ -70,7 +80,7 @@ async def upload_file(
     return await _upload_file(file, service)
 
 
-@router.get("/files/content")
+@router.get("/files/content", responses=_BINARY_FILE_RESPONSE)
 async def get_file_by_name(
     filename: str | None = Query(default=None),
     _auth: AuthContext = Depends(require_file_scope),
@@ -83,8 +93,8 @@ async def get_file_by_name(
     return _file_response(file_path, mimetype)
 
 
-@router.get("/files/{attachment_id}")
-@router.get("/files/{attachment_id}/content")
+@router.get("/files/{attachment_id}", responses=_BINARY_FILE_RESPONSE)
+@router.get("/files/{attachment_id}/content", responses=_BINARY_FILE_RESPONSE)
 async def get_file(
     attachment_id: str,
     _auth: AuthContext = Depends(require_file_scope),

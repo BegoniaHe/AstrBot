@@ -18,7 +18,7 @@ class ConversationServiceError(Exception):
 class ConversationExport:
     file_obj: BytesIO
     filename: str
-    mimetype: str = "application/jsonl"
+    mimetype: str = "application/x-ndjson"
 
 
 class ConversationService:

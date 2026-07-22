@@ -22,6 +22,7 @@ from astrbot.core.platform.register import platform_cls_map, platform_registry
 from astrbot.core.provider.register import provider_registry
 from astrbot.core.star.star import star_registry
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.llm_metadata import LLM_METADATAS
 from astrbot.core.utils.totp import (
     is_totp_enabled,
@@ -31,7 +32,7 @@ from astrbot.core.utils.totp import (
 )
 from astrbot.core.utils.webhook_utils import ensure_platform_webhook_config
 from astrbot.dashboard.async_utils import run_maybe_async
-from astrbot.dashboard.responses import ApiError
+from astrbot.dashboard.responses import ApiError, DashboardValidationError
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
 from astrbot.dashboard.upload_utils import save_upload_to_path
 
@@ -578,9 +579,9 @@ def save_config(
     except Exception as exc:
         logger.error(traceback.format_exc())
         logger.warning(f"验证配置时出现异常: {exc}")
-        raise ValueError(f"验证配置时出现异常: {exc}")
+        raise DashboardValidationError("验证配置时出现异常，请检查配置或服务端日志")
     if errors:
-        raise ValueError(f"格式校验未通过: {errors}")
+        raise DashboardValidationError(f"格式校验未通过: {errors}")
 
     config.save_config(post_config)
 
@@ -622,7 +623,7 @@ class ConfigProfileService:
 
     def get_profile(self, config_id: str) -> dict:
         if config_id not in self.acm.confs:
-            raise ValueError(f"Config file {config_id} does not exist")
+            raise DashboardValidationError(f"Config file {config_id} does not exist")
         return {
             "config": self.acm.confs[config_id],
             "metadata": ConfigMetadataI18n.convert_to_i18n_keys(CONFIG_METADATA_3),
@@ -636,7 +637,7 @@ class ConfigProfileService:
         two_factor_code: str | None = None,
     ) -> str | None:
         if config_id not in self.acm.confs:
-            raise ValueError(f"Config file {config_id} does not exist")
+            raise DashboardValidationError(f"Config file {config_id} does not exist")
         config = copy.deepcopy(config)
         if config_id == "default":
             default_conf = getattr(self.acm, "default_conf", self.acm.confs["default"])
@@ -689,11 +690,11 @@ class ConfigProfileService:
 
     async def rename_profile(self, config_id: str, name: str | None) -> None:
         if not await self.acm.update_conf_info(config_id, name=name):
-            raise ValueError("Failed to update config profile")
+            raise DashboardValidationError("Failed to update config profile")
 
     async def delete_profile(self, config_id: str) -> None:
         if not await self.acm.delete_conf(config_id):
-            raise ValueError("Failed to delete config profile")
+            raise DashboardValidationError("Failed to delete config profile")
         self.core_lifecycle.pipeline_scheduler_mapping.pop(config_id, None)
         ucr = self.core_lifecycle.umop_config_router
         next_routing = {
@@ -933,13 +934,13 @@ class ConfigFileService:
     ):
         scope = scope or "plugin"
         if scope != "plugin":
-            raise ValueError(f"Unsupported scope: {scope}")
+            raise DashboardValidationError(f"Unsupported scope: {scope}")
         if not name or not key_path:
-            raise ValueError("Missing name or key parameter")
+            raise DashboardValidationError("Missing name or key parameter")
 
         metadata = self.get_plugin_metadata_by_name(name)
         if not metadata or not metadata.config:
-            raise ValueError(f"Plugin {name} not found or has no config")
+            raise DashboardValidationError(f"Plugin {name} not found or has no config")
 
         return scope, name, key_path, metadata, metadata.config
 
@@ -950,9 +951,9 @@ class ConfigFileService:
     ) -> None:
         metadata = self.get_plugin_metadata_by_name(plugin_name)
         if not metadata:
-            raise ValueError(f"插件 {plugin_name} 不存在")
+            raise DashboardValidationError(f"插件 {plugin_name} 不存在")
         if not metadata.config:
-            raise ValueError(f"插件 {plugin_name} 没有注册配置")
+            raise DashboardValidationError(f"插件 {plugin_name} 没有注册配置")
 
         errors, post_configs = validate_config(
             post_configs,
@@ -960,7 +961,7 @@ class ConfigFileService:
             is_core=False,
         )
         if errors:
-            raise ValueError(f"格式校验未通过: {errors}")
+            raise DashboardValidationError(f"格式校验未通过: {errors}")
         metadata.config.save_config(post_configs)
         await self.core_lifecycle.plugin_manager.reload(plugin_name)
 
@@ -979,9 +980,9 @@ class ConfigFileService:
         )
         meta = _get_schema_item(getattr(config, "schema", None), key_path)
         if not meta or meta.get("type") != "file":
-            raise ValueError("Config item not found or not file type")
+            raise DashboardValidationError("Config item not found or not file type")
         if not files:
-            raise ValueError("No files uploaded")
+            raise DashboardValidationError("No files uploaded")
 
         allowed_exts = self._allowed_file_extensions(meta)
         plugin_root_path = self._plugin_root_path(name)
@@ -1017,7 +1018,7 @@ class ConfigFileService:
             uploaded.append(rel_path)
 
         if not uploaded:
-            raise ValueError(
+            raise DashboardValidationError(
                 "Upload failed: " + ", ".join(errors) if errors else "Upload failed"
             )
 
@@ -1031,22 +1032,22 @@ class ConfigFileService:
         rel_path: str | None,
     ) -> None:
         if not name:
-            raise ValueError("Missing name parameter")
+            raise DashboardValidationError("Missing name parameter")
         if (scope or "plugin") != "plugin":
-            raise ValueError(f"Unsupported scope: {scope}")
+            raise DashboardValidationError(f"Unsupported scope: {scope}")
 
         rel_path = _normalize_rel_path(rel_path)
         if not rel_path or not rel_path.startswith("files/"):
-            raise ValueError("Invalid path parameter")
+            raise DashboardValidationError("Invalid path parameter")
 
         metadata = self.get_plugin_metadata_by_name(name)
         if not metadata:
-            raise ValueError(f"Plugin {name} not found")
+            raise DashboardValidationError(f"Plugin {name} not found")
 
         plugin_root_path = self._plugin_root_path(name)
         target_path = self._safe_plugin_path(plugin_root_path, rel_path)
         if target_path is None:
-            raise ValueError("Invalid path parameter")
+            raise DashboardValidationError("Invalid path parameter")
         if target_path.is_file():
             target_path.unlink()
 
@@ -1064,7 +1065,7 @@ class ConfigFileService:
         )
         meta = _get_schema_item(getattr(config, "schema", None), key_path)
         if not meta or meta.get("type") != "file":
-            raise ValueError("Config item not found or not file type")
+            raise DashboardValidationError("Config item not found or not file type")
 
         plugin_root_path = self._plugin_root_path(name)
         target_dir = self._safe_plugin_path(
@@ -1072,7 +1073,7 @@ class ConfigFileService:
             f"files/{_config_key_to_folder(key_path)}",
         )
         if target_dir is None:
-            raise ValueError("Invalid path parameter")
+            raise DashboardValidationError("Invalid path parameter")
         if not target_dir.exists() or not target_dir.is_dir():
             return {"files": []}
 
@@ -1102,7 +1103,7 @@ class ConfigFileService:
         try:
             plugin_root_path.relative_to(storage_root_path)
         except ValueError as exc:
-            raise ValueError("Invalid name parameter") from exc
+            raise DashboardValidationError("Invalid name parameter") from exc
         return plugin_root_path
 
     @staticmethod
@@ -1159,7 +1160,7 @@ class BotConfigService:
     def get_bot(self, bot_id: str) -> dict:
         bot = self._find_bot(bot_id)
         if bot is None:
-            raise ValueError(f"Bot {bot_id} not found")
+            raise DashboardValidationError(f"Bot {bot_id} not found")
         return {"bot": copy.deepcopy(bot)}
 
     def get_bot_stats(self) -> dict:
@@ -1168,9 +1169,9 @@ class BotConfigService:
     async def create_bot(self, config: dict) -> None:
         bot_id = config.get("id")
         if not bot_id:
-            raise ValueError("Bot config must have an 'id' field")
+            raise DashboardValidationError("Bot config must have an 'id' field")
         if self._find_bot(bot_id) is not None:
-            raise ValueError(f"Bot {bot_id} already exists")
+            raise DashboardValidationError(f"Bot {bot_id} already exists")
         ensure_platform_webhook_config(config)
         self.config["platform"].append(config)
         save_config(self.config, self.config, is_core=True)
@@ -1178,7 +1179,7 @@ class BotConfigService:
 
     async def update_bot(self, bot_id: str, config: dict) -> None:
         if config.get("id") != bot_id:
-            raise ValueError("Bot id cannot be changed")
+            raise DashboardValidationError("Bot id cannot be changed")
         ensure_platform_webhook_config(config)
         for idx, bot in enumerate(self.config.get("platform", [])):
             if bot.get("id") == bot_id:
@@ -1186,12 +1187,12 @@ class BotConfigService:
                 save_config(self.config, self.config, is_core=True)
                 await self.core_lifecycle.platform_manager.reload(config)
                 return
-        raise ValueError(f"Bot {bot_id} not found")
+        raise DashboardValidationError(f"Bot {bot_id} not found")
 
     async def set_bot_enabled(self, bot_id: str, enabled: bool) -> None:
         bot = self._find_bot(bot_id)
         if bot is None:
-            raise ValueError(f"Bot {bot_id} not found")
+            raise DashboardValidationError(f"Bot {bot_id} not found")
         new_config = copy.deepcopy(bot)
         new_config["enable"] = enabled
         await self.update_bot(bot_id, new_config)
@@ -1203,7 +1204,7 @@ class BotConfigService:
                 save_config(self.config, self.config, is_core=True)
                 await self.core_lifecycle.platform_manager.terminate_platform(bot_id)
                 return
-        raise ValueError(f"Bot {bot_id} not found")
+        raise DashboardValidationError(f"Bot {bot_id} not found")
 
     def _find_bot(self, bot_id: str) -> dict | None:
         for bot in self.config.get("platform", []):
@@ -1344,20 +1345,22 @@ class ProviderConfigService:
     def get_provider_source(self, source_id: str) -> dict:
         source = self._find_provider_source(source_id)
         if source is None:
-            raise ValueError(f"Provider source {source_id} not found")
+            raise DashboardValidationError(f"Provider source {source_id} not found")
         return {"provider_source": self._build_provider_source_response(source)}
 
     async def upsert_provider_source(self, source_id: str, config: dict) -> None:
         config = self._ensure_provider_type(copy.deepcopy(config))
         next_source_id = str(config.get("id") or source_id).strip()
         if not next_source_id:
-            raise ValueError("Provider source config must have an 'id' field")
+            raise DashboardValidationError(
+                "Provider source config must have an 'id' field"
+            )
         config["id"] = next_source_id
         sources = self.config.setdefault("provider_sources", [])
 
         for source in sources:
             if source.get("id") == next_source_id and next_source_id != source_id:
-                raise ValueError(
+                raise DashboardValidationError(
                     f"Provider source ID '{next_source_id}' exists already, please try another ID."
                 )
 
@@ -1382,7 +1385,7 @@ class ProviderConfigService:
         sources = self.config.get("provider_sources", [])
         next_sources = [source for source in sources if source.get("id") != source_id]
         if len(next_sources) == len(sources):
-            raise ValueError(f"Provider source {source_id} not found")
+            raise DashboardValidationError(f"Provider source {source_id} not found")
         self.config["provider_sources"] = next_sources
         await self.provider_manager.delete_provider(provider_source_id=source_id)
         save_config(self.config, self.config, is_core=True)
@@ -1391,7 +1394,7 @@ class ProviderConfigService:
     async def list_provider_source_models(self, source_id: str) -> dict:
         source = self._find_provider_source(source_id)
         if source is None:
-            raise ValueError(f"Provider source {source_id} not found")
+            raise DashboardValidationError(f"Provider source {source_id} not found")
 
         from astrbot.core.provider import Provider
         from astrbot.core.provider.register import provider_cls_map
@@ -1399,15 +1402,19 @@ class ProviderConfigService:
 
         provider_type = source.get("type")
         if not provider_type:
-            raise ValueError("Provider source missing type")
+            raise DashboardValidationError("Provider source missing type")
         try:
             self.provider_manager.dynamic_import_provider(provider_type)
         except ImportError as exc:
-            raise ValueError(f"动态导入提供商适配器失败: {exc!s}") from exc
+            raise DashboardValidationError(
+                "动态导入提供商适配器失败，请检查提供商类型配置或查看服务端日志"
+            ) from exc
         provider_metadata = provider_cls_map.get(provider_type)
         cls_type = provider_metadata.cls_type if provider_metadata else None
         if cls_type is None or not issubclass(cls_type, Provider):
-            raise ValueError(f"Provider source {source_id} does not support model list")
+            raise DashboardValidationError(
+                f"Provider source {source_id} does not support model list"
+            )
 
         inst = cls_type(source, {})
         init_fn = getattr(inst, "initialize", None)
@@ -1436,9 +1443,11 @@ class ProviderConfigService:
 
         provider = self.provider_manager.inst_map.get(provider_id)
         if not provider:
-            raise ValueError(f"未找到 ID 为 {provider_id} 的提供商")
+            raise DashboardValidationError(f"未找到 ID 为 {provider_id} 的提供商")
         if not isinstance(provider, Provider):
-            raise ValueError(f"提供商 {provider_id} 类型不支持获取模型列表")
+            raise DashboardValidationError(
+                f"提供商 {provider_id} 类型不支持获取模型列表"
+            )
 
         models = await provider.get_models()
         models = models or []
@@ -1454,14 +1463,14 @@ class ProviderConfigService:
 
     async def get_embedding_dimension(self, provider_config: dict | None) -> dict:
         if not provider_config:
-            raise ValueError("缺少提供商配置")
+            raise DashboardValidationError("缺少提供商配置")
 
         from astrbot.core.provider.provider import EmbeddingProvider
         from astrbot.core.provider.register import provider_cls_map
 
         provider_type = provider_config.get("type")
         if not provider_type:
-            raise ValueError("提供商配置缺少 type 字段")
+            raise DashboardValidationError("提供商配置缺少 type 字段")
 
         if provider_type not in provider_cls_map:
             try:
@@ -1474,14 +1483,14 @@ class ProviderConfigService:
                     raise ImportError(provider_type)
                 dynamic_import_provider(provider_type)
             except ImportError as exc:
-                raise ValueError(
+                raise DashboardValidationError(
                     "提供商适配器加载失败，请检查提供商类型配置或查看服务端日志"
                 ) from exc
 
         provider_metadata = provider_cls_map.get(provider_type)
         cls_type = provider_metadata.cls_type if provider_metadata else None
         if not cls_type:
-            raise ValueError(f"无法找到 {provider_type} 的类")
+            raise DashboardValidationError(f"无法找到 {provider_type} 的类")
 
         inst = cls_type(provider_config, {})
         try:
@@ -1490,7 +1499,7 @@ class ProviderConfigService:
                 await run_maybe_async(init_fn)
 
             if not isinstance(inst, EmbeddingProvider):
-                raise ValueError("提供商不是 EmbeddingProvider 类型")
+                raise DashboardValidationError("提供商不是 EmbeddingProvider 类型")
 
             vec = await inst.get_embedding("echo")
             dim = len(vec)
@@ -1537,7 +1546,7 @@ class ProviderConfigService:
         self, provider_type: str | None
     ) -> list[dict]:
         if not provider_type:
-            raise ValueError("缺少参数 provider_type")
+            raise DashboardValidationError("缺少参数 provider_type")
         return self.list_providers(provider_type=provider_type)["providers"]
 
     def get_provider(self, provider_id: str, *, merged: bool = False) -> dict:
@@ -1546,7 +1555,7 @@ class ProviderConfigService:
             merged=merged,
         )
         if provider is None:
-            raise ValueError(f"Provider {provider_id} not found")
+            raise DashboardValidationError(f"Provider {provider_id} not found")
         provider_response = (
             self._build_provider_response(provider)
             if merged
@@ -1577,7 +1586,7 @@ class ProviderConfigService:
     async def set_provider_enabled(self, provider_id: str, enabled: bool) -> None:
         provider = self.provider_manager.get_provider_config_by_id(provider_id)
         if provider is None:
-            raise ValueError(f"Provider {provider_id} not found")
+            raise DashboardValidationError(f"Provider {provider_id} not found")
         provider["enable"] = enabled
         await self.provider_manager.update_provider(provider_id, provider)
 
@@ -1587,7 +1596,7 @@ class ProviderConfigService:
     async def test_provider(self, provider_id: str) -> dict:
         target = self.provider_manager.inst_map.get(provider_id)
         if not target:
-            raise ValueError(f"Provider {provider_id} not found")
+            raise DashboardValidationError(f"Provider {provider_id} not found")
         meta = target.meta()
         provider_type = getattr(meta, "provider_type", None)
         result = {
@@ -1601,8 +1610,11 @@ class ProviderConfigService:
         try:
             await target.test()
             result["status"] = "available"
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            result["error"] = str(exc)
+            logger.warning("Provider test failed: %s", safe_error("", exc))
+            result["error"] = "Provider test failed"
         return result
 
     def _find_provider_source(self, source_id: str) -> dict | None:

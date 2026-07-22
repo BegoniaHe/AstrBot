@@ -1,5 +1,4 @@
 import asyncio
-import traceback
 import uuid
 from pathlib import Path
 from typing import Any
@@ -8,8 +7,10 @@ import aiofiles
 from starlette.datastructures import UploadFile
 
 from astrbot import logger
+from astrbot.core.exceptions import KnowledgeBaseUploadError
 from astrbot.core.provider.provider import EmbeddingProvider, RerankProvider
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.task_utils import create_tracked_task
 from astrbot.dashboard.schemas import KnowledgeBaseRequest
 from astrbot.dashboard.services.core_lifecycle import DashboardCoreLifecycle
@@ -19,6 +20,11 @@ from astrbot.dashboard.utils import generate_tsne_visualization
 
 class KnowledgeBaseServiceError(Exception):
     pass
+
+
+_BACKGROUND_TASK_ERROR = "Knowledge base task failed"
+_DOCUMENT_UPLOAD_ERROR = "Document upload failed"
+_KB_INITIALIZATION_ERROR = "Knowledge base initialization failed"
 
 
 class KnowledgeBaseService:
@@ -120,9 +126,15 @@ class KnowledgeBaseService:
 
     @staticmethod
     def format_failed_doc_error(file_name: str, error: Exception) -> str:
-        message = str(error).strip() or "上传失败：发生未知错误。"
-        if message.startswith(file_name):
-            return message
+        if isinstance(error, KnowledgeBaseUploadError):
+            message = error.user_message.strip()
+            if message:
+                return (
+                    message
+                    if message.startswith(file_name)
+                    else f"{file_name}: {message}"
+                )
+        message = _DOCUMENT_UPLOAD_ERROR
         return f"{file_name}: {message}"
 
     async def background_upload_task(
@@ -177,7 +189,11 @@ class KnowledgeBaseService:
                     )
                     uploaded_docs.append(doc.model_dump())
                 except Exception as exc:
-                    logger.error(f"上传文档 {file_info['file_name']} 失败: {exc}")
+                    logger.error(
+                        "上传文档 %s 失败: %s",
+                        file_info["file_name"],
+                        safe_error("", exc),
+                    )
                     failed_docs.append(
                         {
                             "file_name": file_info["file_name"],
@@ -200,9 +216,12 @@ class KnowledgeBaseService:
                 },
             )
         except Exception as exc:
-            logger.error(f"后台上传任务 {task_id} 失败: {exc}")
-            logger.error(traceback.format_exc())
-            self.set_task_result(task_id, "failed", error=str(exc))
+            logger.error(
+                "后台上传任务 %s 失败: %s",
+                task_id,
+                safe_error("", exc),
+            )
+            self.set_task_result(task_id, "failed", error=_BACKGROUND_TASK_ERROR)
 
     async def background_import_task(
         self,
@@ -261,7 +280,11 @@ class KnowledgeBaseService:
                     )
                     uploaded_docs.append(doc.model_dump())
                 except Exception as exc:
-                    logger.error(f"导入文档 {file_name} 失败: {exc}")
+                    logger.error(
+                        "导入文档 %s 失败: %s",
+                        file_name,
+                        safe_error("", exc),
+                    )
                     failed_docs.append(
                         {
                             "file_name": file_name,
@@ -282,9 +305,12 @@ class KnowledgeBaseService:
                 },
             )
         except Exception as exc:
-            logger.error(f"后台导入任务 {task_id} 失败: {exc}")
-            logger.error(traceback.format_exc())
-            self.set_task_result(task_id, "failed", error=str(exc))
+            logger.error(
+                "后台导入任务 %s 失败: %s",
+                task_id,
+                safe_error("", exc),
+            )
+            self.set_task_result(task_id, "failed", error=_BACKGROUND_TASK_ERROR)
 
     async def list_kbs(self, *, page: int, page_size: int) -> dict[str, Any]:
         kb_manager = self.get_kb_manager()
@@ -303,7 +329,7 @@ class KnowledgeBaseService:
             kb_dict = kb.model_dump()
             kb_helper = await kb_manager.get_kb(kb.kb_id)
             if kb_helper and kb_helper.init_error:
-                kb_dict["init_error"] = kb_helper.init_error
+                kb_dict["init_error"] = _KB_INITIALIZATION_ERROR
             kb_list.append(kb_dict)
 
         return {"items": kb_list, "page": page, "page_size": page_size, "total": total}
@@ -334,7 +360,8 @@ class KnowledgeBaseService:
                     f"嵌入向量维度不匹配，实际是 {len(vec)}，然而配置是 {provider.get_dim()}",
                 )
         except Exception as exc:
-            raise KnowledgeBaseServiceError(f"测试嵌入模型失败: {exc!s}") from exc
+            logger.error("知识库嵌入模型验证失败: %s", safe_error("", exc))
+            raise KnowledgeBaseServiceError("测试嵌入模型失败") from exc
 
         if rerank_provider_id:
             rerank_provider = await kb_manager.provider_manager.get_provider_by_id(
@@ -350,9 +377,8 @@ class KnowledgeBaseService:
                 if not result:
                     raise ValueError("重排序模型返回结果异常")
             except Exception as exc:
-                raise KnowledgeBaseServiceError(
-                    f"测试重排序模型失败: {exc!s}，请检查平台日志输出。"
-                ) from exc
+                logger.error("知识库重排序模型验证失败: %s", safe_error("", exc))
+                raise KnowledgeBaseServiceError("测试重排序模型失败") from exc
 
         kb_helper = await kb_manager.create_kb(
             kb_name=kb_name,
@@ -760,9 +786,8 @@ class KnowledgeBaseService:
                 if img_base64:
                     response_data["visualization"] = img_base64
             except Exception as exc:
-                logger.error(f"生成 t-SNE 可视化失败: {exc}")
-                logger.error(traceback.format_exc())
-                response_data["visualization_error"] = str(exc)
+                logger.error("生成 t-SNE 可视化失败: %s", safe_error("", exc))
+                response_data["visualization_error"] = "Visualization generation failed"
 
         return response_data
 
@@ -852,9 +877,12 @@ class KnowledgeBaseService:
                 },
             )
         except Exception as exc:
-            logger.error(f"后台上传URL任务 {task_id} 失败: {exc}")
-            logger.error(traceback.format_exc())
-            self.set_task_result(task_id, "failed", error=str(exc))
+            logger.error(
+                "后台上传URL任务 %s 失败: %s",
+                task_id,
+                safe_error("", exc),
+            )
+            self.set_task_result(task_id, "failed", error=_BACKGROUND_TASK_ERROR)
 
 
 __all__ = ["KnowledgeBaseService", "KnowledgeBaseServiceError"]
