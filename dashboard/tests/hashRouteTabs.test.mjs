@@ -1,123 +1,110 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, expect, it, vi } from 'vitest';
 
-import * as hashRouteTabs from '../src/utils/hashRouteTabs.mjs';
-import { EXTENSION_ROUTE_NAME } from '../src/router/routeConstants.mjs';
+import { EXTENSION_ROUTE_NAME } from '../src/router/routeConstants';
+import {
+  createTabRouteLocation,
+  getValidHashTab,
+  replaceTabRoute,
+} from '../src/utils/hashRouteTabs';
 
-const { createTabRouteLocation, getValidHashTab } = hashRouteTabs;
-
-test('getValidHashTab returns the tab name for a valid route hash', () => {
+describe('hash route tabs', () => {
   const validTabs = ['installed', 'market', 'mcp'];
 
-  assert.equal(getValidHashTab('#market', validTabs), 'market');
-});
+  it('returns the tab name for a valid route hash', () => {
+    expect(getValidHashTab('#market', validTabs)).toBe('market');
+  });
 
-test('getValidHashTab rejects empty and unknown hashes', () => {
-  const validTabs = ['installed', 'market', 'mcp'];
+  it('rejects empty and unknown hashes', () => {
+    expect(getValidHashTab('', validTabs)).toBeNull();
+    expect(getValidHashTab('#unknown', validTabs)).toBeNull();
+  });
 
-  assert.equal(getValidHashTab('', validTabs), null);
-  assert.equal(getValidHashTab('#unknown', validTabs), null);
-});
+  it('uses the last hash segment when multiple hashes are present', () => {
+    expect(getValidHashTab('#/extension#foo#installed', validTabs)).toBe(
+      'installed',
+    );
+  });
 
-test('getValidHashTab uses the last hash segment when multiple hashes are present', () => {
-  const validTabs = ['installed', 'market', 'mcp'];
+  it('preserves the current path and query', () => {
+    const query = { open_config: 'sample-plugin', page: '2' };
+    const location = createTabRouteLocation(
+      {
+        path: '/extension',
+        query,
+      },
+      'market',
+    );
 
-  assert.equal(getValidHashTab('#/extension#foo#installed', validTabs), 'installed');
-});
-
-test('createTabRouteLocation preserves the current path and query', () => {
-  const query = { open_config: 'sample-plugin', page: '2' };
-  const location = createTabRouteLocation(
-    {
+    expect(location).toEqual({
       path: '/extension',
-      query,
-    },
-    'market',
-  );
-
-  assert.deepEqual(location, {
-    path: '/extension',
-    query: { open_config: 'sample-plugin', page: '2' },
-    hash: '#market',
+      query: { open_config: 'sample-plugin', page: '2' },
+      hash: '#market',
+    });
+    expect(location.query).not.toBe(query);
   });
-  assert.notEqual(location.query, query);
-});
 
-test('createTabRouteLocation falls back to the extension route name', () => {
-  const location = createTabRouteLocation(undefined, 'installed');
-
-  assert.deepEqual(location, {
-    name: EXTENSION_ROUTE_NAME,
-    query: {},
-    hash: '#installed',
+  it('falls back to the extension route name', () => {
+    expect(createTabRouteLocation({}, 'installed')).toEqual({
+      name: EXTENSION_ROUTE_NAME,
+      query: {},
+      hash: '#installed',
+    });
   });
-});
 
-test('createTabRouteLocation prefers route name and preserves params', () => {
-  const params = { pluginId: 'demo-plugin' };
-  const location = createTabRouteLocation(
-    {
+  it('prefers the route name and preserves params', () => {
+    const params = { pluginId: 'demo-plugin' };
+    const location = createTabRouteLocation(
+      {
+        name: 'ExtensionDetails',
+        path: '/extension/demo-plugin',
+        params,
+        query: { tab: 'details' },
+      },
+      'market',
+    );
+
+    expect(location).toEqual({
       name: 'ExtensionDetails',
-      path: '/extension/demo-plugin',
-      params,
+      params: { pluginId: 'demo-plugin' },
       query: { tab: 'details' },
-    },
-    'market',
-  );
-
-  assert.deepEqual(location, {
-    name: 'ExtensionDetails',
-    params: { pluginId: 'demo-plugin' },
-    query: { tab: 'details' },
-    hash: '#market',
+      hash: '#market',
+    });
+    expect(location.params).not.toBe(params);
   });
-  assert.notEqual(location.params, params);
-});
 
-test('createTabRouteLocation omits params for path-based routes', () => {
-  const params = { pluginId: 'demo-plugin' };
-  const location = createTabRouteLocation(
-    {
+  it('omits params for path-based routes', () => {
+    const location = createTabRouteLocation(
+      {
+        path: '/extension/demo-plugin',
+        params: { pluginId: 'demo-plugin' },
+      },
+      'installed',
+    );
+
+    expect(location).toEqual({
       path: '/extension/demo-plugin',
-      params,
-    },
-    'installed',
-  );
-
-  assert.deepEqual(location, {
-    path: '/extension/demo-plugin',
-    query: {},
-    hash: '#installed',
+      query: {},
+      hash: '#installed',
+    });
+    expect(location.params).toBeUndefined();
   });
-  assert.equal(location.params, undefined);
-});
 
-test('replaceTabRoute catches rejected router updates', async () => {
-  assert.equal(typeof hashRouteTabs.replaceTabRoute, 'function');
+  it('catches rejected router updates', async () => {
+    const error = new Error('blocked');
+    const logger = { warn: vi.fn() };
+    const router = { replace: vi.fn().mockRejectedValue(error) };
 
-  const error = new Error('blocked');
-  let logged;
-  const router = {
-    replace: async () => {
-      throw error;
-    },
-  };
-  const logger = {
-    warn: (message, cause) => {
-      logged = { message, cause };
-    },
-  };
-
-  const result = await hashRouteTabs.replaceTabRoute(
-    router,
-    { name: EXTENSION_ROUTE_NAME, query: { page: '1' } },
-    'installed',
-    logger,
-  );
-
-  assert.equal(result, false);
-  assert.deepEqual(logged, {
-    message: 'Failed to update extension tab route:',
-    cause: error,
+    await expect(
+      replaceTabRoute(
+        router,
+        { name: EXTENSION_ROUTE_NAME, query: { page: '1' } },
+        'installed',
+        logger,
+      ),
+    ).resolves.toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Failed to update extension tab route:',
+      error,
+    );
   });
 });

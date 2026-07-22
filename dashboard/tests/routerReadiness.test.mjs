@@ -1,29 +1,21 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, expect, it, vi } from 'vitest';
 
-test('waitForRouterReadyInBackground returns immediately and logs failures', async () => {
-  const module = await import('../src/utils/routerReadiness.mjs').catch(() => null);
+import { waitForRouterReadyInBackground } from '../src/utils/routerReadiness';
 
-  assert.ok(module?.waitForRouterReadyInBackground);
+describe('router readiness', () => {
+  it('returns immediately and logs failures', async () => {
+    const error = new Error('router blocked');
+    const logger = { warn: vi.fn() };
+    const readyPromise = Promise.reject(error);
+    const router = { isReady: () => readyPromise };
 
-  const error = new Error('router blocked');
-  let warned;
-  const readyPromise = Promise.reject(error);
-  const logger = {
-    warn: (message, cause) => {
-      warned = { message, cause };
-    },
-  };
+    expect(waitForRouterReadyInBackground(router, logger)).toBeUndefined();
 
-  const result = module.waitForRouterReadyInBackground(
-    { isReady: () => readyPromise },
-    logger,
-  );
+    await Promise.resolve();
 
-  assert.equal(result, undefined);
-  await Promise.resolve();
-  assert.deepEqual(warned, {
-    message: 'Router did not become ready after fallback mount:',
-    cause: error,
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Router did not become ready after fallback mount:',
+      error,
+    );
   });
 });

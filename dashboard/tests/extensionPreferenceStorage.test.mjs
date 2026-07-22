@@ -1,54 +1,55 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, expect, it } from 'vitest';
 
 import {
   PINNED_EXTENSIONS_STORAGE_KEY,
   readPinnedExtensions,
   writePinnedExtensions,
-} from '../src/views/extension/extensionPreferenceStorage.mjs';
+} from '../src/views/extension/extensionPreferenceStorage';
 
-test('readPinnedExtensions uses the legacy pinned extension storage key', () => {
-  assert.equal(PINNED_EXTENSIONS_STORAGE_KEY, 'astrbot.pinnedExtensions');
-});
+describe('extension preference storage', () => {
+  it('uses the pinned extension storage key', () => {
+    expect(PINNED_EXTENSIONS_STORAGE_KEY).toBe('astrbot.pinnedExtensions');
+  });
 
-test('readPinnedExtensions parses stored pinned extension names', () => {
-  const storage = {
-    getItem(key) {
-      return key === PINNED_EXTENSIONS_STORAGE_KEY
-        ? JSON.stringify(['alpha', 'beta', 'alpha', '', 1])
-        : null;
-    },
-  };
+  it('parses stored pinned extension names', () => {
+    const storage = {
+      getItem(key) {
+        return key === PINNED_EXTENSIONS_STORAGE_KEY
+          ? JSON.stringify(['alpha', 'beta', 'alpha', '', 1])
+          : null;
+      },
+    };
 
-  assert.deepEqual(readPinnedExtensions(storage), ['alpha', 'beta']);
-});
+    expect(readPinnedExtensions(storage)).toEqual(['alpha', 'beta']);
+  });
 
-test('readPinnedExtensions returns an empty array when storage access fails', () => {
-  const storage = {
-    getItem() {
-      throw new Error('SecurityError');
-    },
-  };
+  it('returns an empty array when storage access fails', () => {
+    const storage = {
+      getItem() {
+        throw new Error('SecurityError');
+      },
+    };
 
-  assert.deepEqual(readPinnedExtensions(storage), []);
-});
+    expect(readPinnedExtensions(storage)).toEqual([]);
+  });
 
-test('writePinnedExtensions stores normalized pinned extension names', () => {
-  const writes = [];
-  const storage = {
-    setItem(key, value) {
-      writes.push([key, value]);
-    },
-  };
+  it('stores normalized pinned extension names', () => {
+    const writes = [];
+    const storage = {
+      setItem(key, value) {
+        writes.push([key, value]);
+      },
+    };
 
-  writePinnedExtensions(['alpha', 'beta', 'alpha', '', null], storage);
+    writePinnedExtensions(['alpha', 'beta', 'alpha', '', null], storage);
 
-  assert.deepEqual(writes, [
-    [PINNED_EXTENSIONS_STORAGE_KEY, JSON.stringify(['alpha', 'beta'])],
-  ]);
-});
+    expect(writes).toEqual([
+      [PINNED_EXTENSIONS_STORAGE_KEY, JSON.stringify(['alpha', 'beta'])],
+    ]);
+  });
 
-test('writePinnedExtensions ignores unavailable storage', () => {
-  assert.doesNotThrow(() => writePinnedExtensions(['alpha'], null));
-  assert.doesNotThrow(() => writePinnedExtensions(['alpha'], {}));
+  it('ignores unavailable storage', () => {
+    expect(() => writePinnedExtensions(['alpha'], null)).not.toThrow();
+    expect(() => writePinnedExtensions(['alpha'], {})).not.toThrow();
+  });
 });

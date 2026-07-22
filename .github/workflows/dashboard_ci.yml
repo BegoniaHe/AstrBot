@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   build:
-    if: github.repository == 'AstrBotDevs/AstrBot'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,10 +28,11 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: dashboard/pnpm-lock.yaml
 
-      - name: Install and Build
+      - name: Install, test, and build
         working-directory: dashboard
         run: |
           pnpm install --frozen-lockfile
+          pnpm test
           pnpm run build
 
       - name: Inject Commit SHA
@@ -53,7 +53,7 @@ jobs:
             !dist/**/*.md
 
       - name: Create GitHub Release
-        if: github.event_name == 'push'
+        if: github.repository == 'AstrBotDevs/AstrBot' && github.event_name == 'push'
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           tag: release-${{ github.sha }}

@@ -1,6 +1,6 @@
-import test from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -17,10 +17,18 @@ import {
 // ── Helper: create a temporary directory tree for file-system tests ─────────
 
 function makeTmpDir() {
-  const base = join(tmpdir(), `mdi-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(base, { recursive: true });
-  return base;
+  const directory = mkdtempSync(join(tmpdir(), 'astrbot-mdi-test-'));
+  temporaryDirectories.add(directory);
+  return directory;
 }
+
+const temporaryDirectories = new Set();
+
+after(() => {
+  for (const directory of temporaryDirectories) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // ── collectFiles ────────────────────────────────────────────────────────────
 
@@ -32,10 +40,8 @@ test('collectFiles yields files matching given extensions', () => {
 
   const files = [...collectFiles(tmp, ['.vue', '.ts'])];
   assert.equal(files.length, 2);
-  assert.ok(files.some(f => f.endsWith('a.vue')));
-  assert.ok(files.some(f => f.endsWith('b.ts')));
-
-  rmSync(tmp, { recursive: true });
+  assert.ok(files.some((f) => f.endsWith('a.vue')));
+  assert.ok(files.some((f) => f.endsWith('b.ts')));
 });
 
 test('collectFiles recurses into subdirectories', () => {
@@ -47,8 +53,6 @@ test('collectFiles recurses into subdirectories', () => {
   const files = [...collectFiles(tmp, ['.vue'])];
   assert.equal(files.length, 1);
   assert.ok(files[0].endsWith('deep.vue'));
-
-  rmSync(tmp, { recursive: true });
 });
 
 test('collectFiles skips node_modules directories', () => {
@@ -61,23 +65,22 @@ test('collectFiles skips node_modules directories', () => {
   const files = [...collectFiles(tmp, ['.vue'])];
   assert.equal(files.length, 1);
   assert.ok(files[0].endsWith('app.vue'));
-
-  rmSync(tmp, { recursive: true });
 });
 
 test('collectFiles yields nothing for empty directory', () => {
   const tmp = makeTmpDir();
   const files = [...collectFiles(tmp, ['.vue'])];
   assert.equal(files.length, 0);
-
-  rmSync(tmp, { recursive: true });
 });
 
 // ── scanUsedIcons ───────────────────────────────────────────────────────────
 
 test('scanUsedIcons extracts mdi-* icon names from files', () => {
   const tmp = makeTmpDir();
-  writeFileSync(join(tmp, 'A.vue'), '<v-icon>mdi-home</v-icon><v-icon>mdi-close</v-icon>');
+  writeFileSync(
+    join(tmp, 'A.vue'),
+    '<v-icon>mdi-home</v-icon><v-icon>mdi-close</v-icon>',
+  );
   writeFileSync(join(tmp, 'B.vue'), 'icon="mdi-home"');
 
   const icons = scanUsedIcons(collectFiles(tmp, ['.vue']));
@@ -89,21 +92,20 @@ test('scanUsedIcons extracts mdi-* icon names from files', () => {
   }
   const expectedIcons = new Set([...REQUIRED_ICONS, 'mdi-home', 'mdi-close']);
   assert.deepEqual(icons, expectedIcons);
-
-  rmSync(tmp, { recursive: true });
 });
 
 test('scanUsedIcons excludes utility classes', () => {
   const tmp = makeTmpDir();
-  writeFileSync(join(tmp, 'A.vue'), 'mdi-spin mdi-rotate-90 mdi-flip-h mdi-home');
+  writeFileSync(
+    join(tmp, 'A.vue'),
+    'mdi-spin mdi-rotate-90 mdi-flip-h mdi-home',
+  );
 
   const icons = scanUsedIcons(collectFiles(tmp, ['.vue']));
   assert.ok(icons.has('mdi-home'));
   assert.ok(!icons.has('mdi-spin'));
   assert.ok(!icons.has('mdi-rotate-90'));
   assert.ok(!icons.has('mdi-flip-h'));
-
-  rmSync(tmp, { recursive: true });
 });
 
 test('scanUsedIcons includes all required icons even when no mdi-* icons are found in source', () => {
@@ -115,23 +117,22 @@ test('scanUsedIcons includes all required icons even when no mdi-* icons are fou
     assert.ok(icons.has(requiredIcon));
   }
   assert.equal(icons.size, REQUIRED_ICONS.size);
-
-  rmSync(tmp, { recursive: true });
 });
 
 test('scanUsedIcons deduplicates required icons when source already references them', () => {
   const tmp = makeTmpDir();
   const requiredIcon = [...REQUIRED_ICONS][0];
-  writeFileSync(join(tmp, 'A.vue'), `<v-icon>${requiredIcon}</v-icon><v-icon>mdi-home</v-icon>`);
+  writeFileSync(
+    join(tmp, 'A.vue'),
+    `<v-icon>${requiredIcon}</v-icon><v-icon>mdi-home</v-icon>`,
+  );
 
   const icons = [...scanUsedIcons(collectFiles(tmp, ['.vue']))];
-  assert.equal(icons.filter(icon => icon === requiredIcon).length, 1);
+  assert.equal(icons.filter((icon) => icon === requiredIcon).length, 1);
   for (const builtInRequiredIcon of REQUIRED_ICONS) {
     assert.ok(icons.includes(builtInRequiredIcon));
   }
   assert.ok(icons.includes('mdi-home'));
-
-  rmSync(tmp, { recursive: true });
 });
 
 // ── parseIconCodepoints ─────────────────────────────────────────────────────
@@ -168,7 +169,10 @@ test('resolveUsedIcons separates resolved and missing icons', () => {
     ['mdi-close', 'F0156'],
   ]);
 
-  const { resolvedIcons, missingIcons, subsetChars } = resolveUsedIcons(usedIcons, iconMap);
+  const { resolvedIcons, missingIcons, subsetChars } = resolveUsedIcons(
+    usedIcons,
+    iconMap,
+  );
 
   assert.ok(resolvedIcons.includes('mdi-home'));
   assert.ok(resolvedIcons.includes('mdi-close'));
@@ -178,15 +182,18 @@ test('resolveUsedIcons separates resolved and missing icons', () => {
 
   // Verify subsetChars contains correct Unicode characters
   assert.equal(subsetChars.length, 2);
-  assert.equal(subsetChars[0], String.fromCodePoint(0xF02DC));
-  assert.equal(subsetChars[1], String.fromCodePoint(0xF0156));
+  assert.equal(subsetChars[0], String.fromCodePoint(0xf02dc));
+  assert.equal(subsetChars[1], String.fromCodePoint(0xf0156));
 });
 
 test('resolveUsedIcons returns all missing when iconMap is empty', () => {
   const usedIcons = new Set(['mdi-home']);
   const iconMap = new Map();
 
-  const { resolvedIcons, missingIcons, subsetChars } = resolveUsedIcons(usedIcons, iconMap);
+  const { resolvedIcons, missingIcons, subsetChars } = resolveUsedIcons(
+    usedIcons,
+    iconMap,
+  );
   assert.equal(resolvedIcons.length, 0);
   assert.deepEqual(missingIcons, ['mdi-home']);
   assert.equal(subsetChars.length, 0);
