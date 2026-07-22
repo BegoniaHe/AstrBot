@@ -5,8 +5,8 @@ upstream:
   branch: master
 
 last_synced:
-  commit: fed29848ca0b3912ab6a8200a10cd0f2cb080f85
-  synced_at_utc: 2026-07-19T09:00:35.7843560Z
+  commit: 2035dbd079375046ce7b82171a04b1f9a63d781a
+  synced_at_utc: 2026-07-22T17:02:01.3405546Z
   sync_method: cherry-pick
-  source_pr: '9260, 9263, 9264, 9270, 9271, 9274, 9246, 9245, 9233, 9291, 9300, 9285, 9267, 9309, 9244, 9310, 8712, 9311, 9312, 9314, 9313, 9223, 9316, 9318, 9317'
-  note: 'Processed 26 upstream/master commits through fed29848ca0b3912ab6a8200a10cd0f2cb080f85. Hand-ported or retained equivalent fixes for agent stats, configured model limits, provider sources and embedding dimensions, skill archives, dashboard errors, KB/config/tool-loop/ChatUI behavior, copy/tooltip/schema/binding fixes, and fork-specific sidebar rail UX. Skipped optional TEI rerank, GenUI security/legacy paths, platform-log product removal, the Python <3.14 ripgrep path, the QQ Official net-zero pair, plugin URL search behavior, log translation, and upstream version bump. Sidebar was reimplemented for the fork without adopting upstream repository ownership links.'
+  source_pr: '9333, 8323, 9349'
+  note: 'Processed five upstream/master commits through 2035dbd079375046ce7b82171a04b1f9a63d781a. Updated retained README banners; integrated the QQ Official Bot recommendation into the fork’s newer, security-focused OneBot/NapCat documentation while retaining deleted non-English root READMEs. Upgraded actions/setup-python to v7 with a full commit pin across fork workflows while preserving Python 3.14 and Node 24 baselines. Included FAISS Windows non-ASCII path bridge/search fixes and the rate-limit timestamp concurrency regression test. Removed obsolete quoted FAISS annotations for the Python 3.14-only baseline.'
