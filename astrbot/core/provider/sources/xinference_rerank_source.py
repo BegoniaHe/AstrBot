@@ -1,3 +1,5 @@
+import asyncio
+from collections.abc import Mapping
 from typing import cast
 
 from xinference_client.client.restful.async_restful_client import (
@@ -8,6 +10,7 @@ from xinference_client.client.restful.async_restful_client import (
 )
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType, RerankResult
 from ..provider import RerankProvider
@@ -38,26 +41,30 @@ class XinferenceRerankProvider(RerankProvider):
         self.model_uid = None
 
     async def initialize(self) -> None:
-        if self.api_key:
-            logger.info("Xinference Rerank: Using API key for authentication.")
-            self.client = Client(self.base_url, api_key=self.api_key)
-        else:
-            logger.info("Xinference Rerank: No API key provided.")
-            self.client = Client(self.base_url)
-
         try:
+            await self.terminate()
+            if self.api_key:
+                logger.info("Xinference rerank authentication is configured")
+                self.client = Client(self.base_url, api_key=self.api_key)
+            else:
+                logger.info("Xinference rerank does not use API authentication")
+                self.client = Client(self.base_url)
+
             running_models = await self.client.list_models()
+            if not isinstance(running_models, Mapping):
+                raise TypeError("Xinference model list must be an object")
             for uid, model_spec in running_models.items():
+                if not isinstance(model_spec, Mapping):
+                    logger.warning("Xinference returned an invalid model entry")
+                    continue
                 if model_spec.get("model_name") == self.model_name:
-                    logger.info(
-                        f"Model '{self.model_name}' is already running with UID: {uid}",
-                    )
+                    logger.info("Xinference rerank model is already running")
                     self.model_uid = uid
                     break
 
             if self.model_uid is None:
                 if self.launch_model_if_not_running:
-                    logger.info(f"Launching {self.model_name} model...")
+                    logger.info("Launching Xinference rerank model")
                     self.model_uid = await self.client.launch_model(
                         model_name=self.model_name,
                         model_type="rerank",
@@ -65,7 +72,7 @@ class XinferenceRerankProvider(RerankProvider):
                     logger.info("Model launched.")
                 else:
                     logger.warning(
-                        f"Model '{self.model_name}' is not running and auto-launch is disabled. Provider will not be available.",
+                        "Xinference rerank model is not running and auto-launch is disabled"
                     )
                     return
 
@@ -75,13 +82,14 @@ class XinferenceRerankProvider(RerankProvider):
                     await self.client.get_model(self.model_uid),
                 )
 
-        except Exception as e:
-            logger.error(f"Failed to initialize Xinference model: {e}")
-            logger.debug(
-                f"Xinference initialization failed with exception: {e}",
-                exc_info=True,
+        except asyncio.CancelledError:
+            await self.terminate()
+            raise
+        except Exception as exc:
+            logger.error(
+                "Xinference rerank initialization failed: %s", safe_error("", exc)
             )
-            self.model = None
+            await self.terminate()
 
     async def rerank(
         self,
@@ -94,31 +102,56 @@ class XinferenceRerankProvider(RerankProvider):
             return []
         try:
             response = await self.model.rerank(documents, query, top_n)
+            if not isinstance(response, Mapping):
+                logger.warning("Xinference rerank returned an invalid response")
+                return []
             results = response.get("results", [])
-            logger.debug(f"Rerank API response: {response}")
+            if not isinstance(results, list):
+                logger.warning("Xinference rerank returned invalid result data")
+                return []
 
             if not results:
-                logger.warning(
-                    f"Rerank API returned an empty list. Original response: {response}",
-                )
+                logger.warning("Xinference rerank returned no results")
 
-            return [
-                RerankResult(
-                    index=result["index"],
-                    relevance_score=result["relevance_score"],
-                )
-                for result in results
-            ]
-        except Exception as e:
-            logger.error(f"Xinference rerank failed: {e}")
-            logger.debug(f"Xinference rerank failed with exception: {e}", exc_info=True)
+            rerank_results: list[RerankResult] = []
+            for idx, result in enumerate(results):
+                try:
+                    if not isinstance(result, Mapping):
+                        raise TypeError("rerank result must be an object")
+                    rerank_results.append(
+                        RerankResult(
+                            index=int(result.get("index", idx)),
+                            relevance_score=float(result["relevance_score"]),
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Xinference rerank result parsing failed: %s",
+                        safe_error("", exc),
+                    )
+
+            return rerank_results
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Xinference rerank failed: %s", safe_error("", exc))
             return []
 
     async def terminate(self) -> None:
         """关闭客户端会话"""
-        if self.client:
-            logger.info("Closing Xinference rerank client...")
-            try:
-                await self.client.close()
-            except Exception as e:
-                logger.error(f"Failed to close Xinference client: {e}", exc_info=True)
+        client = self.client
+        self.client = None
+        self.model = None
+        self.model_uid = None
+        if client is None:
+            return
+
+        logger.info("Closing Xinference rerank client")
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Xinference rerank client close failed: %s", safe_error("", exc)
+            )

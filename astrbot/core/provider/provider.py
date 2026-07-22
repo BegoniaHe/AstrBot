@@ -15,10 +15,16 @@ from astrbot.core.provider.entities import (
 )
 from astrbot.core.provider.register import provider_cls_map
 from astrbot.core.utils.astrbot_path import get_astrbot_path
+from astrbot.core.utils.error_redaction import safe_error
 
 type Providers = (
     "Provider | STTProvider | TTSProvider | EmbeddingProvider | RerankProvider"
 )
+_EMBEDDING_BATCH_ERROR = "Embedding batch processing failed"
+
+
+class _EmbeddingBatchProviderError(RuntimeError):
+    """Internal marker for a failed upstream embedding request."""
 
 
 class AbstractProvider(abc.ABC):
@@ -278,6 +284,7 @@ class TTSProvider(AbstractProvider):
             if text_part is None:
                 # 输入结束，处理累积的文本
                 if accumulated_text:
+                    audio_path: str | None = None
                     try:
                         # 调用原有的 get_audio 方法获取音频文件路径
                         audio_path = await self.get_audio(accumulated_text)
@@ -288,6 +295,12 @@ class TTSProvider(AbstractProvider):
                     except Exception:
                         # 出错时也要发送 None 结束标记
                         pass
+                    finally:
+                        if audio_path:
+                            try:
+                                os.remove(audio_path)
+                            except OSError:
+                                pass
                 # 发送结束标记
                 await audio_queue.put(None)
                 break
@@ -368,34 +381,55 @@ class EmbeddingProvider(AbstractProvider):
             向量列表
 
         """
+        if batch_size <= 0:
+            raise ValueError("batch_size must be greater than zero")
+        if tasks_limit <= 0:
+            raise ValueError("tasks_limit must be greater than zero")
+        if max_retries <= 0:
+            raise ValueError("max_retries must be greater than zero")
+
         semaphore = asyncio.Semaphore(tasks_limit)
         batch_results: list[list[list[float]] | None] = [None] * (
             (len(texts) + batch_size - 1) // batch_size
         )
-        failed_batches: list[tuple[int, list[str]]] = []
         completed_count = 0
         total_count = len(texts)
 
         async def process_batch(batch_idx: int, batch_texts: list[str]) -> None:
             nonlocal completed_count
-            async with semaphore:
-                for attempt in range(max_retries):
-                    try:
+            for attempt in range(max_retries):
+                try:
+                    async with semaphore:
                         batch_embeddings = await self.get_embeddings(batch_texts)
-                        batch_results[batch_idx] = batch_embeddings
-                        completed_count += len(batch_texts)
-                        if progress_callback:
-                            await progress_callback(completed_count, total_count)
-                        return
-                    except Exception as e:
-                        if attempt == max_retries - 1:
-                            # 最后一次重试失败，记录失败的批次
-                            failed_batches.append((batch_idx, batch_texts))
-                            raise Exception(
-                                f"批次 {batch_idx} 处理失败，已重试 {max_retries} 次: {e!s}",
-                            )
-                        # 等待一段时间后重试，使用指数退避
-                        await asyncio.sleep(2**attempt)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if attempt == max_retries - 1:
+                        logger.warning(
+                            "Embedding batch %d failed after %d attempts: %s",
+                            batch_idx,
+                            max_retries,
+                            safe_error("", exc),
+                        )
+                        raise _EmbeddingBatchProviderError(
+                            _EMBEDDING_BATCH_ERROR,
+                        ) from None
+                    # 等待一段时间后重试，使用指数退避。释放并发槽位后再等待。
+                    await asyncio.sleep(2**attempt)
+                    continue
+
+                if len(batch_embeddings) != len(batch_texts):
+                    raise ValueError(
+                        "Embedding provider returned "
+                        f"{len(batch_embeddings)} embeddings for "
+                        f"{len(batch_texts)} texts",
+                    )
+
+                batch_results[batch_idx] = batch_embeddings
+                completed_count += len(batch_texts)
+                if progress_callback:
+                    await progress_callback(completed_count, total_count)
+                return
 
         tasks = []
         for i in range(0, len(texts), batch_size):
@@ -406,13 +440,16 @@ class EmbeddingProvider(AbstractProvider):
         # 收集所有任务的结果，包括失败的任务
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        cancellations = [r for r in results if isinstance(r, asyncio.CancelledError)]
+        if cancellations:
+            raise cancellations[0]
+
         # 检查是否有失败的任务
         errors = [r for r in results if isinstance(r, Exception)]
         if errors:
-            error_msg = (
-                f"有 {len(errors)} 个批次处理失败: {'; '.join(str(e) for e in errors)}"
-            )
-            raise Exception(error_msg)
+            if any(isinstance(error, _EmbeddingBatchProviderError) for error in errors):
+                raise RuntimeError(_EMBEDDING_BATCH_ERROR) from None
+            raise errors[0]
 
         all_embeddings: list[list[float]] = []
         for batch_result in batch_results:

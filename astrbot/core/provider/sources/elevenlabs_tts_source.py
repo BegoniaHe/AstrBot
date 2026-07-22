@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import httpx
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
@@ -12,6 +14,8 @@ from ..register import register_provider_adapter
 
 SUPPORTED_CONTAINER_OUTPUT_PREFIXES = ("mp3", "wav", "opus")
 RAW_AUDIO_OUTPUT_PREFIXES = ("pcm", "ulaw", "alaw")
+_AUDIO_GENERATION_ERROR = "ElevenLabs TTS audio generation failed."
+_CLIENT_INITIALIZATION_ERROR = "ElevenLabs TTS client initialization failed."
 
 
 def _parse_optional_float(
@@ -117,12 +121,19 @@ class ProviderElevenLabsTTSAPI(TTSProvider):
 
         proxy = provider_config.get("proxy", "")
         if proxy:
-            logger.info(f"[ElevenLabs TTS] 使用代理: {proxy}")
-        self.client = httpx.AsyncClient(
-            timeout=timeout,
-            proxy=proxy or None,
-            trust_env=False,
-        )
+            logger.info("[ElevenLabs TTS] Using configured proxy")
+        try:
+            self.client: httpx.AsyncClient | None = httpx.AsyncClient(
+                timeout=timeout,
+                proxy=proxy or None,
+                trust_env=False,
+            )
+        except Exception as exc:
+            logger.error(
+                "ElevenLabs TTS client initialization failed: %s",
+                safe_error("", exc),
+            )
+            raise RuntimeError(_CLIENT_INITIALIZATION_ERROR) from None
 
     def _output_extension(self) -> str:
         """Infer the audio file extension from the configured output format."""
@@ -135,39 +146,85 @@ class ProviderElevenLabsTTSAPI(TTSProvider):
             return "wav"
         return "mp3"
 
-    async def get_audio(self, text: str) -> str:
-        url = f"{self.api_base}/text-to-speech/{self.voice_id}"
-        headers = {
-            "xi-api-key": self.api_key,
-            "Content-Type": "application/json",
-        }
-        payload: dict = {
-            "text": text,
-            "model_id": self.model_name,
-        }
-        if self.voice_settings:
-            payload["voice_settings"] = self.voice_settings
-
-        response = await self.client.post(
-            url,
-            headers=headers,
-            params={"output_format": self.output_format},
-            json=payload,
-        )
-        if response.status_code != 200:
-            error_text = response.text[:1024]
-            raise Exception(
-                f"ElevenLabs TTS API 请求失败: {response.status_code}, {error_text}"
+    @staticmethod
+    def _remove_incomplete_audio(path: Path) -> None:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Failed to remove incomplete ElevenLabs TTS audio: %s",
+                safe_error("", exc),
             )
 
-        temp_dir = Path(get_astrbot_temp_path())
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        path = (
-            temp_dir / f"elevenlabs_tts_api_{uuid.uuid4()}.{self._output_extension()}"
-        )
-        path.write_bytes(response.content)
-        return str(path)
+    async def get_audio(self, text: str) -> str:
+        path: Path | None = None
+        completed = False
 
-    async def terminate(self):
-        if self.client:
-            await self.client.aclose()
+        try:
+            url = f"{self.api_base}/text-to-speech/{self.voice_id}"
+            headers = {
+                "xi-api-key": self.api_key,
+                "Content-Type": "application/json",
+            }
+            payload: dict = {
+                "text": text,
+                "model_id": self.model_name,
+            }
+            if self.voice_settings:
+                payload["voice_settings"] = self.voice_settings
+
+            temp_dir = Path(get_astrbot_temp_path())
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            path = (
+                temp_dir
+                / f"elevenlabs_tts_api_{uuid.uuid4()}.{self._output_extension()}"
+            )
+
+            client = self.client
+            if client is None:
+                raise RuntimeError("ElevenLabs TTS client is closed.")
+            response = await client.post(
+                url,
+                headers=headers,
+                params={"output_format": self.output_format},
+                json=payload,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(f"ElevenLabs TTS HTTP status {response.status_code}")
+
+            content_type = response.headers.get("content-type", "")
+            if content_type and not content_type.lower().startswith("audio/"):
+                raise ValueError("ElevenLabs TTS response did not contain audio.")
+            audio_data = response.content
+            if not isinstance(audio_data, bytes) or not audio_data:
+                raise ValueError("ElevenLabs TTS returned invalid audio.")
+            path.write_bytes(audio_data)
+            if path.stat().st_size <= 0:
+                raise ValueError("ElevenLabs TTS returned empty audio.")
+
+            completed = True
+            return str(path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("ElevenLabs TTS generation failed: %s", safe_error("", exc))
+            raise RuntimeError(_AUDIO_GENERATION_ERROR) from None
+        finally:
+            if path is not None and not completed:
+                self._remove_incomplete_audio(path)
+
+    async def terminate(self) -> None:
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+
+        try:
+            await client.aclose()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Failed to close ElevenLabs TTS client: %s",
+                safe_error("", exc),
+            )

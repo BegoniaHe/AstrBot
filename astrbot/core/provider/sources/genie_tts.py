@@ -1,6 +1,6 @@
 import asyncio
-import os
 import uuid
+from pathlib import Path
 from typing import Protocol, cast
 
 from astrbot import logger
@@ -8,6 +8,10 @@ from astrbot.core.provider.entities import ProviderType
 from astrbot.core.provider.provider import TTSProvider
 from astrbot.core.provider.register import register_provider_adapter
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
+
+_AUDIO_GENERATION_ERROR = "Genie TTS audio generation failed."
+_INITIALIZATION_ERROR = "Genie TTS initialization failed."
 
 
 class _GenieModule(Protocol):
@@ -78,82 +82,118 @@ class GenieTTSProvider(TTSProvider):
                 audio_text=refer_text,
                 language=language,
             )
-        except Exception as e:
-            raise RuntimeError(f"Failed to load character {self.character_name}: {e}")
+        except Exception as exc:
+            logger.error("Genie TTS initialization failed: %s", safe_error("", exc))
+            raise RuntimeError(_INITIALIZATION_ERROR) from None
 
     def support_stream(self) -> bool:
         return True
 
-    async def get_audio(self, text: str) -> str:
-        temp_dir = get_astrbot_temp_path()
-        os.makedirs(temp_dir, exist_ok=True)
-        filename = f"genie_tts_{uuid.uuid4()}.wav"
-        path = os.path.join(temp_dir, filename)
-
-        loop = asyncio.get_running_loop()
-
-        def _generate(save_path: str) -> None:
-            assert genie is not None
-            genie.tts(
-                character_name=self.character_name,
-                text=text,
-                save_path=save_path,
+    @staticmethod
+    def _remove_audio(path: Path) -> None:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Failed to remove incomplete Genie TTS audio: %s",
+                safe_error("", exc),
             )
 
+    def _new_audio_path(self) -> Path:
+        temp_dir = Path(get_astrbot_temp_path())
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        return temp_dir / f"genie_tts_{uuid.uuid4()}.wav"
+
+    def _generate(self, text: str, path: Path) -> None:
+        assert genie is not None
+        genie.tts(
+            character_name=self.character_name,
+            text=text,
+            save_path=str(path),
+        )
+
+    async def _generate_audio(self, text: str, path: Path) -> None:
+        loop = asyncio.get_running_loop()
+        worker = loop.run_in_executor(None, self._generate, text, path)
+
         try:
-            await loop.run_in_executor(None, _generate, path)
+            await asyncio.shield(worker)
+        except asyncio.CancelledError:
 
-            if os.path.exists(path):
-                return path
+            def _cleanup_after_worker(_worker: asyncio.Future[object]) -> None:
+                try:
+                    _worker.exception()
+                except asyncio.CancelledError, Exception:
+                    pass
+                self._remove_audio(path)
 
-            raise RuntimeError("Genie TTS did not save to file.")
+            worker.add_done_callback(_cleanup_after_worker)
+            raise
 
-        except Exception as e:
-            raise RuntimeError(f"Genie TTS generation failed: {e}")
+    @staticmethod
+    def _has_audio(path: Path) -> bool:
+        return path.is_file() and path.stat().st_size > 0
+
+    async def get_audio(self, text: str) -> str:
+        path: Path | None = None
+
+        try:
+            path = self._new_audio_path()
+            await self._generate_audio(text, path)
+            if not self._has_audio(path):
+                raise RuntimeError("Genie TTS did not save audio.")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if path is not None:
+                self._remove_audio(path)
+            logger.error("Genie TTS generation failed: %s", safe_error("", exc))
+            raise RuntimeError(_AUDIO_GENERATION_ERROR) from None
+
+        assert path is not None
+        return str(path)
 
     async def get_audio_stream(
         self,
         text_queue: asyncio.Queue[str | None],
         audio_queue: asyncio.Queue[bytes | tuple[str, bytes] | None],
     ) -> None:
-        loop = asyncio.get_running_loop()
-
         while True:
             text = await text_queue.get()
             if text is None:
                 await audio_queue.put(None)
                 break
 
+            path: Path | None = None
             try:
-                temp_dir = get_astrbot_temp_path()
-                os.makedirs(temp_dir, exist_ok=True)
-                filename = f"genie_tts_{uuid.uuid4()}.wav"
-                path = os.path.join(temp_dir, filename)
+                path = self._new_audio_path()
+                await self._generate_audio(text, path)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if path is not None:
+                    self._remove_audio(path)
+                logger.error(
+                    "Genie TTS stream generation failed: %s",
+                    safe_error("", exc),
+                )
+                continue
 
-                def _generate(save_path: str, t: str) -> None:
-                    assert genie is not None
-                    genie.tts(
-                        character_name=self.character_name,
-                        text=t,
-                        save_path=save_path,
-                    )
-
-                await loop.run_in_executor(None, _generate, path, text)
-
-                if os.path.exists(path):
-                    with open(path, "rb") as f:
-                        audio_data = f.read()
+            assert path is not None
+            try:
+                if self._has_audio(path):
+                    audio_data = path.read_bytes()
 
                     # Put (text, bytes) into queue so frontend can display text
                     await audio_queue.put((text, audio_data))
-
-                    # Clean up
-                    try:
-                        os.remove(path)
-                    except OSError:
-                        pass
                 else:
-                    logger.error(f"Genie TTS failed to generate audio for: {text}")
-
-            except Exception as e:
-                logger.error(f"Genie TTS stream error: {e}")
+                    logger.error("Genie TTS stream generation did not produce audio.")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error(
+                    "Genie TTS stream generation failed: %s",
+                    safe_error("", exc),
+                )
+            finally:
+                self._remove_audio(path)

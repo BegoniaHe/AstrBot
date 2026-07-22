@@ -1,9 +1,11 @@
 import asyncio
 import importlib
+from collections.abc import Mapping
 from functools import partial
-from typing import Any, cast
+from typing import Any
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.media_utils import MediaResolver
 
 from ..entities import ProviderType
@@ -26,6 +28,7 @@ class ProviderOpenAIWhisperSelfHost(STTProvider):
         self.set_model(provider_config["model"])
         self.device = str(provider_config.get("whisper_device", "cpu")).strip().lower()
         self.model: Any | None = None
+        self._executor_futures: set[asyncio.Future[Any]] = set()
 
     def _resolve_device(self) -> str:
         if self.device == "mps":
@@ -43,40 +46,91 @@ class ProviderOpenAIWhisperSelfHost(STTProvider):
             logger.warning("Whisper 已配置为使用 MPS，但当前环境不可用，将回退到 CPU。")
             return "cpu"
         if self.device != "cpu":
-            logger.warning(
-                "Whisper 配置了未知 device=%s，将回退到 CPU。",
-                self.device,
-            )
+            logger.warning("Whisper configured with an unknown device; using CPU.")
         return "cpu"
 
-    async def initialize(self) -> None:
+    async def _run_in_executor(self, callback, *args):
+        """Run blocking model work and track the submitted future for shutdown."""
         loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(None, callback, *args)
+        self._executor_futures.add(future)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            future.cancel()
+            raise
+        finally:
+            self._executor_futures.discard(future)
+
+    async def initialize(self) -> None:
         device = self._resolve_device()
         logger.info("下载或者加载 Whisper 模型中，这可能需要一些时间 ...")
         try:
             whisper_module = importlib.import_module("whisper")
         except ImportError as exc:
-            raise RuntimeError("openai-whisper is not installed") from exc
-        self.model = await loop.run_in_executor(
-            None,
-            partial(whisper_module.load_model, self.model_name, device=device),
-        )
+            logger.error("Failed to import openai-whisper: %s", safe_error("", exc))
+            raise RuntimeError("openai-whisper is not installed") from None
+        except Exception as exc:
+            logger.error(
+                "Whisper model initialization failed: %s",
+                safe_error("", exc),
+            )
+            raise RuntimeError("Whisper model initialization failed.") from None
+
+        try:
+            model = await self._run_in_executor(
+                partial(whisper_module.load_model, self.model_name, device=device),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "Whisper model initialization failed: %s",
+                safe_error("", exc),
+            )
+            raise RuntimeError("Whisper model initialization failed.") from None
+
+        if model is None:
+            logger.error("Whisper model initialization returned no model.")
+            raise RuntimeError("Whisper model initialization failed.")
+
+        self.model = model
         logger.info("Whisper 模型加载完成。device=%s", device)
 
     async def get_text(self, audio_url: str) -> str:
-        loop = asyncio.get_running_loop()
+        model = self.model
+        if model is None:
+            raise RuntimeError("Whisper model is not initialized.")
 
-        if not self.model:
-            raise RuntimeError("Whisper 模型未初始化")
+        try:
+            async with MediaResolver(
+                audio_url,
+                media_type="audio",
+                default_suffix=".wav",
+            ).as_path(target_format="wav") as audio:
+                result = await self._run_in_executor(
+                    model.transcribe,
+                    str(audio.path),
+                )
 
-        async with MediaResolver(
-            audio_url,
-            media_type="audio",
-            default_suffix=".wav",
-        ).as_path(target_format="wav") as audio:
-            result = await loop.run_in_executor(
-                None,
-                self.model.transcribe,
-                str(audio.path),
-            )
-        return cast(str, result["text"])
+            if not isinstance(result, Mapping):
+                logger.warning("Whisper returned an invalid transcription response.")
+                raise ValueError("invalid transcription response")
+
+            text = result.get("text")
+            if not isinstance(text, str):
+                logger.warning("Whisper returned an invalid transcription response.")
+                raise ValueError("invalid transcription response")
+            return text
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Whisper transcription failed: %s", safe_error("", exc))
+            raise RuntimeError("Whisper transcription failed.") from None
+
+    async def terminate(self) -> None:
+        """Cancel pending model work and release the loaded model reference."""
+        for future in tuple(self._executor_futures):
+            future.cancel()
+        self._executor_futures.clear()
+        self.model = None

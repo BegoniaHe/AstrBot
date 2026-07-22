@@ -1,10 +1,16 @@
+import asyncio
+import math
+
 import aiohttp
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import EmbeddingProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "Ollama embedding request failed"
 
 
 @register_provider_adapter(
@@ -29,7 +35,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         proxy = provider_config.get("proxy", "")
         self.proxy = proxy
         if proxy:
-            logger.info(f"[Ollama Embedding] Using proxy: {proxy}")
+            logger.info("[Ollama Embedding] Using configured proxy")
 
         self.client = None
         self.set_model(self.model)
@@ -66,9 +72,13 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         return embeddings[0] if embeddings else []
 
     async def get_embeddings(self, text: list[str]) -> list[list[float]]:
+        if not text:
+            return []
+
         client = await self._get_client()
         if not client or client.closed:
-            raise Exception("[Ollama Embedding] Client session not initialized")
+            logger.error("[Ollama Embedding] Client session not initialized")
+            raise RuntimeError(_REQUEST_ERROR)
 
         payload = self._build_payload(text)
         request_url = f"{self.base_url}/api/embed"
@@ -78,32 +88,52 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                 request_url, json=payload, proxy=self.proxy or None
             ) as response:
                 if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(
-                        f"[Ollama Embedding] API Error: {response.status} - {error_text}"
-                    )
-                    raise Exception(
-                        f"Ollama Embedding API request failed: HTTP {response.status} - {error_text}"
+                    raise RuntimeError(
+                        f"Ollama embedding HTTP status {response.status}"
                     )
 
                 response_data = await response.json()
+                if not isinstance(response_data, dict):
+                    raise ValueError("Ollama embedding response must be an object")
                 embeddings = response_data.get("embeddings", [])
 
-                if not embeddings:
-                    raise Exception(
-                        f"[Ollama Embedding] No embeddings returned: {response_data}"
-                    )
+                if not isinstance(embeddings, list) or len(embeddings) != len(text):
+                    raise ValueError("Ollama embedding response has invalid dimensions")
 
-                return embeddings
+                normalized_embeddings: list[list[float]] = []
+                for embedding in embeddings:
+                    if not isinstance(embedding, list) or not embedding:
+                        raise ValueError(
+                            "Ollama embedding response contains an empty vector"
+                        )
+                    vector = [float(value) for value in embedding]
+                    if not all(math.isfinite(value) for value in vector):
+                        raise ValueError(
+                            "Ollama embedding response contains non-finite values"
+                        )
+                    normalized_embeddings.append(vector)
 
-        except aiohttp.ClientError as e:
-            logger.error(f"[Ollama Embedding] Network error: {e}")
+                return normalized_embeddings
+
+        except asyncio.CancelledError:
             raise
-        except Exception as e:
-            logger.error(f"[Ollama Embedding] Error: {e}", exc_info=True)
-            raise
+        except aiohttp.ClientError as exc:
+            logger.error("[Ollama Embedding] Network failure: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        except Exception as exc:
+            logger.error("[Ollama Embedding] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     async def terminate(self):
-        if self.client and not self.client.closed:
-            await self.client.close()
-            self.client = None
+        client = self.client
+        self.client = None
+        if client is None or client.closed:
+            return
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[Ollama Embedding] Client close failed: %s", safe_error("", exc)
+            )

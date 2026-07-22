@@ -1,9 +1,13 @@
+import asyncio
+from collections.abc import Mapping
+
 import aiohttp
 from xinference_client.client.restful.async_restful_client import (
     AsyncClient as Client,
 )
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.media_utils import MediaResolver
 
 from ..entities import ProviderType
@@ -65,11 +69,12 @@ class ProviderXinferenceSTT(STTProvider):
                     )
                     return
 
-        except Exception as e:
-            logger.error(f"Failed to initialize Xinference model: {e}")
-            logger.debug(
-                f"Xinference initialization failed with exception: {e}",
-                exc_info=True,
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "Failed to initialize Xinference model: %s",
+                safe_error("", exc),
             )
 
     async def get_text(self, audio_url: str) -> str:
@@ -113,19 +118,44 @@ class ProviderXinferenceSTT(STTProvider):
                     timeout=self.timeout,
                 ) as resp:
                     if resp.status == 200:
-                        result = await resp.json()
+                        try:
+                            result = await resp.json()
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            logger.warning(
+                                "Xinference STT returned invalid JSON: %s",
+                                safe_error("", exc),
+                            )
+                            return ""
+
+                        if not isinstance(result, Mapping):
+                            logger.warning(
+                                "Xinference STT returned an invalid transcription response."
+                            )
+                            return ""
+
                         text = result.get("text", "")
-                        logger.debug(f"Xinference STT result: {text}")
+                        if not isinstance(text, str):
+                            logger.warning(
+                                "Xinference STT returned an invalid transcription response."
+                            )
+                            return ""
+
+                        logger.debug("Xinference STT transcription completed.")
                         return text
                     error_text = await resp.text()
                     logger.error(
-                        f"Xinference STT transcription failed with status {resp.status}: {error_text}",
+                        "Xinference STT transcription failed with status %s: %s",
+                        resp.status,
+                        safe_error("", error_text),
                     )
                     return ""
 
-        except Exception as e:
-            logger.error(f"Xinference STT failed: {e}")
-            logger.debug(f"Xinference STT failed with exception: {e}", exc_info=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Xinference STT failed: %s", safe_error("", exc))
             return ""
 
     async def terminate(self) -> None:
@@ -134,5 +164,10 @@ class ProviderXinferenceSTT(STTProvider):
             logger.info("Closing Xinference STT client...")
             try:
                 await self.client.close()
-            except Exception as e:
-                logger.error(f"Failed to close Xinference client: {e}", exc_info=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error(
+                    "Failed to close Xinference client: %s",
+                    safe_error("", exc),
+                )

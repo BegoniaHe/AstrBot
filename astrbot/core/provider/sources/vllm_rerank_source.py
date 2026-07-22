@@ -1,10 +1,16 @@
+import asyncio
+from collections.abc import Mapping
+
 import aiohttp
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType, RerankResult
 from ..provider import RerankProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "VLLM rerank request failed"
 
 
 @register_provider_adapter(
@@ -36,6 +42,37 @@ class VLLMRerankProvider(RerankProvider):
             timeout=aiohttp.ClientTimeout(total=self.timeout),
         )
 
+    def _parse_results(self, response_data: object) -> list[RerankResult]:
+        if not isinstance(response_data, Mapping):
+            logger.warning("VLLM rerank returned an invalid response")
+            return []
+
+        results = response_data.get("results", [])
+        if not isinstance(results, list):
+            logger.warning("VLLM rerank returned invalid result data")
+            return []
+        if not results:
+            logger.warning("VLLM rerank returned no results")
+            return []
+
+        rerank_results: list[RerankResult] = []
+        for result in results:
+            try:
+                if not isinstance(result, Mapping):
+                    raise TypeError("rerank result must be an object")
+                rerank_results.append(
+                    RerankResult(
+                        index=int(result["index"]),
+                        relevance_score=float(result["relevance_score"]),
+                    )
+                )
+            except Exception as exc:
+                logger.warning(
+                    "VLLM rerank result parsing failed: %s", safe_error("", exc)
+                )
+
+        return rerank_results
+
     async def rerank(
         self,
         query: str,
@@ -49,30 +86,47 @@ class VLLMRerankProvider(RerankProvider):
         }
         if top_n is not None:
             payload["top_n"] = top_n
-        assert self.client is not None
+        client = self.client
+        if client is None or getattr(client, "closed", False):
+            logger.error("VLLM rerank client is not available")
+            return []
+
         rerank_url = f"{self.base_url}{self.api_suffix}"
-        async with self.client.post(
-            rerank_url,
-            json=payload,
-        ) as response:
-            response_data = await response.json()
-            results = response_data.get("results", [])
+        try:
+            async with client.post(
+                rerank_url,
+                json=payload,
+            ) as response:
+                status = getattr(response, "status", 200)
+                if not isinstance(status, int):
+                    logger.error("VLLM rerank HTTP request returned an invalid status")
+                    raise RuntimeError(_REQUEST_ERROR)
+                if not 200 <= status < 300:
+                    logger.error(
+                        "VLLM rerank HTTP request failed with status %d", status
+                    )
+                    raise RuntimeError(_REQUEST_ERROR)
 
-            if not results:
-                logger.warning(
-                    f"Rerank API 返回了空的列表数据。原始响应: {response_data}",
-                )
-
-            return [
-                RerankResult(
-                    index=result["index"],
-                    relevance_score=result["relevance_score"],
-                )
-                for result in results
-            ]
+                response_data = await response.json()
+                return self._parse_results(response_data)
+        except asyncio.CancelledError:
+            raise
+        except aiohttp.ClientError as exc:
+            logger.error("VLLM rerank network failure: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        except Exception as exc:
+            logger.error("VLLM rerank request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     async def terminate(self) -> None:
         """关闭客户端会话"""
-        if self.client:
-            await self.client.close()
-            self.client = None
+        client = self.client
+        self.client = None
+        if client is None or getattr(client, "closed", False):
+            return
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("VLLM rerank client close failed: %s", safe_error("", exc))

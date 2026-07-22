@@ -1,14 +1,18 @@
+import asyncio
+import math
 from typing import cast
 
 from google import genai
 from google.genai import types
-from google.genai.errors import APIError
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import EmbeddingProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "Gemini embedding request failed"
 
 
 @register_provider_adapter(
@@ -33,7 +37,7 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
         proxy = provider_config.get("proxy", "")
         if proxy:
             http_options.async_client_args = {"proxy": proxy}
-            logger.info(f"[Gemini Embedding] 使用代理: {proxy}")
+            logger.info("[Gemini Embedding] Proxy configured")
 
         self.client = genai.Client(api_key=api_key, http_options=http_options).aio
 
@@ -41,6 +45,27 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
             "embedding_model",
             "gemini-embedding-exp-03-07",
         )
+
+    @staticmethod
+    def _extract_embeddings(result: object, expected_count: int) -> list[list[float]]:
+        embeddings = getattr(result, "embeddings", None)
+        if not isinstance(embeddings, list) or len(embeddings) != expected_count:
+            raise ValueError("Gemini returned an invalid embedding response")
+
+        parsed_embeddings: list[list[float]] = []
+        for embedding in embeddings:
+            values = getattr(embedding, "values", None)
+            if not isinstance(values, list):
+                raise ValueError("Gemini returned invalid embedding values")
+            try:
+                parsed_values = [float(value) for value in values]
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("Gemini returned invalid embedding values") from exc
+            if not all(math.isfinite(value) for value in parsed_values):
+                raise ValueError("Gemini returned invalid embedding values")
+            parsed_embeddings.append(parsed_values)
+
+        return parsed_embeddings
 
     async def get_embedding(self, text: str) -> list[float]:
         """获取文本的嵌入"""
@@ -52,11 +77,12 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                     output_dimensionality=self.get_dim(),
                 ),
             )
-            assert result.embeddings is not None
-            assert result.embeddings[0].values is not None
-            return result.embeddings[0].values
-        except APIError as e:
-            raise Exception(f"Gemini Embedding API请求失败: {e.message}")
+            return self._extract_embeddings(result, expected_count=1)[0]
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Gemini embedding request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     async def get_embeddings(self, text: list[str]) -> list[list[float]]:
         """批量获取文本的嵌入"""
@@ -69,20 +95,27 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                     output_dimensionality=self.get_dim(),
                 ),
             )
-            assert result.embeddings is not None
-
-            embeddings: list[list[float]] = []
-            for embedding in result.embeddings:
-                assert embedding.values is not None
-                embeddings.append(embedding.values)
-            return embeddings
-        except APIError as e:
-            raise Exception(f"Gemini Embedding API批量请求失败: {e.message}")
+            return self._extract_embeddings(result, expected_count=len(text))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Gemini embedding request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     def get_dim(self) -> int:
         """获取向量的维度"""
         return int(self.provider_config.get("embedding_dimensions", 768))
 
-    async def terminate(self):
-        if self.client:
-            await self.client.aclose()
+    async def terminate(self) -> None:
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+        try:
+            await client.aclose()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Gemini embedding client close failed: %s", safe_error("", exc)
+            )

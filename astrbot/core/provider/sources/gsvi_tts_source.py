@@ -1,13 +1,18 @@
+import asyncio
 import uuid
 from pathlib import Path
 
 import aiohttp
 
+from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "GSVI TTS audio generation failed"
 
 
 @register_provider_adapter(
@@ -32,8 +37,7 @@ class ProviderGSVITTS(TTSProvider):
         self.text_lang = provider_config.get("text_lang", "中文")
 
     async def get_audio(self, text: str) -> str:
-        temp_dir = get_astrbot_temp_path()
-        path = Path(temp_dir) / f"gsvi_tts_{uuid.uuid4()}.wav"
+        path = Path(get_astrbot_temp_path()) / f"gsvi_tts_{uuid.uuid4()}.wav"
         url = f"{self.api_base}/infer_single"
 
         headers = {"Content-Type": "application/json"}
@@ -50,27 +54,45 @@ class ProviderGSVITTS(TTSProvider):
             "text_lang": self.text_lang,
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=data, headers=headers) as response:
-                if response.status == 200:
-                    resp_json = await response.json()
-                    msg = resp_json.get("msg")
-                    audio_url = resp_json.get("audio_url")
-                    if not msg or msg != "合成成功":
-                        raise Exception(f"GSVI TTS API 合成失败: {msg}")
-                    async with session.get(audio_url) as audio_response:
-                        if audio_response.status == 200:
-                            with open(path, "wb") as f:
-                                f.write(await audio_response.read())
-                        else:
-                            error_text = await audio_response.text()
-                            raise Exception(
-                                f"GSVI TTS API 下载音频失败，状态码: {audio_response.status}，错误: {error_text}",
-                            )
-                else:
-                    error_text = await response.text()
-                    raise Exception(
-                        f"GSVI TTS API 请求失败，状态码: {response.status}，错误: {error_text}",
-                    )
+        completed = False
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=data, headers=headers) as response:
+                    if response.status != 200:
+                        logger.error(
+                            "[GSVI TTS] Synthesis request failed with status %s",
+                            response.status,
+                        )
+                        raise RuntimeError(_REQUEST_ERROR)
+                    response_data = await response.json()
+                    if not isinstance(response_data, dict):
+                        raise ValueError("GSVI TTS returned an invalid response")
+                    if response_data.get("msg") != "合成成功":
+                        raise ValueError("GSVI TTS did not confirm synthesis")
+                    audio_url = response_data.get("audio_url")
+                    if not isinstance(audio_url, str) or not audio_url:
+                        raise ValueError("GSVI TTS returned no audio URL")
 
-        return str(path)
+                    async with session.get(audio_url) as audio_response:
+                        if audio_response.status != 200:
+                            logger.error(
+                                "[GSVI TTS] Audio download failed with status %s",
+                                audio_response.status,
+                            )
+                            raise RuntimeError(_REQUEST_ERROR)
+                        audio = await audio_response.read()
+                        if not isinstance(audio, bytes) or not audio:
+                            raise ValueError("GSVI TTS returned empty audio")
+                        with open(path, "wb") as output:
+                            output.write(audio)
+            completed = True
+            return str(path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[GSVI TTS] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        finally:
+            if not completed:
+                path.unlink(missing_ok=True)

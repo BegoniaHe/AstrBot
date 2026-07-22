@@ -1,15 +1,20 @@
 import asyncio
-import os
 import uuid
+from pathlib import Path
 
 import aiohttp
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "GSV TTS request failed"
+_INITIALIZATION_ERROR = "GSV TTS initialization failed"
+_AUDIO_ERROR = "GSV TTS audio generation failed"
 
 
 @register_provider_adapter(
@@ -41,15 +46,32 @@ class ProviderGSVTTS(TTSProvider):
 
     async def initialize(self) -> None:
         """异步初始化：在 ProviderManager 中被调用"""
-        self._session = aiohttp.ClientSession(
+        session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=self.timeout),
         )
+        self._session = session
         try:
             await self._set_model_weights()
             logger.info("[GSV TTS] 初始化完成")
-        except Exception as e:
-            logger.error(f"[GSV TTS] 初始化失败：{e}")
+        except asyncio.CancelledError:
+            self._session = None
+            await self._close_session(session)
             raise
+        except Exception as exc:
+            self._session = None
+            await self._close_session(session)
+            logger.error("[GSV TTS] Initialization failed: %s", safe_error("", exc))
+            raise RuntimeError(_INITIALIZATION_ERROR) from None
+
+    async def _close_session(self, session: aiohttp.ClientSession) -> None:
+        if getattr(session, "closed", False):
+            return
+        try:
+            await session.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("[GSV TTS] Session close failed: %s", safe_error("", exc))
 
     def get_session(self) -> aiohttp.ClientSession:
         if not self._session or self._session.closed:
@@ -65,52 +87,56 @@ class ProviderGSVTTS(TTSProvider):
         retries: int = 3,
     ) -> bytes | None:
         """发起请求"""
+        if retries <= 0:
+            raise ValueError("retries must be greater than zero")
+
         for attempt in range(retries):
-            logger.debug(f"[GSV TTS] 请求地址：{endpoint}，参数：{params}")
             try:
                 async with self.get_session().get(endpoint, params=params) as response:
                     if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(
-                            f"[GSV TTS] Request to {endpoint} failed with status {response.status}: {error_text}",
+                        raise RuntimeError(
+                            f"GSV TTS HTTP request failed with status {response.status}"
                         )
                     return await response.read()
-            except Exception as e:
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
                 if attempt < retries - 1:
                     logger.warning(
-                        f"[GSV TTS] 请求 {endpoint} 第 {attempt + 1} 次失败：{e}，重试中...",
+                        "[GSV TTS] Request attempt %d failed: %s",
+                        attempt + 1,
+                        safe_error("", exc),
                     )
                     await asyncio.sleep(1)
                 else:
-                    logger.error(f"[GSV TTS] 请求 {endpoint} 最终失败：{e}")
-                    raise
+                    logger.error(
+                        "[GSV TTS] Request failed after %d attempts: %s",
+                        retries,
+                        safe_error("", exc),
+                    )
+                    raise RuntimeError(_REQUEST_ERROR) from None
+
+        raise RuntimeError(_REQUEST_ERROR)
 
     async def _set_model_weights(self) -> None:
         """设置模型路径"""
-        try:
-            if self.gpt_weights_path:
-                await self._make_request(
-                    f"{self.api_base}/set_gpt_weights",
-                    {"weights_path": self.gpt_weights_path},
-                )
-                logger.info(f"[GSV TTS] 成功设置 GPT 模型路径：{self.gpt_weights_path}")
-            else:
-                logger.info("[GSV TTS] GPT 模型路径未配置，将使用内置 GPT 模型")
+        if self.gpt_weights_path:
+            await self._make_request(
+                f"{self.api_base}/set_gpt_weights",
+                {"weights_path": self.gpt_weights_path},
+            )
+            logger.info("[GSV TTS] GPT model weights configured")
+        else:
+            logger.info("[GSV TTS] GPT 模型路径未配置，将使用内置 GPT 模型")
 
-            if self.sovits_weights_path:
-                await self._make_request(
-                    f"{self.api_base}/set_sovits_weights",
-                    {"weights_path": self.sovits_weights_path},
-                )
-                logger.info(
-                    f"[GSV TTS] 成功设置 SoVITS 模型路径：{self.sovits_weights_path}",
-                )
-            else:
-                logger.info("[GSV TTS] SoVITS 模型路径未配置，将使用内置 SoVITS 模型")
-        except aiohttp.ClientError as e:
-            logger.error(f"[GSV TTS] 设置模型路径时发生网络错误：{e}")
-        except Exception as e:
-            logger.error(f"[GSV TTS] 设置模型路径时发生未知错误：{e}")
+        if self.sovits_weights_path:
+            await self._make_request(
+                f"{self.api_base}/set_sovits_weights",
+                {"weights_path": self.sovits_weights_path},
+            )
+            logger.info("[GSV TTS] SoVITS model weights configured")
+        else:
+            logger.info("[GSV TTS] SoVITS 模型路径未配置，将使用内置 SoVITS 模型")
 
     async def get_audio(self, text: str) -> str:
         """实现 TTS 核心方法，根据文本内容自动切换情绪"""
@@ -121,18 +147,25 @@ class ProviderGSVTTS(TTSProvider):
 
         params = self.build_synthesis_params(text)
 
-        temp_dir = get_astrbot_temp_path()
-        os.makedirs(temp_dir, exist_ok=True)
-        path = os.path.join(temp_dir, f"gsv_tts_{uuid.uuid4().hex}.wav")
-
-        logger.debug(f"[GSV TTS] 正在调用语音合成接口，参数：{params}")
-
-        result = await self._make_request(endpoint, params)
-        if isinstance(result, bytes):
-            with open(path, "wb") as f:
-                f.write(result)
-            return path
-        raise Exception(f"[GSV TTS] 合成失败，输入文本：{text}，错误信息：{result}")
+        path = Path(get_astrbot_temp_path()) / f"gsv_tts_{uuid.uuid4().hex}.wav"
+        completed = False
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            result = await self._make_request(endpoint, params)
+            if not isinstance(result, bytes) or not result:
+                raise ValueError("GSV TTS returned empty audio")
+            with open(path, "wb") as output:
+                output.write(result)
+            completed = True
+            return str(path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[GSV TTS] Audio generation failed: %s", safe_error("", exc))
+            raise RuntimeError(_AUDIO_ERROR) from None
+        finally:
+            if not completed:
+                path.unlink(missing_ok=True)
 
     def build_synthesis_params(self, text: str) -> dict:
         """构建语音合成所需的参数字典。
@@ -146,6 +179,8 @@ class ProviderGSVTTS(TTSProvider):
 
     async def terminate(self) -> None:
         """终止释放资源：在 ProviderManager 中被调用"""
-        if self._session and not self._session.closed:
-            await self._session.close()
-            logger.info("[GSV TTS] Session 已关闭")
+        session = self._session
+        self._session = None
+        if session is None:
+            return
+        await self._close_session(session)

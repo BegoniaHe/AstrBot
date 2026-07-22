@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 
@@ -6,6 +7,7 @@ from openai import NOT_GIVEN, AsyncOpenAI
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
@@ -48,16 +50,45 @@ class ProviderOpenAITTSAPI(TTSProvider):
     async def get_audio(self, text: str) -> str:
         temp_dir = get_astrbot_temp_path()
         path = os.path.join(temp_dir, f"openai_tts_api_{uuid.uuid4()}.wav")
-        async with self.client.audio.speech.with_streaming_response.create(
-            model=self.model_name,
-            voice=self.voice,
-            response_format="wav",
-            input=text,
-        ) as response:
-            with open(path, "wb") as f:
-                async for chunk in response.iter_bytes(chunk_size=1024):
-                    f.write(chunk)
-        return path
+        completed = False
+
+        try:
+            os.makedirs(temp_dir, exist_ok=True)
+            bytes_written = 0
+            async with self.client.audio.speech.with_streaming_response.create(
+                model=self.model_name,
+                voice=self.voice,
+                response_format="wav",
+                input=text,
+            ) as response:
+                with open(path, "wb") as f:
+                    async for chunk in response.iter_bytes(chunk_size=1024):
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        bytes_written += len(chunk)
+
+            if not bytes_written:
+                raise RuntimeError("OpenAI TTS returned empty audio.")
+
+            completed = True
+            return path
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("OpenAI TTS generation failed: %s", safe_error("", exc))
+            raise RuntimeError("OpenAI TTS audio generation failed.") from None
+        finally:
+            if not completed:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to remove incomplete OpenAI TTS audio: %s",
+                        safe_error("", exc),
+                    )
 
     async def terminate(self):
         if self.client:

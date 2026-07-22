@@ -1,5 +1,9 @@
+import asyncio
+
 from openai import NOT_GIVEN, AsyncOpenAI
 
+from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.media_utils import MediaResolver
 
 from ..entities import ProviderType
@@ -31,18 +35,44 @@ class ProviderOpenAIWhisperAPI(STTProvider):
 
     async def get_text(self, audio_url: str) -> str:
         """Only supports mp3, mp4, mpeg, m4a, wav, webm"""
-        async with MediaResolver(
-            audio_url,
-            media_type="audio",
-            default_suffix=".wav",
-        ).as_path(target_format="wav") as audio:
-            with audio.open("rb") as audio_file:
-                result = await self.client.audio.transcriptions.create(
-                    model=self.model_name,
-                    file=("audio.wav", audio_file),
+        try:
+            async with MediaResolver(
+                audio_url,
+                media_type="audio",
+                default_suffix=".wav",
+            ).as_path(target_format="wav") as audio:
+                with audio.open("rb") as audio_file:
+                    result = await self.client.audio.transcriptions.create(
+                        model=self.model_name,
+                        file=("audio.wav", audio_file),
+                    )
+
+            text = getattr(result, "text", None)
+            if not isinstance(text, str):
+                logger.warning(
+                    "OpenAI Whisper API returned an invalid transcription response."
                 )
-        return result.text
+                raise ValueError("invalid transcription response")
+            return text
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "OpenAI Whisper transcription failed: %s",
+                safe_error("", exc),
+            )
+            raise RuntimeError("OpenAI Whisper transcription failed.") from None
 
     async def terminate(self):
         if self.client:
-            await self.client.close()
+            try:
+                await self.client.close()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Failed to close OpenAI Whisper client: %s",
+                    safe_error("", exc),
+                )
+            else:
+                self.client = None

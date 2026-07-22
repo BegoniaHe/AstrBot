@@ -1,8 +1,7 @@
 import asyncio
 import base64
-import logging
-import os
 import uuid
+from pathlib import Path
 
 import aiohttp
 import dashscope
@@ -15,11 +14,15 @@ except (
 ):  # pragma: no cover - older dashscope versions without Qwen TTS support
     MultiModalConversation = None
 
+from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "Dashscope TTS audio generation failed"
 
 
 @register_provider_adapter(
@@ -45,23 +48,32 @@ class ProviderDashscopeTTSAPI(TTSProvider):
         if not model:
             raise RuntimeError("Dashscope TTS model is not configured.")
 
-        temp_dir = get_astrbot_temp_path()
-        os.makedirs(temp_dir, exist_ok=True)
+        path: Path | None = None
+        completed = False
+        try:
+            if self._is_qwen_tts_model(model):
+                audio_bytes, ext = await self._synthesize_with_qwen_tts(model, text)
+            else:
+                audio_bytes, ext = await self._synthesize_with_cosyvoice(model, text)
 
-        if self._is_qwen_tts_model(model):
-            audio_bytes, ext = await self._synthesize_with_qwen_tts(model, text)
-        else:
-            audio_bytes, ext = await self._synthesize_with_cosyvoice(model, text)
+            if not isinstance(audio_bytes, bytes) or not audio_bytes:
+                raise ValueError("Dashscope TTS returned empty audio")
 
-        if not audio_bytes:
-            raise RuntimeError(
-                "Audio synthesis failed, returned empty content. The model may not be supported or the service is unavailable.",
-            )
-
-        path = os.path.join(temp_dir, f"dashscope_tts_{uuid.uuid4()}{ext}")
-        with open(path, "wb") as f:
-            f.write(audio_bytes)
-        return path
+            temp_dir = Path(get_astrbot_temp_path())
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            path = temp_dir / f"dashscope_tts_{uuid.uuid4()}{ext}"
+            with open(path, "wb") as output:
+                output.write(audio_bytes)
+            completed = True
+            return str(path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[Dashscope TTS] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        finally:
+            if path is not None and not completed:
+                path.unlink(missing_ok=True)
 
     def _call_qwen_tts(self, model: str, text: str):
         if MultiModalConversation is None:
@@ -77,7 +89,7 @@ class ProviderDashscopeTTSAPI(TTSProvider):
             "text": text,
         }
         if not self.voice:
-            logging.warning(
+            logger.warning(
                 "No voice specified for Qwen TTS model, using default 'Cherry'.",
             )
         return MultiModalConversation.call(**kwargs)
@@ -91,9 +103,7 @@ class ProviderDashscopeTTSAPI(TTSProvider):
         response = await loop.run_in_executor(None, self._call_qwen_tts, model, text)
         audio_bytes = await self._extract_audio_from_response(response)
         if not audio_bytes:
-            raise RuntimeError(
-                f"Audio synthesis failed for model '{model}'. {response}",
-            )
+            raise ValueError("Dashscope Qwen TTS returned no audio")
         ext = ".wav"
         return audio_bytes, ext
 
@@ -106,9 +116,10 @@ class ProviderDashscopeTTSAPI(TTSProvider):
         data_b64 = getattr(audio_obj, "data", None)
         if data_b64:
             try:
-                return base64.b64decode(data_b64)
+                audio = base64.b64decode(data_b64, validate=True)
+                return audio or None
             except ValueError, TypeError:
-                logging.exception("Failed to decode base64 audio data.")
+                logger.warning("[Dashscope TTS] Invalid base64 audio data")
                 return None
 
         url = getattr(audio_obj, "url", None)
@@ -129,8 +140,12 @@ class ProviderDashscopeTTSAPI(TTSProvider):
                 ) as response,
             ):
                 return await response.read()
-        except (TimeoutError, aiohttp.ClientError, OSError) as e:
-            logging.exception(f"Failed to download audio from URL {url}: {e}")
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError, aiohttp.ClientError, OSError) as exc:
+            logger.warning(
+                "[Dashscope TTS] Audio download failed: %s", safe_error("", exc)
+            )
             return None
 
     async def _synthesize_with_cosyvoice(
@@ -151,11 +166,7 @@ class ProviderDashscopeTTSAPI(TTSProvider):
             self.timeout_ms,
         )
         if not audio_bytes:
-            resp = synthesizer.get_response()
-            if resp and isinstance(resp, dict):
-                raise RuntimeError(
-                    f"Audio synthesis failed for model '{model}'. {resp}".strip(),
-                )
+            raise ValueError("Dashscope CosyVoice returned no audio")
         return audio_bytes, ".wav"
 
     def _is_qwen_tts_model(self, model: str) -> bool:

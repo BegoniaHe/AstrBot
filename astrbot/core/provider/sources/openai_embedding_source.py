@@ -1,3 +1,5 @@
+import asyncio
+import math
 import re
 from urllib.parse import urlparse
 
@@ -5,10 +7,13 @@ import httpx
 from openai import AsyncOpenAI
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import EmbeddingProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "OpenAI embedding request failed"
 
 
 def _normalize_api_base(api_base: str) -> str:
@@ -29,15 +34,13 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.provider_config = provider_config
         self.provider_settings = provider_settings
         proxy = provider_config.get("proxy", "")
-        provider_id = provider_config.get("id", "unknown_id")
         http_client = None
         if proxy:
-            logger.info(f"[OpenAI Embedding] {provider_id} Using proxy: {proxy}")
+            logger.info("[OpenAI Embedding] Using configured proxy")
             http_client = httpx.AsyncClient(proxy=proxy)
         api_base = _normalize_api_base(
             provider_config.get("embedding_api_base", "https://api.openai.com/v1")
         )
-        logger.info(f"[OpenAI Embedding] {provider_id} Using API Base: {api_base}")
         self.client = AsyncOpenAI(
             api_key=provider_config.get("embedding_api_key"),
             base_url=api_base,
@@ -45,36 +48,57 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             http_client=http_client,
         )
         self.model = provider_config.get("embedding_model", "text-embedding-3-small")
+        self.set_model(self.model)
 
     async def get_embedding(self, text: str) -> list[float]:
         """获取文本的嵌入"""
-        kwargs = self._embedding_kwargs()
-        embedding = await self.client.embeddings.create(
-            input=text,
-            model=self.model,
-            **kwargs,
-        )
-        return embedding.data[0].embedding
+        return (await self._request_embeddings(text))[0]
 
     async def get_embeddings(self, text: list[str]) -> list[list[float]]:
         """批量获取文本的嵌入"""
-        kwargs = self._embedding_kwargs()
-        embeddings = await self.client.embeddings.create(
-            input=text,
-            model=self.model,
-            **kwargs,
-        )
-        return [item.embedding for item in embeddings.data]
+        if not text:
+            return []
+        return await self._request_embeddings(text)
+
+    async def _request_embeddings(self, text: str | list[str]) -> list[list[float]]:
+        """Request and validate one vector for each input text."""
+        expected_count = 1 if isinstance(text, str) else len(text)
+        try:
+            response = await self.client.embeddings.create(
+                input=text,
+                model=self.model,
+                **self._embedding_kwargs(),
+            )
+            data = getattr(response, "data", None)
+            if not isinstance(data, list) or len(data) != expected_count:
+                raise ValueError("OpenAI embedding response has an invalid item count")
+
+            vectors: list[list[float]] = []
+            for item in data:
+                embedding = getattr(item, "embedding", None)
+                if not isinstance(embedding, list) or not embedding:
+                    raise ValueError(
+                        "OpenAI embedding response contains an empty vector"
+                    )
+                vector = [float(value) for value in embedding]
+                if not all(math.isfinite(value) for value in vector):
+                    raise ValueError(
+                        "OpenAI embedding response contains non-finite values"
+                    )
+                vectors.append(vector)
+            return vectors
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[OpenAI Embedding] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     def _embedding_kwargs(self) -> dict:
         """Build optional embedding request parameters."""
         kwargs: dict[str, int] = {}
         dimensions_mode = self.provider_config.get("embedding_dimensions_mode", "auto")
         if dimensions_mode not in {"auto", "always", "never"}:
-            logger.warning(
-                "Unknown embedding_dimensions_mode %r; using auto.",
-                dimensions_mode,
-            )
+            logger.warning("Unknown embedding_dimensions_mode; using auto.")
             dimensions_mode = "auto"
 
         send_dimensions = dimensions_mode == "always"
@@ -104,11 +128,22 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                 kwargs["dimensions"] = int(self.provider_config["embedding_dimensions"])
             except ValueError, TypeError:
                 logger.warning(
-                    f"embedding_dimensions in embedding configs is not a valid integer: '{self.provider_config['embedding_dimensions']}', ignored."
+                    "embedding_dimensions in embedding configs is not a valid integer; "
+                    "ignored."
                 )
 
         return kwargs
 
     async def terminate(self):
-        if self.client:
-            await self.client.close()
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[OpenAI Embedding] Client close failed: %s", safe_error("", exc)
+            )

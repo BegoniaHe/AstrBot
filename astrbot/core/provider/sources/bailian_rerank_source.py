@@ -1,13 +1,18 @@
+import asyncio
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import aiohttp
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType, RerankResult
 from ..provider import RerankProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "Bailian rerank request failed"
 
 
 class BailianRerankError(Exception):
@@ -122,7 +127,7 @@ class BailianRerankProvider(RerankProvider):
 
         return base
 
-    def _parse_results(self, data: dict) -> list[RerankResult]:
+    def _parse_results(self, data: object) -> list[RerankResult]:
         """解析API响应结果
 
         Args:
@@ -133,59 +138,81 @@ class BailianRerankProvider(RerankProvider):
 
         Raises:
             BailianAPIError: API返回错误
-            KeyError: 结果缺少必要字段
         """
+        if not isinstance(data, Mapping):
+            logger.warning("Bailian rerank returned an invalid response")
+            return []
+
         is_compatible_api = "compatible-api" in self.base_url
 
         if is_compatible_api:
             code = data.get("code")
             if code:
-                raise BailianAPIError(
-                    f"百炼 API 错误: {code} – {data.get('message', '')}"
-                )
+                raise BailianAPIError(_REQUEST_ERROR)
             results = data.get("results", [])
         else:
             code = data.get("code", "200")
             if code != "200":
-                raise BailianAPIError(
-                    f"百炼 API 错误: {code} – {data.get('message', '')}"
-                )
-            results = data.get("output", {}).get("results", [])
+                raise BailianAPIError(_REQUEST_ERROR)
+            output = data.get("output", {})
+            if not isinstance(output, Mapping):
+                logger.warning("Bailian rerank returned an invalid output payload")
+                return []
+            results = output.get("results", [])
 
-        if not results:
-            logger.warning(f"百炼 Rerank 返回空结果: {data}")
+        if not isinstance(results, list):
+            logger.warning("Bailian rerank returned invalid result data")
             return []
 
-        # 转换为RerankResult对象，使用.get()避免KeyError
-        rerank_results = []
+        if not results:
+            logger.warning("Bailian rerank returned no results")
+            return []
+
+        rerank_results: list[RerankResult] = []
         for idx, result in enumerate(results):
             try:
-                index = result.get("index", idx)
+                if not isinstance(result, Mapping):
+                    raise TypeError("rerank result must be an object")
+
+                index = int(result.get("index", idx))
                 relevance_score = result.get("relevance_score", 0.0)
 
                 if relevance_score is None:
-                    logger.warning(f"结果 {idx} 缺少 relevance_score，使用默认值 0.0")
+                    logger.warning("Bailian rerank result is missing a relevance score")
                     relevance_score = 0.0
 
                 rerank_result = RerankResult(
-                    index=index, relevance_score=relevance_score
+                    index=index, relevance_score=float(relevance_score)
                 )
                 rerank_results.append(rerank_result)
-            except Exception as e:
-                logger.warning(f"解析结果 {idx} 时出错: {e}, result={result}")
+            except Exception as exc:
+                logger.warning(
+                    "Bailian rerank result parsing failed: %s", safe_error("", exc)
+                )
                 continue
 
         return rerank_results
 
-    def _log_usage(self, data: dict) -> None:
+    def _log_usage(self, data: object) -> None:
         """记录使用量信息
 
         Args:
             data: API响应数据
         """
-        tokens = data.get("usage", {}).get("total_tokens", 0)
+        if not isinstance(data, Mapping):
+            logger.warning("Bailian rerank returned invalid usage data")
+            return
+        usage = data.get("usage", {})
+        if not isinstance(usage, Mapping):
+            logger.warning("Bailian rerank returned invalid usage data")
+            return
+        try:
+            tokens = int(usage.get("total_tokens", 0))
+        except TypeError, ValueError:
+            logger.warning("Bailian rerank returned invalid usage data")
+            return
         if tokens > 0:
-            logger.debug(f"百炼 Rerank 消耗 Token: {tokens}")
+            logger.debug("Bailian rerank token usage: %d", tokens)
 
     async def rerank(
         self,
@@ -204,7 +231,8 @@ class BailianRerankProvider(RerankProvider):
         Returns:
             重排序结果列表
         """
-        if not self.client:
+        client = self.client
+        if client is None or getattr(client, "closed", False):
             logger.error("百炼 Rerank 客户端会话已关闭，返回空结果")
             return []
 
@@ -227,12 +255,10 @@ class BailianRerankProvider(RerankProvider):
             # 构建请求载荷，如果top_n为None则返回所有重排序结果
             payload = self._build_payload(query, documents, top_n)
 
-            logger.debug(
-                f"百炼 Rerank 请求: query='{query[:50]}...', 文档数量={len(documents)}"
-            )
+            logger.debug("Bailian rerank request sent for %d documents", len(documents))
 
             # 发送请求
-            async with self.client.post(self.base_url, json=payload) as response:
+            async with client.post(self.base_url, json=payload) as response:
                 response.raise_for_status()
                 response_data = await response.json()
 
@@ -240,28 +266,34 @@ class BailianRerankProvider(RerankProvider):
                 results = self._parse_results(response_data)
                 self._log_usage(response_data)
 
-                logger.debug(f"百炼 Rerank 成功返回 {len(results)} 个结果")
+                logger.debug("Bailian rerank returned %d results", len(results))
 
                 return results
 
-        except aiohttp.ClientError as e:
-            error_msg = f"网络请求失败: {e}"
-            logger.error(f"百炼 Rerank 网络请求失败: {e}")
-            raise BailianNetworkError(error_msg) from e
+        except asyncio.CancelledError:
+            raise
+        except aiohttp.ClientError as exc:
+            logger.error("Bailian rerank network failure: %s", safe_error("", exc))
+            raise BailianNetworkError(_REQUEST_ERROR) from None
         except BailianRerankError:
             raise
-        except Exception as e:
-            error_msg = f"重排序失败: {e}"
-            logger.error(f"百炼 Rerank 处理失败: {e}")
-            raise BailianRerankError(error_msg) from e
+        except Exception as exc:
+            logger.error("Bailian rerank request failed: %s", safe_error("", exc))
+            raise BailianRerankError(_REQUEST_ERROR) from None
 
     async def terminate(self) -> None:
         """关闭HTTP客户端会话."""
-        if self.client:
-            logger.info("关闭 百炼 Rerank 客户端会话")
-            try:
-                await self.client.close()
-            except Exception as e:
-                logger.error(f"关闭 百炼 Rerank 客户端时出错: {e}")
-            finally:
-                self.client = None
+        client = self.client
+        self.client = None
+        if client is None or getattr(client, "closed", False):
+            return
+
+        logger.info("Closing Bailian rerank client")
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Bailian rerank client close failed: %s", safe_error("", exc)
+            )

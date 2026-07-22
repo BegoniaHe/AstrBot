@@ -1,3 +1,9 @@
+import asyncio
+from collections.abc import Mapping
+
+from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
+
 from ..entities import ProviderType
 from ..provider import STTProvider
 from ..register import register_provider_adapter
@@ -89,20 +95,55 @@ class ProviderMiMoSTTAPI(STTProvider):
             )
             try:
                 response.raise_for_status()
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
-                error_text = response.text[:1024]
+                logger.warning("MiMo STT request failed: %s", safe_error("", exc))
+                raise MiMoAPIError("MiMo STT API request failed.") from exc
+
+            try:
+                data = response.json()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "MiMo STT returned invalid JSON: %s",
+                    safe_error("", exc),
+                )
                 raise MiMoAPIError(
-                    f"MiMo STT API request failed: HTTP {response.status_code}, response: {error_text}"
+                    "MiMo STT API returned an invalid response."
                 ) from exc
 
-            data = response.json()
+            if not isinstance(data, Mapping):
+                logger.warning("MiMo STT returned an invalid response shape.")
+                raise MiMoAPIError("MiMo STT API returned an invalid response.")
+
             choices = data.get("choices") or []
+            if not isinstance(choices, list):
+                logger.warning("MiMo STT returned an invalid response shape.")
+                raise MiMoAPIError("MiMo STT API returned an invalid response.")
+
             first_choice = choices[0] if choices else {}
-            message = (first_choice or {}).get("message") or {}
+            if not isinstance(first_choice, Mapping):
+                logger.warning("MiMo STT returned an invalid response shape.")
+                raise MiMoAPIError("MiMo STT API returned an invalid response.")
+
+            message = first_choice.get("message") or {}
+            if not isinstance(message, Mapping):
+                logger.warning("MiMo STT returned an invalid response shape.")
+                raise MiMoAPIError("MiMo STT API returned an invalid response.")
+
             content = message.get("content") or message.get("reasoning_content") or ""
             if not isinstance(content, str) or not content.strip():
                 raise MiMoAPIError("MiMo STT API returned empty transcription")
             return content.strip()
+        except asyncio.CancelledError:
+            raise
+        except MiMoAPIError:
+            raise
+        except Exception as exc:
+            logger.error("MiMo STT failed: %s", safe_error("", exc))
+            raise MiMoAPIError("MiMo STT API request failed.") from exc
         finally:
             cleanup_files(cleanup_paths)
 

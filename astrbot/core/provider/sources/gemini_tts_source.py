@@ -1,16 +1,20 @@
-import os
+import asyncio
 import uuid
 import wave
+from pathlib import Path
 
 from google import genai
 from google.genai import types
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "Gemini TTS audio generation failed"
 
 
 @register_provider_adapter(
@@ -36,55 +40,82 @@ class ProviderGeminiTTSAPI(TTSProvider):
         proxy = provider_config.get("proxy", "")
         if proxy:
             http_options.async_client_args = {"proxy": proxy}
-            logger.info(f"[Gemini TTS] 使用代理: {proxy}")
+            logger.info("[Gemini TTS] Using configured proxy")
 
         self.client = genai.Client(api_key=api_key, http_options=http_options).aio
         self.model: str = provider_config.get(
             "gemini_tts_model",
             "gemini-2.5-flash-preview-tts",
         )
+        self.set_model(self.model)
         self.prefix: str | None = provider_config.get(
             "gemini_tts_prefix",
         )
         self.voice_name: str = provider_config.get("gemini_tts_voice_name", "Leda")
 
+    @staticmethod
+    def _extract_audio(response: object) -> bytes:
+        """Validate and return the PCM audio data from a Gemini response."""
+        candidates = getattr(response, "candidates", None)
+        if not isinstance(candidates, list) or not candidates:
+            raise ValueError("Gemini TTS returned no candidates")
+        content = getattr(candidates[0], "content", None)
+        parts = getattr(content, "parts", None)
+        if not isinstance(parts, list) or not parts:
+            raise ValueError("Gemini TTS returned no audio parts")
+        inline_data = getattr(parts[0], "inline_data", None)
+        audio = getattr(inline_data, "data", None)
+        if not isinstance(audio, (bytes, bytearray)) or not audio:
+            raise ValueError("Gemini TTS returned invalid audio data")
+        return bytes(audio)
+
     async def get_audio(self, text: str) -> str:
-        temp_dir = get_astrbot_temp_path()
-        path = os.path.join(temp_dir, f"gemini_tts_{uuid.uuid4()}.wav")
-        prompt = f"{self.prefix}: {text}" if self.prefix else text
-        response = await self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=self.voice_name,
+        path = Path(get_astrbot_temp_path()) / f"gemini_tts_{uuid.uuid4()}.wav"
+        completed = False
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            prompt = f"{self.prefix}: {text}" if self.prefix else text
+            response = await self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=self.voice_name,
+                            ),
                         ),
                     ),
                 ),
-            ),
-        )
+            )
+            audio = self._extract_audio(response)
 
-        # 不想看类型检查报错
-        if (
-            not response.candidates
-            or not response.candidates[0].content
-            or not response.candidates[0].content.parts
-            or not response.candidates[0].content.parts[0].inline_data
-            or not response.candidates[0].content.parts[0].inline_data.data
-        ):
-            raise Exception("No audio content returned from Gemini TTS API.")
+            with wave.open(str(path), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(24000)
+                wf.writeframes(audio)
 
-        with wave.open(path, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(24000)
-            wf.writeframes(response.candidates[0].content.parts[0].inline_data.data)
-
-        return path
+            completed = True
+            return str(path)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[Gemini TTS] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        finally:
+            if not completed:
+                path.unlink(missing_ok=True)
 
     async def terminate(self):
-        if self.client:
-            await self.client.aclose()
+        client = self.client
+        self.client = None
+        if client is None:
+            return
+        try:
+            await client.aclose()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("[Gemini TTS] Client close failed: %s", safe_error("", exc))

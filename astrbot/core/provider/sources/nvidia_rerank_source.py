@@ -1,10 +1,15 @@
+import asyncio
+
 import aiohttp
 
 from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType, RerankResult
 from ..provider import RerankProvider
 from ..register import register_provider_adapter
+
+_REQUEST_ERROR = "NVIDIA rerank request failed"
 
 
 @register_provider_adapter(
@@ -57,7 +62,7 @@ class NvidiaRerankProvider(RerankProvider):
         """
 
         model_path = "nvidia"
-        logger.debug(f"[NVIDIA Rerank] Building endpoint for model: {self.model}")
+        logger.debug("[NVIDIA Rerank] Building endpoint")
         if "/" in self.model:
             """遵循NVIDIA API的URL规则，替换模型名中特殊字符"""
             model_path = self.model.strip("/").replace(".", "_")
@@ -81,20 +86,27 @@ class NvidiaRerankProvider(RerankProvider):
         """解析响应数据"""
         results = response_data.get("rankings", [])
         if not results:
-            logger.warning(f"[NVIDIA Rerank] Empty response: {response_data}")
+            logger.warning("[NVIDIA Rerank] Empty response")
+            return []
+
+        if not isinstance(results, list):
+            logger.warning("[NVIDIA Rerank] Invalid rankings response")
             return []
 
         rerank_results = []
         for idx, item in enumerate(results):
             try:
+                if not isinstance(item, dict):
+                    raise TypeError("ranking item must be an object")
                 index = item.get("index", idx)
                 score = item.get("relevance_score", item.get("logit", 0.0))
                 rerank_results.append(
                     RerankResult(index=index, relevance_score=float(score))
                 )
-            except Exception as e:
+            except Exception as exc:
                 logger.warning(
-                    f"[NVIDIA Rerank] Result parsing error: {e}, Data={item}"
+                    "[NVIDIA Rerank] Result parsing failed: %s",
+                    safe_error("", exc),
                 )
 
         rerank_results.sort(key=lambda x: x.relevance_score, reverse=True)
@@ -105,9 +117,17 @@ class NvidiaRerankProvider(RerankProvider):
 
     def _log_usage(self, data: dict) -> None:
         usage = data.get("usage", {})
+        if not isinstance(usage, dict):
+            logger.warning("[NVIDIA Rerank] Invalid usage metadata")
+            return
         total_tokens = usage.get("total_tokens", 0)
-        if total_tokens > 0:
-            logger.debug(f"[NVIDIA Rerank] Token Usage: {total_tokens}")
+        try:
+            token_count = int(total_tokens)
+        except TypeError, ValueError:
+            logger.warning("[NVIDIA Rerank] Invalid token usage metadata")
+            return
+        if token_count > 0:
+            logger.debug("[NVIDIA Rerank] Token Usage: %d", token_count)
 
     async def rerank(
         self,
@@ -134,31 +154,47 @@ class NvidiaRerankProvider(RerankProvider):
                 if response.status != 200:
                     try:
                         response_data = await response.json()
-                        error_detail = response_data.get(
-                            "detail", response_data.get("message", "Unknown Error")
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logger.warning(
+                            "[NVIDIA Rerank] Failed to parse error response: %s",
+                            safe_error("", exc),
                         )
+                        response_data = "<unavailable>"
 
-                    except Exception:
-                        error_detail = await response.text()
-                        response_data = {"message": error_detail}
-
-                    logger.error(f"[NVIDIA Rerank] API Error Response: {response_data}")
-                    raise Exception(f"HTTP {response.status} - {error_detail}")
+                    logger.error(
+                        "[NVIDIA Rerank] API request failed with status %s: %s",
+                        response.status,
+                        safe_error("", str(response_data)),
+                    )
+                    raise RuntimeError(_REQUEST_ERROR)
 
                 response_data = await response.json()
-                logger.debug(f"[NVIDIA Rerank] API Response: {response_data}")
+                logger.debug("[NVIDIA Rerank] API response received")
                 results = self._parse_results(response_data, top_n)
                 self._log_usage(response_data)
                 return results
 
-        except aiohttp.ClientError as e:
-            logger.error(f"[NVIDIA Rerank] Network error: {e}")
-            raise Exception(f"Network error: {e}") from e
-        except Exception as e:
-            logger.error(f"[NVIDIA Rerank] Error: {e}")
-            raise Exception(f"Rerank error: {e}") from e
+        except asyncio.CancelledError:
+            raise
+        except aiohttp.ClientError as exc:
+            logger.error("[NVIDIA Rerank] Network failure: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
+        except Exception as exc:
+            logger.error("[NVIDIA Rerank] Request failed: %s", safe_error("", exc))
+            raise RuntimeError(_REQUEST_ERROR) from None
 
     async def terminate(self) -> None:
-        if self.client and not self.client.closed:
-            await self.client.close()
-            self.client = None
+        client = self.client
+        self.client = None
+        if client is None or client.closed:
+            return
+        try:
+            await client.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[NVIDIA Rerank] Client close failed: %s", safe_error("", exc)
+            )

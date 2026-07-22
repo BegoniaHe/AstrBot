@@ -1,5 +1,12 @@
+import asyncio
 import base64
+import binascii
 import uuid
+from collections.abc import Mapping
+from pathlib import Path
+
+from astrbot import logger
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
@@ -100,33 +107,100 @@ class ProviderMiMoTTSAPI(TTSProvider):
         }
 
     async def get_audio(self, text: str) -> str:
-        response = await self.client.post(
-            build_api_url(self.api_base),
-            headers=build_headers(self.chosen_api_key),
-            json=self._build_payload(text),
-        )
-
+        output_path: Path | None = None
+        completed = False
         try:
-            response.raise_for_status()
+            response = await self.client.post(
+                build_api_url(self.api_base),
+                headers=build_headers(self.chosen_api_key),
+                json=self._build_payload(text),
+            )
+
+            try:
+                response.raise_for_status()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("MiMo TTS request failed: %s", safe_error("", exc))
+                raise MiMoAPIError("MiMo TTS API request failed.") from exc
+
+            try:
+                data = response.json()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "MiMo TTS returned invalid JSON: %s",
+                    safe_error("", exc),
+                )
+                raise MiMoAPIError(
+                    "MiMo TTS API returned an invalid response."
+                ) from exc
+
+            if not isinstance(data, Mapping):
+                logger.warning("MiMo TTS returned an invalid response shape.")
+                raise MiMoAPIError("MiMo TTS API returned an invalid response.")
+
+            choices = data.get("choices") or []
+            if not isinstance(choices, list):
+                logger.warning("MiMo TTS returned an invalid response shape.")
+                raise MiMoAPIError("MiMo TTS API returned an invalid response.")
+
+            first_choice = choices[0] if choices else {}
+            if not isinstance(first_choice, Mapping):
+                logger.warning("MiMo TTS returned an invalid response shape.")
+                raise MiMoAPIError("MiMo TTS API returned an invalid response.")
+
+            message = first_choice.get("message") or {}
+            if not isinstance(message, Mapping):
+                logger.warning("MiMo TTS returned an invalid response shape.")
+                raise MiMoAPIError("MiMo TTS API returned an invalid response.")
+
+            audio = message.get("audio") or {}
+            if not isinstance(audio, Mapping):
+                logger.warning("MiMo TTS returned an invalid response shape.")
+                raise MiMoAPIError("MiMo TTS API returned an invalid response.")
+
+            audio_data = audio.get("data")
+            if not isinstance(audio_data, str) or not audio_data.strip():
+                raise MiMoAPIError("MiMo TTS API returned no audio payload.")
+
+            try:
+                audio_bytes = base64.b64decode(audio_data, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                logger.warning(
+                    "MiMo TTS returned invalid audio data: %s",
+                    safe_error("", exc),
+                )
+                raise MiMoAPIError(
+                    "MiMo TTS API returned an invalid audio payload."
+                ) from exc
+
+            if not audio_bytes:
+                raise MiMoAPIError("MiMo TTS API returned an invalid audio payload.")
+
+            output_path = (
+                get_temp_dir() / f"mimo_tts_api_{uuid.uuid4()}.{self.audio_format}"
+            )
+            output_path.write_bytes(audio_bytes)
+            completed = True
+            return str(output_path)
+        except asyncio.CancelledError:
+            raise
+        except MiMoAPIError:
+            raise
         except Exception as exc:
-            error_text = response.text[:1024]
-            raise MiMoAPIError(
-                f"MiMo TTS API request failed: HTTP {response.status_code}, response: {error_text}"
-            ) from exc
-
-        data = response.json()
-        choices = data.get("choices") or []
-        first_choice = choices[0] if choices else {}
-        message = first_choice.get("message", {})
-        audio_data = message.get("audio", {}).get("data")
-        if not audio_data:
-            raise MiMoAPIError(f"MiMo TTS API returned no audio payload: {data}")
-
-        output_path = (
-            get_temp_dir() / f"mimo_tts_api_{uuid.uuid4()}.{self.audio_format}"
-        )
-        output_path.write_bytes(base64.b64decode(audio_data))
-        return str(output_path)
+            logger.error("MiMo TTS failed: %s", safe_error("", exc))
+            raise MiMoAPIError("MiMo TTS API request failed.") from exc
+        finally:
+            if output_path is not None and not completed:
+                try:
+                    output_path.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to remove incomplete MiMo TTS audio: %s",
+                        safe_error("", exc),
+                    )
 
     async def terminate(self):
         if self.client:

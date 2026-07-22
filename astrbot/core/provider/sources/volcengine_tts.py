@@ -1,18 +1,20 @@
 import asyncio
 import base64
 import json
-import os
-import traceback
 import uuid
+from pathlib import Path
 
 import aiohttp
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
 from ..register import register_provider_adapter
+
+_AUDIO_GENERATION_ERROR = "Volcengine TTS audio generation failed"
 
 
 @register_provider_adapter(
@@ -65,12 +67,9 @@ class ProviderVolcengineTTS(TTSProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer; {self.api_key}",
         }
-
         payload = self._build_request_payload(text)
-
-        logger.debug(f"请求头: {headers}")
-        logger.debug(f"请求 URL: {self.api_base}")
-        logger.debug(f"请求体: {json.dumps(payload, ensure_ascii=False)[:100]}...")
+        file_path: Path | None = None
+        completed = False
 
         try:
             async with (
@@ -82,38 +81,39 @@ class ProviderVolcengineTTS(TTSProvider):
                     timeout=self.timeout,
                 ) as response,
             ):
-                logger.debug(f"响应状态码: {response.status}")
-
                 response_text = await response.text()
-                logger.debug(f"响应内容: {response_text[:200]}...")
+                if response.status != 200:
+                    raise RuntimeError(f"Volcengine TTS HTTP status {response.status}")
 
-                if response.status == 200:
-                    resp_data = json.loads(response_text)
+                resp_data = json.loads(response_text)
+                if not isinstance(resp_data, dict):
+                    raise ValueError("Volcengine TTS response must be an object")
+                encoded_audio = resp_data.get("data")
+                if not isinstance(encoded_audio, str):
+                    raise ValueError("Volcengine TTS response did not contain audio")
 
-                    if "data" in resp_data:
-                        audio_data = base64.b64decode(resp_data["data"])
+                audio_data = base64.b64decode(encoded_audio, validate=True)
+                if not audio_data:
+                    raise ValueError("Volcengine TTS returned empty audio")
 
-                        temp_dir = get_astrbot_temp_path()
-                        os.makedirs(temp_dir, exist_ok=True)
-                        file_path = os.path.join(
-                            temp_dir,
-                            f"volcengine_tts_{uuid.uuid4()}.mp3",
-                        )
+                temp_dir = Path(get_astrbot_temp_path())
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                file_path = temp_dir / f"volcengine_tts_{uuid.uuid4()}.mp3"
+                file_path.write_bytes(audio_data)
+                completed = True
+                return str(file_path)
 
-                        loop = asyncio.get_running_loop()
-                        await loop.run_in_executor(
-                            None,
-                            lambda: open(file_path, "wb").write(audio_data),
-                        )
-
-                        return file_path
-                    error_msg = resp_data.get("message", "未知错误")
-                    raise Exception(f"火山引擎 TTS API 返回错误: {error_msg}")
-                raise Exception(
-                    f"火山引擎 TTS API 请求失败: {response.status}, {response_text}",
-                )
-
-        except Exception as e:
-            error_details = traceback.format_exc()
-            logger.debug(f"火山引擎 TTS 异常详情: {error_details}")
-            raise Exception(f"火山引擎 TTS 异常: {e!s}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Volcengine TTS generation failed: %s", safe_error("", exc))
+            raise RuntimeError(_AUDIO_GENERATION_ERROR) from None
+        finally:
+            if file_path is not None and not completed:
+                try:
+                    file_path.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to remove incomplete Volcengine TTS audio: %s",
+                        safe_error("", exc),
+                    )

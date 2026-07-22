@@ -1,12 +1,14 @@
+import asyncio
 import json
 import os
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 
 import aiohttp
 
 from astrbot import logger
 from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
+from astrbot.core.utils.error_redaction import safe_error
 
 from ..entities import ProviderType
 from ..provider import TTSProvider
@@ -48,8 +50,7 @@ class ProviderMiniMaxTTSAPI(TTSProvider):
                 self.timber_weight = json.loads(raw_timber_weight)
             except json.JSONDecodeError:
                 logger.warning(
-                    "MiniMax TTS 权重配置解析失败，将使用默认值。 raw_value: %s",
-                    raw_timber_weight,
+                    "MiniMax TTS weight configuration is invalid; using defaults."
                 )
                 self.timber_weight = default_timber_weight
 
@@ -122,60 +123,109 @@ class ProviderMiniMaxTTSAPI(TTSProvider):
                     buffer += chunk
 
                     while b"\n\n" in buffer:
-                        try:
-                            message, buffer = buffer.split(b"\n\n", 1)
-                            if message.startswith(b"data: "):
-                                try:
-                                    data = json.loads(message[6:])
-                                    if "extra_info" in data:
-                                        continue
-                                    audio: str | None = data.get("data", {}).get(
-                                        "audio"
-                                    )
-                                    if audio is not None:
-                                        yield audio
-                                except json.JSONDecodeError:
-                                    logger.warning(
-                                        "Failed to parse JSON data from SSE message",
-                                    )
-                                    continue
-                        except ValueError:
-                            buffer = buffer[-1024:]
+                        message, buffer = buffer.split(b"\n\n", 1)
+                        if not message.startswith(b"data: "):
+                            continue
 
-        except aiohttp.ClientError as e:
-            raise Exception(f"MiniMax TTS API请求失败: {e!s}")
+                        try:
+                            data = json.loads(message[6:])
+                        except json.JSONDecodeError:
+                            logger.warning("MiniMax TTS received invalid SSE JSON.")
+                            continue
+
+                        if not isinstance(data, Mapping):
+                            logger.warning(
+                                "MiniMax TTS received an invalid SSE message."
+                            )
+                            continue
+
+                        if "extra_info" in data:
+                            continue
+
+                        response_data = data.get("data")
+                        if response_data is None:
+                            continue
+                        if not isinstance(response_data, Mapping):
+                            logger.warning(
+                                "MiniMax TTS received an invalid SSE message."
+                            )
+                            continue
+
+                        audio = response_data.get("audio")
+                        if audio is None:
+                            continue
+                        if not isinstance(audio, str):
+                            logger.warning(
+                                "MiniMax TTS received an invalid SSE message."
+                            )
+                            continue
+                        yield audio
+
+        except asyncio.CancelledError:
+            raise
+        except aiohttp.ClientError as exc:
+            logger.warning("MiniMax TTS API request failed: %s", safe_error("", exc))
+            raise RuntimeError("MiniMax TTS API request failed.") from exc
+        except Exception as exc:
+            logger.error("MiniMax TTS stream failed: %s", safe_error("", exc))
+            raise RuntimeError("MiniMax TTS API request failed.") from exc
 
     async def _audio_play(self, audio_stream: AsyncIterator[str]) -> bytes:
         """解码数据流到 audio 比特流"""
-        chunks = []
+        chunks: list[bytes] = []
         async for chunk in audio_stream:
-            if chunk.strip():
-                chunks.append(bytes.fromhex(chunk.strip()))
+            if not isinstance(chunk, str):
+                logger.warning("MiniMax TTS returned an invalid audio chunk.")
+                raise RuntimeError("MiniMax TTS API returned invalid audio data.")
+
+            normalized_chunk = chunk.strip()
+            if not normalized_chunk:
+                continue
+
+            try:
+                chunks.append(bytes.fromhex(normalized_chunk))
+            except ValueError as exc:
+                logger.warning(
+                    "MiniMax TTS returned invalid audio data: %s",
+                    safe_error("", exc),
+                )
+                raise RuntimeError(
+                    "MiniMax TTS API returned invalid audio data."
+                ) from exc
         return b"".join(chunks)
 
     async def get_audio(self, text: str) -> str:
-        temp_dir = get_astrbot_temp_path()
-        os.makedirs(temp_dir, exist_ok=True)
-        path = os.path.join(temp_dir, f"minimax_tts_api_{uuid.uuid4()}.wav")
-
+        path: str | None = None
+        completed = False
         try:
-            # 直接将异步生成器传递给 _audio_play 方法
+            temp_dir = get_astrbot_temp_path()
+            os.makedirs(temp_dir, exist_ok=True)
+            path = os.path.join(temp_dir, f"minimax_tts_api_{uuid.uuid4()}.wav")
+
             audio_stream = self._call_tts_stream(text)
             audio = await self._audio_play(audio_stream)
 
-            # 检查音频数据是否为空
-            if not audio or len(audio) == 0:
-                raise Exception(
-                    "MiniMax TTS API returned empty audio data. "
-                    "Please verify your configuration, especially the 'group_id' parameter. "
-                    "You can find your group_id in Account Management -> Basic Information on the MiniMax platform."
-                )
+            if not audio:
+                raise RuntimeError("MiniMax TTS API returned empty audio data.")
 
-            # 结果保存至文件
             with open(path, "wb") as file:
                 file.write(audio)
 
+            completed = True
             return path
-
-        except aiohttp.ClientError as e:
-            raise Exception(f"MiniMax TTS API request failed: {e!s}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("MiniMax TTS generation failed: %s", safe_error("", exc))
+            raise RuntimeError("MiniMax TTS audio generation failed.") from exc
+        finally:
+            if path is not None and not completed:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    logger.warning(
+                        "Failed to remove incomplete MiniMax TTS audio: %s",
+                        safe_error("", exc),
+                    )

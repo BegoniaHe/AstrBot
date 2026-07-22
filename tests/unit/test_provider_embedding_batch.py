@@ -8,15 +8,19 @@ from astrbot.core.provider.provider import EmbeddingProvider
 class _OutOfOrderEmbeddingProvider(EmbeddingProvider):
     def __init__(self) -> None:
         super().__init__({"type": "test", "id": "test"}, {})
+        self.first_batch_started = asyncio.Event()
+        self.second_batch_finished = asyncio.Event()
+        self.release_first_batch = asyncio.Event()
 
     async def get_embedding(self, text: str) -> list[float]:
         return [float(len(text))]
 
     async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         if texts[0] == "chunk-1":
-            await asyncio.sleep(0.05)
+            self.first_batch_started.set()
+            await self.release_first_batch.wait()
         else:
-            await asyncio.sleep(0.01)
+            self.second_batch_finished.set()
         return [
             [float(idx)] for idx, _text in enumerate(texts, start=int(texts[0][-1]))
         ]
@@ -50,10 +54,17 @@ def test_embedding_provider_uses_shared_dimension_configuration(caplog) -> None:
 async def test_get_embeddings_batch_preserves_input_order() -> None:
     provider = _OutOfOrderEmbeddingProvider()
 
-    result = await provider.get_embeddings_batch(
-        ["chunk-1", "chunk-2", "chunk-3", "chunk-4"],
-        batch_size=2,
-        tasks_limit=2,
+    task = asyncio.create_task(
+        provider.get_embeddings_batch(
+            ["chunk-1", "chunk-2", "chunk-3", "chunk-4"],
+            batch_size=2,
+            tasks_limit=2,
+        )
     )
+    await asyncio.wait_for(provider.first_batch_started.wait(), timeout=1)
+    await asyncio.wait_for(provider.second_batch_finished.wait(), timeout=1)
+    provider.release_first_batch.set()
+
+    result = await task
 
     assert result == [[1.0], [2.0], [3.0], [4.0]]
