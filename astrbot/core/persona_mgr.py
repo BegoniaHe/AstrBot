@@ -1,7 +1,7 @@
 from astrbot import logger
 from astrbot.core.astrbot_config_mgr import AstrBotConfigManager
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import Persona, PersonaFolder, Personality
+from astrbot.core.db.protocols import PersonaStore
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.sentinels import NOT_GIVEN
 from astrbot.core.utils.shared_preferences import SharedPreferences
@@ -20,7 +20,7 @@ DEFAULT_PERSONALITY = Personality(
 class PersonaManager:
     def __init__(
         self,
-        db_helper: BaseDatabase,
+        db_helper: PersonaStore,
         acm: AstrBotConfigManager,
         preferences: SharedPreferences,
     ) -> None:

@@ -1,8 +1,8 @@
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import MemoryStore
 
 
 class MemoryProfileRefresher:
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: MemoryStore) -> None:
         self.db = db
 
     async def refresh(self, *, person_id: str, chat_scope: str) -> str | None:

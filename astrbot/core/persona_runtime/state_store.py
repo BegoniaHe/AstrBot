@@ -1,13 +1,13 @@
 from datetime import UTC, datetime, timedelta
 
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import PersonaSessionState
+from astrbot.core.db.protocols import PersonaRuntimeStore
 
 from .models import PersonaRuntimeSignal
 
 
 class PersonaRuntimeStateStore:
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: PersonaRuntimeStore) -> None:
         self.db = db
 
     async def get_or_create(

@@ -69,7 +69,12 @@ Text chunk to process:
                     prompt=user_prompt,
                     system_prompt=TEXT_REPAIR_SYSTEM_PROMPT,
                 )
-            repaired_chunks = _extract_repaired_chunks(response.completion_text)
+            completion_text = response.completion_text
+            if completion_text is None:
+                raise ValueError(
+                    "LLM cleaning response did not include completion text"
+                )
+            repaired_chunks = _extract_repaired_chunks(completion_text)
             if repaired_chunks is not None:
                 return repaired_chunks
         except Exception as exc:

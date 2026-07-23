@@ -1,18 +1,18 @@
 import hashlib
 
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.agent.message import TextPart
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import MemoryStore
 from astrbot.core.memory.models import MemoryWritebackItem
 from astrbot.core.memory.policy import MemoryScopePolicy
 from astrbot.core.memory.retrieval import MemoryRetrievalManager
 from astrbot.core.memory.tuning import MemoryTuningTaskManager
 from astrbot.core.memory.writeback import MemoryWritebackWorker
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.provider.entities import ProviderRequest
 
 
 class MemoryManager:
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: MemoryStore) -> None:
         self.scope_policy = MemoryScopePolicy()
         self.retrieval = MemoryRetrievalManager(db, self.scope_policy)
         self.tuning = MemoryTuningTaskManager(db, self.retrieval)

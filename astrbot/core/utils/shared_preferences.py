@@ -4,8 +4,8 @@ from typing import Any, TypeVar, overload
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import Preference
+from astrbot.core.db.protocols import PreferenceStore
 
 from .astrbot_path import get_astrbot_data_path
 
@@ -13,7 +13,7 @@ _VT = TypeVar("_VT")
 
 
 class SharedPreferences:
-    def __init__(self, db_helper: BaseDatabase, json_storage_path=None) -> None:
+    def __init__(self, db_helper: PreferenceStore, json_storage_path=None) -> None:
         if json_storage_path is None:
             json_storage_path = os.path.join(
                 get_astrbot_data_path(),

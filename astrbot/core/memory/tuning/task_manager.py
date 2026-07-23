@@ -1,14 +1,14 @@
 import hashlib
 
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import MemoryTuningTask
+from astrbot.core.db.protocols import MemoryStore
 from astrbot.core.memory.retrieval import MemoryRetrievalManager
 
 
 class MemoryTuningTaskManager:
     def __init__(
         self,
-        db: BaseDatabase,
+        db: MemoryStore,
         retrieval: MemoryRetrievalManager,
     ) -> None:
         self.db = db

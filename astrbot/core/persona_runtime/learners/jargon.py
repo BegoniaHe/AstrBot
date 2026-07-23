@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import PersonaRuntimeStore
 
 
 class JargonLearner:
@@ -9,7 +9,7 @@ class JargonLearner:
         r"(?:#([A-Za-z0-9_\-\u4e00-\u9fff]{2,32})|`([^`]{2,32})`|「([^」]{2,32})」)"
     )
 
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: PersonaRuntimeStore) -> None:
         self.db = db
 
     async def learn(

@@ -11,19 +11,19 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from astrbot import logger
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.agent.tool import ToolSet
 from astrbot.core.conversation_mgr import load_sanitized_history
 from astrbot.core.cron.events import CronMessageEvent
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import CronJob
+from astrbot.core.db.protocols import CronStore
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.message_type import MessageType
-from astrbot.core.provider.entities import ProviderRequest
 from astrbot.core.utils.history_saver import persist_agent_history
 from astrbot.core.utils.task_utils import cancel_tracked_tasks, create_tracked_task
 
 if TYPE_CHECKING:
-    from astrbot.core.star.context import Context
+    from astrbot.core.execution_context import CoreExecutionContext
 
 
 _CRONTAB_WEEKDAY_NAMES = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
@@ -96,7 +96,7 @@ class CronJobSchedulingError(Exception):
 class CronJobManager:
     """Central scheduler for BasicCronJob and ActiveAgentCronJob."""
 
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: CronStore) -> None:
         self.db = db
         self.scheduler = AsyncIOScheduler()
         self._basic_handlers: dict[str, Callable[..., Any]] = {}
@@ -104,8 +104,8 @@ class CronJobManager:
         self._lock = asyncio.Lock()
         self._started = False
 
-    async def start(self, ctx: Context) -> None:
-        self.ctx: Context = ctx  # star context
+    async def start(self, ctx: CoreExecutionContext) -> None:
+        self.ctx: CoreExecutionContext = ctx
         async with self._lock:
             if self._started:
                 return

@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.agent.message import TextPart
 from astrbot.core.db.po import PersonaSessionState
-from astrbot.core.provider.entities import ProviderRequest
 
 
 class PersonaRuntimeInjector:

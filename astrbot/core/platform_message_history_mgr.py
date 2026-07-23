@@ -1,9 +1,9 @@
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import PlatformMessageHistory
+from astrbot.core.db.protocols import MessageHistoryStore
 
 
 class PlatformMessageHistoryManager:
-    def __init__(self, db_helper: BaseDatabase) -> None:
+    def __init__(self, db_helper: MessageHistoryStore) -> None:
         self.db = db_helper
 
     async def insert(

@@ -1,7 +1,7 @@
 """Tests for CronJobManager."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -242,7 +242,7 @@ class TestAddActiveJob:
         sample_cron_job.run_once = True
         mock_db.create_cron_job.return_value = sample_cron_job
 
-        run_at = datetime.now(timezone.utc) + timedelta(days=30)
+        run_at = datetime.now(UTC) + timedelta(days=30)
 
         with pytest.raises(CronJobSchedulingError, match="Invalid isoformat string"):
             await cron_manager.add_active_job(
@@ -494,7 +494,7 @@ class TestScheduleJob:
     @pytest.mark.asyncio
     async def test_schedule_job_run_once(self, cron_manager, mock_context):
         """Test scheduling a run-once job."""
-        future_date = datetime.now(timezone.utc) + timedelta(days=30)
+        future_date = datetime.now(UTC) + timedelta(days=30)
         job = CronJob(
             job_id="run-once-job",
             name="Run Once",

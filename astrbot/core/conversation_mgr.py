@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable
 from astrbot import logger
 from astrbot.core.agent.history_sanitizer import sanitize_history_for_storage
 from astrbot.core.agent.message import AssistantMessageSegment, UserMessageSegment
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import Conversation, ConversationV2
+from astrbot.core.db.protocols import ConversationStore
 from astrbot.core.utils.datetime_utils import to_utc_timestamp
 from astrbot.core.utils.shared_preferences import SharedPreferences
 
@@ -36,7 +36,7 @@ class ConversationManager:
 
     def __init__(
         self,
-        db_helper: BaseDatabase,
+        db_helper: ConversationStore,
         preferences: SharedPreferences,
     ) -> None:
         self.session_conversations: dict[str, str] = {}

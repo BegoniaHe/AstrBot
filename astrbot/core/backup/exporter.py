@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from astrbot import logger
 from astrbot.core.config.default import VERSION
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import DatabaseSessionStore
 from astrbot.core.utils.astrbot_path import (
     get_astrbot_backups_path,
     get_astrbot_data_path,
@@ -58,7 +58,7 @@ class AstrBotExporter:
 
     def __init__(
         self,
-        main_db: BaseDatabase,
+        main_db: DatabaseSessionStore,
         kb_manager: KnowledgeBaseManager | None = None,
         config_path: str = CMD_CONFIG_FILE_PATH,
     ) -> None:

@@ -21,7 +21,7 @@ from sqlalchemy import delete
 
 from astrbot import logger
 from astrbot.core.config.default import VERSION
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import DatabaseSessionStore
 from astrbot.core.utils.astrbot_path import (
     get_astrbot_data_path,
     get_astrbot_knowledge_base_path,
@@ -205,7 +205,7 @@ class AstrBotImporter:
 
     def __init__(
         self,
-        main_db: BaseDatabase,
+        main_db: DatabaseSessionStore,
         kb_manager: KnowledgeBaseManager | None = None,
         config_path: str = CMD_CONFIG_FILE_PATH,
         kb_root_dir: str = KB_PATH,

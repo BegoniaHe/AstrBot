@@ -1,9 +1,9 @@
 import hashlib
 
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.agent.message import TextPart
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import PersonaRuntimeStore
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.provider.entities import ProviderRequest
 
 from .injector import PersonaRuntimeInjector
 from .learners import BehaviorLearner, ExpressionLearner, JargonLearner
@@ -14,7 +14,7 @@ from .state_store import PersonaRuntimeStateStore
 
 
 class PersonaRuntimeManager:
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: PersonaRuntimeStore) -> None:
         self.db = db
         self.state_store = PersonaRuntimeStateStore(db)
         self.injector = PersonaRuntimeInjector()

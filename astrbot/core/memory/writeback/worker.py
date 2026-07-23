@@ -1,7 +1,7 @@
 import asyncio
 
 from astrbot import logger
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import MemoryStore
 from astrbot.core.memory.models import MemoryWritebackItem
 
 from .episode_builder import MemoryEpisodeBuilder
@@ -12,7 +12,7 @@ from .profile_refresher import MemoryProfileRefresher
 class MemoryWritebackWorker:
     def __init__(
         self,
-        db: BaseDatabase,
+        db: MemoryStore,
         *,
         max_queue_size: int = 256,
     ) -> None:

@@ -1,8 +1,8 @@
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.protocols import PersonaRuntimeStore
 
 
 class BehaviorLearner:
-    def __init__(self, db: BaseDatabase) -> None:
+    def __init__(self, db: PersonaRuntimeStore) -> None:
         self.db = db
 
     async def learn(

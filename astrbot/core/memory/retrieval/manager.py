@@ -1,5 +1,5 @@
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import MemoryEpisode, MemoryFact, MemoryProfile
+from astrbot.core.db.protocols import MemoryStore
 from astrbot.core.memory.policy import MemoryScopePolicy, ScopeResolution
 
 from .ranker import score_text
@@ -8,7 +8,7 @@ from .ranker import score_text
 class MemoryRetrievalManager:
     def __init__(
         self,
-        db: BaseDatabase,
+        db: MemoryStore,
         scope_policy: MemoryScopePolicy | None = None,
     ) -> None:
         self.db = db
