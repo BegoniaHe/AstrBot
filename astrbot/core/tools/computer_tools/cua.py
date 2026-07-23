@@ -10,7 +10,6 @@ from mcp.types import ContentBlock
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.computer.computer_client import get_booter
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.tools.computer_tools.util import check_admin_permission
 from astrbot.core.tools.registry import builtin_tool
@@ -31,7 +30,7 @@ def _exception_detail(error: Exception) -> str:
 
 
 async def _get_gui_component(context: ContextWrapper[AstrAgentContext]) -> Any:
-    booter = await get_booter(
+    booter = await context.context.context.computer_runtime.get_booter(
         context.context.context,
         context.context.event.unified_msg_origin,
     )

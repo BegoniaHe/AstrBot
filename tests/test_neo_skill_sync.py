@@ -58,14 +58,13 @@ def test_sync_release_writes_skill_and_map(monkeypatch, tmp_path: Path):
         "astrbot.core.skills.neo_skill_sync.SkillManager.set_skill_active",
         _fake_set_skill_active,
     )
-    monkeypatch.setattr(
-        "astrbot.core.skills.neo_skill_sync.sync_skills_to_active_sandboxes",
-        _fake_sync_sandboxes,
-    )
-
     skills_root = tmp_path / "skills"
     map_path = skills_root / "neo_skill_map.json"
-    mgr = NeoSkillSyncManager(skills_root=str(skills_root), map_path=str(map_path))
+    mgr = NeoSkillSyncManager(
+        skills_root=str(skills_root),
+        map_path=str(map_path),
+        sync_active_sandboxes=_fake_sync_sandboxes,
+    )
 
     result = asyncio.run(
         mgr.sync_release(_FakeClient(), release_id="sr-1", require_stable=True)
@@ -111,10 +110,6 @@ def test_sync_release_rejects_non_stable(monkeypatch, tmp_path: Path):
         return
 
     monkeypatch.setattr(
-        "astrbot.core.skills.neo_skill_sync.sync_skills_to_active_sandboxes",
-        _fake_sync_sandboxes,
-    )
-    monkeypatch.setattr(
         "astrbot.core.skills.neo_skill_sync.SkillManager.set_skill_active",
         lambda self, name, active: None,
     )
@@ -122,6 +117,7 @@ def test_sync_release_rejects_non_stable(monkeypatch, tmp_path: Path):
     mgr = NeoSkillSyncManager(
         skills_root=str(tmp_path / "skills"),
         map_path=str(tmp_path / "skills" / "neo_skill_map.json"),
+        sync_active_sandboxes=_fake_sync_sandboxes,
     )
     with pytest.raises(ValueError, match="Only stable releases"):
         asyncio.run(

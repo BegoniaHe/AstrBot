@@ -8,10 +8,9 @@ from astrbot.core.config.astrbot_config import RateLimitStrategy
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 
-@register_stage
 class RateLimitStage(Stage):
     """检查是否需要限制消息发送的限流器。
 

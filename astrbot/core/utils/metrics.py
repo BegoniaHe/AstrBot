@@ -1,120 +1,141 @@
+"""Runtime-owned best-effort telemetry."""
+
+from __future__ import annotations
+
 import asyncio
 import os
 import socket
 import sys
 import uuid
+from collections.abc import Mapping
 from contextlib import suppress
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 
 import aiohttp
 
 from astrbot import logger
 from astrbot.core.config import VERSION
+from astrbot.core.db.protocols import StatisticsStore
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
 
-class Metric:
-    _config: Any = None
-    _db: Any = None
-    _iid_cache = None
-    _has_uploaded_once = False
-    _upload_interval_seconds = 10 * 60
-    _max_pending_metric_groups = 64
-    _counter_fields = {"llm_tick", "msg_event_tick"}
-    _pending_metrics: dict[tuple[tuple[str, str], ...], dict[str, Any]] = {}
-    _flush_task: asyncio.Task | None = None
-    _lock: asyncio.Lock | None = None
-    _lock_loop: asyncio.AbstractEventLoop | None = None
+class MetricsSink(Protocol):
+    """Minimal telemetry capability needed by runtime collaborators."""
 
-    @classmethod
-    def configure(cls, config: Any, db: Any) -> None:
-        """Bind runtime dependencies after services have been created."""
-        cls._config = config
-        cls._db = db
+    async def upload(self, **kwargs: Any) -> None:
+        """Record a best-effort telemetry event."""
 
-    @staticmethod
-    def _is_disabled() -> bool:
-        """检查是否禁用指标上传（配置或环境变量）"""
+
+class MetricsRuntime:
+    """Aggregate and upload telemetry for one AstrBot runtime instance.
+
+    The object deliberately owns all mutable telemetry state.  In particular,
+    two runtimes never share pending batches, flush tasks, configuration, or
+    database statistics writes.
+    """
+
+    UPLOAD_INTERVAL_SECONDS = 10 * 60
+    MAX_PENDING_METRIC_GROUPS = 64
+    COUNTER_FIELDS = frozenset({"llm_tick", "msg_event_tick"})
+
+    def __init__(
+        self,
+        config: Mapping[str, Any],
+        db: StatisticsStore | None,
+        *,
+        installation_id_path: Path | None = None,
+    ) -> None:
+        self._config = config
+        self._db = db
+        self._installation_id_path = installation_id_path or (
+            Path(get_astrbot_data_path()) / ".installation_id"
+        )
+        self._iid_cache: str | None = None
+        self._has_uploaded_once = False
+        self._pending_metrics: dict[tuple[tuple[str, str], ...], dict[str, Any]] = {}
+        self._flush_task: asyncio.Task[None] | None = None
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
+        self._stopped = False
+        self._upload_interval_seconds = self.UPLOAD_INTERVAL_SECONDS
+        self._max_pending_metric_groups = self.MAX_PENDING_METRIC_GROUPS
+
+    def _is_disabled(self) -> bool:
+        """Return whether telemetry is disabled for this runtime."""
+        if self._stopped:
+            return True
         if os.environ.get("ASTRBOT_TEST_MODE", "").lower() == "true":
             return True
         if os.environ.get("ASTRBOT_DISABLE_METRICS", "0") == "1":
             return True
-        return bool(Metric._config and Metric._config.get("disable_metrics", False))
+        return bool(self._config.get("disable_metrics", False))
 
-    @classmethod
-    async def shutdown(cls) -> None:
-        """Stop the runtime-owned metric scheduler without flushing telemetry.
+    async def shutdown(self) -> None:
+        """Stop this runtime's periodic telemetry task without flushing.
 
-        Telemetry is best-effort, so shutdown discards queued batches instead of
-        extending application termination with network I/O.
+        Telemetry is best-effort, so shutdown discards queued batches instead
+        of extending application termination with network I/O.
         """
-        flush_task = cls._flush_task
-        cls._flush_task = None
+        lock = self._get_lock()
+        async with lock:
+            self._stopped = True
+            flush_task = self._flush_task
+            self._flush_task = None
+            self._pending_metrics.clear()
+            self._has_uploaded_once = False
+
         if flush_task is not None and not flush_task.done():
             flush_task.cancel()
             await asyncio.gather(flush_task, return_exceptions=True)
 
-        cls._pending_metrics = {}
-        cls._has_uploaded_once = False
-        cls._config = None
-        cls._db = None
-        cls._lock = None
-        cls._lock_loop = None
+    def get_installation_id(self) -> str:
+        """Return the stable installation identifier for this runtime root."""
+        if self._iid_cache is not None:
+            return self._iid_cache
 
-    @staticmethod
-    def get_installation_id():
-        """获取或创建一个唯一的安装ID"""
-        if Metric._iid_cache is not None:
-            return Metric._iid_cache
-
-        config_dir = os.path.join(os.path.expanduser("~"), ".astrbot")
-        id_file = os.path.join(config_dir, ".installation_id")
-
-        if os.path.exists(id_file):
-            try:
-                with open(id_file) as f:
-                    Metric._iid_cache = f.read().strip()
-                    return Metric._iid_cache
-            except Exception:
-                pass
         try:
-            os.makedirs(config_dir, exist_ok=True)
+            if self._installation_id_path.exists():
+                self._iid_cache = self._installation_id_path.read_text(
+                    encoding="utf-8"
+                ).strip()
+                return self._iid_cache
+            self._installation_id_path.parent.mkdir(parents=True, exist_ok=True)
             installation_id = str(uuid.uuid4())
-            with open(id_file, "w") as f:
-                f.write(installation_id)
-            Metric._iid_cache = installation_id
+            self._installation_id_path.write_text(installation_id, encoding="utf-8")
+            self._iid_cache = installation_id
             return installation_id
-        except Exception:
-            Metric._iid_cache = "null"
-            return "null"
+        except OSError:
+            self._iid_cache = "null"
+            return self._iid_cache
 
-    @staticmethod
-    def _get_lock() -> asyncio.Lock:
+    def _get_lock(self) -> asyncio.Lock:
         loop = asyncio.get_running_loop()
-        if Metric._lock is None or Metric._lock_loop is not loop:
-            Metric._lock = asyncio.Lock()
-            Metric._lock_loop = loop
-        return Metric._lock
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
 
     @staticmethod
     def _format_group_value(value: Any) -> str:
         return repr(value)
 
-    @staticmethod
-    def _get_metric_group_key(kwargs: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    def _get_metric_group_key(
+        self, kwargs: dict[str, Any]
+    ) -> tuple[tuple[str, str], ...]:
         return tuple(
             sorted(
-                (key, Metric._format_group_value(value))
+                (key, self._format_group_value(value))
                 for key, value in kwargs.items()
-                if key not in Metric._counter_fields
+                if key not in self.COUNTER_FIELDS
             )
         )
 
-    @staticmethod
-    def _get_metric_group_fields(kwargs: dict[str, Any]) -> dict[str, Any]:
+    def _get_metric_group_fields(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         return {
             key: value
             for key, value in kwargs.items()
-            if key not in Metric._counter_fields
+            if key not in self.COUNTER_FIELDS
         }
 
     @staticmethod
@@ -124,65 +145,65 @@ class Metric:
         except TypeError, ValueError:
             return 0
 
-    @staticmethod
-    def _ensure_flush_task_locked() -> None:
-        if Metric._flush_task is None or Metric._flush_task.done():
-            Metric._flush_task = asyncio.create_task(Metric._flush_periodically())
+    def _ensure_flush_task_locked(self) -> None:
+        if self._flush_task is None or self._flush_task.done():
+            self._flush_task = asyncio.create_task(self._flush_periodically())
 
-    @staticmethod
-    async def _save_platform_stats(kwargs: dict[str, Any]) -> None:
+    async def _save_platform_stats(self, kwargs: dict[str, Any]) -> None:
         try:
-            if "adapter_name" in kwargs and Metric._db is not None:
-                await Metric._db.insert_platform_stats(
+            if "adapter_name" in kwargs and self._db is not None:
+                await self._db.insert_platform_stats(
                     platform_id=kwargs["adapter_name"],
                     platform_type=kwargs.get("adapter_type", "unknown"),
                 )
-        except Exception as e:
-            logger.error(f"保存指标到数据库失败: {e}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("保存指标到数据库失败: %s", exc)
 
-    @staticmethod
-    async def _add_pending_metrics(kwargs: dict[str, Any]) -> None:
-        key = Metric._get_metric_group_key(kwargs)
+    async def _add_pending_metrics(self, kwargs: dict[str, Any]) -> None:
+        key = self._get_metric_group_key(kwargs)
         immediate_metrics = None
         should_flush = False
-        lock = Metric._get_lock()
+        lock = self._get_lock()
         async with lock:
-            if not Metric._has_uploaded_once:
-                Metric._has_uploaded_once = True
+            if self._stopped:
+                return
+            if not self._has_uploaded_once:
+                self._has_uploaded_once = True
                 immediate_metrics = dict(kwargs)
             else:
-                pending = Metric._pending_metrics.setdefault(
+                pending = self._pending_metrics.setdefault(
                     key,
-                    Metric._get_metric_group_fields(kwargs),
+                    self._get_metric_group_fields(kwargs),
                 )
-                for counter_field in Metric._counter_fields:
+                for counter_field in self.COUNTER_FIELDS:
                     if counter_field in kwargs:
                         pending[counter_field] = pending.get(
                             counter_field,
                             0,
-                        ) + Metric._coerce_counter(kwargs[counter_field])
-                Metric._ensure_flush_task_locked()
+                        ) + self._coerce_counter(kwargs[counter_field])
+                self._ensure_flush_task_locked()
                 should_flush = (
-                    len(Metric._pending_metrics) > Metric._max_pending_metric_groups
+                    len(self._pending_metrics) > self._max_pending_metric_groups
                 )
 
         if immediate_metrics is not None:
-            await Metric._post_metrics(immediate_metrics)
+            await self._post_metrics(immediate_metrics)
             return
         if should_flush:
-            await Metric.flush()
+            await self.flush()
 
-    @staticmethod
-    async def _flush_periodically() -> None:
+    async def _flush_periodically(self) -> None:
         try:
             while True:
-                await asyncio.sleep(Metric._upload_interval_seconds)
-                await Metric.flush()
+                await asyncio.sleep(self._upload_interval_seconds)
+                await self.flush()
 
-                lock = Metric._get_lock()
+                lock = self._get_lock()
                 async with lock:
-                    if not Metric._pending_metrics:
-                        Metric._flush_task = None
+                    if not self._pending_metrics:
+                        self._flush_task = None
                         return
         except asyncio.CancelledError:
             raise
@@ -191,26 +212,26 @@ class Metric:
         finally:
             current_task = asyncio.current_task()
             with suppress(RuntimeError):
-                lock = Metric._get_lock()
+                lock = self._get_lock()
                 async with lock:
-                    if Metric._flush_task is current_task:
-                        Metric._flush_task = None
+                    if self._flush_task is current_task:
+                        self._flush_task = None
 
-    @staticmethod
-    async def flush() -> None:
-        """Flush pending metrics immediately."""
-        lock = Metric._get_lock()
+    async def flush(self) -> None:
+        """Flush this runtime's pending telemetry immediately."""
+        lock = self._get_lock()
         async with lock:
-            pending_metrics = list(Metric._pending_metrics.values())
-            Metric._pending_metrics = {}
+            if self._stopped:
+                return
+            pending_metrics = list(self._pending_metrics.values())
+            self._pending_metrics.clear()
 
         for metrics_data in pending_metrics:
-            await Metric._post_metrics(metrics_data)
+            await self._post_metrics(metrics_data)
             await asyncio.sleep(0.25)
 
-    @staticmethod
-    async def _post_metrics(metrics_data: dict[str, Any]) -> None:
-        if Metric._is_disabled():
+    async def _post_metrics(self, metrics_data: dict[str, Any]) -> None:
+        if self._is_disabled():
             return
 
         base_url = "https://tickstats.soulter.top/api/metric/90a6c2a1"
@@ -219,11 +240,11 @@ class Metric:
         payload_metrics["os"] = sys.platform
         try:
             payload_metrics["hn"] = socket.gethostname()
-        except Exception:
+        except OSError:
             pass
         try:
-            payload_metrics["iid"] = Metric.get_installation_id()
-        except Exception:
+            payload_metrics["iid"] = self.get_installation_id()
+        except OSError:
             pass
         payload = {"metrics_data": payload_metrics}
 
@@ -235,18 +256,20 @@ class Metric:
                     timeout=aiohttp.ClientTimeout(total=3),
                 ) as response:
                     if response.status != 200:
-                        pass
+                        return
+        except asyncio.CancelledError:
+            raise
         except Exception:
             pass
 
-    @staticmethod
-    async def upload(**kwargs) -> None:
-        """上传相关非敏感的指标以更好地了解 AstrBot 的使用情况。上传的指标不会包含任何有关消息文本、用户信息等敏感信息。
+    async def upload(self, **kwargs: Any) -> None:
+        """Upload non-sensitive telemetry for this runtime.
 
-        Powered by TickStats.
+        The payload never includes message text or user identity.  Platform
+        statistics are persisted before the batch is aggregated.
         """
-        if Metric._is_disabled():
+        if self._is_disabled():
             return
 
-        await Metric._save_platform_stats(kwargs)
-        await Metric._add_pending_metrics(dict(kwargs))
+        await self._save_platform_stats(kwargs)
+        await self._add_pending_metrics(dict(kwargs))

@@ -5,16 +5,17 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.star.session_llm_manager import SessionServiceManager
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 
-@register_stage
 class SessionStatusCheckStage(Stage):
     """检查会话是否整体启用"""
 
     async def initialize(self, ctx: PipelineContext) -> None:
         self.ctx = ctx
-        self.conv_mgr = ctx.plugin_manager.context.conversation_manager
+        self.conv_mgr = ctx.execution_context.conversation_manager
+        if ctx.preferences is None:
+            raise RuntimeError("SessionStatusCheckStage requires shared preferences")
         self.session_services = SessionServiceManager(ctx.preferences)
 
     async def process(

@@ -11,8 +11,9 @@ import stat
 import time
 import uuid
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 from urllib.parse import unquote, urlparse
 
 import aiohttp
@@ -25,6 +26,15 @@ from astrbot.utils.version_comparator import VersionComparator
 from .astrbot_path import get_astrbot_data_path, get_astrbot_path, get_astrbot_temp_path
 
 logger = logging.getLogger("astrbot")
+_ZIP_FILE_TYPE = zipfile.ZipFile
+
+
+class _ZipArchiveWithNames(Protocol):
+    """Minimal archive surface used by the testable extraction helper."""
+
+    def namelist(self) -> list[str]: ...
+
+    def extractall(self, target_dir: str) -> None: ...
 
 
 def _safe_url_for_log(url: str) -> str:
@@ -88,7 +98,7 @@ def ensure_dir(dir_path: str | Path) -> None:
 
 
 def extract_zip_safely(
-    zip_file: zipfile.ZipFile,
+    zip_file: zipfile.ZipFile | _ZipArchiveWithNames,
     extract_path: str | Path,
     *,
     archive_label: str = "archive",
@@ -102,16 +112,21 @@ def extract_zip_safely(
         or re.match(r"^[A-Za-z]:[\\/]", extract_path_str) is not None
     )
     windows_extract_root = ntpath.normpath(extract_path_str)
-    members = (
-        zip_file.infolist() if hasattr(zip_file, "infolist") else zip_file.namelist()
-    )
+    if isinstance(zip_file, _ZIP_FILE_TYPE):
+        members: Sequence[zipfile.ZipInfo | str] = zip_file.infolist()
+    else:
+        members = zip_file.namelist()
     for member in members:
-        filename = member.filename if hasattr(member, "filename") else str(member)
+        if isinstance(member, zipfile.ZipInfo):
+            filename = member.filename
+            mode = member.external_attr >> 16
+        else:
+            filename = member
+            mode = 0
         member_path = Path(filename)
         if member_path.is_absolute():
             raise ValueError(f"Unsafe {archive_label} path: {filename}")
 
-        mode = member.external_attr >> 16 if hasattr(member, "external_attr") else 0
         if stat.S_ISLNK(mode):
             raise ValueError(f"Unsafe {archive_label} symlink: {filename}")
 
@@ -138,12 +153,11 @@ def extract_zip_safely(
         if not target_path.is_relative_to(extract_root):
             raise ValueError(f"Unsafe {archive_label} path: {filename}")
 
-    if hasattr(zip_file, "extract"):
-        for member in members:
+    if isinstance(zip_file, _ZIP_FILE_TYPE):
+        for member in zip_file.infolist():
             zip_file.extract(member, extract_root)
         return
-
-    zip_file.extractall(extract_root)
+    zip_file.extractall(str(extract_root))
 
 
 def port_checker(port: int, host: str = "localhost") -> bool:

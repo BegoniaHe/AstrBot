@@ -18,17 +18,15 @@ from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.filter.permission import PermissionTypeFilter
 from astrbot.core.star.session_plugin_manager import SessionPluginManager
-from astrbot.core.star.star import star_map
 from astrbot.core.star.star_handler import (
     EventType,
     StarHandlerMetadata,
-    star_handlers_registry,
 )
 from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.quoted_message.onebot_client import OneBotClient
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 UNIQUE_SESSION_ID_BUILDERS: dict[str, Callable[[AstrMessageEvent], str | None]] = {
     "aiocqhttp": lambda e: f"{e.get_sender_id()}_{e.get_group_id()}",
@@ -66,7 +64,6 @@ def build_unique_session_id(event: AstrMessageEvent) -> str | None:
     return builder(event) if builder else None
 
 
-@register_stage
 class WakingCheckStage(Stage):
     """检查是否需要唤醒。唤醒机器人有如下几点条件：
 
@@ -81,13 +78,13 @@ class WakingCheckStage(Stage):
         """初始化唤醒检查阶段
 
         Args:
-            ctx (PipelineContext): 消息管道上下文对象, 包括配置和插件管理器
+            ctx (PipelineContext): Message pipeline configuration and catalogs.
 
         """
         self.ctx = ctx
         if ctx.preferences is None:
             raise RuntimeError("WakingCheckStage requires shared preferences")
-        self.session_plugins = SessionPluginManager(ctx.preferences)
+        self.session_plugins = SessionPluginManager(ctx.preferences, ctx.plugins)
         self.no_permission_reply = self.ctx.astrbot_config["platform_settings"].get(
             "no_permission_reply",
             True,
@@ -114,7 +111,7 @@ class WakingCheckStage(Stage):
         )
         enabled_plugins = self.ctx.astrbot_config.get("plugin_set", ["*"])
         plugin_names = None if enabled_plugins == ["*"] else enabled_plugins
-        self.command_catalog = ctx.plugin_manager.get_command_catalog(
+        self.command_catalog = ctx.plugin_catalog.get_command_catalog(
             ctx.astrbot_config_id,
             plugin_names,
         )
@@ -278,7 +275,7 @@ class WakingCheckStage(Stage):
         )
         logger.debug(f"enabled_plugins_name: {enabled_plugins_name}")
 
-        handlers = star_handlers_registry.get_handlers_by_event_type(
+        handlers = self.ctx.handlers.get_handlers_by_event_type(
             EventType.AdapterMessageEvent,
             plugins_name=event.plugins_name,
         )
@@ -427,8 +424,11 @@ class WakingCheckStage(Stage):
                                 f"您(ID: {event.get_sender_id()})的权限不足以使用此指令。通过 /session info 获取 ID 并请管理员添加。",
                             ),
                         )
+                    plugin = self.ctx.plugins.get_by_module(handler.handler_module_path)
                     logger.info(
-                        f"触发 {star_map[handler.handler_module_path].name} 时, 用户(ID={event.get_sender_id()}) 权限不足。",
+                        "触发 %s 时, 用户(ID=%s) 权限不足。",
+                        plugin.name if plugin else "unknown plugin",
+                        event.get_sender_id(),
                     )
                     event.stop_event()
                     return activated_handlers, handlers_parsed_params, True
@@ -568,7 +568,11 @@ class WakingCheckStage(Stage):
                     "通过 /session info 获取 ID 并请管理员添加。",
                 ),
             )
-        plugin = star_map.get(handler.handler_module_path) if handler else None
+        plugin = (
+            self.ctx.plugins.get_by_module(handler.handler_module_path)
+            if handler
+            else None
+        )
         logger.info(
             "触发 %s 时, 用户(ID=%s) 权限不足。",
             plugin.name if plugin else "unknown plugin",
@@ -576,13 +580,17 @@ class WakingCheckStage(Stage):
         )
         event.stop_event()
 
-    @staticmethod
     async def _send_filter_error(
+        self,
         event: AstrMessageEvent,
         handler: StarHandlerMetadata | None,
         exc: Exception,
     ) -> None:
-        plugin = star_map.get(handler.handler_module_path) if handler else None
+        plugin = (
+            self.ctx.plugins.get_by_module(handler.handler_module_path)
+            if handler
+            else None
+        )
         await event.send(
             MessageEventResult().message(
                 f"插件 {plugin.name if plugin else 'unknown plugin'}: {exc}",

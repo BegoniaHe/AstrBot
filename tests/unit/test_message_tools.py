@@ -20,6 +20,7 @@ def _make_context(
     role="admin",
     require_admin=True,
     runtime="local",
+    computer_runtime=None,
 ):
     """Build a minimal ContextWrapper for SendMessageToUserTool."""
     cfg = {
@@ -45,6 +46,7 @@ def _make_context(
             event=event,
             context=SimpleNamespace(
                 get_config=lambda umo: cfg,
+                computer_runtime=computer_runtime,
                 send_message=AsyncMock(
                     return_value=PlatformSendResult(
                         platform_id="feishu",
@@ -143,6 +145,8 @@ def _make_respond_stage() -> RespondStage:
     stage.ctx = SimpleNamespace(
         astrbot_config={},
         file_token_service=MagicMock(),
+        handlers=SimpleNamespace(get_handlers_by_event_type=lambda *_args, **_kwargs: []),
+        plugins=SimpleNamespace(),
     )
     return stage
 
@@ -448,6 +452,21 @@ async def test_send_message_empty_messages_returns_error():
 
 
 @pytest.mark.asyncio
+async def test_send_message_rejects_non_string_media_location():
+    """Media locations must be strings before constructing platform components."""
+    tool = SendMessageToUserTool()
+    ctx = _make_context()
+
+    result = await tool.call(
+        ctx,
+        messages=[{"type": "image", "url": 123}],
+    )
+
+    assert "error: messages[0] must include path or url" in result
+    ctx.context.context.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_send_message_missing_image_path_stops_before_send(tmp_path, monkeypatch):
     """Missing image paths fail before sending any message components."""
     tool = SendMessageToUserTool()
@@ -458,9 +477,8 @@ async def test_send_message_missing_image_path_stops_before_send(tmp_path, monke
         del args, kwargs
         raise RuntimeError("sandbox unavailable")
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.message_tools.get_booter",
-        mock_get_booter,
+    ctx.context.context.computer_runtime = SimpleNamespace(
+        get_booter=mock_get_booter,
     )
 
     result = await tool.call(
@@ -575,9 +593,8 @@ async def test_send_message_downloads_windows_sandbox_file_with_original_name(
         del args, kwargs
         return booter
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.message_tools.get_booter",
-        mock_get_booter,
+    ctx.context.context.computer_runtime = SimpleNamespace(
+        get_booter=mock_get_booter,
     )
 
     result = await tool.call(
@@ -621,9 +638,8 @@ async def test_send_message_downloads_trailing_slash_sandbox_file_with_basename(
         del args, kwargs
         return booter
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.message_tools.get_booter",
-        mock_get_booter,
+    ctx.context.context.computer_runtime = SimpleNamespace(
+        get_booter=mock_get_booter,
     )
 
     result = await tool.call(

@@ -7,8 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from astrbot.core.agent.follow_up import FollowUpCoordinator
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
 from astrbot.core.log import LogBroker
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
+from astrbot.core.star.star import StarMetadata
+from astrbot.core.webchat.queue_manager import WebChatQueueManager
+from astrbot.core.webchat.run_coordinator import WebChatRunCoordinator
 
 
 @pytest.fixture
@@ -33,6 +38,14 @@ def mock_db():
     renderer.terminate = AsyncMock()
     preferences = MagicMock()
     preferences.terminate = AsyncMock()
+    computer_runtime = MagicMock()
+    computer_runtime.terminate = AsyncMock()
+    llm_metadata_catalog = MagicMock()
+    llm_metadata_catalog.refresh = AsyncMock()
+    metrics = MagicMock()
+    metrics.shutdown = AsyncMock()
+    webchat_queue_manager = WebChatQueueManager()
+    follow_up_coordinator = FollowUpCoordinator()
     return SimpleNamespace(
         config=config,
         db=db,
@@ -40,6 +53,14 @@ def mock_db():
         html_renderer=renderer,
         file_token_service=MagicMock(),
         pip_installer=MagicMock(),
+        catalogs=RuntimeCatalogs(),
+        webchat_queue_manager=webchat_queue_manager,
+        webchat_run_coordinator=WebChatRunCoordinator(webchat_queue_manager),
+        follow_up_coordinator=follow_up_coordinator,
+        llm_metadata_catalog=llm_metadata_catalog,
+        metrics=metrics,
+        computer_runtime=computer_runtime,
+        tool_image_cache=MagicMock(),
         demo_mode=False,
     )
 
@@ -66,6 +87,8 @@ class TestAstrBotCoreLifecycleInit:
         assert lifecycle.subagent_orchestrator is None
         assert lifecycle.cron_manager is None
         assert lifecycle.temp_dir_cleaner is None
+        with pytest.raises(RuntimeError, match="not initialized"):
+            _ = lifecycle.runtime
 
     def test_init_with_proxy(
         self,
@@ -115,6 +138,38 @@ class TestAstrBotCoreLifecycleInit:
         assert "http_proxy" not in os.environ
         assert "https_proxy" not in os.environ
 
+    @pytest.mark.asyncio
+    async def test_stop_restores_proxy_environment(
+        self,
+        mock_log_broker,
+        mock_db,
+        mock_astrbot_config,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """A stopped runtime must not leave its proxy settings in the host."""
+        mock_astrbot_config.get = MagicMock(
+            side_effect=lambda key, default="": {
+                "http_proxy": "http://runtime-proxy.example:8080",
+                "no_proxy": ["localhost"],
+            }.get(key, default)
+        )
+        mock_db.config = mock_astrbot_config
+        monkeypatch.setenv("http_proxy", "http://host-proxy.example:8080")
+        monkeypatch.setenv("https_proxy", "http://host-proxy.example:8443")
+        monkeypatch.setenv("no_proxy", "host.internal")
+
+        lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
+
+        assert os.environ["http_proxy"] == "http://runtime-proxy.example:8080"
+        assert os.environ["https_proxy"] == "http://runtime-proxy.example:8080"
+        assert os.environ["no_proxy"] == "localhost"
+
+        await lifecycle.stop()
+
+        assert os.environ["http_proxy"] == "http://host-proxy.example:8080"
+        assert os.environ["https_proxy"] == "http://host-proxy.example:8443"
+        assert os.environ["no_proxy"] == "host.internal"
+
 
 class TestAstrBotCoreLifecycleStop:
     """Tests for AstrBotCoreLifecycle.stop method."""
@@ -127,7 +182,7 @@ class TestAstrBotCoreLifecycleStop:
         await lifecycle.stop()
         await lifecycle.stop()
 
-        mock_db.preferences.terminate.assert_awaited_once()
+        mock_db.preferences.terminate.assert_not_awaited()
         mock_db.db.close.assert_not_awaited()
         mock_db.html_renderer.terminate.assert_not_awaited()
 
@@ -137,7 +192,6 @@ class TestAstrBotCoreLifecycleStop:
     ):
         """Runtime-owned preferences must stop before their database is disposed."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
-        lifecycle._db_initialization_started = True
         cleanup_order: list[str] = []
 
         async def terminate_preferences() -> None:
@@ -148,10 +202,28 @@ class TestAstrBotCoreLifecycleStop:
 
         mock_db.preferences.terminate.side_effect = terminate_preferences
         mock_db.db.close.side_effect = close_database
+        lifecycle._register_cleanup("database", mock_db.db.close)
+        lifecycle._register_cleanup("preferences", mock_db.preferences.terminate)
 
         await lifecycle.stop()
 
         assert cleanup_order == ["preferences", "database"]
+
+    @pytest.mark.asyncio
+    async def test_stopped_lifecycle_cannot_be_initialized_again(
+        self,
+        mock_log_broker,
+        mock_db,
+    ):
+        """A closed cleanup stack must never accept another initialization."""
+        lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
+
+        await lifecycle.stop()
+
+        with pytest.raises(RuntimeError, match="already been stopped"):
+            await lifecycle.initialize()
+
+        mock_db.db.initialize.assert_not_awaited()
 
 
 class TestAstrBotCoreLifecycleTaskWrapper:
@@ -196,9 +268,11 @@ class TestAstrBotCoreLifecycleTaskWrapper:
 
         task = asyncio.create_task(cancelled_task(), name="test_task")
 
-        # Should not raise and should not log
+        # Cancellation must propagate so the lifecycle supervisor can finish
+        # the matching cleanup path.
         with patch("astrbot.core.core_lifecycle.logger") as mock_logger:
-            await lifecycle._task_wrapper(task)
+            with pytest.raises(asyncio.CancelledError):
+                await lifecycle._task_wrapper(task)
 
             # CancelledError should be handled silently
             assert not any(
@@ -217,7 +291,7 @@ class TestAstrBotCoreLifecycleErrorHandling:
         """Test that subagent orchestrator init errors are logged."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
         lifecycle.provider_manager = MagicMock()
-        lifecycle.provider_manager.llm_tools = MagicMock()
+        lifecycle.provider_manager.tool_manager = MagicMock()
         lifecycle.persona_mgr = MagicMock()
         lifecycle.astrbot_config = mock_astrbot_config
         lifecycle.astrbot_config.get = MagicMock(return_value={})
@@ -237,7 +311,7 @@ class TestAstrBotCoreLifecycleErrorHandling:
             await lifecycle._init_or_reload_subagent_orchestrator()
 
         mock_subagent_cls.assert_called_once_with(
-            lifecycle.provider_manager.llm_tools,
+            lifecycle.provider_manager.tool_manager,
             lifecycle.persona_mgr,
         )
         mock_subagent.reload_from_config.assert_awaited_once_with({})
@@ -412,11 +486,19 @@ class TestAstrBotCoreLifecycleInitialize:
 
         mock_cron_manager = MagicMock()
 
-        mock_star_context = MagicMock()
-        mock_star_context._register_tasks = []
+        mock_execution_context = MagicMock()
+        mock_execution_context._register_tasks = []
+        mock_execution_context.background_tasks = set()
+        mock_execution_context.session_waiter_registry = SimpleNamespace(
+            terminate=AsyncMock()
+        )
 
         mock_plugin_manager = MagicMock()
-        mock_plugin_manager.reload = AsyncMock()
+        mock_plugin_manager.catalog.plugins.all.return_value = []
+        mock_plugin_manager.extensions.deactivate = AsyncMock()
+        mock_plugin_manager.lifecycle.reload = AsyncMock()
+        mock_plugin_manager.lifecycle.terminate_plugin = AsyncMock()
+        mock_plugin_manager.lifecycle.stop = AsyncMock()
 
         mock_pipeline_scheduler = MagicMock()
         mock_pipeline_scheduler.initialize = AsyncMock()
@@ -471,7 +553,8 @@ class TestAstrBotCoreLifecycleInitialize:
                 return_value=mock_cron_manager,
             ),
             patch(
-                "astrbot.core.core_lifecycle.Context", return_value=mock_star_context
+                "astrbot.core.core_lifecycle.CoreExecutionContext",
+                return_value=mock_execution_context,
             ),
             patch(
                 "astrbot.core.core_lifecycle.PluginManager",
@@ -486,10 +569,6 @@ class TestAstrBotCoreLifecycleInitialize:
                 return_value=mock_astrbot_updator,
             ),
             patch("astrbot.core.core_lifecycle.EventBus", return_value=mock_event_bus),
-            patch(
-                "astrbot.core.core_lifecycle.update_llm_metadata",
-                new_callable=AsyncMock,
-            ),
         ):
             await lifecycle.initialize()
 
@@ -507,10 +586,10 @@ class TestAstrBotCoreLifecycleInitialize:
         mock_persona_runtime_manager.initialize.assert_awaited_once()
         mock_memory_manager.initialize.assert_awaited_once()
         assert (
-            lifecycle.star_context.persona_runtime_manager
+            lifecycle.execution_context.persona_runtime_manager
             is mock_persona_runtime_manager
         )
-        assert lifecycle.star_context.memory_manager is mock_memory_manager
+        assert lifecycle.execution_context.memory_manager is mock_memory_manager
 
         # Verify provider manager initialized
         mock_provider_manager.initialize.assert_awaited_once()
@@ -519,13 +598,53 @@ class TestAstrBotCoreLifecycleInitialize:
         mock_platform_manager.initialize.assert_awaited_once()
 
         # Verify plugin manager reloaded
-        mock_plugin_manager.reload.assert_awaited_once()
+        mock_plugin_manager.lifecycle.reload.assert_awaited_once()
 
         # Verify knowledge base manager initialized
         mock_kb_manager.initialize.assert_awaited_once()
 
         # Verify pipeline scheduler loaded
         assert lifecycle.pipeline_scheduler_mapping is not None
+        runtime = lifecycle.runtime
+        assert runtime.provider_manager is mock_provider_manager
+        assert runtime.platform_manager is mock_platform_manager
+        assert runtime.plugin_manager is mock_plugin_manager
+        assert runtime.pipeline_schedulers is lifecycle.pipeline_scheduler_mapping
+
+    @pytest.mark.asyncio
+    async def test_database_initialization_failure_stops_factory_owned_preferences(
+        self,
+        mock_log_broker,
+        mock_db,
+    ):
+        """A database failure must not leak SharedPreferences' scheduler."""
+        cleanup_order: list[str] = []
+
+        async def fail_database_initialize() -> None:
+            raise RuntimeError("database failed")
+
+        async def record_cleanup(name: str) -> None:
+            cleanup_order.append(name)
+
+        async def cleanup_preferences() -> None:
+            await record_cleanup("preferences")
+
+        async def cleanup_metrics() -> None:
+            await record_cleanup("metrics")
+
+        async def cleanup_database() -> None:
+            await record_cleanup("database")
+
+        mock_db.db.initialize = AsyncMock(side_effect=fail_database_initialize)
+        mock_db.preferences.terminate = AsyncMock(side_effect=cleanup_preferences)
+        mock_db.metrics.shutdown = AsyncMock(side_effect=cleanup_metrics)
+        mock_db.db.close = AsyncMock(side_effect=cleanup_database)
+        lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
+
+        with pytest.raises(RuntimeError, match="database failed"):
+            await lifecycle.initialize()
+
+        assert cleanup_order == ["preferences", "metrics", "database"]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -606,7 +725,7 @@ class TestAstrBotCoreLifecycleInitialize:
             terminate=AsyncMock(side_effect=cleanup_action("memory")),
         )
         provider_manager = SimpleNamespace(
-            llm_tools=MagicMock(),
+            tool_manager=MagicMock(),
             provider_insts=[],
             provider_settings={},
             initialize=AsyncMock(side_effect=init_action("provider_initialize")),
@@ -621,23 +740,26 @@ class TestAstrBotCoreLifecycleInitialize:
             terminate=AsyncMock(side_effect=cleanup_action("knowledge_base")),
         )
         plugin = SimpleNamespace(name="partial-plugin")
-        star_context = SimpleNamespace(
+        execution_context = SimpleNamespace(
             _register_tasks=[],
-            get_all_stars=MagicMock(return_value=[plugin]),
+            background_tasks=set(),
+            session_waiter_registry=SimpleNamespace(terminate=AsyncMock()),
         )
         plugin_manager = SimpleNamespace(
-            context=star_context,
-            reload=AsyncMock(side_effect=init_action("plugin_reload")),
-            deactivate_plugin_extension=AsyncMock(),
-            _terminate_plugin=AsyncMock(side_effect=cleanup_action("plugin")),
+            catalog=SimpleNamespace(
+                plugins=SimpleNamespace(all=MagicMock(return_value=[plugin])),
+            ),
+            extensions=SimpleNamespace(deactivate=AsyncMock()),
+            lifecycle=SimpleNamespace(
+                reload=AsyncMock(side_effect=init_action("plugin_reload")),
+                terminate_plugin=AsyncMock(side_effect=cleanup_action("plugin")),
+                stop=AsyncMock(),
+            ),
         )
         subagent_orchestrator = SimpleNamespace(reload_from_config=AsyncMock())
 
         monkeypatch.setattr(
             "astrbot.core.core_lifecycle.configure_trace", lambda _config: None
-        )
-        monkeypatch.setattr(
-            "astrbot.core.core_lifecycle.Metric.configure", lambda *_args: None
         )
         monkeypatch.setattr(
             "astrbot.core.core_lifecycle.UmopConfigRouter",
@@ -671,8 +793,8 @@ class TestAstrBotCoreLifecycleInitialize:
             lambda *_args: knowledge_base_manager,
         )
         monkeypatch.setattr(
-            "astrbot.core.core_lifecycle.Context",
-            lambda *_args, **_kwargs: star_context,
+            "astrbot.core.core_lifecycle.CoreExecutionContext",
+            lambda *_args, **_kwargs: execution_context,
         )
         monkeypatch.setattr(
             "astrbot.core.core_lifecycle.PluginManager",
@@ -688,9 +810,12 @@ class TestAstrBotCoreLifecycleInitialize:
             await lifecycle.initialize()
         await lifecycle.stop()
 
+        with pytest.raises(RuntimeError, match="not initialized"):
+            _ = lifecycle.runtime
+
         assert cleanup_order == expected_cleanup
         if "plugin" in expected_cleanup:
-            plugin_manager.deactivate_plugin_extension.assert_awaited_once_with(
+            plugin_manager.extensions.deactivate.assert_awaited_once_with(
                 plugin,
                 reason="shutdown",
             )
@@ -698,7 +823,7 @@ class TestAstrBotCoreLifecycleInitialize:
         assert mock_db.html_renderer.terminate.await_count == int(
             "html_renderer" in expected_cleanup
         )
-        assert plugin_manager._terminate_plugin.await_count == int(
+        assert plugin_manager.lifecycle.terminate_plugin.await_count == int(
             "plugin" in expected_cleanup
         )
         assert provider_manager.terminate.await_count == int(
@@ -713,6 +838,28 @@ class TestAstrBotCoreLifecycleStart:
     """Tests for AstrBotCoreLifecycle.start method."""
 
     @pytest.mark.asyncio
+    async def test_start_rejects_invalid_lifecycle_states(
+        self,
+        mock_log_broker,
+        mock_db,
+    ):
+        """A lifecycle has one start transition after initialization only."""
+        lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
+
+        with pytest.raises(RuntimeError, match="must be initialized"):
+            await lifecycle.start()
+
+        lifecycle._initialized = True
+        lifecycle._started = True
+        with pytest.raises(RuntimeError, match="already been started"):
+            await lifecycle.start()
+
+        lifecycle._started = False
+        lifecycle._stopped = True
+        with pytest.raises(RuntimeError, match="already been stopped"):
+            await lifecycle.start()
+
+    @pytest.mark.asyncio
     async def test_start_loads_event_bus_and_runs(self, mock_log_broker, mock_db):
         """Test that start loads event bus and runs tasks."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
@@ -725,12 +872,21 @@ class TestAstrBotCoreLifecycleStart:
 
         lifecycle.temp_dir_cleaner = None
 
-        lifecycle.star_context = MagicMock()
-        lifecycle.star_context._register_tasks = []
+        lifecycle.execution_context = MagicMock()
+        lifecycle.execution_context._register_tasks = []
+        lifecycle._initialized = True
 
-        lifecycle.plugin_manager = MagicMock()
-        lifecycle.plugin_manager.context = MagicMock()
-        lifecycle.plugin_manager.context.get_all_stars = MagicMock(return_value=[])
+        lifecycle.plugin_manager = SimpleNamespace(
+            catalog=SimpleNamespace(
+                plugins=SimpleNamespace(all=MagicMock(return_value=[])),
+            ),
+            extensions=SimpleNamespace(deactivate=AsyncMock()),
+            lifecycle=SimpleNamespace(
+                reload=AsyncMock(),
+                terminate_plugin=AsyncMock(),
+                stop=AsyncMock(),
+            ),
+        )
 
         lifecycle.provider_manager = MagicMock()
         lifecycle.provider_manager.terminate = AsyncMock()
@@ -745,14 +901,7 @@ class TestAstrBotCoreLifecycleStart:
 
         lifecycle.curr_tasks = []
 
-        with (
-            patch(
-                "astrbot.core.core_lifecycle.star_handlers_registry"
-            ) as mock_registry,
-            patch("astrbot.core.core_lifecycle.logger"),
-        ):
-            mock_registry.get_handlers_by_event_type = MagicMock(return_value=[])
-
+        with patch("astrbot.core.core_lifecycle.logger"):
             # Create a task that completes quickly for testing
             async def quick_task():
                 return
@@ -783,12 +932,21 @@ class TestAstrBotCoreLifecycleStart:
         lifecycle.cron_manager = None
         lifecycle.temp_dir_cleaner = None
 
-        lifecycle.star_context = MagicMock()
-        lifecycle.star_context._register_tasks = []
+        lifecycle.execution_context = MagicMock()
+        lifecycle.execution_context._register_tasks = []
+        lifecycle._initialized = True
 
-        lifecycle.plugin_manager = MagicMock()
-        lifecycle.plugin_manager.context = MagicMock()
-        lifecycle.plugin_manager.context.get_all_stars = MagicMock(return_value=[])
+        lifecycle.plugin_manager = SimpleNamespace(
+            catalog=SimpleNamespace(
+                plugins=SimpleNamespace(all=MagicMock(return_value=[])),
+            ),
+            extensions=SimpleNamespace(deactivate=AsyncMock()),
+            lifecycle=SimpleNamespace(
+                reload=AsyncMock(),
+                terminate_plugin=AsyncMock(),
+                stop=AsyncMock(),
+            ),
+        )
 
         lifecycle.provider_manager = MagicMock()
         lifecycle.provider_manager.terminate = AsyncMock()
@@ -808,21 +966,18 @@ class TestAstrBotCoreLifecycleStart:
         mock_handler.handler = AsyncMock()
         mock_handler.handler_module_path = "test_module"
         mock_handler.handler_name = "test_handler"
+        mock_db.catalogs.plugins.publish(
+            StarMetadata(name="Test Handler", module_path="test_module")
+        )
 
         with (
-            patch(
-                "astrbot.core.core_lifecycle.star_handlers_registry"
-            ) as mock_registry,
-            patch(
-                "astrbot.core.core_lifecycle.star_map",
-                {"test_module": MagicMock(name="Test Handler")},
+            patch.object(
+                mock_db.catalogs.handlers,
+                "get_handlers_by_event_type",
+                return_value=[mock_handler],
             ),
             patch("astrbot.core.core_lifecycle.logger"),
         ):
-            mock_registry.get_handlers_by_event_type = MagicMock(
-                return_value=[mock_handler]
-            )
-
             # Run start but cancel after a brief moment
             start_task = asyncio.create_task(lifecycle.start())
             await asyncio.sleep(0.01)
@@ -845,53 +1000,23 @@ class TestAstrBotCoreLifecycleStopAdditional:
         """Test that stop cancels all current tasks."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
 
-        lifecycle.temp_dir_cleaner = None
-        lifecycle.cron_manager = None
+        async def wait_forever() -> None:
+            await asyncio.Event().wait()
 
-        lifecycle.plugin_manager = MagicMock()
-        lifecycle.plugin_manager.context = MagicMock()
-        lifecycle.plugin_manager.context.get_all_stars = MagicMock(return_value=[])
-
-        lifecycle.provider_manager = MagicMock()
-        lifecycle.provider_manager.terminate = AsyncMock()
-
-        lifecycle.platform_manager = MagicMock()
-        lifecycle.platform_manager.terminate = AsyncMock()
-
-        lifecycle.kb_manager = MagicMock()
-        lifecycle.kb_manager.terminate = AsyncMock()
-
-        lifecycle.dashboard_shutdown_event = asyncio.Event()
-
-        # Create mock tasks
-        mock_task1 = MagicMock(spec=asyncio.Task)
-        mock_task1.cancel = MagicMock()
-        mock_task1.get_name = MagicMock(return_value="task1")
-
-        mock_task2 = MagicMock(spec=asyncio.Task)
-        mock_task2.cancel = MagicMock()
-        mock_task2.get_name = MagicMock(return_value="task2")
-
-        lifecycle.curr_tasks = [mock_task1, mock_task2]
+        task1 = asyncio.create_task(wait_forever(), name="task1")
+        task2 = asyncio.create_task(wait_forever(), name="task2")
+        lifecycle.curr_tasks = [task1, task2]
 
         await lifecycle.stop()
 
-        # Verify tasks were cancelled
-        mock_task1.cancel.assert_called_once()
-        mock_task2.cancel.assert_called_once()
+        assert task1.cancelled()
+        assert task2.cancelled()
 
     @pytest.mark.asyncio
     async def test_stop_terminates_all_managers(self, mock_log_broker, mock_db):
         """Test that stop terminates all managers in correct order."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
 
-        lifecycle.temp_dir_cleaner = None
-        lifecycle.cron_manager = None
-
-        lifecycle.plugin_manager = MagicMock()
-        lifecycle.plugin_manager.context = MagicMock()
-        lifecycle.plugin_manager.context.get_all_stars = MagicMock(return_value=[])
-
         lifecycle.provider_manager = MagicMock()
         lifecycle.provider_manager.terminate = AsyncMock()
 
@@ -901,17 +1026,19 @@ class TestAstrBotCoreLifecycleStopAdditional:
         lifecycle.kb_manager = MagicMock()
         lifecycle.kb_manager.terminate = AsyncMock()
 
-        lifecycle.dashboard_shutdown_event = asyncio.Event()
-
-        lifecycle.curr_tasks = []
-
         mock_html_renderer = MagicMock()
         mock_html_renderer.terminate = AsyncMock()
         mock_db.html_renderer = mock_html_renderer
-        lifecycle._provider_initialization_started = True
-        lifecycle._platform_initialization_started = True
-        lifecycle._kb_initialization_started = True
-        lifecycle._html_renderer_initialization_started = True
+        lifecycle._register_cleanup("HTML renderer", mock_html_renderer.terminate)
+        lifecycle._register_cleanup(
+            "provider manager", lifecycle.provider_manager.terminate
+        )
+        lifecycle._register_cleanup(
+            "knowledge base manager", lifecycle.kb_manager.terminate
+        )
+        lifecycle._register_cleanup(
+            "platform manager", lifecycle.platform_manager.terminate
+        )
         await lifecycle.stop()
 
         # Verify all managers were terminated
@@ -927,22 +1054,23 @@ class TestAstrBotCoreLifecycleStopAdditional:
         """Test that stop handles plugin termination errors gracefully."""
         lifecycle = AstrBotCoreLifecycle(mock_log_broker, mock_db)
 
-        lifecycle.temp_dir_cleaner = None
-        lifecycle.cron_manager = None
-
         # Create a mock plugin that raises exception on termination
         mock_plugin = MagicMock()
         mock_plugin.name = "test_plugin"
 
-        lifecycle.plugin_manager = MagicMock()
-        lifecycle.plugin_manager.context = MagicMock()
-        lifecycle.plugin_manager.context.get_all_stars = MagicMock(
-            return_value=[mock_plugin]
+        lifecycle.plugin_manager = SimpleNamespace(
+            catalog=SimpleNamespace(
+                plugins=SimpleNamespace(all=MagicMock(return_value=[mock_plugin])),
+            ),
+            extensions=SimpleNamespace(deactivate=AsyncMock()),
+            lifecycle=SimpleNamespace(
+                reload=AsyncMock(),
+                terminate_plugin=AsyncMock(
+                    side_effect=Exception("Plugin termination failed"),
+                ),
+                stop=AsyncMock(),
+            ),
         )
-        lifecycle.plugin_manager._terminate_plugin = AsyncMock(
-            side_effect=Exception("Plugin termination failed")
-        )
-        lifecycle.plugin_manager.deactivate_plugin_extension = AsyncMock()
 
         lifecycle.provider_manager = MagicMock()
         lifecycle.provider_manager.terminate = AsyncMock()
@@ -953,10 +1081,7 @@ class TestAstrBotCoreLifecycleStopAdditional:
         lifecycle.kb_manager = MagicMock()
         lifecycle.kb_manager.terminate = AsyncMock()
 
-        lifecycle.dashboard_shutdown_event = asyncio.Event()
-
-        lifecycle.curr_tasks = []
-        lifecycle._plugin_reload_started = True
+        lifecycle._register_cleanup("plugin manager", lifecycle._terminate_plugins)
 
         with patch("astrbot.core.core_lifecycle.logger") as mock_logger:
             # Should not raise
@@ -1043,6 +1168,7 @@ class TestAstrBotCoreLifecycleLoadPipelineScheduler:
 
             lifecycle.astrbot_config_mgr = mock_astrbot_config_mgr
             lifecycle.plugin_manager = mock_plugin_manager
+            lifecycle.execution_context = MagicMock()
 
             result = await lifecycle.load_pipeline_scheduler()
 
@@ -1070,6 +1196,7 @@ class TestAstrBotCoreLifecycleLoadPipelineScheduler:
 
         lifecycle.astrbot_config_mgr = mock_astrbot_config_mgr
         lifecycle.plugin_manager = mock_plugin_manager
+        lifecycle.execution_context = MagicMock()
         lifecycle.pipeline_scheduler_mapping = {}
 
         with (

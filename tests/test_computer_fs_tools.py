@@ -13,7 +13,7 @@ from PIL import Image
 
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.computer import file_read_utils
-from astrbot.core.computer.booters.local import LocalBooter
+from astrbot.core.computer.computer_client import ComputerRuntime
 from astrbot.core.tools.computer_tools import fs as fs_tools
 from astrbot.core.tools.computer_tools import util as computer_util
 
@@ -24,6 +24,7 @@ def _make_context(
     role: str = "admin",
     runtime: str = "local",
     umo: str = "qq:friend:user-1",
+    computer_runtime: object | None = None,
 ) -> ContextWrapper:
     config_holder = SimpleNamespace(
         get_config=lambda umo=None: {
@@ -32,6 +33,8 @@ def _make_context(
                 "computer_use_runtime": runtime,
             }
         }
+        ,
+        computer_runtime=computer_runtime or ComputerRuntime(),
     )
     event = SimpleNamespace(
         role=role,
@@ -46,6 +49,7 @@ def _make_sandbox_context(
     *,
     role: str = "admin",
     umo: str = "qq:friend:user-1",
+    computer_runtime: object | None = None,
 ):
     config_holder = SimpleNamespace(
         get_config=lambda umo=None: {
@@ -54,6 +58,8 @@ def _make_sandbox_context(
                 "computer_use_runtime": "sandbox",
             }
         }
+        ,
+        computer_runtime=computer_runtime or ComputerRuntime(),
     )
     event = SimpleNamespace(
         role=role,
@@ -87,9 +93,9 @@ async def test_sandbox_file_download_handles_windows_remote_filename(
     async def _fake_get_booter(_ctx, _umo):
         return booter
 
-    monkeypatch.setattr(fs_tools, "get_booter", _fake_get_booter)
-
-    context = _make_sandbox_context()
+    context = _make_sandbox_context(
+        computer_runtime=SimpleNamespace(get_booter=_fake_get_booter)
+    )
     result = await fs_tools.FileDownloadTool().call(
         context,
         remote_path=r"C:\Users\AstrBot\report.txt",
@@ -121,9 +127,9 @@ async def test_sandbox_file_download_strips_trailing_remote_slash(
     async def _fake_get_booter(_ctx, _umo):
         return booter
 
-    monkeypatch.setattr(fs_tools, "get_booter", _fake_get_booter)
-
-    context = _make_sandbox_context()
+    context = _make_sandbox_context(
+        computer_runtime=SimpleNamespace(get_booter=_fake_get_booter)
+    )
     result = await fs_tools.FileDownloadTool().call(
         context,
         remote_path="reports/export/",
@@ -176,13 +182,6 @@ def _setup_local_fs_tools(
         "get_astrbot_temp_path",
         lambda: str(temp_root),
     )
-
-    booter = LocalBooter()
-
-    async def _fake_get_booter(_ctx, _umo):
-        return booter
-
-    monkeypatch.setattr(fs_tools, "get_booter", _fake_get_booter)
 
     normalized_umo = computer_util.normalize_umo_for_workspace(umo)
     workspace = workspaces_root / normalized_umo

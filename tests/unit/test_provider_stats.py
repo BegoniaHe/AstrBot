@@ -4,10 +4,10 @@ from unittest.mock import MagicMock
 import pytest
 from sqlmodel import select
 
+from astrbot.core.agent.llm_types import ProviderRequest, TokenUsage
 from astrbot.core.agent.response import AgentStats
 from astrbot.core.db.po import ProviderStat
 from astrbot.core.pipeline.process_stage.method.agent_sub_stages import internal
-from astrbot.core.provider.entities import ProviderRequest, TokenUsage
 
 
 @pytest.mark.asyncio

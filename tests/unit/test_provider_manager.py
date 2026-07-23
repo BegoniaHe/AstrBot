@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import copy
 import importlib
 import sys
 import types
@@ -8,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
-from astrbot.core.provider.entities import ProviderMetaData, ProviderType
+from astrbot.core.provider.catalog import ProviderAdapterDescriptor, ProviderCatalog
+from astrbot.core.provider.entities import ProviderType
 from astrbot.core.provider.provider import (
     EmbeddingProvider,
     Provider,
@@ -16,7 +18,7 @@ from astrbot.core.provider.provider import (
     STTProvider,
     TTSProvider,
 )
-from astrbot.core.provider.register import provider_cls_map
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 
 pytestmark = pytest.mark.provider
 
@@ -87,10 +89,10 @@ class DummyRerankProvider(RerankProvider):
         return []
 
 
-class _ConfigWithSave(dict):
+class _ConfigWithAsyncSave(dict):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.save_config = MagicMock()
+        self.save_config_async = AsyncMock(return_value=True)
 
 
 def _build_manager(config: dict | None = None) -> ProviderManager:
@@ -101,7 +103,7 @@ def _build_manager(config: dict | None = None) -> ProviderManager:
         "provider_stt_settings": {"enable": False, "provider_id": None},
         "provider_tts_settings": {"enable": False, "provider_id": None},
     }
-    default_conf = _ConfigWithSave(default_config)
+    default_conf = _ConfigWithAsyncSave(default_config)
     acm = SimpleNamespace(
         confs={"default": default_conf},
         get_conf=lambda umo=None: default_conf,
@@ -110,9 +112,28 @@ def _build_manager(config: dict | None = None) -> ProviderManager:
     persona_mgr = SimpleNamespace(default_persona="default")
     return ProviderManager(
         acm,
-        db_helper=MagicMock(),
         persona_mgr=persona_mgr,
         preferences=AsyncMock(),
+        catalog=ProviderCatalog(),
+        tools=FunctionToolManager(),
+    )
+
+
+def _register_provider(
+    manager: ProviderManager,
+    adapter_type: str,
+    provider_class: type,
+    provider_type: ProviderType,
+) -> None:
+    manager.catalog.register(
+        ProviderAdapterDescriptor.create(
+            type=adapter_type,
+            desc="test adapter",
+            provider_type=provider_type,
+            default_config_tmpl=None,
+            provider_display_name=None,
+        ),
+        provider_class,
     )
 
 
@@ -317,11 +338,86 @@ async def test_set_provider_updates_global_defaults_for_chat_stt_and_tts(monkeyp
         manager.acm.default_conf["provider_tts_settings"]["provider_id"] == "tts-global"
     )
     manager.preferences.put_async.assert_not_awaited()
+    assert manager.acm.default_conf.save_config_async.await_count == 3
     assert hook.call_args_list == [
         call("chat-global", ProviderType.CHAT_COMPLETION, None),
         call("stt-global", ProviderType.SPEECH_TO_TEXT, None),
         call("tts-global", ProviderType.TEXT_TO_SPEECH, None),
     ]
+
+
+@pytest.mark.asyncio
+async def test_set_provider_rolls_back_global_selection_when_persistence_fails():
+    manager = _build_manager()
+    provider = DummyChatProvider(
+        {"id": "chat-new", "type": "fake_chat_new", "enable": True},
+        manager.provider_settings,
+    )
+    manager.inst_map["chat-new"] = provider
+    previous_settings = copy.deepcopy(manager.acm.default_conf["provider_settings"])
+    hook = MagicMock()
+    manager.register_provider_change_hook(hook)
+    manager.acm.default_conf.save_config_async.side_effect = OSError("disk unavailable")
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        await manager.set_provider("chat-new", ProviderType.CHAT_COMPLETION)
+
+    assert manager.acm.default_conf["provider_settings"] == previous_settings
+    hook.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_provider_does_not_roll_back_a_newer_global_selection():
+    manager = _build_manager()
+    provider = DummyChatProvider(
+        {"id": "chat-new", "type": "fake_chat_new", "enable": True},
+        manager.provider_settings,
+    )
+    manager.inst_map["chat-new"] = provider
+    hook = MagicMock()
+    manager.register_provider_change_hook(hook)
+
+    async def superseded_by_newer_selection() -> bool:
+        manager.acm.default_conf["provider_settings"].clear()
+        manager.acm.default_conf["provider_settings"].update(
+            {"default_provider_id": "chat-newer"}
+        )
+        return False
+
+    manager.acm.default_conf.save_config_async.side_effect = (
+        superseded_by_newer_selection
+    )
+
+    with pytest.raises(RuntimeError, match="superseded"):
+        await manager.set_provider("chat-new", ProviderType.CHAT_COMPLETION)
+
+    assert manager.acm.default_conf["provider_settings"] == {
+        "default_provider_id": "chat-newer"
+    }
+    hook.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_provider_keeps_session_override_unpublished_when_persistence_fails():
+    manager = _build_manager()
+    provider = DummyChatProvider(
+        {"id": "chat-session", "type": "fake_chat_session", "enable": True},
+        manager.provider_settings,
+    )
+    manager.inst_map["chat-session"] = provider
+    hook = MagicMock()
+    manager.register_provider_change_hook(hook)
+    manager.preferences.session_put.side_effect = OSError("preferences unavailable")
+
+    with pytest.raises(OSError, match="preferences unavailable"):
+        await manager.set_provider(
+            "chat-session",
+            ProviderType.CHAT_COMPLETION,
+            umo="umo-1",
+        )
+
+    assert manager._session_provider_overrides == {}
+    hook.assert_not_called()
 
 
 def test_resolve_env_key_list_expands_env_references(monkeypatch):
@@ -351,10 +447,10 @@ def test_dynamic_import_provider_registers_both_openai_protocols():
     manager.dynamic_import_provider("openai_chat_completions")
     manager.dynamic_import_provider("openai_responses")
 
-    assert provider_cls_map["openai_chat_completions"].cls_type.__name__ == (
+    assert manager.catalog.get("openai_chat_completions").cls_type.__name__ == (
         "ProviderOpenAIChatCompletions"
     )
-    assert provider_cls_map["openai_responses"].cls_type.__name__ == (
+    assert manager.catalog.get("openai_responses").cls_type.__name__ == (
         "ProviderOpenAIResponses"
     )
 
@@ -453,17 +549,11 @@ async def test_load_provider_merges_source_initializes_and_selects_default(
     )
     monkeypatch.setenv("ASTRBOT_CHAT_KEY", "chat-key")
     monkeypatch.setattr(manager, "dynamic_import_provider", lambda provider_type: None)
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_chat_load",
-        ProviderMetaData(
-            id="default",
-            model=None,
-            type="fake_chat_load",
-            desc="",
-            provider_type=ProviderType.CHAT_COMPLETION,
-            cls_type=DummyChatProvider,
-        ),
+        DummyChatProvider,
+        ProviderType.CHAT_COMPLETION,
     )
 
     await manager.load_provider(
@@ -499,17 +589,11 @@ async def test_load_provider_selects_default_tts_from_tts_settings(monkeypatch):
         },
     )
     monkeypatch.setattr(manager, "dynamic_import_provider", lambda provider_type: None)
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_tts_load",
-        ProviderMetaData(
-            id="default",
-            model=None,
-            type="fake_tts_load",
-            desc="",
-            provider_type=ProviderType.TEXT_TO_SPEECH,
-            cls_type=DummyTTSProvider,
-        ),
+        DummyTTSProvider,
+        ProviderType.TEXT_TO_SPEECH,
     )
 
     await manager.load_provider(
@@ -546,17 +630,11 @@ async def test_load_provider_replaces_existing_current_tts_when_configured_defau
     manager.tts_provider_insts = [existing]
 
     monkeypatch.setattr(manager, "dynamic_import_provider", lambda provider_type: None)
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_tts_target",
-        ProviderMetaData(
-            id="default",
-            model=None,
-            type="fake_tts_target",
-            desc="",
-            provider_type=ProviderType.TEXT_TO_SPEECH,
-            cls_type=DummyTTSProvider,
-        ),
+        DummyTTSProvider,
+        ProviderType.TEXT_TO_SPEECH,
     )
 
     await manager.load_provider(
@@ -608,7 +686,6 @@ async def test_load_provider_returns_cleanly_when_provider_metadata_is_missing(
 ):
     manager = _build_manager()
     monkeypatch.setattr(manager, "dynamic_import_provider", lambda provider_type: None)
-    provider_cls_map.pop("fake_missing_meta", None)
 
     await manager.load_provider(
         {
@@ -673,17 +750,11 @@ async def test_load_provider_returns_cleanly_on_unknown_dynamic_import_failure(
 async def test_load_provider_wraps_type_mismatch(monkeypatch):
     manager = _build_manager()
     monkeypatch.setattr(manager, "dynamic_import_provider", lambda provider_type: None)
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_type_mismatch",
-        ProviderMetaData(
-            id="default",
-            model=None,
-            type="fake_type_mismatch",
-            desc="",
-            provider_type=ProviderType.CHAT_COMPLETION,
-            cls_type=DummySTTProvider,
-        ),
+        DummySTTProvider,
+        ProviderType.CHAT_COMPLETION,
     )
 
     with pytest.raises(
@@ -778,7 +849,7 @@ async def test_initialize_selects_defaults_and_starts_mcp_init(monkeypatch):
     )
     manager.stt_provider_insts = [stt_a]
     manager.inst_map["stt-a"] = stt_a
-    manager.llm_tools.init_mcp_clients = AsyncMock()
+    manager.tool_manager.init_mcp_clients = AsyncMock()
 
     await manager.initialize()
     if manager._mcp_init_task is not None:
@@ -789,7 +860,7 @@ async def test_initialize_selects_defaults_and_starts_mcp_init(monkeypatch):
     assert manager.get_using_provider(ProviderType.SPEECH_TO_TEXT) is stt_a
     assert manager.get_using_provider(ProviderType.TEXT_TO_SPEECH) is None
     manager.preferences.get_async.assert_not_awaited()
-    manager.llm_tools.init_mcp_clients.assert_awaited_once()
+    manager.tool_manager.init_mcp_clients.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -824,14 +895,14 @@ async def test_initialize_continues_after_load_provider_failure(monkeypatch):
         "get_async",
         AsyncMock(side_effect=[None, None, None]),
     )
-    manager.llm_tools.init_mcp_clients = AsyncMock()
+    manager.tool_manager.init_mcp_clients = AsyncMock()
 
     await manager.initialize()
     if manager._mcp_init_task is not None:
         await manager._mcp_init_task
 
     assert manager.get_using_provider(ProviderType.CHAT_COMPLETION) is chat_ok
-    manager.llm_tools.init_mcp_clients.assert_awaited_once()
+    manager.tool_manager.init_mcp_clients.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -875,7 +946,7 @@ async def test_initialize_falls_back_when_persisted_provider_ids_have_wrong_type
         "stt-a": stt_a,
         "tts-a": tts_a,
     }
-    manager.llm_tools.init_mcp_clients = AsyncMock()
+    manager.tool_manager.init_mcp_clients = AsyncMock()
 
     await manager.initialize()
     if manager._mcp_init_task is not None:
@@ -898,13 +969,13 @@ async def test_initialize_reuses_pending_mcp_init_task(monkeypatch):
         "get_async",
         AsyncMock(side_effect=[None, None, None]),
     )
-    manager.llm_tools.init_mcp_clients = AsyncMock()
+    manager.tool_manager.init_mcp_clients = AsyncMock()
     manager._mcp_init_task = existing_task
 
     await manager.initialize()
 
     assert manager._mcp_init_task is existing_task
-    manager.llm_tools.init_mcp_clients.assert_not_awaited()
+    manager.tool_manager.init_mcp_clients.assert_not_awaited()
 
     existing_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
@@ -928,7 +999,9 @@ async def test_initialize_replaces_done_mcp_task_and_logs_background_failure(
         AsyncMock(side_effect=[None, None, None]),
     )
     monkeypatch.setattr(provider_manager_module.logger, "error", error)
-    manager.llm_tools.init_mcp_clients = AsyncMock(side_effect=RuntimeError("mcp boom"))
+    manager.tool_manager.init_mcp_clients = AsyncMock(
+        side_effect=RuntimeError("mcp boom")
+    )
     manager._mcp_init_task = done_task
 
     await manager.initialize()
@@ -936,7 +1009,7 @@ async def test_initialize_replaces_done_mcp_task_and_logs_background_failure(
     if manager._mcp_init_task is not None:
         await manager._mcp_init_task
 
-    manager.llm_tools.init_mcp_clients.assert_awaited_once()
+    manager.tool_manager.init_mcp_clients.assert_awaited_once()
     assert error.call_count == 1
     assert error.call_args.args[0] == "MCP init background task failed"
     assert error.call_args.kwargs["exc_info"] is True
@@ -975,17 +1048,11 @@ async def test_reload_terminates_removed_provider_and_auto_selects_remaining(
         "provider": [{"id": "chat-b", "enable": True}],
         "provider_sources": [],
     }
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_chat_b",
-        ProviderMetaData(
-            id="chat-b",
-            model=None,
-            type="fake_chat_b",
-            desc="",
-            provider_type=ProviderType.CHAT_COMPLETION,
-            cls_type=DummyChatProvider,
-        ),
+        DummyChatProvider,
+        ProviderType.CHAT_COMPLETION,
     )
     monkeypatch.setattr(manager, "load_provider", AsyncMock())
 
@@ -1030,13 +1097,11 @@ async def test_reload_loads_enabled_provider_and_prunes_out_of_config_instances(
         {"id": "chat-new", "type": "fake_chat_new", "enable": True},
         manager.provider_settings,
     )
-    provider_cls_map["fake_chat_new"] = ProviderMetaData(
-        id="chat-new",
-        model=None,
-        type="fake_chat_new",
-        desc="",
-        provider_type=ProviderType.CHAT_COMPLETION,
-        cls_type=DummyChatProvider,
+    _register_provider(
+        manager,
+        "fake_chat_new",
+        DummyChatProvider,
+        ProviderType.CHAT_COMPLETION,
     )
 
     async def fake_load_provider(provider_config: dict) -> None:
@@ -1091,29 +1156,17 @@ async def test_reload_auto_selects_stt_and_tts_when_current_instances_are_none(
     manager.stt_provider_insts = [stt_a]
     manager.tts_provider_insts = [tts_a]
     manager.inst_map = {"stt-a": stt_a, "tts-a": tts_a}
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_stt_a",
-        ProviderMetaData(
-            id="stt-a",
-            model=None,
-            type="fake_stt_a",
-            desc="",
-            provider_type=ProviderType.SPEECH_TO_TEXT,
-            cls_type=DummySTTProvider,
-        ),
+        DummySTTProvider,
+        ProviderType.SPEECH_TO_TEXT,
     )
-    monkeypatch.setitem(
-        provider_cls_map,
+    _register_provider(
+        manager,
         "fake_tts_a",
-        ProviderMetaData(
-            id="tts-a",
-            model=None,
-            type="fake_tts_a",
-            desc="",
-            provider_type=ProviderType.TEXT_TO_SPEECH,
-            cls_type=DummyTTSProvider,
-        ),
+        DummyTTSProvider,
+        ProviderType.TEXT_TO_SPEECH,
     )
 
     manager.acm.default_conf = {
@@ -1148,6 +1201,14 @@ async def test_delete_provider_by_source_id_terminates_matching_instances_and_sa
     )
     manager.terminate_provider = AsyncMock()
 
+    async def persist_after_config_is_complete() -> bool:
+        manager.terminate_provider.assert_not_awaited()
+        return True
+
+    manager.acm.default_conf.save_config_async.side_effect = (
+        persist_after_config_is_complete
+    )
+
     await manager.delete_provider(provider_source_id="source-1")
 
     assert manager.terminate_provider.await_args_list == [
@@ -1157,7 +1218,7 @@ async def test_delete_provider_by_source_id_terminates_matching_instances_and_sa
     assert manager.acm.default_conf["provider"] == [
         {"id": "chat-c", "provider_source_id": "source-2"},
     ]
-    manager.acm.default_conf.save_config.assert_called_once()
+    manager.acm.default_conf.save_config_async.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -1173,29 +1234,95 @@ async def test_update_provider_persists_new_config_and_reloads():
             "provider_tts_settings": {"enable": False, "provider_id": None},
         }
     )
-    manager.reload = AsyncMock()
+    transitions: list[str] = []
+
+    async def persist() -> bool:
+        transitions.append("persist")
+        return True
+
+    async def reload(provider_config: dict) -> None:
+        assert provider_config is new_config
+        transitions.append("reload")
+
+    manager.acm.default_conf.save_config_async.side_effect = persist
+    manager.reload = AsyncMock(side_effect=reload)
     new_config = {"id": "chat-a", "type": "new-type", "enable": True}
 
     await manager.update_provider("chat-a", new_config)
 
     assert manager.acm.default_conf["provider"] == [new_config]
-    manager.acm.default_conf.save_config.assert_called_once()
+    manager.acm.default_conf.save_config_async.assert_awaited_once()
     manager.reload.assert_awaited_once_with(new_config)
+    assert transitions == ["persist", "reload"]
 
 
 @pytest.mark.asyncio
-async def test_create_provider_appends_config_loads_instance_and_syncs_provider_list(
-    monkeypatch,
-):
+async def test_create_provider_appends_config_loads_instance_and_syncs_provider_list():
     manager = _build_manager()
-    manager.load_provider = AsyncMock()
+    transitions: list[str] = []
+
+    async def persist() -> bool:
+        transitions.append("persist")
+        return True
+
+    async def load(provider_config: dict) -> None:
+        assert provider_config is new_config
+        transitions.append("load")
+
+    manager.acm.default_conf.save_config_async.side_effect = persist
+    manager.load_provider = AsyncMock(side_effect=load)
     new_config = {"id": "chat-new", "type": "fake-chat", "enable": True}
     await manager.create_provider(new_config)
 
     assert manager.acm.default_conf["provider"] == [new_config]
-    manager.acm.default_conf.save_config.assert_called_once()
+    manager.acm.default_conf.save_config_async.assert_awaited_once()
     manager.load_provider.assert_awaited_once_with(new_config)
     assert manager.providers_config == [new_config]
+    assert transitions == ["persist", "load"]
+
+
+@pytest.mark.asyncio
+async def test_update_provider_does_not_reload_when_config_persistence_fails():
+    manager = _build_manager(
+        {
+            "provider": [
+                {"id": "chat-a", "type": "old-type", "enable": True},
+            ],
+            "provider_sources": [],
+            "provider_settings": {"default_provider_id": "chat-a"},
+            "provider_stt_settings": {"enable": False, "provider_id": None},
+            "provider_tts_settings": {"enable": False, "provider_id": None},
+        }
+    )
+    old_config = manager.acm.default_conf["provider"]
+    manager.acm.default_conf.save_config_async.side_effect = OSError("disk unavailable")
+    manager.reload = AsyncMock()
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        await manager.update_provider(
+            "chat-a",
+            {"id": "chat-a", "type": "new-type", "enable": True},
+        )
+
+    assert manager.acm.default_conf["provider"] is old_config
+    manager.reload.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_provider_does_not_load_when_write_is_superseded():
+    """A stale config snapshot must not publish a live provider instance."""
+    manager = _build_manager()
+    old_config = manager.acm.default_conf["provider"]
+    manager.acm.default_conf.save_config_async.return_value = False
+    manager.load_provider = AsyncMock()
+    new_config = {"id": "chat-new", "type": "fake-chat", "enable": True}
+
+    with pytest.raises(RuntimeError, match="superseded"):
+        await manager.create_provider(new_config)
+
+    assert manager.acm.default_conf["provider"] is old_config
+    assert manager.providers_config is old_config
+    manager.load_provider.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1277,7 +1404,7 @@ async def test_terminate_cancels_mcp_task_and_terminates_loaded_providers(monkey
     )
     provider.terminate = AsyncMock()
     manager.provider_insts = [provider]
-    manager.llm_tools.disable_mcp_server = AsyncMock()
+    manager.tool_manager.disable_mcp_server = AsyncMock()
 
     async def wait_forever() -> None:
         await asyncio.Event().wait()
@@ -1288,7 +1415,7 @@ async def test_terminate_cancels_mcp_task_and_terminates_loaded_providers(monkey
 
     assert manager._mcp_init_task.cancelled()
     provider.terminate.assert_awaited_once()
-    manager.llm_tools.disable_mcp_server.assert_awaited_once()
+    manager.tool_manager.disable_mcp_server.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -1318,7 +1445,7 @@ async def test_terminate_also_terminates_stt_tts_embedding_and_rerank(monkeypatc
     manager.tts_provider_insts = [tts_provider]
     manager.embedding_provider_insts = [embedding_provider]
     manager.rerank_provider_insts = [rerank_provider]
-    manager.llm_tools.disable_mcp_server = AsyncMock()
+    manager.tool_manager.disable_mcp_server = AsyncMock()
 
     await manager.terminate()
 
@@ -1326,7 +1453,7 @@ async def test_terminate_also_terminates_stt_tts_embedding_and_rerank(monkeypatc
     tts_provider.terminate.assert_awaited_once()
     embedding_provider.terminate.assert_awaited_once()
     rerank_provider.terminate.assert_awaited_once()
-    manager.llm_tools.disable_mcp_server.assert_awaited_once()
+    manager.tool_manager.disable_mcp_server.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -1339,11 +1466,11 @@ async def test_terminate_deduplicates_shared_instance_and_swallows_disable_mcp_e
     shared.terminate = AsyncMock()
     manager.provider_insts = [shared]
     manager.tts_provider_insts = [shared]
-    manager.llm_tools.disable_mcp_server = AsyncMock(
+    manager.tool_manager.disable_mcp_server = AsyncMock(
         side_effect=RuntimeError("disable failed")
     )
 
     await manager.terminate()
 
     shared.terminate.assert_awaited_once()
-    manager.llm_tools.disable_mcp_server.assert_awaited_once()
+    manager.tool_manager.disable_mcp_server.assert_awaited_once()

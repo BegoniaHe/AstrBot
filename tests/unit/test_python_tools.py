@@ -33,10 +33,6 @@ async def test_local_python_tool_uses_session_workspace(tmp_path, monkeypatch):
         return_value={"data": {"output": {"text": "ok", "images": []}, "error": ""}}
     )
     monkeypatch.setattr(
-        "astrbot.core.tools.computer_tools.python.get_local_booter",
-        lambda: SimpleNamespace(python=SimpleNamespace(exec=python_exec)),
-    )
-    monkeypatch.setattr(
         "astrbot.core.tools.computer_tools.python.workspace_root",
         lambda umo: tmp_path / umo.replace(":", "_"),
     )
@@ -52,7 +48,12 @@ async def test_local_python_tool_uses_session_workspace(tmp_path, monkeypatch):
             context=SimpleNamespace(
                 get_config=lambda **_kwargs: {
                     "provider_settings": {"computer_use_require_admin": True}
-                }
+                },
+                computer_runtime=SimpleNamespace(
+                    get_local_booter=lambda: SimpleNamespace(
+                        python=SimpleNamespace(exec=python_exec)
+                    )
+                ),
             ),
         ),
         tool_call_timeout=60,
@@ -77,10 +78,6 @@ async def test_local_python_tool_accepts_timeout_alias(tmp_path, monkeypatch):
         return_value={"data": {"output": {"text": "ok", "images": []}, "error": ""}}
     )
     monkeypatch.setattr(
-        "astrbot.core.tools.computer_tools.python.get_local_booter",
-        lambda: SimpleNamespace(python=SimpleNamespace(exec=python_exec)),
-    )
-    monkeypatch.setattr(
         "astrbot.core.tools.computer_tools.python.workspace_root",
         lambda umo: tmp_path / umo.replace(":", "_"),
     )
@@ -96,7 +93,12 @@ async def test_local_python_tool_accepts_timeout_alias(tmp_path, monkeypatch):
             context=SimpleNamespace(
                 get_config=lambda **_kwargs: {
                     "provider_settings": {"computer_use_require_admin": True}
-                }
+                },
+                computer_runtime=SimpleNamespace(
+                    get_local_booter=lambda: SimpleNamespace(
+                        python=SimpleNamespace(exec=python_exec)
+                    )
+                ),
             ),
         ),
         tool_call_timeout=60,

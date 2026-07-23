@@ -43,7 +43,6 @@ from astrbot import logger
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.computer.computer_client import get_booter
 from astrbot.core.computer.file_read_utils import read_file_tool_result
 from astrbot.core.message.components import File, Image
 from astrbot.core.message.message_event_result import MessageChain
@@ -310,7 +309,7 @@ class FileReadTool(FunctionTool):
                     "Use a file path instead, or use 'astrbot_execute_shell' to list directory contents."
                 )
             offset, limit = self._validate_read_window(offset, limit)
-            sb = await get_booter(
+            sb = await context.context.context.computer_runtime.get_booter(
                 context.context.context,
                 context.context.event.unified_msg_origin,
             )
@@ -377,7 +376,7 @@ class FileWriteTool(FunctionTool):
             )
             if not normalized_path:
                 raise ValueError("`path` must be a non-empty string.")
-            sb = await get_booter(
+            sb = await context.context.context.computer_runtime.get_booter(
                 context.context.context,
                 context.context.event.unified_msg_origin,
             )
@@ -458,7 +457,7 @@ class FileEditTool(FunctionTool):
                 raise ValueError("`path` must be a non-empty string.")
             normalized_old = _decode_escaped_text(old)
             normalized_new = _decode_escaped_text(new)
-            sb = await get_booter(
+            sb = await context.context.context.computer_runtime.get_booter(
                 context.context.context,
                 context.context.event.unified_msg_origin,
             )
@@ -666,7 +665,7 @@ class GrepTool(FunctionTool):
                 kwargs.get("-C"),
             )
             has_context = (after_context or 0) > 0 or (before_context or 0) > 0
-            sb = await get_booter(
+            sb = await context.context.context.computer_runtime.get_booter(
                 context.context.context,
                 context.context.event.unified_msg_origin,
             )
@@ -736,7 +735,7 @@ class FileUploadTool(FunctionTool):
     ) -> str | None:
         if permission_error := check_admin_permission(context, "File upload/download"):
             return permission_error
-        sb = await get_booter(
+        sb = await context.context.context.computer_runtime.get_booter(
             context.context.context,
             context.context.event.unified_msg_origin,
         )
@@ -802,7 +801,7 @@ class FileDownloadTool(FunctionTool):
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "File upload/download"):
             return permission_error
-        sb = await get_booter(
+        sb = await context.context.context.computer_runtime.get_booter(
             context.context.context,
             context.context.event.unified_msg_origin,
         )

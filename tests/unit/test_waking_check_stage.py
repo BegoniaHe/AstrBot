@@ -11,9 +11,11 @@ from astrbot.core.command import (
 )
 from astrbot.core.message.components import At, AtAll, Plain, Reply
 from astrbot.core.platform.message_type import MessageType
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
+from astrbot.core.star.star import StarMetadata
 from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
 
@@ -103,14 +105,17 @@ async def make_stage(**settings):
     }
     stage = waking.WakingCheckStage()
     command_catalog = CommandCatalogStore()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config=config,
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
+            plugin_catalog=SimpleNamespace(
                 get_command_catalog=lambda *_args: command_catalog,
             ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
     )
     stage.session_plugins.filter_handlers_by_session = AsyncMock(
@@ -120,11 +125,17 @@ async def make_stage(**settings):
 
 
 def install_handlers(stage, monkeypatch, handlers) -> None:
-    monkeypatch.setattr(
-        waking.star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *_args, **_kwargs: handlers,
+    _ = monkeypatch
+    stage.ctx.handlers = SimpleNamespace(
+        get_handlers_by_event_type=lambda *_args, **_kwargs: handlers,
     )
+    for handler in handlers:
+        module_path = getattr(handler, "handler_module_path", None)
+        if not module_path or stage.ctx.plugins.get_by_module(module_path):
+            continue
+        stage.ctx.plugins.publish(
+            StarMetadata(name="Test", module_path=module_path, activated=True)
+        )
     stage.command_catalog.replace(build_command_catalog(handlers))
 
 
@@ -307,7 +318,6 @@ async def test_command_permission_denial_keeps_existing_behavior(monkeypatch):
         "admin", admin_only, PermissionTypeFilter(PermissionType.ADMIN)
     )
     install_handlers(stage, monkeypatch, [handler])
-    monkeypatch.setitem(waking.star_map, "test.plugin", SimpleNamespace(name="Test"))
     event = FakeEvent([Plain("/admin")], message_text="/admin")
 
     await stage.process(event)
@@ -477,7 +487,6 @@ async def test_command_filter_internal_error_is_redacted_from_response_and_logs(
 
     handler, _ = make_command_handler("demo", demo, ExplodingFilter())
     install_handlers(stage, monkeypatch, [handler])
-    monkeypatch.setitem(waking.star_map, "test.plugin", SimpleNamespace(name="Test"))
     fake_logger = Mock()
     monkeypatch.setattr(waking, "logger", fake_logger)
     event = FakeEvent([Plain("/demo")], message_text="/demo")

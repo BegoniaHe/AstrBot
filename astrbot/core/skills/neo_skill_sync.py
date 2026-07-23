@@ -1,10 +1,10 @@
 import hashlib
 import json
 import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from astrbot.core.computer.computer_client import sync_skills_to_active_sandboxes
 from astrbot.core.skills._neo_skill_sync_utils import (
     MAP_FILE_NAME,
     MAP_VERSION,
@@ -36,9 +36,11 @@ class NeoSkillSyncManager:
         *,
         skills_root: str | None = None,
         map_path: str | None = None,
+        sync_active_sandboxes: Callable[[], Awaitable[None]],
     ) -> None:
         self.skills_root = skills_root or get_astrbot_skills_path()
         self.map_path = map_path or str(Path(self.skills_root) / MAP_FILE_NAME)
+        self._sync_active_sandboxes = sync_active_sandboxes
         os.makedirs(self.skills_root, exist_ok=True)
 
     def _load_map(self) -> dict[str, Any]:
@@ -300,7 +302,7 @@ class NeoSkillSyncManager:
         )
 
         SkillManager().set_skill_active(local_skill_name, True)
-        await sync_skills_to_active_sandboxes()
+        await self._sync_active_sandboxes()
 
         return NeoSkillSyncResult(
             skill_key=skill_key_val,

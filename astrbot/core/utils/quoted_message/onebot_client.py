@@ -1,5 +1,5 @@
-from collections.abc import Awaitable
-from typing import Any, Protocol
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol, cast
 
 from astrbot import logger
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
@@ -17,7 +17,18 @@ def _unwrap_action_response(ret: dict[str, Any] | None) -> dict[str, Any]:
 
 
 class CallAction(Protocol):
-    def __call__(self, action: str, **params: Any) -> Awaitable[Any] | Any: ...
+    def __call__(self, action: str, **params: Any) -> Awaitable[object]: ...
+
+
+type AsyncAction = Callable[..., Awaitable[object]]
+
+
+def _as_async_action(value: object) -> AsyncAction | None:
+    """Return an externally supplied async action only after a callable check."""
+
+    if not callable(value):
+        return None
+    return cast(AsyncAction, value)
 
 
 class OneBotClient:
@@ -33,10 +44,10 @@ class OneBotClient:
     def _resolve_call_action(event: AstrMessageEvent) -> CallAction | None:
         bot = getattr(event, "bot", None) or getattr(event, "_bot", None)
         api = getattr(bot, "api", None)
-        call_action = getattr(api, "call_action", None)
-        if not callable(call_action):
-            call_action = getattr(bot, "call_action", None)
-        if not callable(call_action):
+        call_action = _as_async_action(getattr(api, "call_action", None))
+        if call_action is None:
+            call_action = _as_async_action(getattr(bot, "call_action", None))
+        if call_action is None:
             adapter = getattr(event, "adapter", None) or getattr(
                 event, "_adapter", None
             )
@@ -44,23 +55,29 @@ class OneBotClient:
             if client is None:
                 return None
 
-            get_message = getattr(client, "get_message", None)
-            get_forward_message = getattr(client, "get_forward_message", None)
-            get_image = getattr(client, "get_image", None)
-            get_file = getattr(client, "get_file", None)
-            get_group_file_url = getattr(client, "get_group_file_url", None)
-            get_private_file_url = getattr(client, "get_private_file_url", None)
+            get_message = _as_async_action(getattr(client, "get_message", None))
+            get_forward_message = _as_async_action(
+                getattr(client, "get_forward_message", None)
+            )
+            get_image = _as_async_action(getattr(client, "get_image", None))
+            get_file = _as_async_action(getattr(client, "get_file", None))
+            get_group_file_url = _as_async_action(
+                getattr(client, "get_group_file_url", None)
+            )
+            get_private_file_url = _as_async_action(
+                getattr(client, "get_private_file_url", None)
+            )
             if (
-                not callable(get_message)
-                or not callable(get_forward_message)
-                or not callable(get_image)
-                or not callable(get_file)
-                or not callable(get_group_file_url)
-                or not callable(get_private_file_url)
+                get_message is None
+                or get_forward_message is None
+                or get_image is None
+                or get_file is None
+                or get_group_file_url is None
+                or get_private_file_url is None
             ):
                 return None
 
-            async def _call_action(action: str, **params: Any) -> dict[str, Any]:
+            async def _call_action(action: str, **params: Any) -> object:
                 message_id = params.get("message_id", params.get("id"))
 
                 if action == "get_msg":
@@ -110,7 +127,7 @@ class OneBotClient:
                 raise ValueError(f"action {action} is not supported by NapCat client")
 
             return _call_action
-        return call_action
+        return cast(CallAction, call_action)
 
     @staticmethod
     def _string_or_none(value: object) -> str | None:

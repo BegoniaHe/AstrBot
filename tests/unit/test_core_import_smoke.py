@@ -33,3 +33,99 @@ for module in (
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_core_imports_do_not_load_concrete_model_sdks(tmp_path: Path) -> None:
+    """Core boundaries must not eagerly pull provider SDKs into a process."""
+    root = tmp_path / "runtime-root"
+    environment = {
+        **os.environ,
+        "ASTRBOT_ROOT": str(root),
+    }
+    code = """
+import sys
+import astrbot.core
+import astrbot.core.runtime_services
+
+sdk_modules = ('openai', 'anthropic', 'google.genai')
+for module in sdk_modules:
+    assert module not in sys.modules, module
+assert not any(
+    name.startswith('google.genai.') for name in sys.modules
+), 'google.genai submodule loaded'
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_runtime_services_import_does_not_configure_logging(tmp_path: Path) -> None:
+    """The inert runtime boundary must not install application log handlers."""
+    root = tmp_path / "runtime-root"
+    environment = {
+        **os.environ,
+        "ASTRBOT_ROOT": str(root),
+    }
+    code = """
+import logging
+
+from astrbot.core.log import LogManager
+
+assert LogManager._configured is False
+assert not logging.getLogger("astrbot").handlers
+
+import astrbot.core.runtime_services
+
+assert LogManager._configured is False
+assert not logging.getLogger("astrbot").handlers
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_importing_runtime_services_does_not_configure_logging(tmp_path: Path) -> None:
+    """Runtime service declarations must not install logging handlers at import time."""
+    root = tmp_path / "runtime-root"
+    environment = {
+        **os.environ,
+        "ASTRBOT_ROOT": str(root),
+    }
+    code = """
+import logging
+
+from astrbot.core.log import LogManager
+
+assert LogManager._configured is False
+assert not any(
+    getattr(handler, LogManager._LOGGER_HANDLER_FLAG, False)
+    for handler in logging.getLogger().handlers
+)
+
+import astrbot.core.runtime_services
+
+assert LogManager._configured is False
+assert not any(
+    getattr(handler, LogManager._LOGGER_HANDLER_FLAG, False)
+    for handler in logging.getLogger().handlers
+)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

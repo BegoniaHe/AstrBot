@@ -4,12 +4,14 @@ import datetime
 import hashlib
 import hmac
 import secrets
+import time
 from enum import Enum
 
 import pyotp
 from sqlmodel import col, delete, select
 
 from astrbot.core.db.po import DashboardTrustedDevice
+from astrbot.core.db.protocols import DatabaseSessionStore
 
 TOTP_TRUSTED_DEVICE_COOKIE_NAME = "astrbot_totp_trusted_device"
 TOTP_TRUSTED_DEVICE_MAX_AGE = 30 * 24 * 60 * 60
@@ -19,20 +21,193 @@ RECOVERY_CODE_LENGTH = RECOVERY_CODE_GROUP_COUNT * RECOVERY_CODE_GROUP_LENGTH
 _RECOVERY_CODE_KDF_ITERATIONS = 600_000
 _RECOVERY_CODE_KDF_SALT_BYTES = 16
 _RECOVERY_CODE_KDF_ALGORITHM = "pbkdf2_sha256"
-
-_last_totp_timecode: dict[str, int] = {}
-_totp_replay_lock = asyncio.Lock()
-_totp_pending_secret: str | None = (
-    None  # pending new secret after rotation, before config save
-)
-_totp_rotation_verified: bool = (
-    False  # user passed the current-TOTP verify step during rotation
-)
+_REPLAY_TIMECODE_RETENTION = 2
+_MAX_REPLAY_ENTRIES = 4096
+_ROTATION_STATE_TTL_SECONDS = 10 * 60
 
 
 class TwoFactorCodeType(Enum):
     TOTP = "totp"
     RECOVERY = "recovery"
+
+
+class TotpRuntimeState:
+    """Runtime-owned mutable state for TOTP replay and rotation workflows.
+
+    A dashboard process can have multiple authenticated sessions. Rotation state
+    must therefore be scoped to the authenticated subject that started it,
+    rather than living in a module-global slot shared by every runtime and
+    request.
+    """
+
+    def __init__(self) -> None:
+        self._last_totp_timecodes: dict[str, int] = {}
+        self._replay_lock = asyncio.Lock()
+        self._pending_secrets: dict[str, str] = {}
+        self._rotation_verified_subjects: set[str] = set()
+        self._rotation_expires_at: dict[str, float] = {}
+        self._rotation_lock = asyncio.Lock()
+
+    @staticmethod
+    def _subject_key(subject: str) -> str:
+        if not isinstance(subject, str) or not subject:
+            raise ValueError("TOTP state requires an authenticated subject.")
+        return subject
+
+    @staticmethod
+    def _secret_digest(secret: str) -> str:
+        return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+    def _cleanup_replay_timecodes(self, current_timecode: int) -> None:
+        cutoff = current_timecode - _REPLAY_TIMECODE_RETENTION
+        stale = [
+            digest
+            for digest, accepted_timecode in self._last_totp_timecodes.items()
+            if accepted_timecode < cutoff
+        ]
+        for digest in stale:
+            del self._last_totp_timecodes[digest]
+
+        while len(self._last_totp_timecodes) > _MAX_REPLAY_ENTRIES:
+            oldest_digest = min(
+                self._last_totp_timecodes,
+                key=self._last_totp_timecodes.__getitem__,
+            )
+            del self._last_totp_timecodes[oldest_digest]
+
+    def _cleanup_expired_rotations(self) -> None:
+        now = time.monotonic()
+        expired_subjects = [
+            subject
+            for subject, expires_at in self._rotation_expires_at.items()
+            if expires_at <= now
+        ]
+        for subject in expired_subjects:
+            self._rotation_expires_at.pop(subject, None)
+            self._pending_secrets.pop(subject, None)
+            self._rotation_verified_subjects.discard(subject)
+
+    def _touch_rotation(self, subject: str) -> None:
+        self._rotation_expires_at[subject] = (
+            time.monotonic() + _ROTATION_STATE_TTL_SECONDS
+        )
+
+    async def consume_totp_code(self, secret: str, code: str) -> bool:
+        """Verify and atomically consume a TOTP code for this runtime."""
+        timecode = _get_verified_totp_timecode(secret, code)
+        if timecode is None:
+            return False
+
+        digest = self._secret_digest(secret.strip())
+        async with self._replay_lock:
+            self._cleanup_replay_timecodes(timecode)
+            if self._last_totp_timecodes.get(digest, -1) >= timecode:
+                return False
+            self._last_totp_timecodes[digest] = timecode
+        return True
+
+    async def consume_configured_totp_code(self, config, code: str) -> bool:
+        """Verify and consume a code for the persisted TOTP secret."""
+        if not is_totp_enabled(config):
+            return False
+        secret = _get_totp_config(config).get("secret", "")
+        return await self.consume_totp_code(secret, code)
+
+    async def verify_configured_2fa_code(
+        self,
+        config,
+        code: str,
+        *,
+        subject: str | None = None,
+        include_pending: bool = False,
+        allow_recovery: bool = False,
+    ) -> TwoFactorCodeType | None:
+        """Verify a configured, subject-scoped pending, or recovery code."""
+        if not isinstance(code, str) or not code.strip():
+            return None
+        if await self.consume_configured_totp_code(config, code):
+            return TwoFactorCodeType.TOTP
+        if include_pending:
+            subject = self._subject_key(subject or "")
+            async with self._rotation_lock:
+                self._cleanup_expired_rotations()
+                pending_secret = self._pending_secrets.get(subject)
+            if pending_secret and await self.consume_totp_code(pending_secret, code):
+                return TwoFactorCodeType.TOTP
+        if allow_recovery and verify_recovery_code(config, code):
+            return TwoFactorCodeType.RECOVERY
+        return None
+
+    async def verify_current_rotation_code(
+        self,
+        subject: str,
+        config,
+        code: str,
+    ) -> bool:
+        """Authorize one subject to stage a replacement TOTP secret."""
+        subject = self._subject_key(subject)
+        if not await self.consume_configured_totp_code(config, code):
+            return False
+        async with self._rotation_lock:
+            self._cleanup_expired_rotations()
+            self._rotation_verified_subjects.add(subject)
+            self._pending_secrets.pop(subject, None)
+            self._touch_rotation(subject)
+        return True
+
+    async def has_rotation_verification(self, subject: str) -> bool:
+        """Return whether this subject has verified the current TOTP secret."""
+        subject = self._subject_key(subject)
+        async with self._rotation_lock:
+            self._cleanup_expired_rotations()
+            return subject in self._rotation_verified_subjects
+
+    async def stage_pending_totp_secret(
+        self,
+        subject: str,
+        config,
+        secret: str,
+        code: str,
+    ) -> bool:
+        """Verify and stage a replacement secret for one authenticated subject."""
+        subject = self._subject_key(subject)
+        if is_totp_enabled(config):
+            async with self._rotation_lock:
+                self._cleanup_expired_rotations()
+                if subject not in self._rotation_verified_subjects:
+                    return False
+
+        if not await self.consume_totp_code(secret, code):
+            return False
+
+        async with self._rotation_lock:
+            self._cleanup_expired_rotations()
+            if (
+                is_totp_enabled(config)
+                and subject not in self._rotation_verified_subjects
+            ):
+                return False
+            self._rotation_verified_subjects.discard(subject)
+            self._pending_secrets[subject] = secret
+            self._touch_rotation(subject)
+        return True
+
+    async def clear_subject(self, subject: str) -> None:
+        """Discard pending rotation state for one authenticated subject."""
+        subject = self._subject_key(subject)
+        async with self._rotation_lock:
+            self._pending_secrets.pop(subject, None)
+            self._rotation_verified_subjects.discard(subject)
+            self._rotation_expires_at.pop(subject, None)
+
+    async def clear_all(self) -> None:
+        """Discard pending rotations after the persisted TOTP configuration changes."""
+        async with self._rotation_lock:
+            self._pending_secrets.clear()
+            self._rotation_verified_subjects.clear()
+            self._rotation_expires_at.clear()
+        async with self._replay_lock:
+            self._last_totp_timecodes.clear()
 
 
 def _get_totp_config(config) -> dict:
@@ -68,78 +243,6 @@ def _get_verified_totp_timecode(secret: str, code: str) -> int | None:
     return None
 
 
-async def consume_totp_code(secret: str, code: str) -> bool:
-    global _last_totp_timecode
-    timecode = _get_verified_totp_timecode(secret, code)
-    if timecode is None:
-        return False
-    secret = secret.strip()
-    async with _totp_replay_lock:
-        if _last_totp_timecode.get(secret, -1) >= timecode:
-            return False
-        _last_totp_timecode[secret] = timecode
-    return True
-
-
-async def consume_configured_totp_code(config, code: str) -> bool:
-    if not is_totp_enabled(config):
-        return False
-    secret = _get_totp_config(config).get("secret", "")
-    return await consume_totp_code(secret, code)
-
-
-async def verify_configured_2fa_code(
-    config, code: str, include_pending: bool = False, allow_recovery: bool = False
-) -> TwoFactorCodeType | None:
-    """Return a 2FA code type when a configured code is valid.
-
-    When include_pending is True, also checks the in-memory pending TOTP
-    secret from an active rotation (used by config-save verification).
-    When allow_recovery is False, only TOTP codes are accepted (recovery
-    codes are rejected to prevent privilege escalation on sensitive ops).
-    """
-    if not isinstance(code, str) or not code.strip():
-        return None
-    if await consume_configured_totp_code(config, code):
-        return TwoFactorCodeType.TOTP
-    if include_pending:
-        pending = _totp_pending_secret
-        if pending and await consume_totp_code(pending, code):
-            return TwoFactorCodeType.TOTP
-    if allow_recovery and verify_recovery_code(config, code):
-        return TwoFactorCodeType.RECOVERY
-    return None
-
-
-def set_pending_totp_secret(secret: str | None) -> None:
-    """Set the pending TOTP secret for an in-memory rotation.
-
-    After a successful TOTP rotation, the new secret is stored in memory
-    so that the subsequent config save 2FA check can verify against it.
-    Cleared once the config save completes.
-    """
-    global _totp_pending_secret
-    _totp_pending_secret = secret
-
-
-def set_rotation_verified(value: bool) -> None:
-    """Set or clear the rotation-verified flag."""
-    global _totp_rotation_verified
-    _totp_rotation_verified = value
-
-
-def consume_rotation_verified() -> bool:
-    """Check and consume the rotation-verified flag (single-use).
-
-    Returns True if the user has passed the old-key verification step.
-    """
-    global _totp_rotation_verified
-    if _totp_rotation_verified:
-        _totp_rotation_verified = False
-        return True
-    return False
-
-
 def _hash_totp_trusted_device_token(config, token: str) -> str:
     jwt_secret = config["dashboard"].get("jwt_secret", "")
     if not isinstance(jwt_secret, str) or not jwt_secret:
@@ -158,7 +261,11 @@ def _hash_totp_secret(config) -> str:
     return hashlib.sha256(secret.strip().encode("utf-8")).hexdigest()
 
 
-async def is_totp_trusted_device_valid(config, db, cookie_token: str) -> bool:
+async def is_totp_trusted_device_valid(
+    config,
+    db: DatabaseSessionStore,
+    cookie_token: str,
+) -> bool:
     if not cookie_token:
         return False
     token_hash = _hash_totp_trusted_device_token(config, cookie_token)
@@ -179,7 +286,10 @@ async def is_totp_trusted_device_valid(config, db, cookie_token: str) -> bool:
         return result.scalar_one_or_none() is not None
 
 
-async def issue_totp_trusted_device(config, db) -> str | None:
+async def issue_totp_trusted_device(
+    config,
+    db: DatabaseSessionStore,
+) -> str | None:
     """Issue a trusted device token, save to DB, and return the raw token for cookie."""
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_totp_trusted_device_token(config, raw_token)
@@ -208,7 +318,7 @@ async def issue_totp_trusted_device(config, db) -> str | None:
     return raw_token
 
 
-async def _cleanup_expired_totp_trusted_devices(db) -> None:
+async def _cleanup_expired_totp_trusted_devices(db: DatabaseSessionStore) -> None:
     async with db.get_db() as session:
         async with session.begin():
             await session.execute(
@@ -219,7 +329,7 @@ async def _cleanup_expired_totp_trusted_devices(db) -> None:
             )
 
 
-async def revoke_user_trusted_devices(db) -> None:
+async def revoke_user_trusted_devices(db: DatabaseSessionStore) -> None:
     async with db.get_db() as session:
         async with session.begin():
             await session.execute(delete(DashboardTrustedDevice))

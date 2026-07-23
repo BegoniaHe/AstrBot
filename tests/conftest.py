@@ -393,13 +393,17 @@ async def temp_db(temp_db_file: Path):
 async def mock_context(
     astrbot_config,
     temp_db,
+    tmp_path,
     mock_provider,
     mock_platform,
 ):
-    """创建模拟的插件上下文。"""
+    """Create a mock core execution context."""
     from asyncio import Queue
 
-    from astrbot.core.star.context import Context
+    from astrbot.core.agent.tool_image_cache import ToolImageCache
+    from astrbot.core.computer.computer_client import ComputerRuntime
+    from astrbot.core.execution_context import CoreExecutionContext
+    from astrbot.core.runtime_catalogs import RuntimeCatalogs
 
     event_queue = Queue()
 
@@ -417,19 +421,26 @@ async def mock_context(
     cron_manager = MagicMock()
     subagent_orchestrator = None
 
-    context = Context(
-        event_queue,
-        astrbot_config,
-        temp_db,
-        provider_manager,
-        platform_manager,
-        conversation_manager,
-        message_history_manager,
-        persona_manager,
-        astrbot_config_mgr,
-        knowledge_base_manager,
-        cron_manager,
-        subagent_orchestrator,
+    context = CoreExecutionContext(
+        event_queue=event_queue,
+        config=astrbot_config,
+        db=temp_db,
+        provider_manager=provider_manager,
+        platform_manager=platform_manager,
+        conversation_manager=conversation_manager,
+        message_history_manager=message_history_manager,
+        persona_manager=persona_manager,
+        astrbot_config_mgr=astrbot_config_mgr,
+        knowledge_base_manager=knowledge_base_manager,
+        cron_manager=cron_manager,
+        preferences=MagicMock(),
+        html_renderer=MagicMock(),
+        file_token_service=MagicMock(),
+        catalogs=RuntimeCatalogs(),
+        computer_runtime=ComputerRuntime(),
+        tool_image_cache=ToolImageCache(tmp_path / "tool_images"),
+        subagent_orchestrator=subagent_orchestrator,
+        metrics=MagicMock(upload=AsyncMock()),
     )
 
     return context
@@ -443,7 +454,7 @@ async def mock_context(
 @pytest.fixture
 def provider_request():
     """创建 ProviderRequest 实例。"""
-    from astrbot.core.provider.entities import ProviderRequest
+    from astrbot.core.agent.llm_types import ProviderRequest
 
     return ProviderRequest(
         prompt="Hello",

@@ -5,7 +5,7 @@ from typing import Any
 
 import click
 
-from ..utils import check_astrbot_root, get_astrbot_root
+from ..utils.basic import check_astrbot_root, get_astrbot_root
 
 
 def _validate_log_level(value: str) -> str:

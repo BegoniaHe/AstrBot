@@ -5,8 +5,8 @@ from astrbot import logger
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
+from astrbot.core.execution_context import CoreExecutionContext
 from astrbot.core.knowledge_base.kb_helper import KBHelper
-from astrbot.core.star.context import Context
 from astrbot.core.tools.registry import builtin_tool
 
 _KNOWLEDGE_BASE_TOOL_CONFIG = {
@@ -24,7 +24,7 @@ def check_all_kb(kb_list: list[KBHelper | None]) -> bool:
 async def retrieve_knowledge_base(
     query: str,
     umo: str,
-    context: Context,
+    context: CoreExecutionContext,
 ) -> str | None:
     """Retrieve knowledge base context for the given query."""
     kb_mgr = context.kb_manager

@@ -16,13 +16,16 @@ import time
 import traceback
 from asyncio import Queue
 from collections.abc import Awaitable, Callable
+from contextlib import AsyncExitStack
 
 from astrbot import logger
 from astrbot.core.astrbot_config_mgr import AstrBotConfigManager
 from astrbot.core.config.default import VERSION
 from astrbot.core.conversation_mgr import ConversationManager
+from astrbot.core.core_runtime import CoreRuntime
 from astrbot.core.cron import CronJobManager
-from astrbot.core.db import BaseDatabase
+from astrbot.core.db.sqlite import SQLiteDatabase
+from astrbot.core.execution_context import CoreExecutionContext
 from astrbot.core.knowledge_base.kb_mgr import KnowledgeBaseManager
 from astrbot.core.log import LogBroker, LogManager
 from astrbot.core.memory import MemoryManager
@@ -34,18 +37,15 @@ from astrbot.core.platform_message_history_mgr import PlatformMessageHistoryMana
 from astrbot.core.provider.manager import ProviderManager
 from astrbot.core.runtime_services import RuntimeServices
 from astrbot.core.star.command_management import list_commands, toggle_command
-from astrbot.core.star.context import Context
-from astrbot.core.star.star_handler import EventType, star_handlers_registry, star_map
+from astrbot.core.star.star_handler import EventType
 from astrbot.core.star.star_manager import PluginManager
 from astrbot.core.subagent_orchestrator import SubAgentOrchestrator
 from astrbot.core.umop_config_router import UmopConfigRouter
 from astrbot.core.updator import AstrBotUpdator
-from astrbot.core.utils.error_redaction import safe_error
+from astrbot.core.utils.error_redaction import redact_sensitive_text, safe_error
 from astrbot.core.utils.event_loop_diagnostics import (
     create_event_loop_diagnostic_tasks,
 )
-from astrbot.core.utils.llm_metadata import update_llm_metadata
-from astrbot.core.utils.metrics import Metric
 from astrbot.core.utils.task_utils import cancel_tracked_tasks, create_tracked_task
 from astrbot.core.utils.temp_dir_cleaner import TempDirCleaner
 from astrbot.core.utils.trace import configure_trace
@@ -53,6 +53,7 @@ from astrbot.core.utils.trace import configure_trace
 from .event_bus import EventBus
 
 EVENT_QUEUE_MAXSIZE = 1024
+_PROXY_ENVIRONMENT_KEYS = ("https_proxy", "http_proxy", "no_proxy")
 
 
 class AstrBotCoreLifecycle:
@@ -67,7 +68,7 @@ class AstrBotCoreLifecycle:
         self.log_broker = log_broker  # 初始化日志代理
         self.services = services
         self.astrbot_config = services.config
-        self.db: BaseDatabase = services.db
+        self.db: SQLiteDatabase = services.db
 
         self.subagent_orchestrator: SubAgentOrchestrator | None = None
         self.cron_manager: CronJobManager | None = None
@@ -84,7 +85,7 @@ class AstrBotCoreLifecycle:
             None
         )
         self.kb_manager: KnowledgeBaseManager | None = None
-        self.star_context: Context | None = None
+        self.execution_context: CoreExecutionContext | None = None
         self.plugin_manager: PluginManager | None = None
         self.event_bus: EventBus | None = None
         self.dashboard_shutdown_event: asyncio.Event | None = None
@@ -93,38 +94,143 @@ class AstrBotCoreLifecycle:
         self._default_chat_provider_warning_emitted = False
         self._background_tasks: set[asyncio.Task] = set()
         self._stop_lock = asyncio.Lock()
+        self._cleanup_stack = AsyncExitStack()
+        self._cleanup_stack_closed = False
+        self._runtime: CoreRuntime | None = None
         self._initializing = False
         self._initialized = False
+        self._started = False
         self._stopped = False
-        self._db_initialization_started = False
-        self._html_renderer_initialization_started = False
-        self._memory_initialization_started = False
-        self._plugin_reload_started = False
-        self._provider_initialization_started = False
-        self._kb_initialization_started = False
-        self._platform_initialization_started = False
-        self._event_bus_started = False
-        self._cron_started = False
-        self._temp_dir_cleaner_started = False
 
-        # 设置代理
-        proxy_config = self.astrbot_config.get("http_proxy", "")
-        if proxy_config != "":
-            os.environ["https_proxy"] = proxy_config
-            os.environ["http_proxy"] = proxy_config
-            logger.debug(f"Using proxy: {proxy_config}")
-            # 设置 no_proxy
-            no_proxy_list = self.astrbot_config.get("no_proxy", [])
-            os.environ["no_proxy"] = ",".join(no_proxy_list)
+        # Proxy variables are process-wide, but the lifecycle is their owner in
+        # this process.  Preserve the prior values so that stopping an embedded
+        # runtime does not silently alter its host's network configuration.
+        self._proxy_environment_before = {
+            name: os.environ.get(name) for name in _PROXY_ENVIRONMENT_KEYS
+        }
+        self._proxy_environment_after: dict[str, str | None] = {}
+        self._apply_proxy_environment()
+        self._register_cleanup(
+            "HTTP proxy environment",
+            self._restore_proxy_environment,
+        )
+
+    def _set_proxy_environment_value(self, name: str, value: str | None) -> None:
+        """Set one owned proxy value and remember the state we installed."""
+        if value is None:
+            os.environ.pop(name, None)
         else:
-            # 清空代理环境变量
-            if "https_proxy" in os.environ:
-                del os.environ["https_proxy"]
-            if "http_proxy" in os.environ:
-                del os.environ["http_proxy"]
-            if "no_proxy" in os.environ:
-                del os.environ["no_proxy"]
-            logger.debug("HTTP proxy cleared")
+            os.environ[name] = value
+        self._proxy_environment_after[name] = value
+
+    def _apply_proxy_environment(self) -> None:
+        """Apply the configured proxy values without logging credentials."""
+        proxy_config = self.astrbot_config.get("http_proxy", "")
+        if proxy_config:
+            proxy_value = str(proxy_config)
+            self._set_proxy_environment_value("https_proxy", proxy_value)
+            self._set_proxy_environment_value("http_proxy", proxy_value)
+
+            no_proxy_config = self.astrbot_config.get("no_proxy", [])
+            if isinstance(no_proxy_config, str):
+                no_proxy_value = no_proxy_config
+            elif isinstance(no_proxy_config, list | tuple):
+                no_proxy_value = ",".join(str(item) for item in no_proxy_config)
+            else:
+                no_proxy_value = ""
+            self._set_proxy_environment_value("no_proxy", no_proxy_value)
+            logger.debug("Using proxy: %s", redact_sensitive_text(proxy_value))
+            return
+
+        for name in _PROXY_ENVIRONMENT_KEYS:
+            self._set_proxy_environment_value(name, None)
+        logger.debug("HTTP proxy cleared")
+
+    async def _restore_proxy_environment(self) -> None:
+        """Restore proxy variables only when they still hold our values."""
+        for name in _PROXY_ENVIRONMENT_KEYS:
+            if os.environ.get(name) != self._proxy_environment_after.get(name):
+                continue
+            previous_value = self._proxy_environment_before[name]
+            if previous_value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = previous_value
+
+    @property
+    def runtime(self) -> CoreRuntime:
+        """Return the completed runtime after successful initialization.
+
+        Raises:
+            RuntimeError: If initialization has not completed successfully.
+        """
+
+        if self._runtime is None:
+            raise RuntimeError("AstrBot core runtime is not initialized")
+        return self._runtime
+
+    def _register_cleanup(
+        self,
+        label: str,
+        action: Callable[[], Awaitable[None]],
+    ) -> None:
+        """Add an idempotent best-effort resource cleanup to the LIFO stack."""
+
+        async def cleanup() -> None:
+            try:
+                await action()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Failed to clean up %s: %s",
+                    label,
+                    safe_error("", exc),
+                )
+
+        self._cleanup_stack.push_async_callback(cleanup)
+
+    async def _terminate_plugins(self) -> None:
+        """Terminate every plugin that was published before shutdown began."""
+
+        plugin_manager = self.plugin_manager
+        if plugin_manager is None:
+            return
+        try:
+            await plugin_manager.lifecycle.stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Failed to stop plugin lifecycle tasks during shutdown: %s",
+                safe_error("", exc),
+            )
+        try:
+            plugins = list(plugin_manager.catalog.plugins.all())
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Failed to enumerate plugins during shutdown: %s",
+                safe_error("", exc),
+            )
+            return
+
+        for plugin in plugins:
+            try:
+                await plugin_manager.extensions.deactivate(
+                    plugin,
+                    reason="shutdown",
+                )
+                await plugin_manager.lifecycle.terminate_plugin(plugin)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Plugin %s failed to terminate: %s",
+                    plugin.name,
+                    safe_error("", exc),
+                )
 
     async def _init_or_reload_subagent_orchestrator(self) -> None:
         """Create (if needed) and reload the subagent orchestrator from config.
@@ -132,13 +238,22 @@ class AstrBotCoreLifecycle:
         This keeps lifecycle wiring in one place while allowing the orchestrator
         to manage enable/disable and tool registration details.
         """
+        provider_manager = self.provider_manager
+        persona_mgr = self.persona_mgr
+        if provider_manager is None or persona_mgr is None:
+            raise RuntimeError(
+                "Subagent orchestrator requires initialized provider and persona managers"
+            )
+
         try:
-            if self.subagent_orchestrator is None:
-                self.subagent_orchestrator = SubAgentOrchestrator(
-                    self.provider_manager.llm_tools,
-                    self.persona_mgr,
+            orchestrator = self.subagent_orchestrator
+            if orchestrator is None:
+                orchestrator = SubAgentOrchestrator(
+                    provider_manager.tool_manager,
+                    persona_mgr,
                 )
-            await self.subagent_orchestrator.reload_from_config(
+                self.subagent_orchestrator = orchestrator
+            await orchestrator.reload_from_config(
                 self.astrbot_config.get("subagent_orchestrator", {}),
             )
         except Exception as e:
@@ -193,6 +308,10 @@ class AstrBotCoreLifecycle:
 
         负责初始化各个组件, 包括 ProviderManager、PlatformManager、ConversationManager、PluginManager、PipelineScheduler、EventBus、AstrBotUpdator等。
         """
+        if self._stopped:
+            raise RuntimeError(
+                "AstrBot core lifecycle has already been stopped and cannot be reused"
+            )
         if self._initialized:
             return
         if self._initializing:
@@ -223,12 +342,19 @@ class AstrBotCoreLifecycle:
             LogManager.configure_logger(logger, self.astrbot_config)
             LogManager.configure_trace_logger(self.astrbot_config)
 
-        self._db_initialization_started = True
+        self._register_cleanup("database", self.db.close)
+        self._register_cleanup("metrics", self.services.metrics.shutdown)
+        self._register_cleanup(
+            "shared preferences",
+            self.services.preferences.terminate,
+        )
         await self.db.initialize()
-        Metric.configure(self.astrbot_config, self.db)
         configure_trace(self.astrbot_config)
 
-        self._html_renderer_initialization_started = True
+        self._register_cleanup(
+            "HTML renderer",
+            self.services.html_renderer.terminate,
+        )
         await self.services.html_renderer.initialize()
 
         # 初始化 UMOP 配置路由器
@@ -236,14 +362,15 @@ class AstrBotCoreLifecycle:
         await self.umop_config_router.initialize()
 
         # 初始化 AstrBot 配置管理器
-        self.astrbot_config_mgr = AstrBotConfigManager(
+        config_manager = AstrBotConfigManager(
             default_config=self.astrbot_config,
             ucr=self.umop_config_router,
             sp=self.services.preferences,
         )
-        await self.astrbot_config_mgr.initialize()
+        self.astrbot_config_mgr = config_manager
+        await config_manager.initialize()
         self.temp_dir_cleaner = TempDirCleaner(
-            max_size_getter=lambda: self.astrbot_config_mgr.default_conf.get(
+            max_size_getter=lambda: config_manager.default_conf.get(
                 TempDirCleaner.CONFIG_KEY,
                 TempDirCleaner.DEFAULT_MAX_SIZE,
             ),
@@ -264,19 +391,28 @@ class AstrBotCoreLifecycle:
         await self.persona_runtime_manager.initialize()
 
         self.memory_manager = MemoryManager(self.db)
-        self._memory_initialization_started = True
+        self._register_cleanup("memory manager", self.memory_manager.terminate)
         await self.memory_manager.initialize()
 
         # 初始化供应商管理器
         self.provider_manager = ProviderManager(
             self.astrbot_config_mgr,
-            self.db,
             self.persona_mgr,
             self.services.preferences,
+            self.services.catalogs.providers,
+            self.services.catalogs.tools,
         )
 
         # 初始化平台管理器
-        self.platform_manager = PlatformManager(self.astrbot_config, self.event_queue)
+        self.platform_manager = PlatformManager(
+            self.astrbot_config,
+            self.event_queue,
+            self.services.webchat_queue_manager,
+            self.services.catalogs.platforms,
+            self.services.catalogs.handlers,
+            self.services.catalogs.plugins,
+            self.services.metrics,
+        )
         self.platform_manager.database = self.db
         self.platform_manager.preferences = self.services.preferences
 
@@ -298,8 +434,8 @@ class AstrBotCoreLifecycle:
         # Dynamic subagents (handoff tools) from config.
         await self._init_or_reload_subagent_orchestrator()
 
-        # 初始化提供给插件的上下文
-        self.star_context = Context(
+        # Initialize runtime-owned execution dependencies.
+        execution_context = CoreExecutionContext(
             self.event_queue,
             self.astrbot_config,
             self.db,
@@ -314,32 +450,52 @@ class AstrBotCoreLifecycle:
             self.services.preferences,
             self.services.html_renderer,
             self.services.file_token_service,
+            self.services.catalogs,
+            self.services.computer_runtime,
+            self.services.tool_image_cache,
             self.subagent_orchestrator,
             demo_mode=self.services.demo_mode,
+            follow_up_coordinator=self.services.follow_up_coordinator,
+            llm_metadata_catalog=self.services.llm_metadata_catalog,
+            metrics=self.services.metrics,
         )
-        self.star_context.persona_runtime_manager = self.persona_runtime_manager
-        self.star_context.memory_manager = self.memory_manager
+        self.execution_context = execution_context
+        execution_context.persona_runtime_manager = self.persona_runtime_manager
+        execution_context.memory_manager = self.memory_manager
+        self._register_cleanup(
+            "follow-up coordinator",
+            self.services.follow_up_coordinator.terminate,
+        )
+        self._register_cleanup(
+            "execution context background tasks",
+            lambda: cancel_tracked_tasks(execution_context.background_tasks),
+        )
+        self._register_cleanup(
+            "session waiter registry",
+            execution_context.session_waiter_registry.terminate,
+        )
 
         # 初始化插件管理器
         self.plugin_manager = PluginManager(
-            self.star_context,
+            execution_context,
             self.astrbot_config,
             self.services.preferences,
             self.services.pip_installer,
+            self.services.catalogs,
         )
 
         # 扫描、注册插件、实例化插件类
-        self._plugin_reload_started = True
-        await self.plugin_manager.reload()
+        self._register_cleanup("plugin manager", self._terminate_plugins)
+        await self.plugin_manager.lifecycle.reload()
         await self._migrate_legacy_builtin_command_switch()
 
         # 根据配置实例化各个 Provider
         self._default_chat_provider_warning_emitted = False
-        self._provider_initialization_started = True
+        self._register_cleanup("provider manager", self.provider_manager.terminate)
         await self.provider_manager.initialize()
         self._warn_about_unset_default_chat_provider()
 
-        self._kb_initialization_started = True
+        self._register_cleanup("knowledge base manager", self.kb_manager.terminate)
         await self.kb_manager.initialize()
 
         # 初始化消息事件流水线调度器
@@ -362,7 +518,15 @@ class AstrBotCoreLifecycle:
         self.curr_tasks: list[asyncio.Task] = []
 
         # 根据配置实例化各个平台适配器
-        self._platform_initialization_started = True
+        self._register_cleanup(
+            "WebChat run coordinator",
+            self.services.webchat_run_coordinator.terminate,
+        )
+        self._register_cleanup(
+            "computer runtime",
+            self.services.computer_runtime.terminate,
+        )
+        self._register_cleanup("platform manager", self.platform_manager.terminate)
         await self.platform_manager.initialize()
 
         # 初始化关闭控制面板的事件
@@ -370,19 +534,81 @@ class AstrBotCoreLifecycle:
 
         create_tracked_task(
             self._background_tasks,
-            update_llm_metadata(),
+            self.services.llm_metadata_catalog.refresh(),
             name="update_llm_metadata",
+        )
+
+        assert self.astrbot_config_mgr is not None
+        assert self.provider_manager is not None
+        assert self.platform_manager is not None
+        assert self.conversation_manager is not None
+        assert self.platform_message_history_manager is not None
+        assert self.persona_mgr is not None
+        assert self.persona_runtime_manager is not None
+        assert self.memory_manager is not None
+        assert self.kb_manager is not None
+        assert self.cron_manager is not None
+        assert self.plugin_manager is not None
+        assert self.execution_context is not None
+        assert self.umop_config_router is not None
+        assert self.subagent_orchestrator is not None
+        assert self.event_bus is not None
+        assert self.dashboard_shutdown_event is not None
+        self._runtime = CoreRuntime(
+            services=self.services,
+            log_broker=self.log_broker,
+            catalogs=self.services.catalogs,
+            webchat_run_coordinator=self.services.webchat_run_coordinator,
+            astrbot_config=self.astrbot_config,
+            astrbot_config_mgr=self.astrbot_config_mgr,
+            provider_manager=self.provider_manager,
+            platform_manager=self.platform_manager,
+            conversation_manager=self.conversation_manager,
+            platform_message_history_manager=self.platform_message_history_manager,
+            persona_mgr=self.persona_mgr,
+            persona_runtime_manager=self.persona_runtime_manager,
+            memory_manager=self.memory_manager,
+            knowledge_base_manager=self.kb_manager,
+            cron_manager=self.cron_manager,
+            plugin_manager=self.plugin_manager,
+            execution_context=self.execution_context,
+            umop_config_router=self.umop_config_router,
+            subagent_orchestrator=self.subagent_orchestrator,
+            pipeline_schedulers=self.pipeline_scheduler_mapping,
+            event_queue=self.event_queue,
+            event_bus=self.event_bus,
+            dashboard_shutdown_event=self.dashboard_shutdown_event,
+            start_time=self.start_time,
+            updater=self.astrbot_updator,
         )
 
     async def _migrate_legacy_builtin_command_switch(self) -> None:
         """Migrate the removed global builtin-command flag into command records."""
-        if not any(
-            config.get("disable_builtin_commands") is True
-            for config in self.astrbot_config_mgr.confs.values()
-        ):
+        config_manager = self.astrbot_config_mgr
+        if config_manager is None:
+            raise RuntimeError("Configuration manager is not initialized")
+        configs_to_migrate = [
+            config
+            for config in config_manager.confs.values()
+            if config.get("disable_builtin_commands") is True
+        ]
+        if not configs_to_migrate:
             return
 
-        commands = await list_commands(self.db)
+        # Persist removal of the legacy switch before mutating the command
+        # database. A superseded configuration must not disable commands from
+        # a stale startup snapshot.
+        for config in configs_to_migrate:
+            next_config = dict(config)
+            next_config.pop("disable_builtin_commands", None)
+            committed = await config.save_config_async(next_config)
+            if not committed:
+                raise RuntimeError(
+                    "Builtin command migration was superseded by a newer "
+                    "configuration update."
+                )
+
+        commands = await list_commands(self.db, self.services.catalogs.handlers)
         pending = list(commands)
         while pending:
             command = pending.pop()
@@ -392,41 +618,47 @@ class AstrBotCoreLifecycle:
             ) == "astrbot.builtin_stars.builtin_commands.main" and isinstance(
                 command.get("handler_full_name"), str
             ):
-                await toggle_command(self.db, command["handler_full_name"], False)
+                await toggle_command(
+                    self.db,
+                    self.services.catalogs.handlers,
+                    command["handler_full_name"],
+                    False,
+                )
 
-        for config in self.astrbot_config_mgr.confs.values():
-            if config.pop("disable_builtin_commands", None) is not None:
-                config.save_config()
         logger.info("Migrated disable_builtin_commands to per-command settings.")
 
     def _load(self) -> None:
         """加载事件总线和任务并初始化."""
+        event_bus = self.event_bus
+        execution_context = self.execution_context
+        if event_bus is None or execution_context is None:
+            raise RuntimeError("AstrBot core lifecycle is not initialized")
+
         # 创建一个异步任务来执行事件总线的 dispatch() 方法
         # dispatch是一个无限循环的协程, 从事件队列中获取事件并处理
         event_bus_task = asyncio.create_task(
-            self.event_bus.dispatch(),
+            event_bus.dispatch(),
             name="event_bus",
         )
-        self._event_bus_started = True
+        cron_manager = self.cron_manager
         cron_task = None
-        if self.cron_manager:
+        if cron_manager is not None:
             cron_task = asyncio.create_task(
-                self.cron_manager.start(self.star_context),
+                cron_manager.start(execution_context),
                 name="cron_manager",
             )
-            self._cron_started = True
+        temp_dir_cleaner = self.temp_dir_cleaner
         temp_dir_cleaner_task = None
-        if self.temp_dir_cleaner:
+        if temp_dir_cleaner is not None:
             temp_dir_cleaner_task = asyncio.create_task(
-                self.temp_dir_cleaner.run(),
+                temp_dir_cleaner.run(),
                 name="temp_dir_cleaner",
             )
-            self._temp_dir_cleaner_started = True
         diagnostic_tasks = create_event_loop_diagnostic_tasks()
 
         # 把插件中注册的所有协程函数注册到事件总线中并执行
         extra_tasks = []
-        for task in self.star_context._register_tasks:
+        for task in execution_context._register_tasks:
             extra_tasks.append(asyncio.create_task(task, name=task.__name__))  # type: ignore
 
         tasks_ = [
@@ -443,7 +675,14 @@ class AstrBotCoreLifecycle:
                 asyncio.create_task(self._task_wrapper(task), name=task.get_name()),
             )
 
-        self.start_time = int(time.time())
+        if cron_manager is not None:
+            self._register_cleanup("cron manager", cron_manager.shutdown)
+        self._register_cleanup("event bus", event_bus.shutdown)
+        if temp_dir_cleaner is not None:
+            self._register_cleanup(
+                "temporary directory cleaner",
+                temp_dir_cleaner.stop,
+            )
 
     async def _task_wrapper(self, task: asyncio.Task) -> None:
         """异步任务包装器, 用于处理异步任务执行中出现的各种异常.
@@ -455,7 +694,7 @@ class AstrBotCoreLifecycle:
         try:
             await task
         except asyncio.CancelledError:
-            pass  # 任务被取消, 静默处理
+            raise
         except Exception as e:
             # 获取完整的异常堆栈信息, 按行分割并记录到日志中
             logger.error(f"------- 任务 {task.get_name()} 发生错误: {e}")
@@ -468,17 +707,31 @@ class AstrBotCoreLifecycle:
 
         用load加载事件总线和任务并初始化, 执行启动完成事件钩子
         """
+        if self._stopped:
+            raise RuntimeError("AstrBot core lifecycle has already been stopped")
+        if not self._initialized:
+            raise RuntimeError(
+                "AstrBot core lifecycle must be initialized before it can start"
+            )
+        if self._started:
+            raise RuntimeError("AstrBot core lifecycle has already been started")
+        self._started = True
         self._load()
         logger.info("AstrBot started.")
 
         # 执行启动完成事件钩子
-        handlers = star_handlers_registry.get_handlers_by_event_type(
+        handlers = self.services.catalogs.handlers.get_handlers_by_event_type(
             EventType.OnAstrBotLoadedEvent,
         )
         for handler in handlers:
             try:
+                plugin = self.services.catalogs.plugins.get_by_module(
+                    handler.handler_module_path
+                )
                 logger.info(
-                    f"hook(on_astrbot_loaded) -> {star_map[handler.handler_module_path].name} - {handler.handler_name}",
+                    "hook(on_astrbot_loaded) -> %s - %s",
+                    plugin.name if plugin else handler.handler_module_path,
+                    handler.handler_name,
                 )
                 await handler.handler()
             except asyncio.CancelledError:
@@ -498,148 +751,45 @@ class AstrBotCoreLifecycle:
             if self._stopped:
                 return
 
-            async def cleanup_once(
-                flag_name: str,
-                label: str,
-                action: Callable[[], Awaitable[None]],
-            ) -> None:
-                if not getattr(self, flag_name):
-                    return
-                setattr(self, flag_name, False)
-                try:
-                    await action()
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to clean up %s: %s",
-                        label,
-                        safe_error("", exc),
-                    )
-
             tasks = self.curr_tasks
             self.curr_tasks = []
             for task in tasks:
                 task.cancel()
 
-            await cleanup_once(
-                "_temp_dir_cleaner_started",
-                "temporary directory cleaner",
-                lambda: self.temp_dir_cleaner.stop(),  # type: ignore[union-attr]
-            )
-            await cleanup_once(
-                "_event_bus_started",
-                "event bus",
-                lambda: self.event_bus.shutdown(),  # type: ignore[union-attr]
-            )
-            await cleanup_once(
-                "_cron_started",
-                "cron manager",
-                lambda: self.cron_manager.shutdown(),  # type: ignore[union-attr]
-            )
-
-            for task in tasks:
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-                except Exception as exc:
-                    logger.error(
-                        "Task %s failed during shutdown: %s",
-                        task.get_name(),
-                        safe_error("", exc),
-                    )
-
-            try:
-                await cancel_tracked_tasks(self._background_tasks)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to cancel lifecycle background tasks: %s",
-                    safe_error("", exc),
-                )
-
-            await cleanup_once(
-                "_platform_initialization_started",
-                "platform manager",
-                lambda: self.platform_manager.terminate(),  # type: ignore[union-attr]
-            )
-            await cleanup_once(
-                "_kb_initialization_started",
-                "knowledge base manager",
-                lambda: self.kb_manager.terminate(),  # type: ignore[union-attr]
-            )
-            await cleanup_once(
-                "_provider_initialization_started",
-                "provider manager",
-                lambda: self.provider_manager.terminate(),  # type: ignore[union-attr]
-            )
-
-            if self._plugin_reload_started:
-                self._plugin_reload_started = False
-                plugin_manager = self.plugin_manager
-                if plugin_manager is not None:
-                    try:
-                        plugins = list(plugin_manager.context.get_all_stars())
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to enumerate plugins during shutdown: %s",
-                            safe_error("", exc),
-                        )
-                        plugins = []
-                    for plugin in plugins:
-                        try:
-                            await plugin_manager.deactivate_plugin_extension(
-                                plugin,
-                                reason="shutdown",
-                            )
-                            await plugin_manager._terminate_plugin(plugin)
-                        except Exception as exc:
-                            logger.warning(
-                                "Plugin %s failed to terminate: %s",
-                                plugin.name,
-                                safe_error("", exc),
-                            )
-
-            await cleanup_once(
-                "_memory_initialization_started",
-                "memory manager",
-                lambda: self.memory_manager.terminate(),  # type: ignore[union-attr]
-            )
-            await cleanup_once(
-                "_html_renderer_initialization_started",
-                "HTML renderer",
-                self.services.html_renderer.terminate,
-            )
-            try:
-                await self.services.preferences.terminate()
-            except Exception as exc:
-                logger.warning(
-                    "Failed to terminate shared preferences: %s",
-                    safe_error("", exc),
-                )
-            try:
-                await Metric.shutdown()
-            except Exception as exc:
-                logger.warning(
-                    "Failed to stop metrics: %s",
-                    safe_error("", exc),
-                )
-            await cleanup_once(
-                "_db_initialization_started",
-                "database",
-                self.db.close,
-            )
-
             if self.dashboard_shutdown_event is not None:
                 self.dashboard_shutdown_event.set()
+
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            await cancel_tracked_tasks(self._background_tasks)
+
+            if not self._cleanup_stack_closed:
+                self._cleanup_stack_closed = True
+                await self._cleanup_stack.aclose()
+
             self._initialized = False
             self._stopped = True
 
     async def restart(self) -> None:
         """重启 AstrBot 核心生命周期管理类, 终止各个管理器并重新加载平台实例"""
-        await self.provider_manager.terminate()
-        await self.platform_manager.terminate()
-        await self.kb_manager.terminate()
+        provider_manager = self.provider_manager
+        platform_manager = self.platform_manager
+        knowledge_base_manager = self.kb_manager
+        dashboard_shutdown_event = self.dashboard_shutdown_event
+        if (
+            provider_manager is None
+            or platform_manager is None
+            or knowledge_base_manager is None
+            or dashboard_shutdown_event is None
+        ):
+            raise RuntimeError("AstrBot core lifecycle is not initialized")
+
+        await provider_manager.terminate()
+        await platform_manager.terminate()
+        await knowledge_base_manager.terminate()
         await self.services.html_renderer.terminate()
-        self.dashboard_shutdown_event.set()
+        dashboard_shutdown_event.set()
         threading.Thread(
             target=self.astrbot_updator._reboot,
             name="restart",
@@ -653,12 +803,25 @@ class AstrBotCoreLifecycle:
             dict[str, PipelineScheduler]: 平台 ID 到流水线调度器的映射
 
         """
+        config_manager = self.astrbot_config_mgr
+        plugin_manager = self.plugin_manager
+        execution_context = self.execution_context
+        if (
+            config_manager is None
+            or plugin_manager is None
+            or execution_context is None
+        ):
+            raise RuntimeError("Pipeline dependencies are not initialized")
+
         mapping = {}
-        for conf_id, ab_config in self.astrbot_config_mgr.confs.items():
+        for conf_id, ab_config in config_manager.confs.items():
             scheduler = PipelineScheduler(
                 PipelineContext(
                     ab_config,
-                    self.plugin_manager,
+                    plugin_manager.catalog,
+                    execution_context,
+                    self.services.catalogs.handlers,
+                    self.services.catalogs.plugins,
                     conf_id,
                     self.services.html_renderer,
                     self.services.file_token_service,
@@ -676,13 +839,25 @@ class AstrBotCoreLifecycle:
             dict[str, PipelineScheduler]: 平台 ID 到流水线调度器的映射
 
         """
-        ab_config = self.astrbot_config_mgr.confs.get(conf_id)
+        config_manager = self.astrbot_config_mgr
+        if config_manager is None:
+            raise RuntimeError("Configuration manager is not initialized")
+        ab_config = config_manager.confs.get(conf_id)
         if not ab_config:
             raise ValueError(f"配置文件 {conf_id} 不存在")
+
+        plugin_manager = self.plugin_manager
+        execution_context = self.execution_context
+        if plugin_manager is None or execution_context is None:
+            raise RuntimeError("Pipeline dependencies are not initialized")
+
         scheduler = PipelineScheduler(
             PipelineContext(
                 ab_config,
-                self.plugin_manager,
+                plugin_manager.catalog,
+                execution_context,
+                self.services.catalogs.handlers,
+                self.services.catalogs.plugins,
                 conf_id,
                 self.services.html_renderer,
                 self.services.file_token_service,
@@ -691,3 +866,7 @@ class AstrBotCoreLifecycle:
         )
         await scheduler.initialize()
         self.pipeline_scheduler_mapping[conf_id] = scheduler
+
+    async def remove_pipeline_scheduler(self, conf_id: str) -> None:
+        """Remove the scheduler associated with a deleted configuration profile."""
+        self.pipeline_scheduler_mapping.pop(conf_id, None)

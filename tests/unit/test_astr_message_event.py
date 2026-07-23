@@ -1,10 +1,11 @@
 """Tests for AstrMessageEvent class."""
 
+import asyncio
 import re
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
 from astrbot.core.message.components import (
     At,
@@ -20,15 +21,6 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.platform.platform_metadata import PlatformMetadata
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 class ConcreteAstrMessageEvent(AstrMessageEvent):
@@ -696,13 +688,16 @@ class TestSendStreaming:
         async def generator():
             yield MessageEventResult().message("Test")
 
-        with patch(
-            "astrbot.core.platform.astr_message_event.Metric.upload",
-            new_callable=AsyncMock,
-        ):
-            await astr_message_event.send_streaming(generator())
+        metrics = SimpleNamespace(upload=AsyncMock())
+        astr_message_event.bind_metrics(metrics)
+        await astr_message_event.send_streaming(generator())
+        await asyncio.sleep(0)
 
         assert astr_message_event._has_send_oper is True
+        metrics.upload.assert_awaited_once_with(
+            msg_event_tick=1,
+            adapter_name="test_platform",
+        )
 
     @pytest.mark.asyncio
     async def test_buffered_streaming_response_preserves_component_order(

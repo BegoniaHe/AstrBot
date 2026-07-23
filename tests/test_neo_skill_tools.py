@@ -42,14 +42,13 @@ def test_promote_stable_sync_failure_auto_rolls_back(monkeypatch):
     async def _fake_get_booter(_ctx, _session_id):
         return _FakeBooter()
 
+    async def _fake_sync_active_sandboxes() -> None:
+        return None
+
     async def _fake_sync_release(self, client, **kwargs):
         _ = self, client, kwargs
         raise ValueError("sync failed")
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.computer_tools.shipyard_neo.neo_skills.get_booter",
-        _fake_get_booter,
-    )
     monkeypatch.setattr(
         "astrbot.core.tools.computer_tools.shipyard_neo.neo_skills.NeoSkillSyncManager.sync_release",
         _fake_sync_release,
@@ -67,6 +66,11 @@ def test_promote_stable_sync_failure_auto_rolls_back(monkeypatch):
                     "computer_use_require_admin": True,
                 }
             }
+            ,
+            computer_runtime=SimpleNamespace(
+                get_booter=_fake_get_booter,
+                sync_skills_to_active_sandboxes=_fake_sync_active_sandboxes,
+            ),
         ),
         event=event,
     )

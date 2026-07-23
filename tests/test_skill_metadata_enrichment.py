@@ -571,9 +571,6 @@ def test_list_workspace_skills_rejects_symlinked_root_outside_workspace(
 
 
 def test_list_skills_includes_plugin_provided_skills(monkeypatch, tmp_path: Path):
-    import astrbot.core.star.star as star_module
-    from astrbot.core.star.star import StarMetadata
-
     data_dir = tmp_path / "data"
     skills_root = tmp_path / "skills"
     plugins_root = tmp_path / "plugins"
@@ -584,18 +581,6 @@ def test_list_skills_includes_plugin_provided_skills(monkeypatch, tmp_path: Path
         "astrbot.core.skills.skill_manager.get_astrbot_data_path",
         lambda: str(data_dir),
     )
-    monkeypatch.setattr(
-        star_module,
-        "star_registry",
-        [
-            StarMetadata(
-                name="demo",
-                root_dir_name="astrbot_plugin_demo",
-                activated=True,
-            )
-        ],
-    )
-
     plugin_skill_dir = plugins_root / "astrbot_plugin_demo" / "skills" / "demo-skill"
     plugin_skill_dir.mkdir(parents=True)
     plugin_skill_dir.joinpath("SKILL.md").write_text(

@@ -9,6 +9,7 @@ from unittest import mock
 
 import pytest
 
+from astrbot.application import prepare_runtime_environment, resolve_dashboard_assets
 from astrbot.core.utils.io import (
     get_dashboard_version,
     should_use_bundled_dashboard_dist,
@@ -16,8 +17,6 @@ from astrbot.core.utils.io import (
 from main import (
     DASHBOARD_RESET_PASSWORD_ENV,
     _apply_startup_env_flags,
-    check_dashboard_files,
-    check_env,
 )
 
 
@@ -52,13 +51,13 @@ class _version_info:
         return (self.major, self.minor) < (other.major, other.minor)
 
 
-def test_check_env(monkeypatch):
+def test_prepare_runtime_environment(monkeypatch):
     version_info_correct = _version_info(3, 14)
     version_info_wrong = _version_info(3, 13)
     monkeypatch.setattr(sys, "version_info", version_info_correct)
     with mock.patch("os.makedirs") as mock_makedirs:
-        check_env()
-        # check_env uses get_astrbot_*_path() which returns absolute paths,
+        prepare_runtime_environment()
+        # prepare_runtime_environment uses get_astrbot_*_path() which returns absolute paths,
         # so just verify makedirs was called the expected number of times
         assert mock_makedirs.call_count >= 4
         # Verify all calls used exist_ok=True
@@ -67,7 +66,7 @@ def test_check_env(monkeypatch):
 
     monkeypatch.setattr(sys, "version_info", version_info_wrong)
     with pytest.raises(SystemExit):
-        check_env()
+        prepare_runtime_environment()
 
 
 def test_apply_startup_env_flags_sets_reset_password_env(monkeypatch):
@@ -94,50 +93,50 @@ def test_apply_startup_env_flags_does_not_reset_for_help(monkeypatch):
     assert DASHBOARD_RESET_PASSWORD_ENV not in os.environ
 
 
-def test_check_env_appends_user_site_packages_after_runtime_paths(monkeypatch):
+def test_prepare_runtime_environment_appends_user_site_packages_after_runtime_paths(monkeypatch):
     astrbot_root = "/tmp/astrbot-root"
     site_packages_path = "/tmp/astrbot-site-packages"
     original_sys_path = list(sys.path)
 
     monkeypatch.setattr(sys, "version_info", _version_info(3, 14))
-    monkeypatch.setattr("main.get_astrbot_root", lambda: astrbot_root)
+    monkeypatch.setattr("astrbot.application.get_astrbot_root", lambda: astrbot_root)
     monkeypatch.setattr(
-        "main.get_astrbot_site_packages_path", lambda: site_packages_path
+        "astrbot.application.get_astrbot_site_packages_path", lambda: site_packages_path
     )
-    monkeypatch.setattr("main.get_astrbot_config_path", lambda: "/tmp/config")
-    monkeypatch.setattr("main.get_astrbot_plugin_path", lambda: "/tmp/plugins")
-    monkeypatch.setattr("main.get_astrbot_temp_path", lambda: "/tmp/temp")
-    monkeypatch.setattr("main.get_astrbot_knowledge_base_path", lambda: "/tmp/kb")
+    monkeypatch.setattr("astrbot.application.get_astrbot_config_path", lambda: "/tmp/config")
+    monkeypatch.setattr("astrbot.application.get_astrbot_plugin_path", lambda: "/tmp/plugins")
+    monkeypatch.setattr("astrbot.application.get_astrbot_temp_path", lambda: "/tmp/temp")
+    monkeypatch.setattr("astrbot.application.get_astrbot_knowledge_base_path", lambda: "/tmp/kb")
     monkeypatch.setattr(sys, "path", ["/runtime/lib", *original_sys_path])
 
     with mock.patch("os.makedirs"):
-        check_env()
+        prepare_runtime_environment()
 
     assert sys.path[0] == astrbot_root
     assert sys.path[-1] == site_packages_path
     assert sys.path.index(site_packages_path) > sys.path.index("/runtime/lib")
 
 
-def test_check_env_does_not_append_duplicate_user_site_packages(monkeypatch):
+def test_prepare_runtime_environment_does_not_append_duplicate_user_site_packages(monkeypatch):
     astrbot_root = "/tmp/astrbot-root"
     site_packages_path = "/tmp/astrbot-site-packages"
     original_sys_path = list(sys.path)
 
     monkeypatch.setattr(sys, "version_info", _version_info(3, 14))
-    monkeypatch.setattr("main.get_astrbot_root", lambda: astrbot_root)
+    monkeypatch.setattr("astrbot.application.get_astrbot_root", lambda: astrbot_root)
     monkeypatch.setattr(
-        "main.get_astrbot_site_packages_path", lambda: site_packages_path
+        "astrbot.application.get_astrbot_site_packages_path", lambda: site_packages_path
     )
-    monkeypatch.setattr("main.get_astrbot_config_path", lambda: "/tmp/config")
-    monkeypatch.setattr("main.get_astrbot_plugin_path", lambda: "/tmp/plugins")
-    monkeypatch.setattr("main.get_astrbot_temp_path", lambda: "/tmp/temp")
-    monkeypatch.setattr("main.get_astrbot_knowledge_base_path", lambda: "/tmp/kb")
+    monkeypatch.setattr("astrbot.application.get_astrbot_config_path", lambda: "/tmp/config")
+    monkeypatch.setattr("astrbot.application.get_astrbot_plugin_path", lambda: "/tmp/plugins")
+    monkeypatch.setattr("astrbot.application.get_astrbot_temp_path", lambda: "/tmp/temp")
+    monkeypatch.setattr("astrbot.application.get_astrbot_knowledge_base_path", lambda: "/tmp/kb")
     monkeypatch.setattr(
         sys, "path", [astrbot_root, *original_sys_path, site_packages_path]
     )
 
     with mock.patch("os.makedirs"):
-        check_env()
+        prepare_runtime_environment()
 
     assert sys.path.count(site_packages_path) == 1
 
@@ -176,29 +175,29 @@ def test_version_info_comparisons():
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_not_exists(tmp_path):
+async def test_resolve_dashboard_assets_not_exists(tmp_path):
     """Tests startup disables WebUI when no local build exists."""
     data_dir = tmp_path / "data"
     bundled_dist = tmp_path / "bundled-dist"
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_uses_bundled_dist_without_download(tmp_path):
+async def test_resolve_dashboard_assets_uses_bundled_dist_without_download(tmp_path):
     """Tests that bundled dashboard assets are used when data/dist is absent."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     bundled_dist = tmp_path / "bundled-dist"
@@ -206,24 +205,24 @@ async def test_check_dashboard_files_uses_bundled_dist_without_download(tmp_path
     (bundled_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (bundled_dist / "index.html").write_text("bundled", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result == str(bundled_dist)
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_exists_and_version_match(tmp_path):
+async def test_resolve_dashboard_assets_exists_and_version_match(tmp_path):
     """Tests that dashboard is not downloaded when it exists and version matches."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -231,17 +230,17 @@ async def test_check_dashboard_files_exists_and_version_match(tmp_path):
     (data_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (data_dist / "index.html").write_text("user", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
-            result = await check_dashboard_files()
+            result = await resolve_dashboard_assets()
             assert result == str(data_dist)
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_rejects_version_mismatch(tmp_path):
+async def test_resolve_dashboard_assets_rejects_version_mismatch(tmp_path):
     """Tests that startup rejects a mismatched local dashboard."""
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -249,17 +248,17 @@ async def test_check_dashboard_files_rejects_version_mismatch(tmp_path):
     (data_dist / "assets").mkdir(parents=True)
     (data_dist / "assets" / "version").write_text("v0.0.1", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                with mock.patch("main.logger.warning") as mock_logger_warning:
-                    result = await check_dashboard_files()
+                with mock.patch("astrbot.application.logger.warning") as mock_logger_warning:
+                    result = await resolve_dashboard_assets()
 
     assert result is None
     assert any(
@@ -269,11 +268,11 @@ async def test_check_dashboard_files_rejects_version_mismatch(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_rejects_incomplete_matching_dist(
+async def test_resolve_dashboard_assets_rejects_incomplete_matching_dist(
     tmp_path,
 ):
     """Tests that a version match alone is not enough to serve WebUI."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -281,16 +280,16 @@ async def test_check_dashboard_files_rejects_incomplete_matching_dist(
     (data_dist / "assets").mkdir(parents=True)
     (data_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result is None
 
@@ -347,7 +346,7 @@ async def test_get_dashboard_version_uses_bundled_dist_when_data_dist_is_missing
     tmp_path,
 ):
     """Tests bundled WebUI version lookup when data/dist is absent."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     bundled_dist = tmp_path / "bundled-dist"
@@ -375,7 +374,7 @@ async def test_get_dashboard_version_uses_repo_dist_when_data_dist_is_missing(
     tmp_path,
 ):
     """Tests source-tree WebUI version lookup when data/dist is absent."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     repo_dist = tmp_path / "repo-dist"
@@ -404,7 +403,7 @@ async def test_get_dashboard_version_prefers_repo_dist_when_data_dist_is_stale(
     tmp_path,
 ):
     """Tests source-tree WebUI is preferred over stale data/dist."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -433,11 +432,11 @@ async def test_get_dashboard_version_prefers_repo_dist_when_data_dist_is_stale(
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_replaces_stale_data_dist_with_bundled_dist(
+async def test_resolve_dashboard_assets_replaces_stale_data_dist_with_bundled_dist(
     tmp_path,
 ):
     """Tests that a stale data/dist is repaired from bundled dashboard assets."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -449,20 +448,20 @@ async def test_check_dashboard_files_replaces_stale_data_dist_with_bundled_dist(
     (bundled_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (bundled_dist / "index.html").write_text("bundled", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=tmp_path / "repo-dist",
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=Path(bundled_dist),
             ):
                 with mock.patch(
                     "astrbot.core.utils.io.get_bundled_dashboard_dist_path",
                     return_value=Path(bundled_dist),
                 ):
-                    result = await check_dashboard_files()
+                    result = await resolve_dashboard_assets()
 
     assert result == str(data_dist)
     assert (data_dist / "assets" / "version").read_text(
@@ -473,11 +472,11 @@ async def test_check_dashboard_files_replaces_stale_data_dist_with_bundled_dist(
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_uses_repo_dist_when_data_dist_is_missing(
+async def test_resolve_dashboard_assets_uses_repo_dist_when_data_dist_is_missing(
     tmp_path,
 ):
     """Tests startup prefers source-tree WebUI before downloading."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     repo_dist = tmp_path / "repo-dist"
@@ -486,26 +485,26 @@ async def test_check_dashboard_files_uses_repo_dist_when_data_dist_is_missing(
     (repo_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (repo_dist / "index.html").write_text("repo", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=repo_dist,
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result == str(repo_dist)
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_uses_repo_dist_when_data_dist_is_stale(
+async def test_resolve_dashboard_assets_uses_repo_dist_when_data_dist_is_stale(
     tmp_path,
 ):
     """Tests startup prefers source-tree WebUI over stale data/dist."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -518,26 +517,26 @@ async def test_check_dashboard_files_uses_repo_dist_when_data_dist_is_stale(
     (repo_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (repo_dist / "index.html").write_text("repo", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=repo_dist,
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result == str(repo_dist)
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_prefers_repo_dist_when_data_dist_matches(
+async def test_resolve_dashboard_assets_prefers_repo_dist_when_data_dist_matches(
     tmp_path,
 ):
     """Tests startup prefers source-tree WebUI over data/dist in source checkout."""
-    from main import VERSION
+    from astrbot.application import VERSION
 
     data_dir = tmp_path / "data"
     data_dist = data_dir / "dist"
@@ -550,27 +549,27 @@ async def test_check_dashboard_files_prefers_repo_dist_when_data_dist_matches(
     (repo_dist / "assets" / "version").write_text(f"v{VERSION}", encoding="utf-8")
     (repo_dist / "index.html").write_text("repo", encoding="utf-8")
 
-    with mock.patch("main.get_astrbot_data_path", return_value=str(data_dir)):
+    with mock.patch("astrbot.application.get_astrbot_data_path", return_value=str(data_dir)):
         with mock.patch(
-            "main.get_repo_dashboard_dist_path",
+            "astrbot.application.get_repo_dashboard_dist_path",
             return_value=repo_dist,
         ):
             with mock.patch(
-                "main.get_bundled_dashboard_dist_path",
+                "astrbot.application.get_bundled_dashboard_dist_path",
                 return_value=bundled_dist,
             ):
-                result = await check_dashboard_files()
+                result = await resolve_dashboard_assets()
 
     assert result == str(repo_dist)
 
 
 @pytest.mark.asyncio
-async def test_check_dashboard_files_with_webui_dir_arg(monkeypatch):
+async def test_resolve_dashboard_assets_with_webui_dir_arg(monkeypatch):
     """Tests that providing a valid webui_dir skips all checks."""
     valid_dir = "/tmp/my-custom-webui"
     monkeypatch.setattr(os.path, "exists", lambda path: path == valid_dir)
 
-    with mock.patch("main.get_dashboard_dist_version") as mock_get_version:
-        result = await check_dashboard_files(webui_dir=valid_dir)
+    with mock.patch("astrbot.application.get_dashboard_dist_version") as mock_get_version:
+        result = await resolve_dashboard_assets(webui_dir=valid_dir)
         assert result == valid_dir
         mock_get_version.assert_not_called()

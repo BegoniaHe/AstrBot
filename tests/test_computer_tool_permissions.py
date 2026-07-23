@@ -26,13 +26,19 @@ class _FakeSandbox:
         }
 
 
-def _make_run_context(require_admin: bool, role: str = "member") -> ContextWrapper:
+def _make_run_context(
+    require_admin: bool,
+    role: str = "member",
+    computer_runtime: object | None = None,
+) -> ContextWrapper:
     config_holder = SimpleNamespace(
         get_config=lambda umo: {  # noqa: ARG005
             "provider_settings": {
                 "computer_use_require_admin": require_admin,
             }
         }
+        ,
+        computer_runtime=computer_runtime,
     )
     event = SimpleNamespace(
         role=role,
@@ -50,13 +56,11 @@ async def test_browser_tool_allows_non_admin_when_admin_requirement_disabled(
     async def _fake_get_booter(_ctx, _session_id):
         return SimpleNamespace(browser=_FakeBrowser())
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.computer_tools.shipyard_neo.browser.get_booter",
-        _fake_get_booter,
-    )
-
     result = await BrowserExecTool().call(
-        _make_run_context(require_admin=False),
+        _make_run_context(
+            require_admin=False,
+            computer_runtime=SimpleNamespace(get_booter=_fake_get_booter),
+        ),
         cmd="open https://example.com",
     )
 
@@ -73,13 +77,11 @@ async def test_neo_skill_tool_allows_non_admin_when_admin_requirement_disabled(
             sandbox=_FakeSandbox(),
         )
 
-    monkeypatch.setattr(
-        "astrbot.core.tools.computer_tools.shipyard_neo.neo_skills.get_booter",
-        _fake_get_booter,
-    )
-
     result = await GetExecutionHistoryTool().call(
-        _make_run_context(require_admin=False),
+        _make_run_context(
+            require_admin=False,
+            computer_runtime=SimpleNamespace(get_booter=_fake_get_booter),
+        ),
         limit=5,
     )
 

@@ -5,11 +5,10 @@ from astrbot.core.message.message_event_result import MessageEventResult
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 from .strategies.strategy import StrategySelector
 
 
-@register_stage
 class ContentSafetyCheckStage(Stage):
     """检查内容安全
 

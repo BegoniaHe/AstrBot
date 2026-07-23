@@ -5,16 +5,15 @@ from pathlib import Path
 
 import click
 
-from ..utils import (
+from ..utils.basic import check_astrbot_root, get_astrbot_root
+from ..utils.plugin import (
+    PluginRecord,
     PluginStatus,
     build_plug_list,
-    check_astrbot_root,
-    get_astrbot_root,
     get_git_repo,
     install_local_plugin,
     manage_plugin,
 )
-from ..utils.plugin import PluginRecord
 
 
 @click.group()

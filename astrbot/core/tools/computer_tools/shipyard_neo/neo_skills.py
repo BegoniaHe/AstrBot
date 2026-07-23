@@ -6,7 +6,6 @@ from typing import Any
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.computer.computer_client import get_booter
 from astrbot.core.skills.neo_skill_sync import NeoSkillSyncManager
 from astrbot.core.tools.computer_tools.util import check_admin_permission
 from astrbot.core.tools.registry import builtin_tool
@@ -34,7 +33,7 @@ def _to_json_text(data: Any) -> str:
 async def _get_neo_context(
     context: ContextWrapper[AstrAgentContext],
 ) -> tuple[Any, Any]:
-    booter = await get_booter(
+    booter = await context.context.context.computer_runtime.get_booter(
         context.context.context,
         context.context.event.unified_msg_origin,
     )
@@ -406,7 +405,11 @@ class PromoteSkillCandidateTool(NeoSkillToolBase):
 
         try:
             client, _sandbox = await _get_neo_context(context)
-            sync_mgr = NeoSkillSyncManager()
+            sync_mgr = NeoSkillSyncManager(
+                sync_active_sandboxes=(
+                    context.context.context.computer_runtime.sync_skills_to_active_sandboxes
+                )
+            )
             result = await sync_mgr.promote_with_optional_sync(
                 client,
                 candidate_id=candidate_id,
@@ -533,6 +536,9 @@ class SyncSkillReleaseTool(NeoSkillToolBase):
                 release_id=release_id,
                 skill_key=skill_key,
                 require_stable=require_stable,
+                sync_active_sandboxes=(
+                    context.context.context.computer_runtime.sync_skills_to_active_sandboxes
+                ),
             ),
             error_action="syncing skill release",
         )
@@ -544,8 +550,11 @@ async def _sync_release_to_dict(
     release_id: str | None,
     skill_key: str | None,
     require_stable: bool,
+    sync_active_sandboxes: Callable[[], Awaitable[None]],
 ) -> dict[str, str]:
-    sync_mgr = NeoSkillSyncManager()
+    sync_mgr = NeoSkillSyncManager(
+        sync_active_sandboxes=sync_active_sandboxes,
+    )
     result = await sync_mgr.sync_release(
         client,
         release_id=release_id,

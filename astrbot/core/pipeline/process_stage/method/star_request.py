@@ -7,7 +7,6 @@ from typing import Any
 from astrbot import logger
 from astrbot.core.message.message_event_result import MessageEventResult
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.star.star import star_map
 from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
 from ...context import PipelineContext, call_event_hook, call_handler
@@ -37,7 +36,7 @@ class StarRequestSubStage(Stage):
             if event.is_stopped():
                 break
             params = handlers_parsed_params.get(handler.handler_full_name, {})
-            md = star_map.get(handler.handler_module_path)
+            md = self.ctx.plugins.get_by_module(handler.handler_module_path)
             if not md:
                 logger.warning(
                     f"Cannot find plugin for given handler module path: {handler.handler_module_path}",
@@ -63,6 +62,8 @@ class StarRequestSubStage(Stage):
                     handler.handler_name,
                     e,
                     traceback_text,
+                    handler_registry=self.ctx.handlers,
+                    plugin_registry=self.ctx.plugins,
                 )
 
                 if not event.is_stopped() and event.is_at_or_wake_command:

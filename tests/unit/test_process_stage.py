@@ -7,10 +7,8 @@ import pytest
 
 import astrbot.core.pipeline.process_stage as process_stage_pkg
 import astrbot.core.pipeline.process_stage.method as process_stage_method_pkg
-from astrbot.core.pipeline import stage as pipeline_stage_module
-from astrbot.core.provider.entities import ProviderRequest
+from astrbot.core.agent.llm_types import ProviderRequest
 
-_original_registered_stages = list(pipeline_stage_module.registered_stages)
 _original_agent_request_module = sys.modules.get(
     "astrbot.core.pipeline.process_stage.method.agent_request"
 )
@@ -92,9 +90,6 @@ if _had_stage_attr:
     process_stage_pkg.stage = _original_stage_attr
 else:
     process_stage_pkg.__dict__.pop("stage", None)
-
-pipeline_stage_module.registered_stages[:] = _original_registered_stages
-
 
 class FakeEvent:
     def __init__(

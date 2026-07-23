@@ -48,7 +48,7 @@ async def initialize_astrbot(astrbot_root: Path) -> None:
 @click.command()
 def init() -> None:
     """Initialize AstrBot"""
-    from ..utils import get_astrbot_root
+    from ..utils.basic import get_astrbot_root
 
     click.echo("Initializing AstrBot...")
 

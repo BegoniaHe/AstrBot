@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import ClassVar
 
 from astrbot import logger
-from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
 
 
 @dataclass
@@ -33,26 +32,17 @@ class CachedImage:
 class ToolImageCache:
     """Manages cached images from tool calls.
 
-    Images are stored in data/temp/tool_images/ and can be retrieved by file path.
+    Images are stored in an explicit runtime-owned directory and can be retrieved
+    by file path.
     """
 
-    _instance: ClassVar[ToolImageCache | None] = None
     CACHE_DIR_NAME: ClassVar[str] = "tool_images"
     # Cache expiry time in seconds (1 hour)
     CACHE_EXPIRY: ClassVar[int] = 3600
     _SAFE_ID_RE: ClassVar[re.Pattern[str]] = re.compile(r"[^A-Za-z0-9._-]+")
 
-    def __new__(cls) -> ToolImageCache:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self) -> None:
-        if self._initialized:
-            return
-        self._initialized = True
-        self._cache_dir = Path(get_astrbot_temp_path()) / self.CACHE_DIR_NAME
+    def __init__(self, cache_dir: Path) -> None:
+        self._cache_dir = cache_dir
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _sanitize_tool_call_id(self, tool_call_id: str) -> str:
@@ -180,7 +170,3 @@ class ToolImageCache:
             logger.info(f"Cleaned up {cleaned} expired cached images")
 
         return cleaned
-
-
-# Global singleton instance
-tool_image_cache = ToolImageCache()

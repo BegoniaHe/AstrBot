@@ -1,12 +1,10 @@
-"""AstrBot 启动器，负责初始化和启动核心组件和仪表板服务器。
+"""Application-level supervision for the core lifecycle and Dashboard."""
 
-工作流程:
-1. 初始化核心生命周期, 传递数据库和日志代理实例到核心生命周期
-2. 运行核心生命周期任务和仪表板服务器
-"""
+from __future__ import annotations
 
 import asyncio
 import traceback
+from collections.abc import Awaitable
 
 from astrbot import logger
 from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
@@ -17,45 +15,111 @@ from astrbot.dashboard.server import AstrBotDashboard
 
 
 class InitialLoader:
-    """AstrBot 启动器，负责初始化和启动核心组件和仪表板服务器。"""
+    """Start one initialized core runtime and supervise its process tasks."""
 
-    def __init__(self, services: RuntimeServices, log_broker: LogBroker) -> None:
+    def __init__(
+        self,
+        services: RuntimeServices,
+        log_broker: LogBroker,
+        *,
+        webui_dir: str | None = None,
+    ) -> None:
         self.services = services
         self.logger = logger
         self.log_broker = log_broker
-        self.webui_dir: str | None = None
+        self.webui_dir = webui_dir
+        self.core_lifecycle: AstrBotCoreLifecycle | None = None
+        self.dashboard_server: AstrBotDashboard | None = None
 
-    async def start(self) -> None:
-        core_lifecycle = AstrBotCoreLifecycle(self.log_broker, self.services)
-
+    async def _stop_lifecycle(self, lifecycle: AstrBotCoreLifecycle) -> None:
+        """Stop once without hiding the task failure that triggered shutdown."""
         try:
-            await core_lifecycle.initialize()
-        except Exception as e:
-            await core_lifecycle.stop()
-            logger.critical(redact_sensitive_text(traceback.format_exc()))
-            logger.critical("😭 初始化 AstrBot 失败：%s !!!", safe_error("", e))
+            await lifecycle.stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Failed to stop AstrBot core: %s", safe_error("", exc))
+
+    @staticmethod
+    async def _wait_for_runtime_tasks(tasks: list[asyncio.Task[None]]) -> None:
+        """Wait until a runtime task completes or surface its failure.
+
+        ``asyncio.FIRST_EXCEPTION`` does not wake when a child task is
+        cancelled.  Runtime task cancellation must still enter ``start()``'s
+        cleanup path so that the sibling task cannot outlive the lifecycle.
+        A normal return is terminal too: a Dashboard without its Core (or a
+        Core without its Dashboard) must not keep serving independently.
+        """
+        pending = set(tasks)
+        while pending:
+            done, pending = await asyncio.wait(
+                pending,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Preserve a concrete task failure over a simultaneous sibling
+            # cancellation. Iterate in creation order rather than set order.
+            for task in tasks:
+                if task not in done or task.cancelled():
+                    continue
+                exception = task.exception()
+                if exception is not None:
+                    raise exception
+
+            if any(task.cancelled() for task in done):
+                raise asyncio.CancelledError
+
+            # A normal exit still ends this process-wide supervision scope.
+            # ``start()``'s ``finally`` block cancels and joins any sibling.
             return
 
-        core_task = core_lifecycle.start()
+    @staticmethod
+    async def _cancel_and_join(tasks: list[asyncio.Task[None]]) -> None:
+        """Cancel unfinished sibling tasks and wait for them to settle."""
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        webui_dir = self.webui_dir
+    async def start(self) -> None:
+        """Initialize and supervise the core and Dashboard for this process."""
+        lifecycle = AstrBotCoreLifecycle(self.log_broker, self.services)
+        self.core_lifecycle = lifecycle
+        tasks: list[asyncio.Task[None]] = []
 
-        self.dashboard_server = AstrBotDashboard(
-            core_lifecycle,
-            self.services.db,
-            core_lifecycle.dashboard_shutdown_event,
-            webui_dir,
-        )
-
-        coro = self.dashboard_server.run()
-        if coro:
-            # 启动核心任务和仪表板服务器
-            task = asyncio.gather(core_task, coro)
-        else:
-            task = core_task
         try:
-            await task  # 整个AstrBot在这里运行
-        except asyncio.CancelledError:
-            logger.info("🌈 正在关闭 AstrBot...")
-            await core_lifecycle.stop()
-            raise
+            try:
+                await lifecycle.initialize()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.critical(redact_sensitive_text(traceback.format_exc()))
+                logger.critical("😭 初始化 AstrBot 失败：%s !!!", safe_error("", exc))
+                raise
+
+            runtime = lifecycle.runtime
+            self.dashboard_server = await AstrBotDashboard.create(
+                runtime,
+                lifecycle,
+                self.services.db,
+                runtime.dashboard_shutdown_event,
+                self.webui_dir,
+            )
+            core_task = asyncio.create_task(
+                lifecycle.start(),
+                name="astrbot-core",
+            )
+            tasks.append(core_task)
+            dashboard_coro: Awaitable[None] | None = self.dashboard_server.run()
+            if dashboard_coro is not None:
+                tasks.append(
+                    asyncio.create_task(
+                        dashboard_coro,
+                        name="astrbot-dashboard",
+                    )
+                )
+            await self._wait_for_runtime_tasks(tasks)
+        finally:
+            await self._cancel_and_join(tasks)
+            await self._stop_lifecycle(lifecycle)

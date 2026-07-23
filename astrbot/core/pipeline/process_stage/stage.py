@@ -1,21 +1,19 @@
 from collections.abc import AsyncGenerator
 
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.provider.entities import ProviderRequest
 from astrbot.core.star.star_handler import StarHandlerMetadata
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 from .method.agent_request import AgentRequestSubStage
 from .method.star_request import StarRequestSubStage
 
 
-@register_stage
 class ProcessStage(Stage):
     async def initialize(self, ctx: PipelineContext) -> None:
         self.ctx = ctx
         self.config = ctx.astrbot_config
-        self.plugin_manager = ctx.plugin_manager
 
         # initialize agent sub stage
         self.agent_sub_stage = AgentRequestSubStage()

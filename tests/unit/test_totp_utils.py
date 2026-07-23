@@ -3,7 +3,7 @@ import pytest
 
 from astrbot.core.db.sqlite import SQLiteDatabase
 from astrbot.core.utils.totp import (
-    consume_totp_code,
+    TotpRuntimeState,
     generate_recovery_code,
     is_totp_enabled,
     is_totp_trusted_device_valid,
@@ -32,10 +32,59 @@ def test_is_totp_enabled_requires_enable_secret_and_recovery_hash(
 
 @pytest.mark.asyncio
 async def test_consume_totp_code_prevents_replay_same_timecode():
+    state = TotpRuntimeState()
     secret = pyotp.random_base32()
     code = pyotp.TOTP(secret).now()
-    assert await consume_totp_code(secret, code) is True
-    assert await consume_totp_code(secret, code) is False
+    assert await state.consume_totp_code(secret, code) is True
+    assert await state.consume_totp_code(secret, code) is False
+
+
+@pytest.mark.asyncio
+async def test_totp_runtime_state_is_isolated_per_runtime():
+    secret = pyotp.random_base32()
+    code = pyotp.TOTP(secret).now()
+    first_runtime = TotpRuntimeState()
+    second_runtime = TotpRuntimeState()
+
+    assert await first_runtime.consume_totp_code(secret, code) is True
+    assert await first_runtime.consume_totp_code(secret, code) is False
+    assert await second_runtime.consume_totp_code(secret, code) is True
+
+
+@pytest.mark.asyncio
+async def test_pending_rotation_is_scoped_to_authenticated_subject():
+    state = TotpRuntimeState()
+    current_secret = pyotp.random_base32()
+    replacement_secret = pyotp.random_base32()
+    config = {
+        "dashboard": {
+            "totp": {
+                "enable": True,
+                "secret": current_secret,
+                "recovery_code_hash": "hash",
+            }
+        }
+    }
+
+    assert await state.verify_current_rotation_code(
+        "dashboard-session:one",
+        config,
+        pyotp.TOTP(current_secret).now(),
+    )
+
+    replacement_code = pyotp.TOTP(replacement_secret).now()
+    assert not await state.stage_pending_totp_secret(
+        "dashboard-session:two",
+        config,
+        replacement_secret,
+        replacement_code,
+    )
+    assert await state.stage_pending_totp_secret(
+        "dashboard-session:one",
+        config,
+        replacement_secret,
+        replacement_code,
+    )
 
 
 def test_generate_and_verify_recovery_code_roundtrip():

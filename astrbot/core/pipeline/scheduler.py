@@ -1,14 +1,19 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable
 from time import time
+from typing import Protocol, cast
 
 from astrbot import logger
+from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.utils.active_event_registry import active_event_registry
 
-from .bootstrap import ensure_builtin_stages_registered
+from .bootstrap import builtin_stage_classes
 from .context import PipelineContext
-from .stage import registered_stages
-from .stage_order import STAGES_ORDER
+
+
+class _EmptyCompletionEvent(Protocol):
+    """An adapter event that accepts an empty completion signal."""
+
+    def send(self, message: MessageChain | None) -> Awaitable[object]: ...
 
 
 class PipelineScheduler:
@@ -17,16 +22,13 @@ class PipelineScheduler:
     _PIPELINE_SLOW_LOG_THRESHOLD_S = 1.0
 
     def __init__(self, context: PipelineContext) -> None:
-        ensure_builtin_stages_registered()
-        registered_stages.sort(
-            key=lambda x: STAGES_ORDER.index(x.__name__),
-        )  # 按照顺序排序
         self.ctx = context  # 上下文对象
+        self.stage_classes = builtin_stage_classes()
         self.stages = []  # 存储阶段实例
 
     async def initialize(self) -> None:
         """初始化管道调度器时, 初始化所有阶段"""
-        for stage_cls in registered_stages:
+        for stage_cls in self.stage_classes:
             stage_instance = stage_cls()  # 创建实例
             await stage_instance.initialize(self.ctx)
             self.stages.append(stage_instance)
@@ -81,14 +83,16 @@ class PipelineScheduler:
             event (AstrMessageEvent): 事件对象
 
         """
-        active_event_registry.register(event)
+        self.ctx.execution_context.active_event_registry.register(event)
         started_at = time()
         try:
             await self._process_stages(event)
 
             # 发送一个空消息, 以便于后续的处理
             if event.requires_empty_completion:
-                await event.send(None)
+                # Only adapters whose send implementation accepts ``None`` set this
+                # flag. The base event contract deliberately remains message-only.
+                await cast(_EmptyCompletionEvent, event).send(None)
 
             elapsed = time() - started_at
             if elapsed >= self._PIPELINE_SLOW_LOG_THRESHOLD_S:
@@ -103,4 +107,4 @@ class PipelineScheduler:
                 logger.debug("pipeline execution completed.")
         finally:
             event.cleanup_temporary_local_files()
-            active_event_registry.unregister(event)
+            self.ctx.execution_context.active_event_registry.unregister(event)

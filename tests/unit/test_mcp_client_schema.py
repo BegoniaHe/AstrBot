@@ -1,5 +1,5 @@
-from contextlib import asynccontextmanager
 import socket
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 

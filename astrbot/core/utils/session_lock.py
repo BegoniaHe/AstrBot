@@ -50,6 +50,3 @@ class SessionLockManager:
         manager = self._get_loop_manager()
         async with manager.acquire_lock(session_id):
             yield
-
-
-session_lock_manager = SessionLockManager()

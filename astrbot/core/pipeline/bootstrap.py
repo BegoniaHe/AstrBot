@@ -1,52 +1,40 @@
-"""Pipeline bootstrap utilities."""
+"""The immutable built-in pipeline stage order."""
 
-from importlib import import_module
+from __future__ import annotations
 
-from .stage import registered_stages
+from collections.abc import Sequence
 
-_BUILTIN_STAGE_MODULES = (
-    "astrbot.core.pipeline.waking_check.stage",
-    "astrbot.core.pipeline.whitelist_check.stage",
-    "astrbot.core.pipeline.session_status_check.stage",
-    "astrbot.core.pipeline.rate_limit_check.stage",
-    "astrbot.core.pipeline.content_safety_check.stage",
-    "astrbot.core.pipeline.preprocess_stage.stage",
-    "astrbot.core.pipeline.process_stage.stage",
-    "astrbot.core.pipeline.result_decorate.stage",
-    "astrbot.core.pipeline.respond.stage",
-)
-
-_EXPECTED_STAGE_NAMES = {
-    "WakingCheckStage",
-    "WhitelistCheckStage",
-    "SessionStatusCheckStage",
-    "RateLimitStage",
-    "ContentSafetyCheckStage",
-    "PreProcessStage",
-    "ProcessStage",
-    "ResultDecorateStage",
-    "RespondStage",
-}
-
-_builtin_stages_registered = False
+from .stage import Stage
 
 
-def ensure_builtin_stages_registered() -> None:
-    """Ensure built-in pipeline stages are imported and registered."""
-    global _builtin_stages_registered
+def builtin_stage_classes() -> Sequence[type[Stage]]:
+    """Return the fixed, production pipeline stage classes in execution order.
 
-    if _builtin_stages_registered:
-        return
+    Imports are intentionally local: importing the pipeline package remains
+    lightweight, while scheduler construction obtains a stable tuple rather
+    than populating a process-global mutable registry.
+    """
+    from .content_safety_check.stage import ContentSafetyCheckStage
+    from .preprocess_stage.stage import PreProcessStage
+    from .process_stage.stage import ProcessStage
+    from .rate_limit_check.stage import RateLimitStage
+    from .respond.stage import RespondStage
+    from .result_decorate.stage import ResultDecorateStage
+    from .session_status_check.stage import SessionStatusCheckStage
+    from .waking_check.stage import WakingCheckStage
+    from .whitelist_check.stage import WhitelistCheckStage
 
-    stage_names = {stage_cls.__name__ for stage_cls in registered_stages}
-    if _EXPECTED_STAGE_NAMES.issubset(stage_names):
-        _builtin_stages_registered = True
-        return
+    return (
+        WakingCheckStage,
+        WhitelistCheckStage,
+        SessionStatusCheckStage,
+        RateLimitStage,
+        ContentSafetyCheckStage,
+        PreProcessStage,
+        ProcessStage,
+        ResultDecorateStage,
+        RespondStage,
+    )
 
-    for module_path in _BUILTIN_STAGE_MODULES:
-        import_module(module_path)
 
-    _builtin_stages_registered = True
-
-
-__all__ = ["ensure_builtin_stages_registered"]
+__all__ = ["builtin_stage_classes"]

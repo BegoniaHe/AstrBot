@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from astrbot.core.computer.computer_client import ComputerRuntime
+
 # ═══════════════════════════════════════════════════════════════
 # _wait_until_ready
 # ═══════════════════════════════════════════════════════════════
@@ -249,7 +251,6 @@ class TestGetBooterRebuild:
     @pytest.mark.asyncio
     async def test_stale_neo_booter_calls_shutdown_with_delete(self, monkeypatch):
         """A stale ShipyardNeoBooter gets shutdown(delete_sandbox=True) on eviction."""
-        from astrbot.core.computer import computer_client
         from astrbot.core.computer.booters.shipyard_neo import ShipyardNeoBooter
 
         ctx = self._make_fake_context()
@@ -263,9 +264,9 @@ class TestGetBooterRebuild:
         # available() will return False because refresh() throws
         stale.shutdown = AsyncMock()
 
-        monkeypatch.setitem(computer_client.session_booter, "session-1", stale)
-
-        from astrbot.core.computer.computer_client import get_booter
+        runtime = ComputerRuntime()
+        runtime._session_booters["session-1"] = stale
+        runtime._session_booter_types["session-1"] = "shipyard_neo"
 
         # get_booter should evict stale and rebuild.
         # We need to mock the entire rebuild path so it doesn't actually
@@ -289,25 +290,25 @@ class TestGetBooterRebuild:
                 AsyncMock(),
             ),
         ):
-            await get_booter(ctx, "session-1")
+            await runtime.get_booter(ctx, "session-1")
 
         stale.shutdown.assert_awaited_once_with(delete_sandbox=True)
         # Old entry should be replaced
-        new_booter = computer_client.session_booter.get("session-1")
+        new_booter = runtime.get_session_booter("session-1")
         assert new_booter is not None
         assert new_booter is not stale
 
     @pytest.mark.asyncio
     async def test_stale_non_neo_booter_calls_plain_shutdown(self, monkeypatch):
         """Non-neo booter types use plain shutdown() without delete_sandbox."""
-        from astrbot.core.computer import computer_client
-
         ctx = self._make_fake_context(booter_type="unknown_type")
 
         stale = SimpleNamespace(shutdown=AsyncMock())
         stale.available = AsyncMock(return_value=False)
 
-        monkeypatch.setitem(computer_client.session_booter, "session-1", stale)
+        runtime = ComputerRuntime()
+        runtime._session_booters["session-1"] = stale
+        runtime._session_booter_types["session-1"] = "boxlite"
 
         with (
             patch(
@@ -315,10 +316,8 @@ class TestGetBooterRebuild:
                 AsyncMock(),
             ),
         ):
-            from astrbot.core.computer.computer_client import get_booter
-
             with pytest.raises(ValueError, match="Unknown booter type"):
-                await get_booter(ctx, "session-1")
+                await runtime.get_booter(ctx, "session-1")
 
         stale.shutdown.assert_awaited_once()
         # No delete_sandbox kwarg for non-neo booters

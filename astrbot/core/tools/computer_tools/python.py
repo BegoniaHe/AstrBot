@@ -7,7 +7,6 @@ import mcp
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext, AstrMessageEvent
-from astrbot.core.computer.computer_client import get_booter, get_local_booter
 from astrbot.core.message.message_event_result import MessageChain
 
 from ..registry import builtin_tool
@@ -91,7 +90,7 @@ class PythonTool(FunctionTool):
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "Python execution"):
             return permission_error
-        sb = await get_booter(
+        sb = await context.context.context.computer_runtime.get_booter(
             context.context.context,
             context.context.event.unified_msg_origin,
         )
@@ -135,7 +134,7 @@ class LocalPythonTool(FunctionTool):
     ) -> ToolExecResult:
         if permission_error := check_admin_permission(context, "Python execution"):
             return permission_error
-        sb = get_local_booter()
+        sb = context.context.context.computer_runtime.get_local_booter()
         requested_timeout = kwargs.get("timeout")
         if requested_timeout is None:
             requested_timeout = timeout_seconds

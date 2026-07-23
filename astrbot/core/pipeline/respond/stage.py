@@ -12,10 +12,9 @@ from astrbot.core.star.star_handler import EventType
 from astrbot.core.utils.path_util import path_Mapping
 
 from ..context import PipelineContext, call_event_hook
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 
-@register_stage
 class RespondStage(Stage):
     # 组件类型到其非空判断函数的映射
     _component_validators = {
@@ -375,7 +374,12 @@ class RespondStage(Stage):
             elif not await self._send_standard_result(event, result):
                 return
 
-        if await call_event_hook(event, EventType.OnAfterMessageSentEvent):
+        if await call_event_hook(
+            event,
+            EventType.OnAfterMessageSentEvent,
+            handler_registry=self.ctx.handlers,
+            plugin_registry=self.ctx.plugins,
+        ):
             return
 
         event.clear_result()

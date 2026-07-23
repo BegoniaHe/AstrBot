@@ -12,14 +12,12 @@ from astrbot.core.pipeline.content_safety_check.stage import ContentSafetyCheckS
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.message_type import MessageType
 from astrbot.core.star.session_llm_manager import SessionServiceManager
-from astrbot.core.star.star import star_map
-from astrbot.core.star.star_handler import EventType, star_handlers_registry
+from astrbot.core.star.star_handler import EventType
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage, registered_stages
+from ..stage import Stage
 
 
-@register_stage
 class ResultDecorateStage(Stage):
     async def initialize(self, ctx: PipelineContext) -> None:
         self.ctx = ctx
@@ -95,13 +93,13 @@ class ResultDecorateStage(Stage):
         ]
         self.content_safe_check_stage = None
         if self.content_safe_check_reply:
-            for stage_cls in registered_stages:
-                if stage_cls.__name__ == "ContentSafetyCheckStage":
-                    self.content_safe_check_stage = stage_cls()
-                    await self.content_safe_check_stage.initialize(ctx)
+            self.content_safe_check_stage = ContentSafetyCheckStage()
+            await self.content_safe_check_stage.initialize(ctx)
 
         provider_cfg = ctx.astrbot_config.get("provider_settings", {})
         self.show_reasoning = provider_cfg.get("display_reasoning_text", False)
+        if ctx.preferences is None:
+            raise RuntimeError("ResultDecorateStage requires shared preferences")
         self.session_services = SessionServiceManager(ctx.preferences)
 
     def _split_text_by_words(self, text: str) -> list[str]:
@@ -172,14 +170,15 @@ class ResultDecorateStage(Stage):
             yield item
 
     async def _run_decorating_hooks(self, event, is_stream: bool) -> bool:
-        for handler in star_handlers_registry.get_handlers_by_event_type(
+        for handler in self.ctx.handlers.get_handlers_by_event_type(
             EventType.OnDecoratingResultEvent, plugins_name=event.plugins_name
         ):
             try:
-                plugin = star_map[handler.handler_module_path]
+                plugin = self.ctx.plugins.get_by_module(handler.handler_module_path)
+                plugin_name = plugin.name if plugin else handler.handler_module_path
                 logger.debug(
                     "hook(on_decorating_result) -> %s - %s",
-                    plugin.name,
+                    plugin_name,
                     handler.handler_name,
                 )
                 if is_stream:
@@ -190,7 +189,7 @@ class ResultDecorateStage(Stage):
                 if (result := event.get_result()) is None or not result.chain:
                     logger.debug(
                         "hook(on_decorating_result) -> %s - %s 将消息结果清空。",
-                        plugin.name,
+                        plugin_name,
                         handler.handler_name,
                     )
             except asyncio.CancelledError:
@@ -202,7 +201,7 @@ class ResultDecorateStage(Stage):
             if event.is_stopped():
                 logger.info(
                     "%s - %s 终止了事件传播。",
-                    star_map[handler.handler_module_path].name,
+                    plugin_name,
                     handler.handler_name,
                 )
                 return False
@@ -273,7 +272,7 @@ class ResultDecorateStage(Stage):
         )
         if not should_tts:
             return False
-        provider = self.ctx.plugin_manager.context.get_using_tts_provider(
+        provider = self.ctx.execution_context.get_using_tts_provider(
             event.unified_msg_origin
         )
         if not provider:

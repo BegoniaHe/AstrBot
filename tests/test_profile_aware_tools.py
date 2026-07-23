@@ -1,10 +1,10 @@
 """Tests for profile-aware sandbox selection and conditional tool registration."""
 
-
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
+
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 
 # ═══════════════════════════════════════════════════════════════
 # ShipyardNeoBooter.capabilities
@@ -85,14 +85,28 @@ class TestApplySandboxToolsConditional:
             return set()
         return {t.name for t in req.func_tool.tools}
 
+    @staticmethod
+    def _apply(
+        fn,
+        config,
+        req,
+        existing_booter: object | None = None,
+    ) -> None:
+        fn(
+            config,
+            req,
+            "session-1",
+            FunctionToolManager(),
+            existing_booter,
+        )
+
     def test_no_session_registers_all(self):
         """First request (no booted session) → all tools including browser."""
         fn = _import_apply_sandbox_tools()
         config = _make_config("shipyard_neo")
         req = _make_req()
 
-        with patch("astrbot.core.computer.computer_client.session_booter", {}):
-            fn(config, req, "session-1")
+        self._apply(fn, config, req)
 
         names = self._tool_names(req)
         assert "astrbot_execute_browser" in names
@@ -108,11 +122,7 @@ class TestApplySandboxToolsConditional:
             capabilities=["python", "shell", "filesystem", "browser"]
         )
 
-        with patch(
-            "astrbot.core.computer.computer_client.session_booter",
-            {"session-1": fake_booter},
-        ):
-            fn(config, req, "session-1")
+        self._apply(fn, config, req, fake_booter)
 
         names = self._tool_names(req)
         assert "astrbot_execute_browser" in names
@@ -124,11 +134,7 @@ class TestApplySandboxToolsConditional:
         req = _make_req()
         fake_booter = SimpleNamespace(capabilities=["python", "shell", "filesystem"])
 
-        with patch(
-            "astrbot.core.computer.computer_client.session_booter",
-            {"session-1": fake_booter},
-        ):
-            fn(config, req, "session-1")
+        self._apply(fn, config, req, fake_booter)
 
         names = self._tool_names(req)
         assert "astrbot_execute_browser" not in names
@@ -144,11 +150,7 @@ class TestApplySandboxToolsConditional:
         req = _make_req()
         fake_booter = SimpleNamespace(capabilities=["python"])
 
-        with patch(
-            "astrbot.core.computer.computer_client.session_booter",
-            {"session-1": fake_booter},
-        ):
-            fn(config, req, "session-1")
+        self._apply(fn, config, req, fake_booter)
 
         names = self._tool_names(req)
         assert "astrbot_create_skill_candidate" in names

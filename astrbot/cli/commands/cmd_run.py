@@ -1,29 +1,27 @@
 import asyncio
 import os
 import sys
-import traceback
-from pathlib import Path
 
 import click
 from filelock import FileLock, Timeout
 
-from ..utils import check_astrbot_root, get_astrbot_root
+from ..utils.basic import check_astrbot_root, get_astrbot_root
 
 DASHBOARD_RESET_PASSWORD_ENV = "ASTRBOT_RESET_DASHBOARD_PASSWORD"
 
 
-async def run_astrbot(astrbot_root: Path) -> None:
-    """Run AstrBot"""
-    from astrbot import logger
-    from astrbot.core.initial_loader import InitialLoader
-    from astrbot.core.log import LogBroker, LogManager
-    from astrbot.core.runtime_services import create_runtime_services
+async def _run_application() -> None:
+    """Import the shared runner only after runtime bootstrap has completed."""
+    from astrbot.application import ApplicationOptions, run_application
 
-    log_broker = LogBroker()
-    LogManager.set_queue_handler(logger, log_broker)
-    core_lifecycle = InitialLoader(create_runtime_services(), log_broker)
+    await run_application(ApplicationOptions())
 
-    await core_lifecycle.start()
+
+def _initialize_runtime_bootstrap() -> None:
+    """Install the verified aiohttp CA context before importing core modules."""
+    import runtime_bootstrap
+
+    runtime_bootstrap.initialize_runtime_bootstrap()
 
 
 @click.option("--reload", "-r", is_flag=True, help="Auto-reload plugins")
@@ -48,6 +46,8 @@ def run(reload: bool, port: str | None, reset_password: bool) -> None:
         os.environ["ASTRBOT_ROOT"] = str(astrbot_root)
         sys.path.insert(0, str(astrbot_root))
 
+        _initialize_runtime_bootstrap()
+
         if port:
             os.environ["DASHBOARD_PORT"] = port
 
@@ -61,12 +61,21 @@ def run(reload: bool, port: str | None, reset_password: bool) -> None:
         lock_file = astrbot_root / "astrbot.lock"
         lock = FileLock(lock_file, timeout=5)
         with lock.acquire():
-            asyncio.run(run_astrbot(astrbot_root))
+            asyncio.run(_run_application())
     except KeyboardInterrupt:
         click.echo("AstrBot has been shut down.")
     except Timeout:
         raise click.ClickException(
             "Cannot acquire lock file. Please check if another instance is running"
         )
-    except Exception as e:
-        raise click.ClickException(f"Runtime error: {e}\n{traceback.format_exc()}")
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        # Runtime startup errors now propagate from the shared application
+        # runner.  Do not echo exception text or tracebacks here: this command
+        # must stay outside the Core import boundary, and either can contain
+        # credentials or private endpoint details.  Startup paths log redacted
+        # diagnostics before propagating failures.
+        raise click.ClickException(
+            "Runtime failed. See AstrBot logs for details."
+        ) from exc

@@ -1,13 +1,47 @@
-"""AstrBot CLI entry point"""
+"""AstrBot CLI entry point."""
 
-import sys
+from __future__ import annotations
+
+from importlib import import_module
 
 import click
 
-from . import __version__
-from .commands import conf, init, install_browser, password, plug, run
+import runtime_bootstrap
 
-logo_tmpl = r"""
+from . import __version__
+
+runtime_bootstrap.initialize_runtime_bootstrap()
+
+
+class LazyCommandGroup(click.Group):
+    """Resolve command modules only after process bootstrap has completed."""
+
+    _commands = {
+        "conf": ("astrbot.cli.commands.cmd_conf", "conf"),
+        "init": ("astrbot.cli.commands.cmd_init", "init"),
+        "install-browser": (
+            "astrbot.cli.commands.cmd_install_browser",
+            "install_browser",
+        ),
+        "password": ("astrbot.cli.commands.cmd_password", "password"),
+        "plug": ("astrbot.cli.commands.cmd_plug", "plug"),
+        "run": ("astrbot.cli.commands.cmd_run", "run"),
+    }
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return sorted({*super().list_commands(ctx), *self._commands})
+
+    def get_command(self, ctx: click.Context, cmd_name: str):
+        command = super().get_command(ctx, cmd_name)
+        if command is not None:
+            return command
+        module_name, attribute = self._commands.get(cmd_name, (None, None))
+        if module_name is None or attribute is None:
+            return None
+        return getattr(import_module(module_name), attribute)
+
+
+_LOGO = r"""
      ___           _______.___________..______      .______     ______   .___________.
     /   \         /       |           ||   _  \     |   _  \   /  __  \  |           |
    /  ^  \       |   (----`---|  |----`|  |_)  |    |  |_)  | |  |  |  | `---|  |----`
@@ -17,11 +51,11 @@ logo_tmpl = r"""
 """
 
 
-@click.group()
+@click.group(cls=LazyCommandGroup)
 @click.version_option(__version__, prog_name="AstrBot")
 def cli() -> None:
-    """The AstrBot CLI"""
-    click.echo(logo_tmpl)
+    """The AstrBot CLI."""
+    click.echo(_LOGO)
     click.echo("Welcome to AstrBot CLI!")
     click.echo(f"AstrBot CLI version: {__version__}")
 
@@ -29,33 +63,20 @@ def cli() -> None:
 @click.command()
 @click.argument("command_name", required=False, type=str)
 def help(command_name: str | None) -> None:
-    """Display help information for commands
-
-    If COMMAND_NAME is provided, display detailed help for that command.
-    Otherwise, display general help information.
-    """
+    """Display help information for commands."""
     ctx = click.get_current_context()
     if command_name:
-        # Find the specified command
         command = cli.get_command(ctx, command_name)
         if command:
-            # Display help for the specific command
             click.echo(command.get_help(ctx))
         else:
             click.echo(f"Unknown command: {command_name}")
-            sys.exit(1)
+            raise SystemExit(1)
     else:
-        # Display general help information
         click.echo(cli.get_help(ctx))
 
 
-cli.add_command(init)
-cli.add_command(install_browser)
-cli.add_command(run)
 cli.add_command(help)
-cli.add_command(plug)
-cli.add_command(conf)
-cli.add_command(password)
 
 if __name__ == "__main__":
     cli()

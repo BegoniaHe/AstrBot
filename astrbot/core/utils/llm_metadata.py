@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Literal, TypedDict
 
 import aiohttp
@@ -27,40 +28,46 @@ class LLMMetadata(TypedDict):
     limit: LLMLimit
 
 
-LLM_METADATAS: dict[str, LLMMetadata] = {}
+class LLMMetadataCatalog:
+    """Runtime-owned metadata fetched from the public model catalog."""
 
+    def __init__(self) -> None:
+        self._models: dict[str, LLMMetadata] = {}
 
-async def update_llm_metadata() -> None:
-    url = "https://models.dev/api.json"
-    try:
-        async with aiohttp.ClientSession(
-            trust_env=True, connector=build_tls_connector()
-        ) as session:
-            async with session.get(url) as response:
-                data = await response.json()
-                global LLM_METADATAS
-                models = {}
-                for info in data.values():
-                    for model in info.get("models", {}).values():
-                        model_id = model.get("id")
-                        if not model_id:
-                            continue
-                        models[model_id] = LLMMetadata(
-                            id=model_id,
-                            reasoning=model.get("reasoning", False),
-                            tool_call=model.get("tool_call", False),
-                            knowledge=model.get("knowledge", "none"),
-                            release_date=model.get("release_date", ""),
-                            modalities=model.get(
-                                "modalities", {"input": [], "output": []}
-                            ),
-                            open_weights=model.get("open_weights", False),
-                            limit=model.get("limit", {"context": 0, "output": 0}),
-                        )
-                # Replace the global cache in-place so references remain valid
-                LLM_METADATAS.clear()
-                LLM_METADATAS.update(models)
-                logger.info(f"Successfully fetched metadata for {len(models)} LLMs.")
-    except Exception as e:
-        logger.error(f"Failed to fetch LLM metadata: {e}")
-        return
+    def get(self, model_id: str) -> LLMMetadata | None:
+        """Return metadata for one model when it is known."""
+        return self._models.get(model_id)
+
+    def replace(self, models: Mapping[str, LLMMetadata]) -> None:
+        """Atomically replace the currently available metadata snapshot."""
+        self._models = dict(models)
+
+    async def refresh(self) -> None:
+        """Fetch and publish the latest model metadata without sharing global state."""
+        url = "https://models.dev/api.json"
+        try:
+            async with aiohttp.ClientSession(
+                trust_env=True, connector=build_tls_connector()
+            ) as session:
+                async with session.get(url) as response:
+                    data = await response.json()
+            models: dict[str, LLMMetadata] = {}
+            for info in data.values():
+                for model in info.get("models", {}).values():
+                    model_id = model.get("id")
+                    if not model_id:
+                        continue
+                    models[model_id] = LLMMetadata(
+                        id=model_id,
+                        reasoning=model.get("reasoning", False),
+                        tool_call=model.get("tool_call", False),
+                        knowledge=model.get("knowledge", "none"),
+                        release_date=model.get("release_date", ""),
+                        modalities=model.get("modalities", {"input": [], "output": []}),
+                        open_weights=model.get("open_weights", False),
+                        limit=model.get("limit", {"context": 0, "output": 0}),
+                    )
+            self.replace(models)
+            logger.info("Successfully fetched metadata for %s LLMs.", len(models))
+        except Exception as exc:
+            logger.error("Failed to fetch LLM metadata: %s", exc)

@@ -1,3 +1,4 @@
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -17,15 +18,13 @@ except ImportError:  # pragma: no cover - fallback depends on runtime setup
     OUTPUT_MATHML = None
     katex_render_to_string = None
 
-from astrbot.core.log import LogManager
-
 SHIKI_RUNTIME_SCRIPT_ID = "astrbot-t2i-shiki-runtime"
 SHIKI_RUNTIME_TEMPLATE_PATTERN = re.compile(r"\{\{\s*shiki_runtime\s*\|\s*safe\s*\}\}")
 JINJA_SYNTAX_PATTERN = re.compile(r"\{[{%#]")
 JINJA_RAW_OPEN_PATTERN = re.compile(r"{%-?\s*raw\s*-?%}")
 JINJA_RAW_CLOSE_PATTERN = re.compile(r"{%-?\s*endraw\s*-?%}")
 
-logger = LogManager.GetLogger(log_name="astrbot")
+logger = logging.getLogger("astrbot")
 
 
 @lru_cache(maxsize=1)

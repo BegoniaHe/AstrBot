@@ -1,8 +1,24 @@
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from astrbot.core.platform.astr_message_event import AstrMessageEvent
+
+
+class ActiveEventControl(Protocol):
+    """Narrow control port for active event cancellation."""
+
+    def stop_all(
+        self,
+        umo: str,
+        exclude: AstrMessageEvent | None = None,
+    ) -> int: ...
+
+    def request_agent_stop_all(
+        self,
+        umo: str,
+        exclude: AstrMessageEvent | None = None,
+    ) -> int: ...
 
 
 class ActiveEventRegistry:
@@ -60,6 +76,3 @@ class ActiveEventRegistry:
                 event.set_extra("agent_stop_requested", True)
                 count += 1
         return count
-
-
-active_event_registry = ActiveEventRegistry()

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 from astrbot import logger
 from astrbot.core.agent.agent import Agent
 from astrbot.core.agent.handoff import HandoffTool
-from astrbot.core.provider.func_tool_manager import FunctionToolManager
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 
 if TYPE_CHECKING:
     from astrbot.core.persona_mgr import PersonaManager

@@ -10,14 +10,23 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from astrbot.core.agent.follow_up import FollowUpCoordinator
+from astrbot.core.agent.tool_image_cache import ToolImageCache
+from astrbot.core.computer.computer_client import ComputerRuntime
 from astrbot.core.config.astrbot_config import AstrBotConfig
 from astrbot.core.db.sqlite import SQLiteDatabase
 from astrbot.core.file_token_service import FileTokenService
 from astrbot.core.message.components import BaseMessageComponent
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
 from astrbot.core.runtime_services import RuntimeServices
+from astrbot.core.utils.llm_metadata import LLMMetadataCatalog
+from astrbot.core.utils.metrics import MetricsRuntime
 from astrbot.core.utils.pip_installer import PipInstaller
 from astrbot.core.utils.shared_preferences import SharedPreferences
 from astrbot.core.utils.t2i.renderer import HtmlRenderer
+from astrbot.core.utils.totp import TotpRuntimeState
+from astrbot.core.webchat.queue_manager import WebChatQueueManager
+from astrbot.core.webchat.run_coordinator import WebChatRunCoordinator
 
 
 class NoopAwaitable:
@@ -48,8 +57,10 @@ def create_isolated_runtime_services(
     data_path.mkdir(parents=True, exist_ok=True)
     config = AstrBotConfig(config_path=str(data_path / "cmd_config.json"))
     database = SQLiteDatabase(str(database_path))
+    webchat_queue_manager = WebChatQueueManager()
     return RuntimeServices(
         config=config,
+        catalogs=RuntimeCatalogs(),
         db=database,
         preferences=SharedPreferences(
             db_helper=database,
@@ -61,6 +72,18 @@ def create_isolated_runtime_services(
             config.get("pip_install_arg", ""),
             config.get("pypi_index_url", None),
         ),
+        webchat_queue_manager=webchat_queue_manager,
+        webchat_run_coordinator=WebChatRunCoordinator(webchat_queue_manager),
+        follow_up_coordinator=FollowUpCoordinator(),
+        llm_metadata_catalog=LLMMetadataCatalog(),
+        metrics=MetricsRuntime(
+            config,
+            database,
+            installation_id_path=data_path / ".installation_id",
+        ),
+        computer_runtime=ComputerRuntime(),
+        tool_image_cache=ToolImageCache(data_path / "temp" / "tool_images"),
+        totp_runtime_state=TotpRuntimeState(),
         demo_mode=False,
     )
 
@@ -364,7 +387,7 @@ def create_mock_llm_response(
     Returns:
         LLMResponse: 模拟的 LLM 响应
     """
-    from astrbot.core.provider.entities import LLMResponse, TokenUsage
+    from astrbot.core.agent.llm_types import LLMResponse, TokenUsage
 
     return LLMResponse(
         role=role,

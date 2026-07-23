@@ -5,14 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from astrbot.core.pipeline.bootstrap import ensure_builtin_stages_registered
+from astrbot.core.pipeline.bootstrap import builtin_stage_classes
 from astrbot.core.pipeline.process_stage.method.agent_sub_stages.internal import (
     InternalAgentSubStage,
 )
 from astrbot.core.pipeline.process_stage.method.agent_sub_stages.third_party import (
     ThirdPartyAgentSubStage,
 )
-from astrbot.core.pipeline.stage import Stage, registered_stages
 from astrbot.core.pipeline.stage_order import STAGES_ORDER
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -46,17 +45,17 @@ def test_smoke_critical_imports_in_fresh_interpreter() -> None:
     _run_code_in_fresh_interpreter(code, "Smoke import check failed.")
 
 
-def test_smoke_pipeline_stage_registration_matches_order() -> None:
-    ensure_builtin_stages_registered()
-    stage_names = {cls.__name__ for cls in registered_stages}
+def test_smoke_pipeline_stage_classes_match_fixed_order() -> None:
+    stages = builtin_stage_classes()
 
-    assert set(STAGES_ORDER).issubset(stage_names)
-    assert len(stage_names) == len(registered_stages)
+    assert tuple(stage.__name__ for stage in stages) == STAGES_ORDER
+    assert len({stage.__name__ for stage in stages}) == len(stages)
 
 
-def test_smoke_agent_sub_stages_are_stage_subclasses() -> None:
-    assert issubclass(InternalAgentSubStage, Stage)
-    assert issubclass(ThirdPartyAgentSubStage, Stage)
+def test_smoke_agent_sub_stages_are_private_agent_request_helpers() -> None:
+    """Agent request helpers are not independently schedulable pipeline stages."""
+    assert InternalAgentSubStage.__base__ is object
+    assert ThirdPartyAgentSubStage.__base__ is object
 
 
 def test_pipeline_package_exports_remain_compatible() -> None:
@@ -64,14 +63,13 @@ def test_pipeline_package_exports_remain_compatible() -> None:
 
     assert pipeline.ProcessStage is not None
     assert pipeline.RespondStage is not None
-    assert isinstance(pipeline.STAGES_ORDER, list)
+    assert isinstance(pipeline.STAGES_ORDER, tuple)
     assert "ProcessStage" in pipeline.STAGES_ORDER
 
 
-def test_builtin_stage_bootstrap_is_idempotent() -> None:
-    ensure_builtin_stages_registered()
-    before_count = len(registered_stages)
-    stage_names = {cls.__name__ for cls in registered_stages}
+def test_builtin_stage_classes_are_immutable_snapshots() -> None:
+    first = builtin_stage_classes()
+    second = builtin_stage_classes()
 
     expected_stage_names = {
         "WakingCheckStage",
@@ -85,10 +83,9 @@ def test_builtin_stage_bootstrap_is_idempotent() -> None:
         "RespondStage",
     }
 
-    assert expected_stage_names.issubset(stage_names)
-
-    ensure_builtin_stages_registered()
-    assert len(registered_stages) == before_count
+    assert expected_stage_names == {stage.__name__ for stage in first}
+    assert first == second
+    assert isinstance(first, tuple)
 
 
 def test_pipeline_import_is_stable_with_mocked_apscheduler() -> None:

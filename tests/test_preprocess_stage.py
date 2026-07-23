@@ -39,6 +39,9 @@ def _stage(**settings) -> PreProcessStage:
     stage.config = settings
     stage.platform_settings = settings.get("platform_settings", {})
     stage.stt_settings = settings.get("provider_stt_settings", {"enable": False})
+    stage.ctx = SimpleNamespace(
+        execution_context=SimpleNamespace(get_using_stt_provider=lambda _umo: None)
+    )
     return stage
 
 
@@ -271,9 +274,7 @@ async def test_stt_replaces_top_level_and_reply_records_and_updates_message_stri
 
     monkeypatch.setattr(Record, "convert_to_file_path", record_path)
     stage = _stage(provider_stt_settings={"enable": True})
-    stage.plugin_manager = SimpleNamespace(
-        context=SimpleNamespace(get_using_stt_provider=lambda _: Provider())
-    )
+    stage.ctx.execution_context.get_using_stt_provider = lambda _umo: Provider()
 
     await stage.process(event)
 
@@ -307,9 +308,7 @@ async def test_stt_retries_missing_file_and_keeps_message_on_non_retryable_error
     monkeypatch.setattr(Record, "convert_to_file_path", record_path)
     monkeypatch.setattr(asyncio, "sleep", no_sleep)
     stage = _stage(provider_stt_settings={"enable": True})
-    stage.plugin_manager = SimpleNamespace(
-        context=SimpleNamespace(get_using_stt_provider=lambda _: Provider())
-    )
+    stage.ctx.execution_context.get_using_stt_provider = lambda _umo: Provider()
 
     await stage.process(event)
 
@@ -322,9 +321,7 @@ async def test_stt_without_provider_keeps_current_message(monkeypatch):
     record = Record(file="voice")
     event = FakeEvent([record])
     stage = _stage(provider_stt_settings={"enable": True})
-    stage.plugin_manager = SimpleNamespace(
-        context=SimpleNamespace(get_using_stt_provider=lambda _: None)
-    )
+    stage.ctx.execution_context.get_using_stt_provider = lambda _umo: None
 
     await stage.process(event)
 

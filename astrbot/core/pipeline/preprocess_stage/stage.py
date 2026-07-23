@@ -17,7 +17,7 @@ from astrbot.core.utils.media_utils import (
 )
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 
 def _split_path_mapping(mapping: str) -> tuple[str, str] | None:
@@ -47,12 +47,10 @@ def _split_path_mapping(mapping: str) -> tuple[str, str] | None:
     return None
 
 
-@register_stage
 class PreProcessStage(Stage):
     async def initialize(self, ctx: PipelineContext) -> None:
         self.ctx = ctx
         self.config = ctx.astrbot_config
-        self.plugin_manager = ctx.plugin_manager
 
         self.stt_settings: dict = self.config.get("provider_stt_settings", {})
         self.platform_settings: dict = self.config.get("platform_settings", {})
@@ -252,7 +250,7 @@ class PreProcessStage(Stage):
         # STT
         if self.stt_settings.get("enable", False):
             # TODO: 独立
-            ctx = self.plugin_manager.context
+            ctx = self.ctx.execution_context
             stt_provider = ctx.get_using_stt_provider(event.unified_msg_origin)
             if not stt_provider:
                 logger.warning(

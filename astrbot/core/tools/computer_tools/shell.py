@@ -9,7 +9,6 @@ from typing import Any
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.computer.computer_client import get_booter
 from astrbot.core.utils.astrbot_path import get_astrbot_system_tmp_path
 
 from ..registry import builtin_tool
@@ -93,7 +92,7 @@ class ExecuteShellTool(FunctionTool):
         if permission_error := check_admin_permission(context, "Shell execution"):
             return permission_error
 
-        sb = await get_booter(
+        sb = await context.context.context.computer_runtime.get_booter(
             context.context.context,
             context.context.event.unified_msg_origin,
         )

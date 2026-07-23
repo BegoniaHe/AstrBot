@@ -5,10 +5,9 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.message_type import MessageType
 
 from ..context import PipelineContext
-from ..stage import Stage, register_stage
+from ..stage import Stage
 
 
-@register_stage
 class WhitelistCheckStage(Stage):
     """检查是否在群聊/私聊白名单"""
 

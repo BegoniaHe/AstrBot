@@ -7,8 +7,8 @@ from collections.abc import AsyncGenerator as AsyncGeneratorABC
 from astrbot import logger
 from astrbot.core.message.message_event_result import MessageEventResult
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
-from astrbot.core.star.star import star_map
-from astrbot.core.star.star_handler import EventType, star_handlers_registry
+from astrbot.core.star.star import PluginRegistry
+from astrbot.core.star.star_handler import EventType, HandlerRegistry
 
 
 async def call_handler(
@@ -78,6 +78,8 @@ async def call_event_hook(
     event: AstrMessageEvent,
     hook_type: EventType,
     *args,
+    handler_registry: HandlerRegistry,
+    plugin_registry: PluginRegistry,
     **kwargs,
 ) -> bool:
     """调用事件钩子函数
@@ -87,15 +89,17 @@ async def call_event_hook(
     #
 
     """
-    handlers = star_handlers_registry.get_handlers_by_event_type(
+    handlers = handler_registry.get_handlers_by_event_type(
         hook_type,
         plugins_name=event.plugins_name,
     )
     for handler in handlers:
+        plugin = plugin_registry.get_by_module(handler.handler_module_path)
+        plugin_name = plugin.name if plugin else handler.handler_module_path
         try:
             assert inspect.iscoroutinefunction(handler.handler)
             logger.debug(
-                f"hook({hook_type.name}) -> {star_map[handler.handler_module_path].name} - {handler.handler_name}",
+                f"hook({hook_type.name}) -> {plugin_name} - {handler.handler_name}",
             )
             await handler.handler(event, *args, **kwargs)
         except asyncio.CancelledError:
@@ -107,7 +111,7 @@ async def call_event_hook(
 
         if event.is_stopped():
             logger.info(
-                f"{star_map[handler.handler_module_path].name} - {handler.handler_name} 终止了事件传播。",
+                f"{plugin_name} - {handler.handler_name} 终止了事件传播。",
             )
             return True
 

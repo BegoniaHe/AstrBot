@@ -19,6 +19,7 @@ from astrbot.core.computer.booters.local import (
     LocalShellComponent,
     _is_safe_command,
 )
+from astrbot.core.computer.computer_client import ComputerRuntime
 
 
 class TestLocalBooterInit:
@@ -420,28 +421,20 @@ class TestComputerClient:
     """Tests for computer_client module functions."""
 
     def test_get_local_booter(self):
-        """Test get_local_booter returns singleton LocalBooter."""
-        from astrbot.core.computer import computer_client
+        """A runtime reuses its own local booter without sharing globally."""
+        runtime = ComputerRuntime()
 
-        # Clear the global booter to test singleton
-        computer_client.local_booter = None
-
-        booter1 = computer_client.get_local_booter()
-        booter2 = computer_client.get_local_booter()
+        booter1 = runtime.get_local_booter()
+        booter2 = runtime.get_local_booter()
 
         assert isinstance(booter1, LocalBooter)
-        assert booter1 is booter2  # Same instance (singleton)
-
-        # Reset for other tests
-        computer_client.local_booter = None
+        assert booter1 is booter2
+        assert booter1 is not ComputerRuntime().get_local_booter()
 
     @pytest.mark.asyncio
     async def test_get_booter_shipyard_neo(self):
         """Test get_booter with shipyard_neo type."""
-        from astrbot.core.computer import computer_client
-
-        # Clear session booter
-        computer_client.session_booter.clear()
+        runtime = ComputerRuntime()
 
         mock_context = MagicMock()
         mock_config = MagicMock()
@@ -478,21 +471,16 @@ class TestComputerClient:
                 AsyncMock(),
             ),
         ):
-            # Directly set the booter in the session
-            computer_client.session_booter["test-session-id"] = mock_booter
+            runtime._session_booters["test-session-id"] = mock_booter
+            runtime._session_booter_types["test-session-id"] = "shipyard_neo"
 
-            booter = await computer_client.get_booter(mock_context, "test-session-id")
+            booter = await runtime.get_booter(mock_context, "test-session-id")
             assert booter is mock_booter
-
-        # Cleanup
-        computer_client.session_booter.clear()
 
     @pytest.mark.asyncio
     async def test_get_booter_unknown_type(self):
         """Test get_booter with unknown booter type raises ValueError."""
-        from astrbot.core.computer import computer_client
-
-        computer_client.session_booter.clear()
+        runtime = ComputerRuntime()
 
         mock_context = MagicMock()
         mock_config = MagicMock()
@@ -507,15 +495,13 @@ class TestComputerClient:
         mock_context.get_config = MagicMock(return_value=mock_config)
 
         with pytest.raises(ValueError) as exc_info:
-            await computer_client.get_booter(mock_context, "test-session-id")
+            await runtime.get_booter(mock_context, "test-session-id")
         assert "Unknown booter type" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_get_booter_reuses_existing(self):
         """Test get_booter reuses existing booter for same session."""
-        from astrbot.core.computer import computer_client
-
-        computer_client.session_booter.clear()
+        runtime = ComputerRuntime()
 
         mock_context = MagicMock()
         mock_config = MagicMock()
@@ -543,23 +529,19 @@ class TestComputerClient:
                 AsyncMock(),
             ),
         ):
-            # Pre-set the booter
-            computer_client.session_booter["test-session"] = mock_booter
+            runtime._session_booters["test-session"] = mock_booter
+            runtime._session_booter_types["test-session"] = "shipyard_neo"
 
-            booter1 = await computer_client.get_booter(mock_context, "test-session")
-            booter2 = await computer_client.get_booter(mock_context, "test-session")
+            booter1 = await runtime.get_booter(mock_context, "test-session")
+            booter2 = await runtime.get_booter(mock_context, "test-session")
             assert booter1 is booter2
-
-        # Cleanup
-        computer_client.session_booter.clear()
 
     @pytest.mark.asyncio
     async def test_get_booter_rebuild_unavailable(self):
         """Test get_booter rebuilds when existing booter is unavailable."""
-        from astrbot.core.computer import computer_client
         from astrbot.core.computer.booters.shipyard_neo import ShipyardNeoBooter
 
-        computer_client.session_booter.clear()
+        runtime = ComputerRuntime()
 
         mock_context = MagicMock()
         mock_config = MagicMock()
@@ -595,13 +577,11 @@ class TestComputerClient:
             ),
         ):
             session_id = "test-session-rebuild"
-            # Pre-set the unavailable booter
-            computer_client.session_booter[session_id] = mock_unavailable_booter
+            runtime._session_booters[session_id] = mock_unavailable_booter
+            runtime._session_booter_types[session_id] = "shipyard_neo"
 
             # get_booter should detect the booter is unavailable and create a new one
-            new_booter_instance = await computer_client.get_booter(
-                mock_context, session_id
-            )
+            new_booter_instance = await runtime.get_booter(mock_context, session_id)
 
             # Assert that a new booter was created and is now in the session
             mock_booter_cls.assert_called_once()
@@ -610,10 +590,7 @@ class TestComputerClient:
             )
             mock_new_booter.boot.assert_awaited_once()
             assert new_booter_instance is mock_new_booter
-            assert computer_client.session_booter[session_id] is mock_new_booter
-
-        # Cleanup
-        computer_client.session_booter.clear()
+            assert runtime.get_session_booter(session_id) is mock_new_booter
 
 
 class TestSyncSkillsToSandbox:

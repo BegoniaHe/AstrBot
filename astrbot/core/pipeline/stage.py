@@ -5,14 +5,6 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 from .context import PipelineContext
 
-registered_stages: list[type[Stage]] = []  # 维护了所有已注册的 Stage 实现类类型
-
-
-def register_stage(cls):
-    """一个简单的装饰器，用于注册 pipeline 包下的 Stage 实现类"""
-    registered_stages.append(cls)
-    return cls
-
 
 class Stage(abc.ABC):
     """描述一个 Pipeline 的某个阶段"""

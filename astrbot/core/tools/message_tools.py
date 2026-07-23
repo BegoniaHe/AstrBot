@@ -3,7 +3,9 @@ import json
 import os
 import shlex
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import cast
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
@@ -13,7 +15,6 @@ from astrbot import logger
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.computer.computer_client import get_booter
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.tools.computer_tools.fs import _remote_basename
@@ -168,7 +169,7 @@ class SendMessageToUserTool(FunctionTool[AstrAgentContext]):
                     )
 
         try:
-            sb = await get_booter(
+            sb = await context.context.context.computer_runtime.get_booter(
                 context.context.context,
                 context.context.event.unified_msg_origin,
             )
@@ -195,8 +196,10 @@ class SendMessageToUserTool(FunctionTool[AstrAgentContext]):
         component_type: str,
         index: int,
     ) -> Comp.BaseMessageComponent | str:
-        path = message.get("path")
-        url = message.get("url")
+        path_value = message.get("path")
+        url_value = message.get("url")
+        path = path_value if isinstance(path_value, str) else None
+        url = url_value if isinstance(url_value, str) else None
         if not path and not url:
             return (
                 f"error: messages[{index}] must include path or url for "
@@ -212,8 +215,19 @@ class SendMessageToUserTool(FunctionTool[AstrAgentContext]):
                 return Comp.Record.fromFileSystem(path=local_path)
             if component_type == "video":
                 return Comp.Video.fromFileSystem(path=local_path)
-            name = message.get("text") or _remote_basename(path) or "file"
+            name_value = message.get("text")
+            name = (
+                name_value
+                if isinstance(name_value, str) and name_value
+                else _remote_basename(path) or "file"
+            )
             return Comp.File(name=name, file=local_path)
+
+        if not url:
+            return (
+                f"error: messages[{index}] must include path or url for "
+                f"{component_type} component."
+            )
 
         if component_type == "image":
             return Comp.Image.fromURL(url=url)
@@ -221,7 +235,12 @@ class SendMessageToUserTool(FunctionTool[AstrAgentContext]):
             return Comp.Record.fromURL(url=url)
         if component_type == "video":
             return Comp.Video.fromURL(url=url)
-        name = message.get("text") or os.path.basename(url) or "file"
+        name_value = message.get("text")
+        name = (
+            name_value
+            if isinstance(name_value, str) and name_value
+            else os.path.basename(url) or "file"
+        )
         return Comp.File(name=name, url=url)
 
     async def call(
@@ -374,6 +393,7 @@ class SendPokeToUserTool(FunctionTool[AstrAgentContext]):
         send_poke = getattr(event, "send_poke", None)
         if not callable(send_poke):
             return "error: current event does not expose send_poke."
+        send_poke_async = cast(Callable[..., Awaitable[object]], send_poke)
 
         sender_id = event.get_sender_id().strip()
         user_id = str(kwargs.get("user_id", "")).strip() or sender_id
@@ -399,7 +419,7 @@ class SendPokeToUserTool(FunctionTool[AstrAgentContext]):
         normalized_times = max(1, min(normalized_times, 3))
 
         for attempt in range(normalized_times):
-            await send_poke(user_id=user_id)
+            await send_poke_async(user_id=user_id)
             if attempt + 1 < normalized_times:
                 await asyncio.sleep(0.4)
 

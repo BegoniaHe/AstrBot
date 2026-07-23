@@ -333,10 +333,9 @@ class TestIssue5464:
         (each potentially running in different event loops) access the
         same SessionLockManager concurrently.
         """
-        from astrbot.core.utils.session_lock import session_lock_manager
-
         errors: list[Exception] = []
         results: list[str] = []
+        manager = SessionLockManager()
 
         def simulate_onebot_instance(instance_id: int, session_ids: list[str]):
             """Simulate a OneBot instance running in its own event loop."""
@@ -347,7 +346,7 @@ class TestIssue5464:
                 async def process_messages():
                     for session_id in session_ids:
                         try:
-                            async with session_lock_manager.acquire_lock(session_id):
+                            async with manager.acquire_lock(session_id):
                                 results.append(f"instance-{instance_id}-{session_id}")
                         except Exception as e:
                             errors.append(e)

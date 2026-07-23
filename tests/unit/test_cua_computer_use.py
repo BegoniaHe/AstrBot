@@ -3,14 +3,16 @@ import base64
 import json
 import shlex
 from pathlib import Path
+from types import SimpleNamespace
 
 import mcp
 import pytest
 
 from astrbot.core.astr_agent_tool_exec import FunctionToolExecutor
 from astrbot.core.computer.booters.cua import CuaShellComponent
+from astrbot.core.computer.computer_client import ComputerRuntime
 from astrbot.core.config.default import CONFIG_METADATA_3
-from astrbot.core.provider.func_tool_manager import FunctionToolManager
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 
 
 class FakeContext:
@@ -21,9 +23,10 @@ class FakeContext:
         return self._config
 
 
-def _clear_cua_session_state(computer_client, session_id: str) -> None:
-    computer_client.session_booter.pop(session_id, None)
-    state = getattr(computer_client, "cua_idle_state", {}).pop(session_id, None)
+def _clear_cua_session_state(runtime: ComputerRuntime, session_id: str) -> None:
+    runtime._session_booters.pop(session_id, None)
+    runtime._session_booter_types.pop(session_id, None)
+    state = runtime._cua_idle_states.pop(session_id, None)
     if state is not None and not state.task.done():
         state.task.cancel()
 
@@ -202,8 +205,7 @@ async def test_get_booter_creates_cua_booter(monkeypatch):
     monkeypatch.setattr(
         computer_client, "_sync_skills_to_sandbox", lambda booter: asyncio.sleep(0)
     )
-    monkeypatch.setitem(computer_client.session_booter, "cua-test", None)
-    computer_client.session_booter.pop("cua-test", None)
+    runtime = ComputerRuntime()
     monkeypatch.setattr(
         "astrbot.core.computer.booters.cua.CuaBooter",
         FakeCuaBooter,
@@ -227,7 +229,7 @@ async def test_get_booter_creates_cua_booter(monkeypatch):
         }
     )
 
-    booter = await computer_client.get_booter(ctx, "cua-test")
+    booter = await runtime.get_booter(ctx, "cua-test")
 
     assert isinstance(booter, FakeCuaBooter)
     assert created == [("linux", "linux", 120, False, True, "")]
@@ -303,14 +305,17 @@ async def test_cua_config_log_does_not_include_api_key(monkeypatch):
     monkeypatch.setattr(
         computer_client, "_sync_skills_to_sandbox", lambda booter: asyncio.sleep(0)
     )
-    monkeypatch.setitem(computer_client.session_booter, "cua-log-test", None)
-    computer_client.session_booter.pop("cua-log-test", None)
+    runtime = ComputerRuntime()
     monkeypatch.setattr(
         "astrbot.core.computer.booters.cua.CuaBooter",
         FakeCuaBooter,
         raising=False,
     )
-    monkeypatch.setattr(computer_client.logger, "info", log_messages.append)
+
+    def _capture_info(message: str, *args: object) -> None:
+        log_messages.append(message % args if args else message)
+
+    monkeypatch.setattr(computer_client.logger, "info", _capture_info)
 
     ctx = FakeContext(
         {
@@ -325,7 +330,7 @@ async def test_cua_config_log_does_not_include_api_key(monkeypatch):
         }
     )
 
-    await computer_client.get_booter(ctx, "cua-log-test")
+    await runtime.get_booter(ctx, "cua-log-test")
 
     assert log_messages
     assert all("sk-secret-value" not in message for message in log_messages)
@@ -352,8 +357,7 @@ async def test_get_booter_shuts_down_client_when_skill_sync_fails(monkeypatch):
         raise RuntimeError("sync failed")
 
     monkeypatch.setattr(computer_client, "_sync_skills_to_sandbox", fail_sync)
-    monkeypatch.setitem(computer_client.session_booter, "cua-sync-fail", None)
-    computer_client.session_booter.pop("cua-sync-fail", None)
+    runtime = ComputerRuntime()
     monkeypatch.setattr(
         "astrbot.core.computer.booters.cua.CuaBooter",
         FakeCuaBooter,
@@ -370,10 +374,10 @@ async def test_get_booter_shuts_down_client_when_skill_sync_fails(monkeypatch):
     )
 
     with pytest.raises(RuntimeError, match="sync failed"):
-        await computer_client.get_booter(ctx, "cua-sync-fail")
+        await runtime.get_booter(ctx, "cua-sync-fail")
 
     assert len(shutdowns) == 1
-    assert "cua-sync-fail" not in computer_client.session_booter
+    assert runtime.get_session_booter("cua-sync-fail") is None
 
 
 @pytest.mark.asyncio
@@ -403,7 +407,8 @@ async def test_cua_idle_timeout_shuts_down_session_proactively(monkeypatch):
         FakeCuaBooter,
         raising=False,
     )
-    _clear_cua_session_state(computer_client, "cua-idle-expire")
+    runtime = ComputerRuntime()
+    _clear_cua_session_state(runtime, "cua-idle-expire")
 
     ctx = FakeContext(
         {
@@ -417,11 +422,11 @@ async def test_cua_idle_timeout_shuts_down_session_proactively(monkeypatch):
         }
     )
 
-    booter = await computer_client.get_booter(ctx, "cua-idle-expire")
+    booter = await runtime.get_booter(ctx, "cua-idle-expire")
     await asyncio.sleep(0.2)
 
     assert shutdowns == [booter.session_id]
-    assert "cua-idle-expire" not in computer_client.session_booter
+    assert runtime.get_session_booter("cua-idle-expire") is None
 
 
 @pytest.mark.asyncio
@@ -451,7 +456,8 @@ async def test_cua_idle_timeout_refreshes_on_reuse(monkeypatch):
         FakeCuaBooter,
         raising=False,
     )
-    _clear_cua_session_state(computer_client, "cua-idle-refresh")
+    runtime = ComputerRuntime()
+    _clear_cua_session_state(runtime, "cua-idle-refresh")
 
     ctx = FakeContext(
         {
@@ -465,9 +471,9 @@ async def test_cua_idle_timeout_refreshes_on_reuse(monkeypatch):
         }
     )
 
-    booter1 = await computer_client.get_booter(ctx, "cua-idle-refresh")
+    booter1 = await runtime.get_booter(ctx, "cua-idle-refresh")
     await asyncio.sleep(0.05)
-    booter2 = await computer_client.get_booter(ctx, "cua-idle-refresh")
+    booter2 = await runtime.get_booter(ctx, "cua-idle-refresh")
     await asyncio.sleep(0.05)
 
     assert booter2 is booter1
@@ -476,7 +482,7 @@ async def test_cua_idle_timeout_refreshes_on_reuse(monkeypatch):
     await asyncio.sleep(0.25)
 
     assert shutdowns == [booter1.session_id]
-    assert "cua-idle-refresh" not in computer_client.session_booter
+    assert runtime.get_session_booter("cua-idle-refresh") is None
 
 
 @pytest.mark.asyncio
@@ -506,7 +512,8 @@ async def test_cua_idle_timeout_zero_disables_proactive_shutdown(monkeypatch):
         FakeCuaBooter,
         raising=False,
     )
-    _clear_cua_session_state(computer_client, "cua-idle-disabled")
+    runtime = ComputerRuntime()
+    _clear_cua_session_state(runtime, "cua-idle-disabled")
 
     ctx = FakeContext(
         {
@@ -520,24 +527,24 @@ async def test_cua_idle_timeout_zero_disables_proactive_shutdown(monkeypatch):
         }
     )
 
-    await computer_client.get_booter(ctx, "cua-idle-disabled")
+    await runtime.get_booter(ctx, "cua-idle-disabled")
     await asyncio.sleep(0.05)
 
     assert shutdowns == []
-    assert "cua-idle-disabled" in computer_client.session_booter
-    assert "cua-idle-disabled" not in computer_client.cua_idle_state
+    assert runtime.get_session_booter("cua-idle-disabled") is not None
+    assert "cua-idle-disabled" not in runtime._cua_idle_states
 
 
 @pytest.mark.asyncio
 async def test_non_cua_booter_does_not_schedule_idle_cleanup(monkeypatch):
-    from astrbot.core.computer import computer_client
-
     class FakeNonCuaBooter:
         async def available(self):
             return True
 
-    _clear_cua_session_state(computer_client, "sandbox-session")
-    computer_client.session_booter["sandbox-session"] = FakeNonCuaBooter()
+    runtime = ComputerRuntime()
+    _clear_cua_session_state(runtime, "sandbox-session")
+    runtime._session_booters["sandbox-session"] = FakeNonCuaBooter()
+    runtime._session_booter_types["sandbox-session"] = "shipyard_neo"
 
     ctx = FakeContext(
         {
@@ -553,10 +560,10 @@ async def test_non_cua_booter_does_not_schedule_idle_cleanup(monkeypatch):
         }
     )
 
-    booter = await computer_client.get_booter(ctx, "sandbox-session")
+    booter = await runtime.get_booter(ctx, "sandbox-session")
 
     assert isinstance(booter, FakeNonCuaBooter)
-    assert "sandbox-session" not in computer_client.cua_idle_state
+    assert "sandbox-session" not in runtime._cua_idle_states
 
 
 @pytest.mark.asyncio
@@ -1629,7 +1636,9 @@ async def test_screenshot_tool_returns_image_and_sends_file(monkeypatch, tmp_pat
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(cua_tools, "get_booter", fake_get_booter)
+    FakeAstrContext.context.computer_runtime = SimpleNamespace(
+        get_booter=fake_get_booter
+    )
     monkeypatch.setattr(cua_tools, "get_astrbot_temp_path", lambda: str(tmp_path))
 
     result = await CuaScreenshotTool().call(FakeWrapper(), send_to_user=True)
@@ -1711,7 +1720,9 @@ async def test_screenshot_tool_normalizes_supported_screenshot_shapes(
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(cua_tools, "get_booter", fake_get_booter)
+    FakeAstrContext.context.computer_runtime = SimpleNamespace(
+        get_booter=fake_get_booter
+    )
     monkeypatch.setattr(cua_tools, "get_astrbot_temp_path", lambda: str(tmp_path))
 
     result = await CuaScreenshotTool().call(FakeWrapper(), send_to_user=True)
@@ -1764,7 +1775,9 @@ async def test_screenshot_tool_can_opt_in_to_llm_image_content(monkeypatch, tmp_
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(cua_tools, "get_booter", fake_get_booter)
+    FakeAstrContext.context.computer_runtime = SimpleNamespace(
+        get_booter=fake_get_booter
+    )
     monkeypatch.setattr(cua_tools, "get_astrbot_temp_path", lambda: str(tmp_path))
 
     result = await CuaScreenshotTool().call(
@@ -1815,7 +1828,9 @@ async def test_screenshot_tool_can_opt_out_of_llm_image_content(monkeypatch, tmp
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(cua_tools, "get_booter", fake_get_booter)
+    FakeAstrContext.context.computer_runtime = SimpleNamespace(
+        get_booter=fake_get_booter
+    )
     monkeypatch.setattr(cua_tools, "get_astrbot_temp_path", lambda: str(tmp_path))
 
     result = await CuaScreenshotTool().call(

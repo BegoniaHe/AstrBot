@@ -6,10 +6,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 from astrbot import logger
 from astrbot.core.skills.skill_manager import SANDBOX_SKILLS_ROOT, SkillManager
-from astrbot.core.star.context import Context
 from astrbot.core.utils.astrbot_path import (
     get_astrbot_skills_path,
     get_astrbot_temp_path,
@@ -18,19 +18,17 @@ from astrbot.core.utils.astrbot_path import (
 from .booters.base import ComputerBooter
 from .booters.local import LocalBooter
 
-session_booter: dict[str, ComputerBooter] = {}
-session_booter_locks: dict[str, asyncio.Lock] = {}
-local_booter: ComputerBooter | None = None
+if TYPE_CHECKING:
+    from astrbot.core.execution_context import CoreExecutionContext
+
+
 _MANAGED_SKILLS_FILE = ".astrbot_managed_skills.json"
 
 
 @dataclass(slots=True)
 class _CUAIdleState:
     expires_at: float
-    task: asyncio.Task
-
-
-cua_idle_state: dict[str, _CUAIdleState] = {}
+    task: asyncio.Task[None]
 
 
 def _get_cua_idle_timeout(config: dict) -> float:
@@ -43,49 +41,86 @@ def _get_cua_idle_timeout(config: dict) -> float:
     return max(timeout, 0.0)
 
 
-def _clear_cua_idle_state(session_id: str) -> None:
-    state = cua_idle_state.pop(session_id, None)
-    if state is not None and not state.task.done():
-        state.task.cancel()
+class _ComputerRuntimeState:
+    """Internal mutable state shared by the computer runtime operations.
 
+    The public :class:`ComputerRuntime` below owns this state for one
+    :class:`RuntimeServices` value.  It deliberately has no process-global
+    fallback, so independent AstrBot runtimes cannot share sandboxes, locks,
+    or CUA idle tasks.
+    """
 
-def _schedule_cua_idle_cleanup(session_id: str, timeout: float) -> None:
-    _clear_cua_idle_state(session_id)
-    if timeout <= 0:
-        return
-    expires_at = time.monotonic() + timeout
+    def __init__(self) -> None:
+        self._session_booters: dict[str, ComputerBooter] = {}
+        self._session_booter_types: dict[str, str] = {}
+        self._session_booter_locks: dict[str, asyncio.Lock] = {}
+        self._cua_idle_states: dict[str, _CUAIdleState] = {}
+        self._local_booter: ComputerBooter | None = None
+        self._terminated = False
 
-    async def _expire_when_idle() -> None:
-        try:
-            remaining = expires_at - time.monotonic()
-            if remaining > 0:
-                await asyncio.sleep(remaining)
+    def get_session_booter(self, session_id: str) -> ComputerBooter | None:
+        """Return the existing session booter without creating one."""
+        return self._session_booters.get(session_id)
 
-            state = cua_idle_state.get(session_id)
-            if state is None or state.expires_at != expires_at:
-                return
+    def _ensure_active(self) -> None:
+        if self._terminated:
+            raise RuntimeError("Computer runtime has been terminated.")
 
-            booter = session_booter.get(session_id)
-            if booter is not None:
-                try:
-                    await booter.shutdown()
-                except Exception as shutdown_err:
-                    logger.warning(
-                        "[Computer] Failed to shutdown idle CUA sandbox for session %s: %s",
-                        session_id,
-                        shutdown_err,
-                    )
-                finally:
-                    session_booter.pop(session_id, None)
-        except asyncio.CancelledError:
-            raise
-        finally:
-            state = cua_idle_state.get(session_id)
-            if state is not None and state.expires_at == expires_at:
-                cua_idle_state.pop(session_id, None)
+    def _clear_cua_idle_state(self, session_id: str) -> None:
+        state = self._cua_idle_states.pop(session_id, None)
+        if state is not None and not state.task.done():
+            state.task.cancel()
 
-    task = asyncio.create_task(_expire_when_idle())
-    cua_idle_state[session_id] = _CUAIdleState(expires_at=expires_at, task=task)
+    def _schedule_cua_idle_cleanup(self, session_id: str, timeout: float) -> None:
+        self._clear_cua_idle_state(session_id)
+        if timeout <= 0:
+            return
+        expires_at = time.monotonic() + timeout
+
+        async def _expire_when_idle() -> None:
+            try:
+                remaining = expires_at - time.monotonic()
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
+
+                state = self._cua_idle_states.get(session_id)
+                if state is None or state.expires_at != expires_at:
+                    return
+
+                booter = self._session_booters.get(session_id)
+                if booter is not None:
+                    try:
+                        await booter.shutdown()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as shutdown_err:  # noqa: BLE001
+                        logger.warning(
+                            "[Computer] Failed to shutdown idle CUA sandbox for session %s: %s",
+                            session_id,
+                            shutdown_err,
+                        )
+                    finally:
+                        self._session_booters.pop(session_id, None)
+                        self._session_booter_types.pop(session_id, None)
+            except asyncio.CancelledError:
+                raise
+            finally:
+                state = self._cua_idle_states.get(session_id)
+                if state is not None and state.expires_at == expires_at:
+                    self._cua_idle_states.pop(session_id, None)
+
+        task = asyncio.create_task(_expire_when_idle())
+        self._cua_idle_states[session_id] = _CUAIdleState(
+            expires_at=expires_at,
+            task=task,
+        )
+
+    @staticmethod
+    async def _shutdown_booter(booter: ComputerBooter, booter_type: str) -> None:
+        if booter_type == "shipyard_neo":
+            await booter.shutdown(delete_sandbox=True)
+        else:
+            await booter.shutdown()
 
 
 def _list_local_skill_dirs(skills_root: Path) -> list[Path]:
@@ -537,136 +572,221 @@ async def _sync_skills_to_sandbox(booter: ComputerBooter) -> None:
                 logger.warning(f"Failed to remove temp skills zip: {zip_path}")
 
 
-async def get_booter(
-    context: Context,
-    session_id: str,
-) -> ComputerBooter:
-    lock = session_booter_locks.setdefault(session_id, asyncio.Lock())
-    async with lock:
-        config = context.get_config(umo=session_id)
+class ComputerRuntime(_ComputerRuntimeState):
+    """Runtime-owned computer sandbox capability."""
 
-        runtime = config.get("provider_settings", {}).get(
-            "computer_use_runtime", "local"
-        )
-        if runtime == "local":
-            return get_local_booter()
-        elif runtime == "none":
-            raise RuntimeError("Sandbox runtime is disabled by configuration.")
+    async def get_booter(
+        self,
+        context: CoreExecutionContext,
+        session_id: str,
+    ) -> ComputerBooter:
+        """Return the configured local or sandbox booter for one session."""
+        self._ensure_active()
+        lock = self._session_booter_locks.setdefault(session_id, asyncio.Lock())
+        async with lock:
+            config = context.get_config(umo=session_id)
 
-        sandbox_cfg = config.get("provider_settings", {}).get("sandbox", {})
-        booter_type = sandbox_cfg.get("booter", "shipyard_neo")
-        cua_idle_timeout = (
-            _get_cua_idle_timeout(config) if booter_type == "cua" else 0.0
-        )
+            runtime = config.get("provider_settings", {}).get(
+                "computer_use_runtime", "local"
+            )
+            if runtime == "local":
+                return self.get_local_booter()
+            if runtime == "none":
+                raise RuntimeError("Sandbox runtime is disabled by configuration.")
 
-        if session_id in session_booter:
-            booter = session_booter[session_id]
-            if not await booter.available():
-                # Clean up old booter before rebuilding so sandbox resources
-                # on Bay (containers, volumes, networks) are not leaked.
+            sandbox_cfg = config.get("provider_settings", {}).get("sandbox", {})
+            booter_type = sandbox_cfg.get("booter", "shipyard_neo")
+            cua_idle_timeout = (
+                _get_cua_idle_timeout(config) if booter_type == "cua" else 0.0
+            )
+
+            booter = self._session_booters.get(session_id)
+            if booter is not None and not await booter.available():
+                # Clean up old booters before rebuilding so remote resources
+                # (containers, volumes, and networks) are not leaked.
                 try:
-                    if booter_type == "shipyard_neo":
-                        await booter.shutdown(delete_sandbox=True)
-                    else:
-                        await booter.shutdown()
-                except Exception as shutdown_err:
+                    await self._shutdown_booter(
+                        booter,
+                        self._session_booter_types.get(session_id, booter_type),
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as shutdown_err:  # noqa: BLE001
                     logger.warning(
                         "[Computer] Error shutting down stale booter for session %s: %s",
                         session_id,
                         shutdown_err,
                     )
-                _clear_cua_idle_state(session_id)
-                session_booter.pop(session_id, None)
-        if session_id not in session_booter:
-            uuid_str = uuid.uuid5(uuid.NAMESPACE_DNS, session_id).hex
-            logger.info(
-                f"[Computer] Initializing booter: type={booter_type}, session={session_id}"
-            )
-            if booter_type == "shipyard_neo":
-                from .booters.shipyard_neo import ShipyardNeoBooter
+                self._clear_cua_idle_state(session_id)
+                self._session_booters.pop(session_id, None)
+                self._session_booter_types.pop(session_id, None)
+                booter = None
 
-                ep = sandbox_cfg.get("shipyard_neo_endpoint", "")
-                token = sandbox_cfg.get("shipyard_neo_access_token", "")
-                ttl = sandbox_cfg.get("shipyard_neo_ttl", 3600)
-                profile = sandbox_cfg.get("shipyard_neo_profile", "python-default")
-
-                # Auto-discover token from Bay's credentials.json if not configured
-                if not token:
-                    token = _discover_bay_credentials(ep)
-
+            if booter is None:
+                uuid_str = uuid.uuid5(uuid.NAMESPACE_DNS, session_id).hex
                 logger.info(
-                    f"[Computer] Shipyard Neo config: endpoint={ep}, profile={profile}, ttl={ttl}"
+                    "[Computer] Initializing booter: type=%s, session=%s",
+                    booter_type,
+                    session_id,
                 )
-                client = ShipyardNeoBooter(
-                    endpoint_url=ep,
-                    access_token=token,
-                    profile=profile,
-                    ttl=ttl,
-                )
-            elif booter_type == "cua":
-                from .booters.cua import CuaBooter, build_cua_booter_kwargs
+                if booter_type == "shipyard_neo":
+                    from .booters.shipyard_neo import ShipyardNeoBooter
 
-                cua_kwargs = build_cua_booter_kwargs(sandbox_cfg)
-                logger.info(
-                    f"[Computer] CUA config: image={cua_kwargs['image']}, "
-                    f"os_type={cua_kwargs['os_type']}, ttl={cua_kwargs['ttl']}"
-                )
-                client = CuaBooter(**cua_kwargs)
-            elif booter_type == "boxlite":
-                from .booters.boxlite import BoxliteBooter
-
-                client = BoxliteBooter()
-            else:
-                raise ValueError(f"Unknown booter type: {booter_type}")
-
-            try:
-                await client.boot(uuid_str)
-                logger.info(
-                    f"[Computer] Sandbox booted successfully: type={booter_type}, session={session_id}"
-                )
-                await _sync_skills_to_sandbox(client)
-            except Exception as e:
-                logger.error(f"Error booting sandbox for session {session_id}: {e}")
-                try:
-                    if booter_type == "shipyard_neo":
-                        await client.shutdown(delete_sandbox=True)
-                    else:
-                        await client.shutdown()
-                except Exception as shutdown_error:
-                    logger.warning(
-                        "Failed to shutdown sandbox after boot error for session %s: %s",
-                        session_id,
-                        shutdown_error,
+                    endpoint = sandbox_cfg.get("shipyard_neo_endpoint", "")
+                    token = sandbox_cfg.get("shipyard_neo_access_token", "")
+                    ttl = sandbox_cfg.get("shipyard_neo_ttl", 3600)
+                    profile = sandbox_cfg.get(
+                        "shipyard_neo_profile",
+                        "python-default",
                     )
-                _clear_cua_idle_state(session_id)
-                raise e
 
-            session_booter[session_id] = client
-        if booter_type == "cua":
-            _schedule_cua_idle_cleanup(session_id, cua_idle_timeout)
-        return session_booter[session_id]
+                    # Auto-discover a token only when configuration did not provide one.
+                    if not token:
+                        token = _discover_bay_credentials(endpoint)
 
+                    logger.info(
+                        "[Computer] Shipyard Neo config: endpoint=%s, profile=%s, ttl=%s",
+                        endpoint,
+                        profile,
+                        ttl,
+                    )
+                    client = ShipyardNeoBooter(
+                        endpoint_url=endpoint,
+                        access_token=token,
+                        profile=profile,
+                        ttl=ttl,
+                    )
+                elif booter_type == "cua":
+                    from .booters.cua import CuaBooter, build_cua_booter_kwargs
 
-async def sync_skills_to_active_sandboxes() -> None:
-    """Best-effort skills synchronization for all active sandbox sessions."""
-    logger.info(
-        "[Computer] Syncing skills to %d active sandbox(es)", len(session_booter)
-    )
-    for session_id, booter in list(session_booter.items()):
-        try:
-            if not await booter.available():
-                continue
-            await _sync_skills_to_sandbox(booter)
-        except Exception as e:
-            logger.warning(
-                "Failed to sync skills to sandbox for session %s: %s",
-                session_id,
-                e,
-            )
+                    cua_kwargs = build_cua_booter_kwargs(sandbox_cfg)
+                    logger.info(
+                        "[Computer] CUA config: image=%s, os_type=%s, ttl=%s",
+                        cua_kwargs["image"],
+                        cua_kwargs["os_type"],
+                        cua_kwargs["ttl"],
+                    )
+                    client = CuaBooter(**cua_kwargs)
+                elif booter_type == "boxlite":
+                    from .booters.boxlite import BoxliteBooter
 
+                    client = BoxliteBooter()
+                else:
+                    raise ValueError(f"Unknown booter type: {booter_type}")
 
-def get_local_booter() -> ComputerBooter:
-    global local_booter
-    if local_booter is None:
-        local_booter = LocalBooter()
-    return local_booter
+                try:
+                    await client.boot(uuid_str)
+                    logger.info(
+                        "[Computer] Sandbox booted successfully: type=%s, session=%s",
+                        booter_type,
+                        session_id,
+                    )
+                    await _sync_skills_to_sandbox(client)
+                except asyncio.CancelledError:
+                    try:
+                        await self._shutdown_booter(client, booter_type)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as shutdown_error:  # noqa: BLE001
+                        logger.warning(
+                            "Failed to shutdown cancelled sandbox boot for session %s: %s",
+                            session_id,
+                            shutdown_error,
+                        )
+                    self._clear_cua_idle_state(session_id)
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "Error booting sandbox for session %s: %s", session_id, exc
+                    )
+                    try:
+                        await self._shutdown_booter(client, booter_type)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as shutdown_error:  # noqa: BLE001
+                        logger.warning(
+                            "Failed to shutdown sandbox after boot error for session %s: %s",
+                            session_id,
+                            shutdown_error,
+                        )
+                    self._clear_cua_idle_state(session_id)
+                    raise
+
+                self._session_booters[session_id] = client
+                self._session_booter_types[session_id] = booter_type
+                booter = client
+
+            if booter_type == "cua":
+                self._schedule_cua_idle_cleanup(session_id, cua_idle_timeout)
+            return booter
+
+    def get_local_booter(self) -> ComputerBooter:
+        """Return this runtime's lazily constructed local booter."""
+        self._ensure_active()
+        if self._local_booter is None:
+            self._local_booter = LocalBooter()
+        return self._local_booter
+
+    async def sync_skills_to_active_sandboxes(self) -> None:
+        """Best-effort skills synchronization for all active sandbox sessions."""
+        self._ensure_active()
+        logger.info(
+            "[Computer] Syncing skills to %d active sandbox(es)",
+            len(self._session_booters),
+        )
+        for session_id, booter in list(self._session_booters.items()):
+            try:
+                if not await booter.available():
+                    continue
+                await _sync_skills_to_sandbox(booter)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Failed to sync skills to sandbox for session %s: %s",
+                    session_id,
+                    exc,
+                )
+
+    async def terminate(self) -> None:
+        """Cancel idle cleanup and terminate every booter owned by this runtime."""
+        if self._terminated:
+            return
+        self._terminated = True
+
+        idle_tasks = [state.task for state in self._cua_idle_states.values()]
+        self._cua_idle_states.clear()
+        for task in idle_tasks:
+            if not task.done():
+                task.cancel()
+        if idle_tasks:
+            await asyncio.gather(*idle_tasks, return_exceptions=True)
+
+        booters = list(self._session_booters.items())
+        booter_types = self._session_booter_types.copy()
+        self._session_booters.clear()
+        self._session_booter_types.clear()
+        self._session_booter_locks.clear()
+        for session_id, booter in booters:
+            try:
+                await self._shutdown_booter(
+                    booter,
+                    booter_types.get(session_id, ""),
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Failed to terminate sandbox for session %s: %s",
+                    session_id,
+                    exc,
+                )
+
+        local_booter, self._local_booter = self._local_booter, None
+        if local_booter is not None:
+            try:
+                await local_booter.shutdown()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Failed to terminate local computer runtime: %s", exc)

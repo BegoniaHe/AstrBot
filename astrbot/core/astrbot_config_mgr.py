@@ -163,7 +163,11 @@ class AstrBotConfigManager:
         conf_file_name = f"abconf_{conf_uuid}.json"
         conf_path = os.path.join(get_astrbot_config_path(), conf_file_name)
         conf = AstrBotConfig(config_path=conf_path, default_config=config)
-        conf.save_config()
+        committed = await conf.save_config_async()
+        if not committed:
+            raise RuntimeError(
+                "Configuration profile save was superseded by a newer revision."
+            )
         await self._save_conf_mapping(conf_file_name, conf_uuid, abconf_name=name)
         self.confs[conf_uuid] = conf
         return conf_uuid
