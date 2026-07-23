@@ -36,6 +36,7 @@ from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.utils.media_utils import MediaResolver
 
 from ...register import register_platform_adapter
+from .provisioning import provision_qqofficial_registration
 from .qqofficial_message_event import QQOfficialMessageEvent
 
 # remove logger handler
@@ -311,7 +312,11 @@ class botClient(Client):
         await self.close()
 
 
-@register_platform_adapter("qq_official", "QQ 机器人官方 API 适配器")
+@register_platform_adapter(
+    "qq_official",
+    "QQ 机器人官方 API 适配器",
+    provisioner=provision_qqofficial_registration,
+)
 class QQOfficialPlatformAdapter(Platform):
     def __init__(
         self,

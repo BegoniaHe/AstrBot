@@ -18,6 +18,7 @@ from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.utils.webhook_utils import log_webhook_info
 
 from ...register import register_platform_adapter
+from ..qqofficial.provisioning import provision_qqofficial_registration
 from ..qqofficial.qqofficial_platform_adapter import (
     QQOfficialPlatformAdapter,
     _ensure_group_message_create_parser,
@@ -99,7 +100,11 @@ class botClient(Client):
         self.platform.commit_event(self.platform.create_event(abm))
 
 
-@register_platform_adapter("qq_official_webhook", "QQ 机器人官方 API 适配器(Webhook)")
+@register_platform_adapter(
+    "qq_official_webhook",
+    "QQ 机器人官方 API 适配器(Webhook)",
+    provisioner=provision_qqofficial_registration,
+)
 class QQOfficialWebhookPlatformAdapter(Platform):
     def __init__(
         self,

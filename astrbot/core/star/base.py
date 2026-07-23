@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, Any
 
 from astrbot.core.utils.plugin_kv_store import PluginKVStoreMixin
 
-from .star import StarMetadata, star_map, star_registry
+from .star import StarDeclaration
 
 if TYPE_CHECKING:
-    from .context import Context
+    from .plugin_context import PluginContext
 
 logger = logging.getLogger("astrbot")
 
@@ -16,33 +16,24 @@ class Star(PluginKVStoreMixin):
 
     author: str
     name: str
-    context: Context
+    context: PluginContext
 
-    def __init__(self, context: Context, config: dict | None = None) -> None:
+    def __init__(self, context: PluginContext, config: dict | None = None) -> None:
         self.context = context
 
     def _get_context_config(self) -> Any:
-        get_config = getattr(self.context, "get_config", None)
-        if callable(get_config):
-            try:
-                return get_config()
-            except Exception as e:
-                logger.debug(f"get_config() failed: {e}")
-                return None
-        return getattr(self.context, "_config", None)
+        try:
+            return self.context.config.get()
+        except Exception as exc:
+            logger.debug("Unable to resolve plugin configuration: %s", exc)
+            return None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if not star_map.get(cls.__module__):
-            metadata = StarMetadata(
-                star_cls_type=cls,
-                module_path=cls.__module__,
-            )
-            star_map[cls.__module__] = metadata
-            star_registry.append(metadata)
-        else:
-            star_map[cls.__module__].star_cls_type = cls
-            star_map[cls.__module__].module_path = cls.__module__
+        cls.__astrbot_star_declaration__ = StarDeclaration(
+            star_cls_type=cls,
+            module_path=cls.__module__,
+        )
 
     async def text_to_image(self, text: str) -> str:
         """将文本转换为图片"""
@@ -53,7 +44,7 @@ class Star(PluginKVStoreMixin):
                 template_name = config_obj.get("t2i_active_template")
             except Exception:
                 template_name = None
-        return await self.context.html_renderer.render_t2i(
+        return await self.context.rendering.text_to_image(
             text,
             template_name=template_name,
         )
@@ -65,7 +56,7 @@ class Star(PluginKVStoreMixin):
         options: dict | None = None,
     ) -> str:
         """渲染 HTML"""
-        return await self.context.html_renderer.render_custom_template(
+        return await self.context.rendering.html(
             tmpl,
             data,
             options=options,

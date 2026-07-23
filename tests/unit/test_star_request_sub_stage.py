@@ -8,6 +8,8 @@ import pytest
 
 import astrbot.core.pipeline.process_stage as process_stage_pkg
 from astrbot.core.message.message_event_result import MessageEventResult
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
+from astrbot.core.star.star import StarMetadata
 
 _original_process_stage_module = sys.modules.get(
     "astrbot.core.pipeline.process_stage.stage"
@@ -73,11 +75,25 @@ def _handler_meta(name: str, module_path: str = "plugin.module"):
     )
 
 
+def _stage_with_runtime():
+    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    catalogs = RuntimeCatalogs()
+    stage.ctx = SimpleNamespace(
+        handlers=catalogs.handlers,
+        plugins=catalogs.plugins,
+    )
+    return stage, catalogs
+
+
+def _publish_plugin(catalogs: RuntimeCatalogs, module_path: str) -> None:
+    catalogs.plugins.publish(StarMetadata(name="demo-plugin", module_path=module_path))
+
+
 @pytest.mark.asyncio
 async def test_star_request_process_dispatches_handlers_and_clears_previous_results(
     monkeypatch,
 ):
-    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    stage, catalogs = _stage_with_runtime()
     handler_a = _handler_meta("first")
     handler_b = _handler_meta("second")
     event = FakeEvent(
@@ -90,11 +106,7 @@ async def test_star_request_process_dispatches_handlers_and_clears_previous_resu
         }
     )
 
-    monkeypatch.setitem(
-        star_request.star_map,
-        "plugin.module",
-        SimpleNamespace(name="demo-plugin"),
-    )
+    _publish_plugin(catalogs, "plugin.module")
 
     call_args = []
 
@@ -113,7 +125,7 @@ async def test_star_request_process_dispatches_handlers_and_clears_previous_resu
 
 @pytest.mark.asyncio
 async def test_star_request_process_skips_missing_plugin_metadata(monkeypatch):
-    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    stage, _ = _stage_with_runtime()
     handler = _handler_meta("missing", module_path="missing.module")
     event = FakeEvent({"activated_handlers": [handler], "handlers_parsed_params": {}})
 
@@ -128,18 +140,14 @@ async def test_star_request_process_skips_missing_plugin_metadata(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_star_request_process_reports_handler_errors_and_stops(monkeypatch):
-    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    stage, catalogs = _stage_with_runtime()
     handler = _handler_meta("boom")
     event = FakeEvent(
         {"activated_handlers": [handler], "handlers_parsed_params": {}},
         at_or_wake=True,
     )
 
-    monkeypatch.setitem(
-        star_request.star_map,
-        "plugin.module",
-        SimpleNamespace(name="demo-plugin"),
-    )
+    _publish_plugin(catalogs, "plugin.module")
 
     async def fake_call_handler(event_arg, handler_obj, **params):
         if False:
@@ -163,16 +171,12 @@ async def test_star_request_process_reports_handler_errors_and_stops(monkeypatch
 
 @pytest.mark.asyncio
 async def test_star_request_process_stops_before_running_later_handlers(monkeypatch):
-    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    stage, catalogs = _stage_with_runtime()
     handler_a = _handler_meta("first")
     handler_b = _handler_meta("second")
     event = FakeEvent({"activated_handlers": [handler_a, handler_b]})
 
-    monkeypatch.setitem(
-        star_request.star_map,
-        "plugin.module",
-        SimpleNamespace(name="demo-plugin"),
-    )
+    _publish_plugin(catalogs, "plugin.module")
 
     async def fake_call_handler(event_arg, handler_obj, **params):
         yield f"resp-{handler_obj is handler_a.handler}"
@@ -191,18 +195,14 @@ async def test_star_request_process_stops_before_running_later_handlers(monkeypa
 async def test_star_request_process_non_wake_error_stops_without_user_facing_result(
     monkeypatch,
 ):
-    stage = star_request.StarRequestSubStage.__new__(star_request.StarRequestSubStage)
+    stage, catalogs = _stage_with_runtime()
     handler = _handler_meta("boom")
     event = FakeEvent(
         {"activated_handlers": [handler], "handlers_parsed_params": {}},
         at_or_wake=False,
     )
 
-    monkeypatch.setitem(
-        star_request.star_map,
-        "plugin.module",
-        SimpleNamespace(name="demo-plugin"),
-    )
+    _publish_plugin(catalogs, "plugin.module")
 
     async def fake_call_handler(event_arg, handler_obj, **params):
         if False:

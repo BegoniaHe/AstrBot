@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
 from astrbot.api.event import MessageChain
 from astrbot.api.message_components import File, Image, Plain
@@ -39,15 +38,6 @@ def _build_event(*, group_id: str | None = None) -> SlackMessageEvent:
         session_id=message.session_id,
         web_client=AsyncMock(),
     )
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 @pytest.mark.asyncio
@@ -207,11 +197,7 @@ async def test_slack_send_falls_back_to_plain_text_when_block_send_fails():
         ]
     )
 
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        new_callable=AsyncMock,
-    ):
-        await event.send(chain)
+    await event.send(chain)
 
     assert event.web_client.chat_postMessage.await_count == 2
     first_call = event.web_client.chat_postMessage.await_args_list[0]
@@ -229,11 +215,7 @@ async def test_slack_send_uses_sender_id_for_direct_messages():
     event = _build_event()
     event.web_client.chat_postMessage = AsyncMock()
 
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        new_callable=AsyncMock,
-    ):
-        await event.send(MessageChain([Plain("hello direct")]))
+    await event.send(MessageChain([Plain("hello direct")]))
 
     event.web_client.chat_postMessage.assert_awaited_once_with(
         channel="U1",

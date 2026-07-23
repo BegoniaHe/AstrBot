@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
@@ -49,15 +48,6 @@ def _slack_signature(secret: str, timestamp: str, body: bytes) -> str:
             hashlib.sha256,
         ).hexdigest()
     )
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 def test_slack_adapter_requires_required_tokens_by_mode():

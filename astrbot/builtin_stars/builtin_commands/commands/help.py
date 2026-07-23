@@ -7,12 +7,11 @@ from astrbot.api import star
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 from astrbot.core.config import AstrBotConfig
 from astrbot.core.config.default import VERSION
-from astrbot.core.star import command_management
 from astrbot.core.utils.io import get_dashboard_version
 
 
 class HelpCommand:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def _query_astrbot_notice(self):
@@ -31,7 +30,7 @@ class HelpCommand:
         使用实时指令配置生成内置指令清单，确保重命名/禁用后与实际生效状态保持一致。
         """
         try:
-            commands = await command_management.list_commands(self.context.get_db())
+            commands = await self.context.runtime_info.commands()
         except Exception:
             return []
 
@@ -146,7 +145,7 @@ class HelpCommand:
 
     def _get_event_config(self, event: AstrMessageEvent) -> AstrBotConfig | None:
         try:
-            return self.context.get_config(umo=event.unified_msg_origin)
+            return self.context.config.get(umo=event.unified_msg_origin)
         except Exception:
             return None
 
@@ -190,7 +189,7 @@ class HelpCommand:
             notice=notice,
         )
         try:
-            rendered_image = await self.context.html_renderer.render_t2i(
+            rendered_image = await self.context.rendering.text_to_image(
                 image_markup,
                 template_name="astrbot_help",
             )
@@ -211,9 +210,7 @@ class HelpCommand:
         callback_base = self._get_callback_base(event)
         if callback_base:
             try:
-                token = await self.context.file_token_service.register_file(
-                    rendered_image
-                )
+                token = await self.context.files.publish(rendered_image)
                 image_url = f"{callback_base}/api/v1/files/tokens/{token}"
                 event.set_result(
                     MessageEventResult().url_image(image_url).use_t2i(False)

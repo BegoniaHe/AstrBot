@@ -1023,6 +1023,103 @@ class DashboardExtensionRegistry:
                 transaction.open = False
                 self._staging_by_owner.pop(owner_id, None)
 
+    def validate_staged_generation(
+        self,
+        staging: DashboardExtensionRegistry,
+        current: StarMetadata,
+        replacement: StarMetadata,
+    ) -> None:
+        """Validate a staged replacement without draining the live generation."""
+        try:
+            replacement_owner_key = self._owner_key(replacement)
+        except DashboardRegistrationError:
+            return
+
+        staged_extension_id = staging._extension_by_owner_key.get(
+            replacement_owner_key,
+        )
+        if staged_extension_id is None:
+            return
+        staged_record = staging._records_by_extension.get(staged_extension_id)
+        if (
+            staged_record is None
+            or staged_record.state is not DashboardExtensionState.ACTIVE
+            or staged_record.snapshot.owner_key != replacement_owner_key
+        ):
+            raise DashboardRegistrationError(
+                "Staged Dashboard extension generation is not active",
+            )
+        existing = self._records_by_extension.get(staged_extension_id)
+        if (
+            existing is not None
+            and existing.snapshot.owner_key != replacement_owner_key
+        ):
+            raise DashboardRegistrationError(
+                f"Dashboard extension ID is already owned: {staged_extension_id}",
+            )
+
+    async def promote_staged_generation(
+        self,
+        staging: DashboardExtensionRegistry,
+        current: StarMetadata,
+        replacement: StarMetadata,
+        *,
+        reason: str,
+    ) -> None:
+        """Replace one live extension generation with an isolated staged one.
+
+        A replacement plugin is initialized against ``staging`` while the
+        currently active generation remains reachable.  Only after that
+        initialization has completed can its action generation be moved into
+        this live registry.  A failed staged initialization therefore cannot
+        drain or overwrite the live Dashboard extension.
+
+        Args:
+            staging: Isolated registry used by the replacement generation.
+            current: Currently active plugin metadata.
+            replacement: Fully initialized replacement metadata.
+            reason: Lifecycle reason used for the retiring generation.
+
+        Raises:
+            DashboardRegistrationError: If the staged generation is invalid
+                for this live registry.
+        """
+        self.validate_staged_generation(staging, current, replacement)
+        try:
+            replacement_owner_key = self._owner_key(replacement)
+        except DashboardRegistrationError:
+            replacement_owner_key = None
+        staged_extension_id = (
+            staging._extension_by_owner_key.get(replacement_owner_key)
+            if replacement_owner_key is not None
+            else None
+        )
+        staged_record = (
+            staging._records_by_extension.get(staged_extension_id)
+            if staged_extension_id is not None
+            else None
+        )
+
+        await self.deactivate(current, reason=reason, release=True)
+
+        if staged_record is None or staged_extension_id is None:
+            return
+        assert replacement_owner_key is not None
+
+        staging._records_by_extension.pop(staged_extension_id, None)
+        staging._extension_by_owner_key.pop(replacement_owner_key, None)
+        self._records_by_extension[staged_extension_id] = staged_record
+        self._extension_by_owner_key[replacement_owner_key] = staged_extension_id
+        await self._publish(
+            DashboardExtensionLifecycleEvent(
+                kind=DashboardLifecycleEventKind.GENERATION_ACTIVATING,
+                extension_id=staged_extension_id,
+                plugin_name=staged_record.snapshot.plugin_name,
+                generation=staged_record.snapshot.generation,
+                reason="staged_generation_promoted",
+            ),
+        )
+
     @staticmethod
     def _plugin_root(metadata: StarMetadata) -> Path:
         dashboard_root = getattr(metadata, "dashboard_root", None)

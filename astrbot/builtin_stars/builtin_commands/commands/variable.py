@@ -3,7 +3,7 @@ from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
 
 class VariableCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def set_variable(self, event: AstrMessageEvent, key: str, value: str) -> None:

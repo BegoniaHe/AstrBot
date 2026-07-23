@@ -33,15 +33,18 @@ from astrbot.core.utils.webhook_utils import log_webhook_info
 from ...register import register_platform_adapter
 from .bot_info import request_lark_bot_info
 from .lark_event import LarkMessageEvent
+from .provisioning import provision_lark_registration
 from .server import LarkWebhookServer
 
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
 LARK_REPLY_FETCH_TIMEOUT_SECONDS = 0.35
 LARK_SLOW_REPLY_FETCH_LOG_THRESHOLD_SECONDS = 0.2
 
 
 @register_platform_adapter(
-    "lark", "飞书机器人官方 API 适配器", support_streaming_message=True
+    "lark",
+    "飞书机器人官方 API 适配器",
+    support_streaming_message=True,
+    provisioner=provision_lark_registration,
 )
 class LarkPlatformAdapter(Platform):
     def __init__(
@@ -67,7 +70,7 @@ class LarkPlatformAdapter(Platform):
 
         def do_v2_msg_event(event: lark.im.v1.P2ImMessageReceiveV1) -> None:
             create_tracked_task(
-                _BACKGROUND_TASKS,
+                self._background_tasks,
                 on_msg_event_recv(event),
                 name="lark:message-event",
             )

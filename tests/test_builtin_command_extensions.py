@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from typing import Annotated
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -20,14 +20,11 @@ from astrbot.core.command import (
 )
 from astrbot.core.command.schema import compile_command_schema
 from astrbot.core.provider.entities import ProviderType
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
-from astrbot.core.star.star import StarMetadata, star_map
-from astrbot.core.star.star_handler import (
-    EventType,
-    StarHandlerMetadata,
-    star_handlers_registry,
-)
+from astrbot.core.star.star import StarMetadata
+from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
 
 class DummyEvent:
@@ -155,7 +152,7 @@ def test_all_builtin_extension_commands_use_native_command_schemas():
 @pytest.mark.asyncio
 async def test_admin_list_reports_configured_ids_and_empty_state():
     config = {"admins_id": ["42", 7]}
-    context = SimpleNamespace(get_config=lambda **_kwargs: config)
+    context = SimpleNamespace(config=SimpleNamespace(get=lambda **_kwargs: config))
     command = AdminCommands(context)
 
     event = DummyEvent(message_str="admin list")
@@ -169,8 +166,49 @@ async def test_admin_list_reports_configured_ids_and_empty_state():
 
 
 @pytest.mark.asyncio
+async def test_admin_grant_and_revoke_use_async_config_persistence():
+    class AsyncConfig(dict):
+        pass
+
+    config = AsyncConfig(admins_id=[])
+    config.save_config_async = AsyncMock(return_value=True)
+    context = SimpleNamespace(config=SimpleNamespace(get=lambda **_kwargs: config))
+    command = AdminCommands(context)
+
+    await command.grant(DummyEvent(message_str="admin op 42"), "42")
+    await command.revoke(DummyEvent(message_str="admin deop 42"), "42")
+
+    assert config["admins_id"] == []
+    assert config.save_config_async.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_admin_commands_do_not_report_success_when_save_is_superseded():
+    class AsyncConfig(dict):
+        pass
+
+    config = AsyncConfig(admins_id=[])
+    config.save_config_async = AsyncMock(return_value=False)
+    context = SimpleNamespace(config=SimpleNamespace(get=lambda **_kwargs: config))
+    command = AdminCommands(context)
+
+    grant_event = DummyEvent(message_str="admin op 42")
+    await command.grant(grant_event, "42")
+
+    assert "superseded" in _plain_text(grant_event.result)
+    assert "Added" not in _plain_text(grant_event.result)
+
+    revoke_event = DummyEvent(message_str="admin deop 42")
+    await command.revoke(revoke_event, "42")
+
+    assert "superseded" in _plain_text(revoke_event.result)
+    assert "Removed" not in _plain_text(revoke_event.result)
+    assert config.save_config_async.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_help_command_defaults_to_plain_text(monkeypatch):
-    async def fake_list_commands(_db):
+    async def fake_list_commands():
         return [
             {
                 "reserved": True,
@@ -202,15 +240,13 @@ async def test_help_command_defaults_to_plain_text(monkeypatch):
         return "test-ui"
 
     monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.help.command_management.list_commands",
-        fake_list_commands,
-    )
-    monkeypatch.setattr(
         "astrbot.builtin_stars.builtin_commands.commands.help.get_dashboard_version",
         fake_dashboard_version,
     )
 
-    command = HelpCommand(SimpleNamespace(get_db=lambda: object()))
+    command = HelpCommand(
+        SimpleNamespace(runtime_info=SimpleNamespace(commands=fake_list_commands))
+    )
     event = DummyEvent(message_str="help")
     await command.help(event)
 
@@ -226,7 +262,7 @@ async def test_help_command_defaults_to_plain_text(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_help_command_supports_image_mode(monkeypatch):
-    async def fake_list_commands(_db):
+    async def fake_list_commands():
         return [
             {
                 "reserved": True,
@@ -241,10 +277,6 @@ async def test_help_command_supports_image_mode(monkeypatch):
     async def fake_dashboard_version():
         return "test-ui"
 
-    monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.help.command_management.list_commands",
-        fake_list_commands,
-    )
     monkeypatch.setattr(
         "astrbot.builtin_stars.builtin_commands.commands.help.get_dashboard_version",
         fake_dashboard_version,
@@ -270,11 +302,12 @@ async def test_help_command_supports_image_mode(monkeypatch):
 
     command = HelpCommand(
         SimpleNamespace(
-            get_config=lambda umo=None: {
-                "callback_api_base": "http://127.0.0.1:6185",
-            },
-            html_renderer=SimpleNamespace(render_t2i=fake_render_t2i),
-            file_token_service=SimpleNamespace(register_file=fake_register_file),
+            runtime_info=SimpleNamespace(commands=fake_list_commands),
+            config=SimpleNamespace(
+                get=lambda umo=None: {"callback_api_base": "http://127.0.0.1:6185"},
+            ),
+            rendering=SimpleNamespace(text_to_image=fake_render_t2i),
+            files=SimpleNamespace(publish=fake_register_file),
         )
     )
     event = DummyEvent(message_str="help --image")
@@ -302,7 +335,7 @@ async def test_help_command_sends_local_image_when_callback_url_is_unavailable(
 ):
     image_path = tmp_path / "help-card.png"
 
-    async def fake_list_commands(_db):
+    async def fake_list_commands():
         return [
             {
                 "reserved": True,
@@ -326,17 +359,15 @@ async def test_help_command_sends_local_image_when_callback_url_is_unavailable(
         return str(image_path)
 
     monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.help.command_management.list_commands",
-        fake_list_commands,
-    )
-    monkeypatch.setattr(
         "astrbot.builtin_stars.builtin_commands.commands.help.get_dashboard_version",
         fake_dashboard_version,
     )
     command = HelpCommand(
         SimpleNamespace(
-            html_renderer=SimpleNamespace(render_t2i=fake_render_t2i),
-            file_token_service=SimpleNamespace(register_file=AsyncMock()),
+            runtime_info=SimpleNamespace(commands=fake_list_commands),
+            config=SimpleNamespace(get=lambda umo=None: {}),
+            rendering=SimpleNamespace(text_to_image=fake_render_t2i),
+            files=SimpleNamespace(publish=AsyncMock()),
         )
     )
     event = DummyEvent(message_str="help --image")
@@ -355,7 +386,7 @@ async def test_help_command_sends_local_image_when_file_token_registration_fails
 ):
     image_path = tmp_path / "help-card.png"
 
-    async def fake_list_commands(_db):
+    async def fake_list_commands():
         return [
             {
                 "reserved": True,
@@ -383,20 +414,17 @@ async def test_help_command_sends_local_image_when_file_token_registration_fails
         raise RuntimeError("file service unavailable")
 
     monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.help.command_management.list_commands",
-        fake_list_commands,
-    )
-    monkeypatch.setattr(
         "astrbot.builtin_stars.builtin_commands.commands.help.get_dashboard_version",
         fake_dashboard_version,
     )
     command = HelpCommand(
         SimpleNamespace(
-            get_config=lambda umo=None: {
-                "callback_api_base": "http://127.0.0.1:6185",
-            },
-            html_renderer=SimpleNamespace(render_t2i=fake_render_t2i),
-            file_token_service=SimpleNamespace(register_file=fake_register_file),
+            runtime_info=SimpleNamespace(commands=fake_list_commands),
+            config=SimpleNamespace(
+                get=lambda umo=None: {"callback_api_base": "http://127.0.0.1:6185"},
+            ),
+            rendering=SimpleNamespace(text_to_image=fake_render_t2i),
+            files=SimpleNamespace(publish=fake_register_file),
         )
     )
     event = DummyEvent(message_str="help --image")
@@ -411,7 +439,7 @@ async def test_help_command_sends_local_image_when_file_token_registration_fails
 async def test_help_command_uses_file_token_for_local_image_when_callback_is_available(
     monkeypatch,
 ):
-    async def fake_list_commands(_db):
+    async def fake_list_commands():
         return [
             {
                 "reserved": True,
@@ -439,20 +467,17 @@ async def test_help_command_uses_file_token_for_local_image_when_callback_is_ava
         return "token-123"
 
     monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.help.command_management.list_commands",
-        fake_list_commands,
-    )
-    monkeypatch.setattr(
         "astrbot.builtin_stars.builtin_commands.commands.help.get_dashboard_version",
         fake_dashboard_version,
     )
     command = HelpCommand(
         SimpleNamespace(
-            get_config=lambda umo=None: {
-                "callback_api_base": "http://127.0.0.1:6185",
-            },
-            html_renderer=SimpleNamespace(render_t2i=fake_render_t2i),
-            file_token_service=SimpleNamespace(register_file=fake_register_file),
+            runtime_info=SimpleNamespace(commands=fake_list_commands),
+            config=SimpleNamespace(
+                get=lambda umo=None: {"callback_api_base": "http://127.0.0.1:6185"},
+            ),
+            rendering=SimpleNamespace(text_to_image=fake_render_t2i),
+            files=SimpleNamespace(publish=fake_register_file),
         )
     )
     event = DummyEvent(message_str="help --image")
@@ -468,105 +493,101 @@ async def test_help_command_uses_file_token_for_local_image_when_callback_is_ava
 
 @pytest.mark.asyncio
 async def test_plugin_show_lists_command_signatures_and_aliases():
-    original_handlers = list(star_handlers_registry)
-    original_star_map = dict(star_map)
+    catalogs = RuntimeCatalogs()
+    plugin = StarMetadata(
+        name="demo",
+        author="Tester",
+        version="1.2.3",
+        module_path="plugin.demo",
+        activated=True,
+    )
+    catalogs.plugins.publish(plugin)
 
-    star_handlers_registry.clear()
-    star_map.clear()
+    async def greet(
+        self,
+        event,
+        name: str,
+        force: Annotated[bool, option("--force", "-f")] = False,
+    ) -> None: ...
 
-    try:
-        plugin = StarMetadata(
-            name="demo",
-            author="Tester",
-            version="1.2.3",
-            module_path="plugin.demo",
-            activated=True,
-        )
-        star_map["plugin.demo"] = plugin
+    greet.__module__ = "plugin.demo"
+    greet_handler = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name="plugin.demo_greet",
+        handler_name="greet",
+        handler_module_path="plugin.demo",
+        handler=greet,
+        event_filters=[],
+        desc="Greet someone",
+    )
+    greet_filter = CommandFilter("greet", alias={"hello"})
+    greet_filter.init_handler_md(greet_handler)
+    greet_handler.event_filters.append(greet_filter)
+    catalogs.handlers.append(greet_handler)
 
-        async def greet(
-            self,
-            event,
-            name: str,
-            force: Annotated[bool, option("--force", "-f")] = False,
-        ) -> None: ...
+    async def tools(self, event) -> None: ...
 
-        greet.__module__ = "plugin.demo"
-        greet_handler = StarHandlerMetadata(
-            event_type=EventType.AdapterMessageEvent,
-            handler_full_name="plugin.demo_greet",
-            handler_name="greet",
-            handler_module_path="plugin.demo",
-            handler=greet,
-            event_filters=[],
-            desc="Greet someone",
-        )
-        greet_filter = CommandFilter("greet", alias={"hello"})
-        greet_filter.init_handler_md(greet_handler)
-        greet_handler.event_filters.append(greet_filter)
-        star_handlers_registry.append(greet_handler)
+    tools.__module__ = "plugin.demo"
+    tools_handler = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name="plugin.demo_tools",
+        handler_name="tools",
+        handler_module_path="plugin.demo",
+        handler=tools,
+        event_filters=[],
+        desc="Tool commands",
+    )
+    tools_handler.event_filters.append(CommandGroupFilter("tools", alias={"t"}))
+    catalogs.handlers.append(tools_handler)
 
-        async def tools(self, event) -> None: ...
+    from astrbot.core.star.plugin_context import RuntimeInfoCapability
 
-        tools.__module__ = "plugin.demo"
-        tools_handler = StarHandlerMetadata(
-            event_type=EventType.AdapterMessageEvent,
-            handler_full_name="plugin.demo_tools",
-            handler_name="tools",
-            handler_module_path="plugin.demo",
-            handler=tools,
-            event_filters=[],
-            desc="Tool commands",
-        )
-        tools_handler.event_filters.append(CommandGroupFilter("tools", alias={"t"}))
-        star_handlers_registry.append(tools_handler)
+    context = SimpleNamespace(
+        runtime_info=RuntimeInfoCapability(
+            catalogs,
+            MagicMock(),
+            demo_mode=False,
+        ),
+    )
+    command = PluginCommands(context)
+    event = DummyEvent(message_str="plugin show demo")
 
-        context = SimpleNamespace(
-            get_registered_star=lambda plugin_name: (
-                plugin if plugin_name == "demo" else None
-            )
-        )
-        command = PluginCommands(context)
-        event = DummyEvent(message_str="plugin show demo")
+    await command.show(event, "demo")
 
-        await command.show(event, "demo")
-
-        text = _plain_text(event.result)
-        assert (
-            "/greet (name(str),force[--force/-f](bool)=False) [aliases: hello]" in text
-        )
-        assert "/tools [aliases: t]" in text
-        assert "Greet someone" in text
-        assert "Tool commands" in text
-    finally:
-        star_handlers_registry.clear()
-        star_map.clear()
-        for handler in original_handlers:
-            star_handlers_registry.append(handler)
-        star_map.update(original_star_map)
+    text = _plain_text(event.result)
+    assert "/greet (name(str),force[--force/-f](bool)=False) [aliases: hello]" in text
+    assert "/tools [aliases: t]" in text
+    assert "Greet someone" in text
+    assert "Tool commands" in text
 
 
 @pytest.mark.asyncio
-async def test_chat_commands_report_and_set_session_service_status(monkeypatch):
-    calls: list[tuple[str, bool]] = []
+async def test_chat_commands_report_and_set_session_service_status():
+    calls: list[tuple[str, dict[str, bool]]] = []
+    settings = {"llm_enabled": True}
 
-    async def fake_is_enabled(_self, umo: str) -> bool:
+    async def session_get(
+        umo: str, key: str, default: dict[str, bool]
+    ) -> dict[str, bool]:
         assert umo == "napcat:FriendMessage:42"
-        return True
+        assert key == "session_service_config"
+        assert default == {}
+        return dict(settings)
 
-    async def fake_set_status(_self, umo: str, enabled: bool) -> None:
-        calls.append((umo, enabled))
+    async def session_put(umo: str, key: str, value: dict[str, bool]) -> None:
+        assert umo == "napcat:FriendMessage:42"
+        assert key == "session_service_config"
+        calls.append((umo, dict(value)))
+        settings.update(value)
 
-    monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.chat.SessionServiceManager.is_llm_enabled_for_session",
-        fake_is_enabled,
+    command = ChatCommands(
+        SimpleNamespace(
+            preferences=SimpleNamespace(
+                session_get=session_get,
+                session_put=session_put,
+            ),
+        )
     )
-    monkeypatch.setattr(
-        "astrbot.builtin_stars.builtin_commands.commands.chat.SessionServiceManager.set_llm_status_for_session",
-        fake_set_status,
-    )
-
-    command = ChatCommands(SimpleNamespace(preferences=SimpleNamespace()))
     status_event = DummyEvent(message_str="chat status")
     await command.status(status_event)
     assert "enabled" in _plain_text(status_event.result)
@@ -577,8 +598,8 @@ async def test_chat_commands_report_and_set_session_service_status(monkeypatch):
     await command.set_enabled(enable_event, True)
 
     assert calls == [
-        ("napcat:FriendMessage:42", False),
-        ("napcat:FriendMessage:42", True),
+        ("napcat:FriendMessage:42", {"llm_enabled": False}),
+        ("napcat:FriendMessage:42", {"llm_enabled": True}),
     ]
     assert "disabled" in _plain_text(disable_event.result)
     assert "enabled" in _plain_text(enable_event.result)
@@ -588,45 +609,36 @@ async def test_chat_commands_report_and_set_session_service_status(monkeypatch):
 async def test_persona_command_switches_current_conversation_persona():
     updates: list[tuple[str, str]] = []
 
-    async def get_curr_conversation_id(_umo: str) -> str:
+    async def current_id(_umo: str) -> str:
         return "abcd-1234"
 
-    async def get_conversation(**kwargs):
-        _ = kwargs
+    async def get(_umo: str, _conversation_id: str, *, create_if_missing: bool):
+        assert create_if_missing is True
         return SimpleNamespace(title="Current", persona_id=None)
 
-    async def update_conversation(
-        *, unified_msg_origin: str, persona_id: str, **kwargs
-    ):
+    async def update(umo: str, *, persona_id: str, **kwargs) -> None:
         _ = kwargs
-        updates.append((unified_msg_origin, persona_id))
+        updates.append((umo, persona_id))
 
-    async def get_default_runtime_persona(umo=None):
-        _ = umo
-        return {"name": "default"}
-
-    async def resolve_selected_persona(**kwargs):
+    async def resolve(**kwargs):
         _ = kwargs
         return ("default", {"name": "default"}, None, False)
 
     context = SimpleNamespace(
-        conversation_manager=SimpleNamespace(
-            get_curr_conversation_id=get_curr_conversation_id,
-            get_conversation=get_conversation,
-            update_conversation=update_conversation,
+        conversations=SimpleNamespace(
+            current_id=current_id,
+            get=get,
+            update=update,
         ),
-        persona_manager=SimpleNamespace(
-            get_default_runtime_persona=get_default_runtime_persona,
-            resolve_selected_persona=resolve_selected_persona,
-            get_runtime_persona_by_id=lambda persona_id: (
+        personas=SimpleNamespace(
+            resolve=resolve,
+            get=lambda persona_id: (
                 {"name": persona_id, "prompt": "prompt"}
                 if persona_id == "assistant"
                 else None
             ),
-            get_folder_tree=None,
-            personas=[],
         ),
-        get_config=lambda umo=None: {"provider_settings": {}},
+        config=SimpleNamespace(get=lambda umo=None: {"provider_settings": {}}),
     )
 
     command = PersonaCommands(context)
@@ -801,13 +813,13 @@ async def test_provider_native_switch_methods_use_explicit_provider_types():
         calls.append(kwargs)
 
     context = SimpleNamespace(
-        provider_manager=SimpleNamespace(
-            register_provider_change_hook=lambda hook: None,
-            set_provider=set_provider,
+        models=SimpleNamespace(
+            on_change=lambda hook: None,
+            select=set_provider,
+            chat=lambda: (provider,),
+            text_to_speech=lambda: (provider,),
+            speech_to_text=lambda: (provider,),
         ),
-        get_all_providers=lambda: [provider],
-        get_all_tts_providers=lambda: [provider],
-        get_all_stt_providers=lambda: [provider],
     )
     command = ProviderCommands(context)
 
@@ -832,17 +844,17 @@ async def test_provider_model_commands_list_and_switch_by_index():
         return None
 
     context = SimpleNamespace(
-        provider_manager=SimpleNamespace(
-            register_provider_change_hook=lambda hook: None,
-            set_provider=set_provider,
+        models=SimpleNamespace(
+            on_change=lambda hook: None,
+            select=set_provider,
+            chat=lambda: (provider,),
+            text_to_speech=lambda: (),
+            speech_to_text=lambda: (),
+            using_chat=lambda umo=None: provider,
+            using_text_to_speech=lambda umo=None: None,
+            using_speech_to_text=lambda umo=None: None,
         ),
-        get_config=lambda umo=None: {"provider_settings": {}},
-        get_using_provider=lambda umo=None: provider,
-        get_all_providers=lambda: [provider],
-        get_all_tts_providers=lambda: [],
-        get_all_stt_providers=lambda: [],
-        get_using_tts_provider=lambda umo=None: None,
-        get_using_stt_provider=lambda umo=None: None,
+        config=SimpleNamespace(get=lambda umo=None: {"provider_settings": {}}),
     )
 
     command = ProviderCommands(context)

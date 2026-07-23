@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from Crypto.Cipher import AES
 
+from astrbot.core.platform.sources.qqofficial import provisioning
 from astrbot.core.platform.sources.qqofficial.login_registration import (
     QQOFFICIAL_BIND_STATUS_COMPLETED,
     QQOFFICIAL_BIND_STATUS_EXPIRED,
@@ -12,8 +13,6 @@ from astrbot.core.platform.sources.qqofficial.login_registration import (
     generate_qqofficial_bind_key,
     qqofficial_login_result,
 )
-from astrbot.dashboard.services import platform_service
-from astrbot.dashboard.services.platform_service import PlatformService
 
 
 def test_generate_qqofficial_bind_key_returns_base64_aes_key():
@@ -86,18 +85,15 @@ async def test_qqofficial_webhook_registration_reuses_qr_binding(monkeypatch):
         )
 
     monkeypatch.setattr(
-        platform_service,
+        provisioning,
         "request_qqofficial_login_qr",
         fake_request_qqofficial_login_qr,
     )
-    service = PlatformService.__new__(PlatformService)
 
-    result = await service.handle_platform_registration(
-        "qq_official_webhook",
-        {
-            "action": "start",
-            "platform_config": {"type": "qq_official_webhook"},
-        },
+    result = await provisioning.provision_qqofficial_registration(
+        action="start",
+        payload={},
+        platform_config={"type": "qq_official_webhook"},
     )
 
     assert result == {

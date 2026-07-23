@@ -1,14 +1,9 @@
+import copy
+
 from astrbot import logger
 
-from .entities import ProviderMetaData, ProviderType
-from .func_tool_manager import FunctionToolManager
-
-provider_registry: list[ProviderMetaData] = []
-"""维护了通过装饰器注册的 Provider"""
-provider_cls_map: dict[str, ProviderMetaData] = {}
-"""维护了 Provider 类型名称和 ProviderMetadata 的映射"""
-
-llm_tools = FunctionToolManager()
+from .catalog import PROVIDER_ADAPTER_DESCRIPTOR_ATTR, ProviderAdapterDescriptor
+from .entities import ProviderType
 
 
 def register_provider_adapter(
@@ -18,36 +13,34 @@ def register_provider_adapter(
     default_config_tmpl: dict | None = None,
     provider_display_name: str | None = None,
 ):
-    """用于注册平台适配器的带参装饰器"""
+    """Declare immutable metadata on a provider adapter class.
+
+    Runtime-owned ``ProviderCatalog`` instances discover this declaration after
+    the adapter module has been imported. The decorator deliberately performs
+    no process-wide registration.
+    """
+
+    template = copy.deepcopy(default_config_tmpl) if default_config_tmpl else None
+    if template is not None:
+        template.setdefault("type", provider_type_name)
+        template.setdefault("enable", False)
+        template.setdefault("id", provider_type_name)
+    descriptor = ProviderAdapterDescriptor.create(
+        type=provider_type_name,
+        desc=desc,
+        provider_type=provider_type,
+        default_config_tmpl=template,
+        provider_display_name=provider_display_name,
+    )
 
     def decorator(cls):
-        if provider_type_name in provider_cls_map:
+        existing = cls.__dict__.get(PROVIDER_ADAPTER_DESCRIPTOR_ATTR)
+        if existing is not None and existing != descriptor:
             raise ValueError(
-                f"检测到大模型提供商适配器 {provider_type_name} 已经注册，可能发生了大模型提供商适配器类型命名冲突。",
+                f"Provider adapter {cls.__qualname__} already declares metadata.",
             )
-
-        # 添加必备选项
-        if default_config_tmpl:
-            if "type" not in default_config_tmpl:
-                default_config_tmpl["type"] = provider_type_name
-            if "enable" not in default_config_tmpl:
-                default_config_tmpl["enable"] = False
-            if "id" not in default_config_tmpl:
-                default_config_tmpl["id"] = provider_type_name
-
-        pm = ProviderMetaData(
-            id="default",  # will be replaced when instantiated
-            model=None,
-            type=provider_type_name,
-            desc=desc,
-            provider_type=provider_type,
-            cls_type=cls,
-            default_config_tmpl=default_config_tmpl,
-            provider_display_name=provider_display_name,
-        )
-        provider_registry.append(pm)
-        provider_cls_map[provider_type_name] = pm
-        logger.debug("Model provider registered: %s", provider_type_name)
+        setattr(cls, PROVIDER_ADAPTER_DESCRIPTOR_ATTR, descriptor)
+        logger.debug("Model provider declared: %s", provider_type_name)
         return cls
 
     return decorator

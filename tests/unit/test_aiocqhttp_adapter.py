@@ -12,7 +12,7 @@ from astrbot.core.message.components import Plain, Reply
 from astrbot.core.pipeline.waking_check.stage import WakingCheckStage
 from astrbot.core.platform.astrbot_message import AstrBotMessage, MessageMember
 from astrbot.core.platform.message_type import MessageType
-from astrbot.core.star.star_handler import star_handlers_registry
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
 
 pytestmark = pytest.mark.platform
 
@@ -296,6 +296,7 @@ async def test_aiocqhttp_reply_only_wake_resolves_sender_lazily(monkeypatch):
     event = adapter.create_event(message)
 
     stage = WakingCheckStage()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config={
@@ -316,16 +317,13 @@ async def test_aiocqhttp_reply_only_wake_resolves_sender_lazily(monkeypatch):
                 "plugin_set": ["*"],
             },
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
-                get_command_catalog=lambda *_args: CommandCatalogStore(),
-            ),
+                plugin_catalog=SimpleNamespace(
+                    get_command_catalog=lambda *_args: CommandCatalogStore(),
+                ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
-    )
-    monkeypatch.setattr(
-        star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *args, **kwargs: [],
     )
 
     await stage.process(event)

@@ -1,8 +1,5 @@
 import datetime
 
-from sqlalchemy import case, func, select
-from sqlmodel import col
-
 from astrbot import logger
 from astrbot.api import star
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
@@ -13,9 +10,7 @@ from astrbot.core.agent.runners.deerflow.constants import (
     DEERFLOW_THREAD_ID_KEY,
 )
 from astrbot.core.agent.runners.deerflow.deerflow_api_client import DeerFlowAPIClient
-from astrbot.core.db.po import ProviderStat
 from astrbot.core.platform.message_session import MessageSession
-from astrbot.core.utils.active_event_registry import active_event_registry
 
 from .utils.reset_scene import ResetScene
 
@@ -29,20 +24,19 @@ THIRD_PARTY_AGENT_RUNNER_STR = ", ".join(THIRD_PARTY_AGENT_RUNNER_KEY.keys())
 
 
 async def _cleanup_deerflow_thread_if_present(
-    context: star.Context,
+    context: star.PluginContext,
     umo: str,
 ) -> None:
     try:
-        thread_id = await context.preferences.get_async(
-            scope="umo",
-            scope_id=umo,
-            key=DEERFLOW_THREAD_ID_KEY,
-            default="",
+        thread_id = await context.preferences.session_get(
+            umo,
+            DEERFLOW_THREAD_ID_KEY,
+            "",
         )
         if not thread_id:
             return
 
-        cfg = context.get_config(umo=umo)
+        cfg = context.config.get(umo=umo)
         provider_id = cfg["provider_settings"].get(
             DEERFLOW_AGENT_RUNNER_PROVIDER_ID_KEY,
             "",
@@ -50,7 +44,7 @@ async def _cleanup_deerflow_thread_if_present(
         if not provider_id:
             return
 
-        merged_provider_config = context.provider_manager.get_provider_config_by_id(
+        merged_provider_config = context.models.configuration(
             provider_id,
             merged=True,
         )
@@ -89,7 +83,7 @@ async def _cleanup_deerflow_thread_if_present(
 
 
 async def _clear_third_party_agent_runner_state(
-    context: star.Context,
+    context: star.PluginContext,
     umo: str,
     agent_runner_type: str,
 ) -> None:
@@ -100,24 +94,20 @@ async def _clear_third_party_agent_runner_state(
     if agent_runner_type == DEERFLOW_PROVIDER_TYPE:
         await _cleanup_deerflow_thread_if_present(context, umo)
 
-    await context.preferences.remove_async(
-        scope="umo",
-        scope_id=umo,
-        key=session_key,
-    )
+    await context.preferences.session_remove(umo, session_key)
 
 
 class ConversationCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def _get_current_persona_id(self, session_id):
-        curr = await self.context.conversation_manager.get_curr_conversation_id(
+        curr = await self.context.conversations.current_id(
             session_id,
         )
         if not curr:
             return None
-        conv = await self.context.conversation_manager.get_conversation(
+        conv = await self.context.conversations.get(
             session_id,
             curr,
         )
@@ -128,15 +118,13 @@ class ConversationCommands:
     async def reset(self, message: AstrMessageEvent) -> None:
         """重置 LLM 会话"""
         umo = message.unified_msg_origin
-        cfg = self.context.get_config(umo=message.unified_msg_origin)
+        cfg = self.context.config.get(umo=message.unified_msg_origin)
         is_unique_session = cfg["platform_settings"]["unique_session"]
         is_group = bool(message.get_group_id())
 
         scene = ResetScene.get_scene(is_group, is_unique_session)
 
-        alter_cmd_cfg = await self.context.preferences.get_async(
-            "global", "global", "alter_cmd", {}
-        )
+        alter_cmd_cfg = await self.context.preferences.global_get("alter_cmd", {})
         plugin_config = alter_cmd_cfg.get("astrbot", {})
         reset_cfg = plugin_config.get("reset", {})
 
@@ -156,7 +144,7 @@ class ConversationCommands:
 
         agent_runner_type = cfg["provider_settings"]["agent_runner_type"]
         if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
-            active_event_registry.stop_all(umo, exclude=message)
+            self.context.conversations.stop_active_events(umo, exclude=message)
             await _clear_third_party_agent_runner_state(
                 self.context,
                 umo,
@@ -167,7 +155,7 @@ class ConversationCommands:
             )
             return
 
-        if not self.context.get_using_provider(umo):
+        if not self.context.models.using_chat(umo):
             message.set_result(
                 MessageEventResult().message(
                     "😕 Cannot find any LLM provider. Configure one first."
@@ -175,7 +163,7 @@ class ConversationCommands:
             )
             return
 
-        cid = await self.context.conversation_manager.get_curr_conversation_id(umo)
+        cid = await self.context.conversations.current_id(umo)
 
         if not cid:
             message.set_result(
@@ -185,12 +173,12 @@ class ConversationCommands:
             )
             return
 
-        active_event_registry.stop_all(umo, exclude=message)
+        self.context.conversations.stop_active_events(umo, exclude=message)
 
-        await self.context.conversation_manager.update_conversation(
+        await self.context.conversations.update(
             umo,
-            cid,
-            [],
+            conversation_id=cid,
+            history=[],
         )
 
         ret = "✅ Conversation reset successfully."
@@ -201,14 +189,17 @@ class ConversationCommands:
 
     async def stop(self, message: AstrMessageEvent) -> None:
         """停止当前会话正在运行的 Agent"""
-        cfg = self.context.get_config(umo=message.unified_msg_origin)
+        cfg = self.context.config.get(umo=message.unified_msg_origin)
         agent_runner_type = cfg["provider_settings"]["agent_runner_type"]
         umo = message.unified_msg_origin
 
         if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
-            stopped_count = active_event_registry.stop_all(umo, exclude=message)
+            stopped_count = self.context.conversations.stop_active_events(
+                umo,
+                exclude=message,
+            )
         else:
-            stopped_count = active_event_registry.request_agent_stop_all(
+            stopped_count = self.context.conversations.request_agent_stop_all(
                 umo,
                 exclude=message,
             )
@@ -227,10 +218,13 @@ class ConversationCommands:
 
     async def create(self, message: AstrMessageEvent) -> None:
         """创建新对话"""
-        cfg = self.context.get_config(umo=message.unified_msg_origin)
+        cfg = self.context.config.get(umo=message.unified_msg_origin)
         agent_runner_type = cfg["provider_settings"]["agent_runner_type"]
         if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
-            active_event_registry.stop_all(message.unified_msg_origin, exclude=message)
+            self.context.conversations.stop_active_events(
+                message.unified_msg_origin,
+                exclude=message,
+            )
             await _clear_third_party_agent_runner_state(
                 self.context,
                 message.unified_msg_origin,
@@ -241,9 +235,12 @@ class ConversationCommands:
             )
             return
 
-        active_event_registry.stop_all(message.unified_msg_origin, exclude=message)
+        self.context.conversations.stop_active_events(
+            message.unified_msg_origin,
+            exclude=message,
+        )
         cpersona = await self._get_current_persona_id(message.unified_msg_origin)
-        cid = await self.context.conversation_manager.new_conversation(
+        cid = await self.context.conversations.create(
             message.unified_msg_origin,
             message.get_platform_id(),
             persona_id=cpersona,
@@ -260,7 +257,7 @@ class ConversationCommands:
     async def stats(self, message: AstrMessageEvent) -> None:
         """Show token usage statistics for the current conversation."""
         umo = message.unified_msg_origin
-        cid = await self.context.conversation_manager.get_curr_conversation_id(umo)
+        cid = await self.context.conversations.current_id(umo)
 
         if not cid:
             message.set_result(
@@ -270,28 +267,7 @@ class ConversationCommands:
             )
             return
 
-        db = self.context.get_db()
-        async with db.get_db() as session:
-            result = await session.execute(
-                select(
-                    func.count(case((col(ProviderStat.id).is_not(None), 1))).label(
-                        "record_count",
-                    ),
-                    func.coalesce(func.sum(ProviderStat.token_input_other), 0).label(
-                        "total_input_other",
-                    ),
-                    func.coalesce(func.sum(ProviderStat.token_input_cached), 0).label(
-                        "total_input_cached",
-                    ),
-                    func.coalesce(func.sum(ProviderStat.token_output), 0).label(
-                        "total_output",
-                    ),
-                ).where(
-                    col(ProviderStat.agent_type) == "internal",
-                    col(ProviderStat.conversation_id) == cid,
-                )
-            )
-            stats = result.one()
+        stats = await self.context.conversations.token_usage(cid)
 
         if stats.record_count == 0:
             message.set_result(
@@ -301,10 +277,10 @@ class ConversationCommands:
             )
             return
 
-        total_input_other = stats.total_input_other
-        total_input_cached = stats.total_input_cached
-        total_output = stats.total_output
-        total_tokens = total_input_other + total_input_cached + total_output
+        total_input_other = stats.input_other
+        total_input_cached = stats.input_cached
+        total_output = stats.output
+        total_tokens = stats.total
 
         ret = (
             f"📊 Conversation Token usage (ID: {cid[:8]}...)\n"
@@ -320,20 +296,19 @@ class ConversationCommands:
         """Show conversation history."""
         size_per_page = 6
         umo = message.unified_msg_origin
-        conv_mgr = self.context.conversation_manager
-        current_cid = await conv_mgr.get_curr_conversation_id(umo)
+        current_cid = await self.context.conversations.current_id(umo)
 
         if not current_cid:
-            current_cid = await conv_mgr.new_conversation(
+            current_cid = await self.context.conversations.create(
                 umo,
                 message.get_platform_id(),
             )
 
-        contexts, total_pages = await conv_mgr.get_human_readable_context(
+        contexts, total_pages = await self.context.conversations.readable_history(
             umo,
             current_cid,
-            page,
-            size_per_page,
+            page=page,
+            page_size=size_per_page,
         )
 
         parts: list[str] = []
@@ -357,7 +332,7 @@ class ConversationCommands:
         page: int = 1,
     ) -> None:
         """Show conversation list."""
-        cfg = self.context.get_config(umo=message.unified_msg_origin)
+        cfg = self.context.config.get(umo=message.unified_msg_origin)
         agent_runner_type = cfg["provider_settings"]["agent_runner_type"]
         if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
             message.set_result(
@@ -368,7 +343,7 @@ class ConversationCommands:
             return
 
         size_per_page = 6
-        conversations_all = await self.context.conversation_manager.get_conversations(
+        conversations_all = await self.context.conversations.list(
             message.unified_msg_origin,
         )
         total_pages = max(
@@ -394,7 +369,7 @@ class ConversationCommands:
                 _,
                 force_applied_persona_id,
                 _,
-            ) = await self.context.persona_manager.resolve_selected_persona(
+            ) = await self.context.personas.resolve(
                 umo=message.unified_msg_origin,
                 conversation_persona_id=conv.persona_id,
                 platform_name=platform_name,
@@ -423,7 +398,7 @@ class ConversationCommands:
 
         parts.append("---\n")
         ret = "".join(parts)
-        current_cid = await self.context.conversation_manager.get_curr_conversation_id(
+        current_cid = await self.context.conversations.current_id(
             message.unified_msg_origin,
         )
         if current_cid:
@@ -454,7 +429,7 @@ class ConversationCommands:
             ),
         )
         current_persona = await self._get_current_persona_id(session)
-        cid = await self.context.conversation_manager.new_conversation(
+        cid = await self.context.conversations.create(
             session,
             message.get_platform_id(),
             persona_id=current_persona,
@@ -471,7 +446,7 @@ class ConversationCommands:
         index: int,
     ) -> None:
         """Switch to a conversation returned by /conversation list."""
-        conversations = await self.context.conversation_manager.get_conversations(
+        conversations = await self.context.conversations.list(
             message.unified_msg_origin,
         )
         if index < 1 or index > len(conversations):
@@ -483,7 +458,7 @@ class ConversationCommands:
             return
 
         conversation = conversations[index - 1]
-        await self.context.conversation_manager.switch_conversation(
+        await self.context.conversations.switch(
             message.unified_msg_origin,
             conversation.cid,
         )
@@ -503,9 +478,9 @@ class ConversationCommands:
             )
             return
 
-        await self.context.conversation_manager.update_conversation_title(
+        await self.context.conversations.update(
             message.unified_msg_origin,
-            new_name,
+            title=new_name,
         )
         message.set_result(
             MessageEventResult().message("✅ Conversation renamed successfully."),
@@ -514,7 +489,7 @@ class ConversationCommands:
     async def delete(self, message: AstrMessageEvent) -> None:
         """Delete the current conversation."""
         umo = message.unified_msg_origin
-        cfg = self.context.get_config(umo=umo)
+        cfg = self.context.config.get(umo=umo)
         is_unique_session = cfg["platform_settings"]["unique_session"]
 
         if message.get_group_id() and not is_unique_session and message.role != "admin":
@@ -527,7 +502,7 @@ class ConversationCommands:
 
         agent_runner_type = cfg["provider_settings"]["agent_runner_type"]
         if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
-            active_event_registry.stop_all(umo, exclude=message)
+            self.context.conversations.stop_active_events(umo, exclude=message)
             await _clear_third_party_agent_runner_state(
                 self.context,
                 umo,
@@ -538,7 +513,7 @@ class ConversationCommands:
             )
             return
 
-        current_cid = await self.context.conversation_manager.get_curr_conversation_id(
+        current_cid = await self.context.conversations.current_id(
             umo,
         )
         if not current_cid:
@@ -549,8 +524,8 @@ class ConversationCommands:
             )
             return
 
-        active_event_registry.stop_all(umo, exclude=message)
-        await self.context.conversation_manager.delete_conversation(
+        self.context.conversations.stop_active_events(umo, exclude=message)
+        await self.context.conversations.delete(
             umo,
             current_cid,
         )

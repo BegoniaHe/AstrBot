@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 from wechatpy.exceptions import WeChatClientException
 
 from astrbot.api.event import MessageChain
@@ -16,15 +15,6 @@ from astrbot.api.platform import (
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.platform.sources.wecom.wecom_event import WecomPlatformEvent
 from astrbot.core.platform.sources.wecom.wecom_kf_message import WeChatKFMessage
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 def _build_message() -> AstrBotMessage:

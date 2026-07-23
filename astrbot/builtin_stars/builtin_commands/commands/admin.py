@@ -3,12 +3,12 @@ from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
 
 class AdminCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def list_admins(self, event: AstrMessageEvent) -> None:
         """List configured administrator IDs."""
-        cfg = self.context.get_config(umo=event.unified_msg_origin)
+        cfg = self.context.config.get(umo=event.unified_msg_origin)
         admin_ids = [str(admin_id) for admin_id in cfg.get("admins_id", [])]
         if not admin_ids:
             message = "✅ No administrator IDs are configured."
@@ -20,12 +20,19 @@ class AdminCommands:
 
     async def grant(self, event: AstrMessageEvent, admin_id: str) -> None:
         """Grant admin permission."""
-        cfg = self.context.get_config(umo=event.unified_msg_origin)
+        cfg = self.context.config.get(umo=event.unified_msg_origin)
         admin_ids = cfg.setdefault("admins_id", [])
         admin_id = str(admin_id)
         if admin_id not in admin_ids:
             admin_ids.append(admin_id)
-            cfg.save_config()
+            if not await cfg.save_config_async():
+                event.set_result(
+                    MessageEventResult().message(
+                        "❌ Configuration update was superseded by a newer update. "
+                        "Please retry.",
+                    ),
+                )
+                return
 
         event.set_result(
             MessageEventResult().message(f"✅ Added {admin_id} to admin IDs."),
@@ -33,7 +40,7 @@ class AdminCommands:
 
     async def revoke(self, event: AstrMessageEvent, admin_id: str) -> None:
         """Revoke admin permission."""
-        cfg = self.context.get_config(umo=event.unified_msg_origin)
+        cfg = self.context.config.get(umo=event.unified_msg_origin)
         admin_ids = cfg.setdefault("admins_id", [])
         admin_id = str(admin_id)
         if admin_id not in admin_ids:
@@ -45,7 +52,14 @@ class AdminCommands:
             return
 
         admin_ids.remove(admin_id)
-        cfg.save_config()
+        if not await cfg.save_config_async():
+            event.set_result(
+                MessageEventResult().message(
+                    "❌ Configuration update was superseded by a newer update. "
+                    "Please retry.",
+                ),
+            )
+            return
         event.set_result(
             MessageEventResult().message(f"✅ Removed {admin_id} from admin IDs."),
         )

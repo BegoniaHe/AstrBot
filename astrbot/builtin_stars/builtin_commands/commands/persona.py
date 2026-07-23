@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from astrbot.api import star
@@ -8,13 +9,13 @@ if TYPE_CHECKING:
 
 
 class PersonaCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     def _build_tree_output(
         self,
         folder_tree: list[dict],
-        all_personas: list[Persona],
+        all_personas: Sequence[Persona],
         depth: int = 0,
     ) -> list[str]:
         lines: list[str] = []
@@ -42,18 +43,14 @@ class PersonaCommands:
         current_persona = "none"
         conversation_title = "none"
 
-        conversation_id = (
-            await self.context.conversation_manager.get_curr_conversation_id(umo)
-        )
-        default_persona = (
-            await self.context.persona_manager.get_default_runtime_persona(umo=umo)
-        )
+        conversation_id = await self.context.conversations.current_id(umo)
+        default_persona = await self.context.personas.default(umo=umo)
 
         if conversation_id:
-            conversation = await self.context.conversation_manager.get_conversation(
-                unified_msg_origin=umo,
-                conversation_id=conversation_id,
-                create_if_not_exists=True,
+            conversation = await self.context.conversations.get(
+                umo,
+                conversation_id,
+                create_if_missing=True,
             )
             if conversation is None:
                 message.set_result(
@@ -63,7 +60,7 @@ class PersonaCommands:
                 )
                 return
 
-            provider_settings = self.context.get_config(umo=umo).get(
+            provider_settings = self.context.config.get(umo=umo).get(
                 "provider_settings", {}
             )
             (
@@ -71,7 +68,7 @@ class PersonaCommands:
                 _,
                 force_applied_persona_id,
                 _,
-            ) = await self.context.persona_manager.resolve_selected_persona(
+            ) = await self.context.personas.resolve(
                 umo=umo,
                 conversation_persona_id=conversation.persona_id,
                 platform_name=message.get_platform_name(),
@@ -105,8 +102,8 @@ class PersonaCommands:
         )
 
     async def list_personas(self, message: AstrMessageEvent) -> None:
-        folder_tree = await self.context.persona_manager.get_folder_tree()
-        all_personas = self.context.persona_manager.personas
+        folder_tree = await self.context.personas.folders()
+        all_personas = self.context.personas.all()
 
         lines = ["📂 Personas:\n"]
         tree_lines = self._build_tree_output(folder_tree, all_personas)
@@ -129,9 +126,7 @@ class PersonaCommands:
         )
 
     async def show(self, message: AstrMessageEvent, persona_id: str) -> None:
-        persona = self.context.persona_manager.get_runtime_persona_by_id(
-            persona_id.strip()
-        )
+        persona = self.context.personas.get(persona_id.strip())
         if persona is None:
             message.set_result(
                 MessageEventResult().message(f"Persona `{persona_id}` does not exist.")
@@ -145,9 +140,7 @@ class PersonaCommands:
 
     async def unset(self, message: AstrMessageEvent) -> None:
         umo = message.unified_msg_origin
-        conversation_id = (
-            await self.context.conversation_manager.get_curr_conversation_id(umo)
-        )
+        conversation_id = await self.context.conversations.current_id(umo)
         if not conversation_id:
             message.set_result(
                 MessageEventResult().message(
@@ -156,8 +149,8 @@ class PersonaCommands:
             )
             return
 
-        await self.context.conversation_manager.update_conversation(
-            unified_msg_origin=umo,
+        await self.context.conversations.update(
+            umo,
             persona_id="[%None]",
         )
         message.set_result(
@@ -169,9 +162,7 @@ class PersonaCommands:
     async def set_persona(self, message: AstrMessageEvent, persona_id: str) -> None:
         persona_id = persona_id.strip()
         umo = message.unified_msg_origin
-        conversation_id = (
-            await self.context.conversation_manager.get_curr_conversation_id(umo)
-        )
+        conversation_id = await self.context.conversations.current_id(umo)
         if not conversation_id:
             message.set_result(
                 MessageEventResult().message(
@@ -180,7 +171,7 @@ class PersonaCommands:
             )
             return
 
-        persona = self.context.persona_manager.get_runtime_persona_by_id(persona_id)
+        persona = self.context.personas.get(persona_id)
         if persona is None:
             message.set_result(
                 MessageEventResult().message(
@@ -189,10 +180,10 @@ class PersonaCommands:
             )
             return
 
-        conversation = await self.context.conversation_manager.get_conversation(
-            unified_msg_origin=umo,
-            conversation_id=conversation_id,
-            create_if_not_exists=True,
+        conversation = await self.context.conversations.get(
+            umo,
+            conversation_id,
+            create_if_missing=True,
         )
         if conversation is None:
             message.set_result(
@@ -202,7 +193,7 @@ class PersonaCommands:
             )
             return
 
-        provider_settings = self.context.get_config(umo=umo).get(
+        provider_settings = self.context.config.get(umo=umo).get(
             "provider_settings", {}
         )
         (
@@ -210,15 +201,15 @@ class PersonaCommands:
             _,
             force_applied_persona_id,
             _,
-        ) = await self.context.persona_manager.resolve_selected_persona(
+        ) = await self.context.personas.resolve(
             umo=umo,
             conversation_persona_id=conversation.persona_id,
             platform_name=message.get_platform_name(),
             provider_settings=provider_settings,
         )
 
-        await self.context.conversation_manager.update_conversation(
-            unified_msg_origin=umo,
+        await self.context.conversations.update(
+            umo,
             persona_id=persona_id,
         )
         force_warning = ""

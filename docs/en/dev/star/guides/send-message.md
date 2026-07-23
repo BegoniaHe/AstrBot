@@ -22,7 +22,7 @@ delivered still depends on the platform adapter.
 ## Proactive Messages
 
 A scheduled task or another delayed workflow can save
-`event.unified_msg_origin` and later call `Context.send_message()` for the same
+`event.unified_msg_origin` and later call `PluginContext.messages.send()` for the same
 session:
 
 ```python
@@ -35,7 +35,7 @@ async def remember_me(self, event: AstrMessageEvent):
     session = event.unified_msg_origin
     chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
 
-    send_result = await self.context.send_message(session, chain)
+    send_result = await self.context.messages.send(session, chain)
     if not send_result.success:
         logger.warning(
             "Message delivery failed: %s",
@@ -45,7 +45,7 @@ async def remember_me(self, event: AstrMessageEvent):
     yield event.plain_result("Proactive delivery was attempted.")
 ```
 
-`Context.send_message()` returns a `PlatformSendResult` with `platform_id`,
+`PluginContext.messages.send()` returns a `PlatformSendResult` with `platform_id`,
 `success`, `target`, `message_count`, and `error_message`. A missing adapter or
 an adapter send exception produces `success=False`; an invalid session string
 raises `ValueError`. Not every platform supports proactive delivery. QQ

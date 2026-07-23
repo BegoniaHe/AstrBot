@@ -27,7 +27,7 @@ from astrbot.core.star.filter.platform_adapter_type import (
     PlatformAdapterTypeFilter,
     PlatformAdapterType,
 )
-from astrbot.core.star import Context, Star
+from astrbot.core.star import PluginContext, Star
 from astrbot.core.star.config import *
 
 

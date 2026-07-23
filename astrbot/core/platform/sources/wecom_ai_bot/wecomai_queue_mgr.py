@@ -1,5 +1,5 @@
 """企业微信智能机器人队列管理器
-参考 webchat_queue_mgr.py，为企业微信智能机器人实现队列机制
+参考 core.webchat.queue_manager，为企业微信智能机器人实现队列机制
 支持异步消息处理和流式响应
 """
 

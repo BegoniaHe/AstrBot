@@ -4,11 +4,11 @@
 
 ```python
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 from astrbot.api import logger # 使用 astrbot 提供的 logger 接口
 
 class MyPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: PluginContext):
         super().__init__(context)
 
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
@@ -27,7 +27,7 @@ class MyPlugin(Star):
 解释如下：
 
 - 插件需要继承 `Star` 类。
-- `Context` 类用于插件与 AstrBot Core 交互，可以由此调用 AstrBot Core 提供的各种 API。
+- `PluginContext` 通过细粒度能力接口供插件与 AstrBot Core 交互。
 - 具体的处理函数 `Handler` 在插件类中定义，如这里的 `helloworld` 函数。
 - `AstrMessageEvent` 是 AstrBot 的消息事件对象，存储了消息发送者、消息内容等信息。
 - `AstrBotMessage` 是 AstrBot 的消息对象，存储了消息平台下发的消息的具体内容。可以通过 `event.message_obj` 获取。

@@ -11,7 +11,7 @@ from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
 class TestPlugin(star.Star):
     """测试插件类"""
 
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         super().__init__(context)
         self.initialized = True
 

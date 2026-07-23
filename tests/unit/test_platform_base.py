@@ -1,6 +1,7 @@
 import asyncio
 from asyncio import Queue
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -41,10 +42,19 @@ def test_commit_event_returns_false_when_queue_is_full():
     assert result is False
 
 
+def test_commit_event_binds_runtime_metrics_to_event():
+    """An adapter passes its instance-owned telemetry capability to each event."""
+    platform = _DummyPlatform({}, Queue())
+    metrics = SimpleNamespace(upload=AsyncMock())
+    platform.bind_metrics(metrics)
+    event = _make_event("runtime-owned")
+
+    assert platform.commit_event(event)
+    assert event._metrics is metrics
+
+
 @pytest.mark.asyncio
-async def test_platform_termination_cancels_send_metric_task(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_platform_termination_cancels_send_metric_task():
     """A send metric cannot continue after its adapter has been terminated."""
     metric_started = asyncio.Event()
 
@@ -52,11 +62,8 @@ async def test_platform_termination_cancels_send_metric_task(
         metric_started.set()
         await asyncio.Event().wait()
 
-    monkeypatch.setattr(
-        "astrbot.core.platform.platform.Metric.upload",
-        blocked_metric_upload,
-    )
     platform = _DummyPlatform({}, Queue())
+    platform.bind_metrics(SimpleNamespace(upload=blocked_metric_upload))
     session = MessageSession("dummy", MessageType.FRIEND_MESSAGE, "session")
 
     await platform.send_by_session(session, MessageChain())

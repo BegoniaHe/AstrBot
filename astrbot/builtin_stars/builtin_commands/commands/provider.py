@@ -86,19 +86,13 @@ class _ModelCache:
 
 
 class ProviderCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
         self._model_cache = _ModelCache()
         self._register_provider_change_hook()
 
     def _register_provider_change_hook(self) -> None:
-        register_change_hook = getattr(
-            self.context.provider_manager,
-            "register_provider_change_hook",
-            None,
-        )
-        if callable(register_change_hook):
-            register_change_hook(self._on_provider_manager_changed)
+        self.context.models.on_change(self._on_provider_manager_changed)
 
     def invalidate_provider_models_cache(
         self,
@@ -121,7 +115,7 @@ class ProviderCommands:
         if not umo:
             return {}
         try:
-            return self.context.get_config(umo).get("provider_settings", {}) or {}
+            return self.context.config.get(umo).get("provider_settings", {}) or {}
         except Exception as exc:
             logger.debug("Failed to read provider settings, using defaults: %s", exc)
             return {}
@@ -258,7 +252,7 @@ class ProviderCommands:
         use_cache: bool = True,
     ) -> tuple[Provider | None, str | None]:
         all_providers: list[Provider] = []
-        for provider in self.context.get_all_providers():
+        for provider in self.context.models.chat():
             if provider.meta().provider_type != ProviderType.CHAT_COMPLETION:
                 continue
             if (
@@ -419,13 +413,13 @@ class ProviderCommands:
     async def list_providers(self, event: AstrMessageEvent) -> None:
         """List configured LLM, TTS, and STT providers."""
         umo = event.unified_msg_origin
-        cfg = self.context.get_config(umo).get("provider_settings", {})
+        cfg = self.context.config.get(umo).get("provider_settings", {})
         reachability_check_enabled = cfg.get("reachability_check", True)
 
         parts = ["LLM Providers\n"]
-        llms = list(self.context.get_all_providers())
-        ttss = self.context.get_all_tts_providers()
-        stts = self.context.get_all_stt_providers()
+        llms = list(self.context.models.chat())
+        ttss = self.context.models.text_to_speech()
+        stts = self.context.models.speech_to_text()
 
         if reachability_check_enabled and (llms or ttss or stts):
             await event.send(
@@ -450,7 +444,7 @@ class ProviderCommands:
             ),
         )
 
-        provider_using = self.context.get_using_provider(umo=umo)
+        provider_using = self.context.models.using_chat(umo=umo)
         for index, data in enumerate(llm_data):
             line = f"{index + 1}. {data['info']}{data['mark']}"
             if (
@@ -462,7 +456,7 @@ class ProviderCommands:
 
         if tts_data:
             parts.append("\n## TTS Providers\n")
-            tts_using = self.context.get_using_tts_provider(umo=umo)
+            tts_using = self.context.models.using_text_to_speech(umo=umo)
             for index, data in enumerate(tts_data):
                 line = f"{index + 1}. {data['info']}{data['mark']}"
                 if tts_using and tts_using.meta().id == data["provider"].meta().id:
@@ -471,7 +465,7 @@ class ProviderCommands:
 
         if stt_data:
             parts.append("\n## STT Providers\n")
-            stt_using = self.context.get_using_stt_provider(umo=umo)
+            stt_using = self.context.models.using_speech_to_text(umo=umo)
             for index, data in enumerate(stt_data):
                 line = f"{index + 1}. {data['info']}{data['mark']}"
                 if stt_using and stt_using.meta().id == data["provider"].meta().id:
@@ -489,7 +483,7 @@ class ProviderCommands:
         await self._set_provider_by_index(
             event,
             index,
-            list(self.context.get_all_providers()),
+            list(self.context.models.chat()),
             ProviderType.CHAT_COMPLETION,
         )
 
@@ -497,7 +491,7 @@ class ProviderCommands:
         await self._set_provider_by_index(
             event,
             index,
-            self.context.get_all_tts_providers(),
+            self.context.models.text_to_speech(),
             ProviderType.TEXT_TO_SPEECH,
         )
 
@@ -505,7 +499,7 @@ class ProviderCommands:
         await self._set_provider_by_index(
             event,
             index,
-            self.context.get_all_stt_providers(),
+            self.context.models.speech_to_text(),
             ProviderType.SPEECH_TO_TEXT,
         )
 
@@ -521,7 +515,7 @@ class ProviderCommands:
             return
         provider = providers[index - 1]
         provider_id = provider.meta().id
-        await self.context.provider_manager.set_provider(
+        await self.context.models.select(
             provider_id=provider_id,
             provider_type=provider_type,
             umo=event.unified_msg_origin,
@@ -584,7 +578,7 @@ class ProviderCommands:
 
         target_id = target_provider.meta().id
         try:
-            await self.context.provider_manager.set_provider(
+            await self.context.models.select(
                 provider_id=target_id,
                 provider_type=ProviderType.CHAT_COMPLETION,
                 umo=umo,
@@ -606,7 +600,7 @@ class ProviderCommands:
 
     async def list_models(self, event: AstrMessageEvent) -> None:
         """List models for the current chat provider."""
-        provider = self.context.get_using_provider(event.unified_msg_origin)
+        provider = self.context.models.using_chat(event.unified_msg_origin)
         if not provider:
             event.set_result(
                 MessageEventResult().message(
@@ -639,7 +633,7 @@ class ProviderCommands:
 
     async def set_model(self, event: AstrMessageEvent, name_or_index: str) -> None:
         """Switch the current chat model by name or list index."""
-        provider = self.context.get_using_provider(event.unified_msg_origin)
+        provider = self.context.models.using_chat(event.unified_msg_origin)
         if not provider:
             event.set_result(
                 MessageEventResult().message(

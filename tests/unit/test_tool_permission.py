@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from astrbot.core.agent.tool import FunctionTool
-from astrbot.core.provider.func_tool_manager import (
+from astrbot.core.tools.function_tool_manager import (
     FunctionToolManager,
     _PermissionGuardedTool,
 )
@@ -81,10 +81,11 @@ def _make_tools_service(
 ) -> ToolsService:
     """Create a minimal tools service for permission unit tests."""
     service = ToolsService.__new__(ToolsService)
-    service.core_lifecycle = MagicMock()
-    service.core_lifecycle.astrbot_config_mgr = MagicMock()
-    service.core_lifecycle.astrbot_config_mgr.get_conf_list.return_value = []
-    service.core_lifecycle.astrbot_config_mgr.confs = {}
+    service.config_manager = MagicMock()
+    service.config_manager.get_conf_list.return_value = []
+    service.config_manager.confs = {}
+    service.plugin_catalog = MagicMock()
+    service.plugin_catalog.get_by_module.return_value = None
     service.preferences = preferences
     service.tool_mgr = tool_mgr or _manager()
     return service

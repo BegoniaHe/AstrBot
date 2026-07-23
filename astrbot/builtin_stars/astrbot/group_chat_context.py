@@ -22,7 +22,6 @@ from astrbot.api.message_components import (
 from astrbot.api.platform import MessageType
 from astrbot.api.provider import Provider, ProviderRequest
 from astrbot.core.agent.message import TextPart
-from astrbot.core.astrbot_config_mgr import AstrBotConfigManager
 
 """
 Group chat context awareness.
@@ -39,8 +38,7 @@ DEFAULT_GROUP_MESSAGE_MAX_CNT = 300
 
 
 class GroupChatContext:
-    def __init__(self, acm: AstrBotConfigManager, context: star.Context) -> None:
-        self.acm = acm
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
         self._locks: dict[str, asyncio.Lock] = {}
         self.raw_records: dict[str, deque[str]] = defaultdict(deque)
@@ -54,7 +52,7 @@ class GroupChatContext:
         return lock
 
     def cfg(self, event: AstrMessageEvent):
-        cfg = self.context.get_config(umo=event.unified_msg_origin)
+        cfg = self.context.config.get(umo=event.unified_msg_origin)
         group_context_cfg = cfg["provider_ltm_settings"]
         image_caption_prompt = cfg["provider_settings"]["image_caption_prompt"]
         image_caption_provider_id = group_context_cfg.get("image_caption_provider_id")
@@ -92,9 +90,9 @@ class GroupChatContext:
         image_caption_prompt: str,
     ) -> str:
         if not image_caption_provider_id:
-            provider = self.context.get_using_provider()
+            provider = self.context.models.using_chat()
         else:
-            provider = self.context.get_provider_by_id(image_caption_provider_id)
+            provider = self.context.models.get(image_caption_provider_id)
             if not provider:
                 raise Exception(f"没有找到 ID 为 {image_caption_provider_id} 的提供商")
         if not isinstance(provider, Provider):
@@ -105,7 +103,9 @@ class GroupChatContext:
             image_urls=[image_url],
             persist=False,
         )
-        return response.completion_text
+        # A valid provider response may carry tool calls or an empty completion.
+        # Keep the group-context prompt text-only rather than rendering ``None``.
+        return response.completion_text or ""
 
     async def need_active_reply(self, event: AstrMessageEvent) -> bool:
         cfg = self.cfg(event)

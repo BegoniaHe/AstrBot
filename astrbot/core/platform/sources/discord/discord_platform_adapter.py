@@ -23,8 +23,7 @@ from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
-from astrbot.core.star.star import star_map
-from astrbot.core.star.star_handler import StarHandlerMetadata, star_handlers_registry
+from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
 from .client import DiscordBotClient
 from .discord_platform_event import DiscordPlatformEvent
@@ -406,12 +405,9 @@ class DiscordPlatformAdapter(Platform):
             self.client.remove_application_command(command)
         self._registered_application_commands.clear()
 
-        for handler_md in star_handlers_registry:
-            plugin = star_map.get(handler_md.handler_module_path)
-            if not plugin or not plugin.activated:
-                continue
-            if not handler_md.enabled:
-                continue
+        for handler_md in self.get_handler_registry().get_handlers_by_event_type(
+            EventType.AdapterMessageEvent,
+        ):
             for event_filter in handler_md.event_filters:
                 if (
                     isinstance(event_filter, CommandGroupFilter)
@@ -679,9 +675,10 @@ class DiscordPlatformAdapter(Platform):
             return None
         return choices
 
-    @staticmethod
-    def _handler_is_active(handler_md: StarHandlerMetadata) -> bool:
-        plugin = star_map.get(handler_md.handler_module_path)
+    def _handler_is_active(self, handler_md: StarHandlerMetadata) -> bool:
+        plugin = self.get_plugin_registry().get_by_module(
+            handler_md.handler_module_path,
+        )
         return bool(plugin and plugin.activated and handler_md.enabled)
 
     @staticmethod

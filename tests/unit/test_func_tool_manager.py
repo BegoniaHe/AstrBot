@@ -1,11 +1,12 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from astrbot.core.provider import func_tool_manager as ftm
-from astrbot.core.provider.func_tool_manager import FunctionToolManager
+from astrbot.core.tools import function_tool_manager as ftm
 from astrbot.core.tools.computer_tools.shell import ExecuteShellTool
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 from astrbot.core.tools.message_tools import SendMessageToUserTool, SendPokeToUserTool
 from astrbot.core.tools.web_search_tools import (
     FirecrawlExtractWebPageTool,
@@ -36,6 +37,25 @@ def test_get_builtin_tool_by_class_returns_cached_instance():
     assert tool_by_class is tool_by_name
     assert manager.get_tool("send_message_to_user") is tool_by_class
     assert tool_by_class.name == "send_message_to_user"
+
+
+def test_builtin_tool_discovery_is_scoped_to_each_manager_instance():
+    """A previous runtime's discovery cannot populate another runtime's tools."""
+    first = FunctionToolManager()
+    second = FunctionToolManager()
+
+    first.get_builtin_tool(SendMessageToUserTool)
+
+    assert (
+        first._builtin_tool_classes_by_name is not second._builtin_tool_classes_by_name
+    )
+    assert first.builtin_func_list
+    assert second.builtin_func_list == {}
+
+    second_tool = second.get_builtin_tool("send_message_to_user")
+
+    assert second_tool is not first.get_builtin_tool("send_message_to_user")
+    assert second_tool.name == "send_message_to_user"
 
 
 def test_get_builtin_poke_tool_by_class_returns_cached_instance():
@@ -75,8 +95,6 @@ def test_computer_tools_are_registered_as_builtin_tools():
 
 @pytest.mark.asyncio
 async def test_execute_shell_defaults_to_foreground(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -107,7 +125,7 @@ async def test_execute_shell_defaults_to_foreground(monkeypatch):
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
 
     result = await ExecuteShellTool().call(
         FakeWrapper(), command="chromium https://example.com"
@@ -119,8 +137,6 @@ async def test_execute_shell_defaults_to_foreground(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_shell_uses_fresh_default_env_per_call(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -152,7 +168,7 @@ async def test_execute_shell_uses_fresh_default_env_per_call(monkeypatch):
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
     tool = ExecuteShellTool()
 
     await tool.call(FakeWrapper(), command="first")
@@ -165,8 +181,6 @@ async def test_execute_shell_uses_fresh_default_env_per_call(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_shell_copies_user_env_before_execution(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -198,7 +212,7 @@ async def test_execute_shell_copies_user_env_before_execution(monkeypatch):
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
     original_env = {"FOO": "bar"}
 
     await ExecuteShellTool().call(FakeWrapper(), command="first", env=original_env)
@@ -209,8 +223,6 @@ async def test_execute_shell_copies_user_env_before_execution(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_shell_accepts_timeout_alias(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -241,7 +253,7 @@ async def test_execute_shell_accepts_timeout_alias(monkeypatch):
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
 
     await ExecuteShellTool().call(FakeWrapper(), command="echo hi", timeout=12)
 
@@ -252,8 +264,6 @@ async def test_execute_shell_accepts_timeout_alias(monkeypatch):
 async def test_execute_shell_avoids_double_background_for_detached_commands(
     monkeypatch,
 ):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -284,7 +294,7 @@ async def test_execute_shell_avoids_double_background_for_detached_commands(
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
 
     command = "nohup firefox >/tmp/astrbot-firefox.log 2>&1 &"
     result = await ExecuteShellTool().call(
@@ -297,8 +307,6 @@ async def test_execute_shell_avoids_double_background_for_detached_commands(
 
 @pytest.mark.asyncio
 async def test_execute_shell_recognizes_commented_background_command(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     calls = []
 
     class FakeShell:
@@ -329,7 +337,7 @@ async def test_execute_shell_recognizes_commented_background_command(monkeypatch
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
 
     command = "firefox & # already detached"
     result = await ExecuteShellTool().call(
@@ -360,8 +368,6 @@ def test_is_self_detached_command_handles_quotes_and_comments(command, expected)
 
 @pytest.mark.asyncio
 async def test_execute_shell_reports_blank_exception_type(monkeypatch):
-    from astrbot.core.tools.computer_tools import shell as shell_tools
-
     class BlankError(Exception):
         def __str__(self):
             return ""
@@ -393,7 +399,7 @@ async def test_execute_shell_reports_blank_exception_type(monkeypatch):
     async def fake_get_booter(context, session_id):
         return FakeBooter()
 
-    monkeypatch.setattr(shell_tools, "get_booter", fake_get_booter)
+    FakeConfig.computer_runtime = SimpleNamespace(get_booter=fake_get_booter)
 
     result = await ExecuteShellTool().call(FakeWrapper(), command="firefox")
 
@@ -440,7 +446,8 @@ async def test_mcp_shutdown_cleanup_runs_in_lifecycle_task(monkeypatch):
     await manager.disable_mcp_server("dummy", timeout=5)
 
     assert seen["cleanup_task"] is seen["connect_task"]
-    assert "dummy" not in manager.mcp_client_dict
+    assert "dummy" not in manager.mcp_server_runtime_view
+    assert not hasattr(manager, "mcp_client_dict")
 
 
 @pytest.mark.asyncio
@@ -468,7 +475,7 @@ async def test_mcp_shutdown_cleanup_survives_late_cancellation(monkeypatch):
     await manager.disable_mcp_server("dummy", timeout=5)
 
     assert len(cleanup_calls) == 2
-    assert "dummy" not in manager.mcp_client_dict
+    assert "dummy" not in manager.mcp_server_runtime_view
 
 
 @pytest.mark.asyncio

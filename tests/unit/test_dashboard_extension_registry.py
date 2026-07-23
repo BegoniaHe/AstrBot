@@ -24,8 +24,8 @@ from astrbot.core.star.dashboard_extension import (
     DashboardUploadAction,
     validate_dashboard_manifest,
 )
+from astrbot.core.star.plugin_runtime_loader import PluginRuntimeLoader
 from astrbot.core.star.star import StarMetadata
-from astrbot.core.star.star_manager import PluginManager
 
 MALICIOUS_FIXTURE_ROOT = (
     Path(__file__).parents[1] / "fixtures" / "plugins" / "dashboard_extension_malicious"
@@ -66,7 +66,7 @@ async def file_handler(_payload, _context):
 
 
 def test_example_fixture_declares_dashboard_v1_capability_and_loads():
-    metadata = PluginManager._load_plugin_metadata(str(EXAMPLE_FIXTURE_ROOT))
+    metadata = PluginRuntimeLoader.load_metadata(str(EXAMPLE_FIXTURE_ROOT))
 
     assert metadata.dashboard is not None
     assert metadata.dashboard.extension_id == (
@@ -95,7 +95,7 @@ def test_metadata_loader_requires_exact_dashboard_v1_capability(
     )
 
     with pytest.raises(DashboardExtensionError):
-        PluginManager._load_plugin_metadata(str(plugin_root))
+        PluginRuntimeLoader.load_metadata(str(plugin_root))
 
 
 def _write_file(root: Path, relative_path: str, content: bytes) -> dict:
@@ -224,7 +224,7 @@ def test_valid_manifest_supports_single_and_multiple_pages(tmp_path: Path):
 
 def test_malicious_fixture_plugin_is_rejected_before_registration():
     with pytest.raises(DashboardExtensionError):
-        PluginManager._load_plugin_metadata(str(MALICIOUS_FIXTURE_ROOT))
+        PluginRuntimeLoader.load_metadata(str(MALICIOUS_FIXTURE_ROOT))
 
 
 @pytest.mark.parametrize(
@@ -583,6 +583,63 @@ async def test_registration_failure_leaves_no_partial_snapshot(tmp_path: Path):
     assert registry.snapshots() == ()
     with pytest.raises(DashboardRegistrationError):
         registry.registrar_for(owner)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_promote_staged_generation_keeps_live_extension_until_commit(
+    tmp_path: Path,
+):
+    """A staged replacement cannot affect the live extension before promotion."""
+    live_registry = DashboardExtensionRegistry()
+    current_owner = object()
+    current_root = tmp_path / "current"
+    current_root.mkdir()
+    current = _metadata(
+        current_root,
+        current_owner,
+        root_dir_name="reloadable_plugin",
+    )
+    live_registry.begin_registration(current, current_owner)  # type: ignore[arg-type]
+    live_registry.registrar_for(current_owner).register_json(  # type: ignore[arg-type]
+        _json_action(),
+        json_handler,
+    )
+    current_snapshot = await live_registry.commit_registration(current_owner)  # type: ignore[arg-type]
+    assert current_snapshot is not None
+
+    staging_registry = DashboardExtensionRegistry()
+    replacement_owner = object()
+    replacement_root = tmp_path / "replacement"
+    replacement_root.mkdir()
+    replacement = _metadata(
+        replacement_root,
+        replacement_owner,
+        root_dir_name="reloadable_plugin",
+    )
+    staging_registry.begin_registration(replacement, replacement_owner)  # type: ignore[arg-type]
+    staging_registry.registrar_for(replacement_owner).register_json(  # type: ignore[arg-type]
+        _json_action(),
+        json_handler,
+    )
+    replacement_snapshot = await staging_registry.commit_registration(  # type: ignore[arg-type]
+        replacement_owner,
+    )
+    assert replacement_snapshot is not None
+
+    assert live_registry.get_snapshot(current_snapshot.extension_id) is current_snapshot
+
+    await live_registry.promote_staged_generation(
+        staging_registry,
+        current,
+        replacement,
+        reason="reload",
+    )
+
+    assert (
+        live_registry.get_snapshot(replacement_snapshot.extension_id)
+        is replacement_snapshot
+    )
+    assert staging_registry.snapshots() == ()
 
 
 def test_registration_rejects_constructor_foreign_stale_and_duplicate_owners(

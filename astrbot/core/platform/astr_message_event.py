@@ -9,6 +9,7 @@ from time import time
 from typing import Any
 
 from astrbot import logger
+from astrbot.core.agent.llm_types import ProviderRequest
 from astrbot.core.agent.tool import ToolSet
 from astrbot.core.db.po import Conversation
 from astrbot.core.message.components import (
@@ -42,8 +43,7 @@ from astrbot.core.message.components import (
 )
 from astrbot.core.message.message_event_result import MessageChain, MessageEventResult
 from astrbot.core.platform.message_type import MessageType
-from astrbot.core.provider.entities import ProviderRequest
-from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.metrics import MetricsSink
 from astrbot.core.utils.task_utils import create_tracked_task
 from astrbot.core.utils.trace import TraceSpan
 
@@ -52,8 +52,6 @@ from .message_session import MessageSession
 from .platform_metadata import PlatformMetadata
 from .route_identity import PlatformRouteIdentity
 from .send_result import PlatformSendResult
-
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class _LazyExtraValue:
@@ -163,6 +161,10 @@ class AstrMessageEvent(abc.ABC):
         """是否在此消息事件中禁止默认的 LLM 请求"""
         self._temporary_local_files: list[str] = []
         """Temporary local files created during this event and safe to delete when it finishes."""
+        self._background_tasks: set[asyncio.Task] = set()
+        """Tasks retained by this event until its owning platform binds them."""
+        self._metrics: MetricsSink | None = None
+        """Telemetry capability injected by the originating platform."""
 
         self.plugins_name: list[str] | None = None
         """该事件启用的插件名称列表。None 表示所有插件都启用。空列表表示没有启用任何插件。"""
@@ -171,6 +173,29 @@ class AstrMessageEvent(abc.ABC):
     def unified_msg_origin(self) -> str:
         """统一的消息来源字符串。格式为 platform_name:message_type:session_id"""
         return str(self.session)
+
+    def bind_background_tasks(self, task_set: set[asyncio.Task]) -> None:
+        """Transfer auxiliary task ownership to the originating platform."""
+        if self._background_tasks and self._background_tasks is not task_set:
+            task_set.update(self._background_tasks)
+        self._background_tasks = task_set
+
+    def bind_metrics(self, metrics: MetricsSink) -> None:
+        """Bind telemetry from the platform that owns this event."""
+
+        self._metrics = metrics
+
+    def _schedule_metric(self, *, name: str, **kwargs: Any) -> None:
+        """Schedule a metric under this event's bound task owner."""
+
+        metrics = getattr(self, "_metrics", None)
+        if metrics is None:
+            return
+        create_tracked_task(
+            self._background_tasks,
+            metrics.upload(**kwargs),
+            name=name,
+        )
 
     @property
     def route_origin(self) -> str:
@@ -531,10 +556,10 @@ class AstrMessageEvent(abc.ABC):
 
     async def _record_streaming_send(self) -> PlatformSendResult:
         """Record exactly one successful logical streaming response."""
-        create_tracked_task(
-            _BACKGROUND_TASKS,
-            Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
+        self._schedule_metric(
             name=f"metric:stream:{self.platform_meta.name}",
+            msg_event_tick=1,
+            adapter_name=self.platform_meta.name,
         )
         self._has_send_oper = True
         return self._success_send_result()
@@ -677,7 +702,6 @@ class AstrMessageEvent(abc.ABC):
     def request_llm(
         self,
         prompt: str,
-        func_tool_manager=None,
         tool_set: ToolSet | None = None,
         session_id: str = "",
         image_urls: list[str] | None = None,
@@ -704,8 +728,6 @@ class AstrMessageEvent(abc.ABC):
 
         contexts: 当指定 contexts 时，将会使用 contexts 作为上下文。如果同时传入了 conversation，将会忽略 conversation。
 
-        func_tool_manager: [Deprecated] 函数工具管理器，用于调用函数工具。用 self.context.get_llm_tool_manager() 获取。已过时，请使用 tool_set 参数代替。
-
         conversation: 可选。如果指定，将在指定的对话中进行 LLM 请求。对话的人格会被用于 LLM 请求，并且结果将会被记录到对话中。
 
         """
@@ -723,7 +745,6 @@ class AstrMessageEvent(abc.ABC):
             session_id=session_id,
             image_urls=image_urls,
             audio_urls=audio_urls,
-            # func_tool=func_tool_manager,
             func_tool=tool_set,
             contexts=contexts,
             system_prompt=system_prompt,
@@ -742,14 +763,11 @@ class AstrMessageEvent(abc.ABC):
         # Leverage BLAKE2 hash function to generate a non-reversible hash of the sender ID for privacy.
         hash_obj = hashlib.blake2b(self.get_sender_id().encode("utf-8"), digest_size=16)
         sid = str(uuid.UUID(bytes=hash_obj.digest()))
-        create_tracked_task(
-            _BACKGROUND_TASKS,
-            Metric.upload(
-                msg_event_tick=1,
-                adapter_name=self.platform_meta.name,
-                sid=sid,
-            ),
+        self._schedule_metric(
             name=f"metric:send:{self.platform_meta.name}",
+            msg_event_tick=1,
+            adapter_name=self.platform_meta.name,
+            sid=sid,
         )
         self._has_send_oper = True
         return self._success_send_result(message_count=len(message.chain))

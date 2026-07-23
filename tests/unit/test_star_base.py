@@ -18,9 +18,9 @@ class TestStarBase:
         """Test Star initialization with a context-like object."""
         from astrbot.core.star import Star
 
-        # Create a mock context with get_config method
+        # Create a mock capability-scoped plugin context.
         mock_context = MagicMock()
-        mock_context.get_config.return_value = MagicMock()
+        mock_context.config.get.return_value = MagicMock()
 
         # Create a concrete Star subclass for testing
         class TestStar(Star):
@@ -37,12 +37,11 @@ class TestStarBase:
         from astrbot.core.star import Star
 
         mock_context = MagicMock()
-        mock_context.html_renderer = MagicMock()
         mock_config = MagicMock()
         mock_config.get.side_effect = lambda key, default=None: {
             "t2i_active_template": "default_template",
         }.get(key, default)
-        mock_context.get_config.return_value = mock_config
+        mock_context.config.get.return_value = mock_config
 
         class TestStar(Star):
             name = "test_star"
@@ -51,7 +50,7 @@ class TestStarBase:
         star = TestStar(context=mock_context)
 
         with patch.object(
-            mock_context.html_renderer, "render_t2i", new_callable=AsyncMock
+            mock_context.rendering, "text_to_image", new_callable=AsyncMock
         ) as mock_render:
             mock_render.return_value = "D:/temp/image.png"
             result = await star.text_to_image("test text")
@@ -68,8 +67,7 @@ class TestStarBase:
         from astrbot.core.star import Star
 
         mock_context = MagicMock()
-        mock_context.html_renderer = MagicMock()
-        mock_context.get_config.return_value = None
+        mock_context.config.get.return_value = None
 
         class TestStar(Star):
             name = "test_star"
@@ -78,7 +76,7 @@ class TestStarBase:
         star = TestStar(context=mock_context)
 
         with patch.object(
-            mock_context.html_renderer, "render_t2i", new_callable=AsyncMock
+            mock_context.rendering, "text_to_image", new_callable=AsyncMock
         ) as mock_render:
             mock_render.return_value = "D:/temp/image.png"
             result = await star.text_to_image("test text")
@@ -95,8 +93,7 @@ class TestStarBase:
         from astrbot.core.star import Star
 
         mock_context = MagicMock()
-        mock_context.html_renderer = MagicMock()
-        mock_context.get_config.return_value = MagicMock()
+        mock_context.config.get.return_value = MagicMock()
 
         class TestStar(Star):
             name = "test_star"
@@ -105,8 +102,8 @@ class TestStarBase:
         star = TestStar(context=mock_context)
 
         with patch.object(
-            mock_context.html_renderer,
-            "render_custom_template",
+            mock_context.rendering,
+            "html",
             new_callable=AsyncMock,
         ) as mock_render:
             mock_render.return_value = "D:/temp/rendered.png"
@@ -124,8 +121,7 @@ class TestStarBase:
         from astrbot.core.star import Star
 
         mock_context = MagicMock()
-        mock_context.html_renderer = MagicMock()
-        mock_context.get_config.return_value = MagicMock()
+        mock_context.config.get.return_value = MagicMock()
 
         class TestStar(Star):
             name = "test_star"
@@ -134,8 +130,8 @@ class TestStarBase:
         star = TestStar(context=mock_context)
 
         with patch.object(
-            mock_context.html_renderer,
-            "render_custom_template",
+            mock_context.rendering,
+            "html",
             new_callable=AsyncMock,
         ) as mock_render:
             mock_render.return_value = "D:/temp/rendered.png"
@@ -176,21 +172,18 @@ class TestStarBase:
         await star.terminate()
         assert star.terminated is True
 
-    def test_star_metadata_registration(self):
-        """Test that Star subclass is automatically registered."""
-        from astrbot.core.star import star_registry
+    def test_star_subclass_declares_metadata_without_global_registration(self):
+        """Star subclass declarations stay on the class until a runtime scans it."""
+        from astrbot.core.star import Star
+        from astrbot.core.star.star import StarDeclaration
 
-        class UniqueTestStar:
-            """Not a Star subclass, should not be registered."""
+        class DeclaredStar(Star):
+            name = "declared_star"
+            author = "test_author"
 
-            pass
-
-        # Verify Star subclass gets registered
-        initial_count = len(star_registry)
-
-        # Note: This test verifies the __init_subclass__ mechanism
-        # The actual registration happens when a class inherits from Star
-        assert len(star_registry) >= initial_count
+        declaration = DeclaredStar.__astrbot_star_declaration__
+        assert isinstance(declaration, StarDeclaration)
+        assert declaration.star_cls_type is DeclaredStar
 
 
 class TestStarMetadataPluginId:
@@ -266,9 +259,9 @@ class TestNoCircularImports:
         """Test that both modules can be imported together."""
 
         # Verify key exports are available
-        from astrbot.core.star import Context, PluginManager, Star
+        from astrbot.core.star import PluginContext, PluginManager, Star
 
-        assert Context is not None
+        assert PluginContext is not None
         assert Star is not None
         assert PluginManager is not None
 

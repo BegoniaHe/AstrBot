@@ -4,7 +4,7 @@ from astrbot.core.umo_alias import get_event_auto_name, normalize_umo_name
 
 
 class SessionCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def info(self, event: AstrMessageEvent) -> None:
@@ -26,7 +26,7 @@ class SessionCommands:
         )
 
         if (
-            self.context.get_config()["platform_settings"]["unique_session"]
+            self.context.config.get()["platform_settings"]["unique_session"]
             and event.get_group_id()
         ):
             message += (
@@ -42,7 +42,7 @@ class SessionCommands:
         auto_name = get_event_auto_name(event)
         alias = normalize_umo_name(alias)
         if not alias:
-            saved_alias = await self.context.get_db().get_umo_alias(umo)
+            saved_alias = await self.context.sessions.alias(umo)
             user_alias = normalize_umo_name(
                 saved_alias.user_alias if saved_alias else ""
             )
@@ -64,7 +64,7 @@ class SessionCommands:
 
         sender_id = str(event.get_sender_id() or "")
 
-        await self.context.get_db().upsert_umo_alias(
+        await self.context.sessions.set_alias(
             umo=umo,
             creator_sender_id=sender_id,
             auto_name=auto_name,

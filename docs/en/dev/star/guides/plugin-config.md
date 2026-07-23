@@ -99,9 +99,7 @@ The saved value is not an absolute path. It is a list such as:
 Files live under `data/plugin_data/<plugin-root>/files/<config-key>/`. Paths and extensions are validated, and the current per-file limit is 500 MiB. Resolve a value through the public storage entry point:
 
 ```python
-from astrbot.api.star import StarTools
-
-absolute_path = StarTools.get_data_dir() / config["reference_files"][0]
+absolute_path = self.context.storage.data_directory() / config["reference_files"][0]
 ```
 
 Do not treat an upload path as a URL or bypass relative-path validation to access another plugin's data.
@@ -162,11 +160,11 @@ The stored value includes its template key:
 
 ```python
 from astrbot.api import AstrBotConfig
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 
 
 class Main(Star):
-    def __init__(self, context: Context, config: AstrBotConfig) -> None:
+    def __init__(self, context: PluginContext, config: AstrBotConfig) -> None:
         super().__init__(context)
         self.config = config
 
@@ -178,7 +176,7 @@ class Main(Star):
 
 The configuration filename comes from the plugin directory root name and is stored as `data/config/<root-name>_config.json`, not an arbitrary metadata display name. Saving in the WebUI validates and writes the data, then reloads the plugin. Every client, task, and file therefore needs correct `terminate()` cleanup.
 
-When a plugin genuinely needs to update configuration at runtime, modify `self.config` and call `self.config.save_config()`. Do not write on every message or store runtime state, caches, or user data in configuration; use [Plugin Storage](./storage) instead.
+When a plugin genuinely needs to update configuration at runtime from an async handler, modify `self.config` and await `self.config.save_config_async()`. Do not write on every message or store runtime state, caches, or user data in configuration; use [Plugin Storage](./storage) instead.
 
 ## Schema update rules
 

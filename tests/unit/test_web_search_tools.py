@@ -423,186 +423,14 @@ class _TavilyResponse:
         return self.textData
 
 
-@pytest.fixture(autouse=True)
-def _resetKeyRotators():
-    """Reset KeyRotator indexes to avoid state leakage between tests."""
-    tools._TAVILY_KEY_ROTATOR.index = 0
-    tools._BOCHA_KEY_ROTATOR.index = 0
-    tools._BRAVE_KEY_ROTATOR.index = 0
-    tools._FIRECRAWL_KEY_ROTATOR.index = 0
-    tools._EXA_KEY_ROTATOR.index = 0
-    yield
-    tools._TAVILY_KEY_ROTATOR.index = 0
-    tools._BOCHA_KEY_ROTATOR.index = 0
-    tools._BRAVE_KEY_ROTATOR.index = 0
-    tools._FIRECRAWL_KEY_ROTATOR.index = 0
-    tools._EXA_KEY_ROTATOR.index = 0
+def _runtime_search_settings(values: dict) -> dict:
+    """Create one isolated key-rotation state for a direct search call."""
+    return tools._RuntimeProviderSettings(values, tools._WebSearchRuntimeState())
 
 
 # ---------------------------------------------------------------------------
 # Issue #8886: Tavily key rotation did not fail over to the next key.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_tavily_search_raises_value_error_when_no_key_configured():
-    """Raise ValueError when no Tavily API key is configured."""
-    with pytest.raises(
-        ValueError,
-        match="Error: Tavily API key is not configured in AstrBot.",
-    ):
-        await tools._tavily_search({}, {"query": "test"})
-
-
-@pytest.mark.asyncio
-async def test_tavily_search_key_failover_on_quota_exceeded_432(
-    monkeypatch,
-):
-    """Fail over to the second key when the first key returns 432."""
-    session = _CycleSession(
-        [
-            _TavilyResponse(
-                status=432,
-                textData='{"detail":{"error":"quota exceeded"}}',
-            ),
-            _TavilyResponse(
-                status=200,
-                jsonData={
-                    "results": [
-                        {"title": "AstrBot", "url": "https://example.com", "content": "OK"}
-                    ]
-                },
-            ),
-        ]
-    )
-
-    def fakeClientSession(*, trust_env):
-        session.trust_env = trust_env
-        return session
-
-    monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
-
-    providerSettings = {"websearch_tavily_key": ["bad-key", "good-key"]}
-
-    results = await tools._tavily_search(providerSettings, {"query": "test"})
-
-    assert len(results) == 1
-    assert results[0].title == "AstrBot"
-    assert results[0].url == "https://example.com"
-    assert len(session.calls) == 2  # Both keys were attempted.
-
-
-@pytest.mark.asyncio
-async def test_tavily_search_key_failover_on_rate_limited_429(
-    monkeypatch,
-):
-    """Fail over to the second key when the first key returns 429."""
-    session = _CycleSession(
-        [
-            _TavilyResponse(
-                status=429,
-                textData='{"detail":{"error":"rate limited"}}',
-            ),
-            _TavilyResponse(
-                status=200,
-                jsonData={
-                    "results": [
-                        {"title": "RateLimitOK", "url": "https://example2.com", "content": "OK"}
-                    ]
-                },
-            ),
-        ]
-    )
-
-    def fakeClientSession(*, trust_env):
-        session.trust_env = trust_env
-        return session
-
-    monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
-
-    providerSettings = {"websearch_tavily_key": ["rate-limited-key", "good-key"]}
-
-    results = await tools._tavily_search(providerSettings, {"query": "test"})
-
-    assert len(results) == 1
-    assert results[0].title == "RateLimitOK"
-    assert len(session.calls) == 2  # Both keys were attempted.
-
-
-@pytest.mark.asyncio
-async def test_tavily_search_fails_when_all_keys_exhausted_8886(
-    monkeypatch,
-):
-    """Raise the last error when all keys are exhausted."""
-    # Both responses are retryable failures.
-    session = _CycleSession(
-        [
-            _TavilyResponse(
-                status=432,
-                textData='{"detail":{"error":"quota exceeded"}}',
-            ),
-            _TavilyResponse(
-                status=429,
-                textData='{"detail":{"error":"rate limited"}}',
-            ),
-        ]
-    )
-
-    def fakeClientSession(*, trust_env):
-        session.trust_env = trust_env
-        return session
-
-    monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
-
-    providerSettings = {"websearch_tavily_key": ["bad-key-1", "bad-key-2"]}
-
-    with pytest.raises(
-        Exception,
-        match="Tavily web search failed",
-    ):
-        await tools._tavily_search(providerSettings, {"query": "test"})
-
-    assert len(session.calls) == 2  # Both keys were attempted.
-
-
-@pytest.mark.asyncio
-async def test_tavily_search_does_not_failover_on_server_error_500(
-    monkeypatch,
-):
-    """Raise immediately for non-key-related errors such as 500 responses."""
-    session = _CycleSession(
-        [
-            _TavilyResponse(
-                status=500,
-                textData='{"error":"internal server error"}',
-            ),
-            _TavilyResponse(
-                status=200,
-                jsonData={
-                    "results": [
-                        {"title": "OK", "url": "https://example.com", "content": "OK"}
-                    ]
-                },
-            ),
-        ]
-    )
-
-    def fakeClientSession(*, trust_env):
-        session.trust_env = trust_env
-        return session
-
-    monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
-
-    providerSettings = {"websearch_tavily_key": ["key-1", "key-2"]}
-
-    with pytest.raises(
-        Exception,
-        match="Tavily web search failed.*status: 500",
-    ):
-        await tools._tavily_search(providerSettings, {"query": "test"})
-
-    # Only one key is attempted because 500 is not retryable.
-    assert len(session.calls) == 1
 
 
 class _CycleSession:
@@ -659,20 +487,6 @@ class _TavilyResponse:
         return self.textData
 
 
-@pytest.fixture(autouse=True)
-def _resetKeyRotators():
-    """Reset KeyRotator indexes to avoid state leakage between tests."""
-    tools._TAVILY_KEY_ROTATOR.index = 0
-    tools._BOCHA_KEY_ROTATOR.index = 0
-    tools._BRAVE_KEY_ROTATOR.index = 0
-    tools._FIRECRAWL_KEY_ROTATOR.index = 0
-    yield
-    tools._TAVILY_KEY_ROTATOR.index = 0
-    tools._BOCHA_KEY_ROTATOR.index = 0
-    tools._BRAVE_KEY_ROTATOR.index = 0
-    tools._FIRECRAWL_KEY_ROTATOR.index = 0
-
-
 # ---------------------------------------------------------------------------
 # Issue #8886: Tavily key rotation did not fail over to the next key.
 # ---------------------------------------------------------------------------
@@ -716,7 +530,9 @@ async def test_tavily_search_key_failover_on_quota_exceeded_432(
 
     monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
 
-    providerSettings = {"websearch_tavily_key": ["bad-key", "good-key"]}
+    providerSettings = _runtime_search_settings(
+        {"websearch_tavily_key": ["bad-key", "good-key"]}
+    )
 
     results = await tools._tavily_search(providerSettings, {"query": "test"})
 
@@ -754,7 +570,9 @@ async def test_tavily_search_key_failover_on_rate_limited_429(
 
     monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
 
-    providerSettings = {"websearch_tavily_key": ["rate-limited-key", "good-key"]}
+    providerSettings = _runtime_search_settings(
+        {"websearch_tavily_key": ["rate-limited-key", "good-key"]}
+    )
 
     results = await tools._tavily_search(providerSettings, {"query": "test"})
 
@@ -788,7 +606,9 @@ async def test_tavily_search_fails_when_all_keys_exhausted_8886(
 
     monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
 
-    providerSettings = {"websearch_tavily_key": ["bad-key-1", "bad-key-2"]}
+    providerSettings = _runtime_search_settings(
+        {"websearch_tavily_key": ["bad-key-1", "bad-key-2"]}
+    )
 
     with pytest.raises(
         Exception,
@@ -827,7 +647,9 @@ async def test_tavily_search_does_not_failover_on_server_error_500(
 
     monkeypatch.setattr(tools.aiohttp, "ClientSession", fakeClientSession)
 
-    providerSettings = {"websearch_tavily_key": ["key-1", "key-2"]}
+    providerSettings = _runtime_search_settings(
+        {"websearch_tavily_key": ["key-1", "key-2"]}
+    )
 
     with pytest.raises(
         Exception,
@@ -837,6 +659,32 @@ async def test_tavily_search_does_not_failover_on_server_error_500(
 
     # Only one key is attempted because 500 is not retryable.
     assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_tavily_key_rotation_is_isolated_by_runtime_state():
+    """Independent tool runtimes must not share API-key rotation state."""
+    first_runtime = _runtime_search_settings(
+        {"websearch_tavily_key": ["first-a", "first-b"]}
+    )
+    second_runtime = _runtime_search_settings(
+        {"websearch_tavily_key": ["second-a", "second-b"]}
+    )
+
+    first_rotator = tools._get_key_rotator(
+        first_runtime,
+        "websearch_tavily_key",
+        "Tavily",
+    )
+    second_rotator = tools._get_key_rotator(
+        second_runtime,
+        "websearch_tavily_key",
+        "Tavily",
+    )
+
+    assert await first_rotator.get(first_runtime) == "first-a"
+    assert await first_rotator.get(first_runtime) == "first-b"
+    assert await second_rotator.get(second_runtime) == "second-a"
 
 
 def _context_with_provider_settings(provider_settings):

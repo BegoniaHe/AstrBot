@@ -27,13 +27,170 @@ class FakeMediaResolver:
         return WAV_PATH
 
 
-def _make_adapter() -> WeixinOCAdapter:
-    return WeixinOCAdapter({"id": "weixin-oc-test"}, {}, asyncio.Queue())
+class RuntimeConfig(dict):
+    def __init__(self, platform_config: dict, *, committed: bool) -> None:
+        super().__init__(platform=[platform_config])
+        self.save_config_async = AsyncMock(return_value=committed)
+
+
+def _make_adapter(config: dict | None = None) -> WeixinOCAdapter:
+    return WeixinOCAdapter(config or {"id": "weixin-oc-test"}, {}, asyncio.Queue())
 
 
 def _patch_media_resolver(monkeypatch) -> None:
     FakeMediaResolver.calls = []
     monkeypatch.setattr(weixin_oc_adapter, "MediaResolver", FakeMediaResolver)
+
+
+def _account_state(
+    *,
+    token: str,
+    account_id: str,
+    sync_buf: str,
+    base_url: str,
+    context_tokens: dict[str, str],
+) -> dict[str, object]:
+    return {
+        "weixin_oc_token": token,
+        "weixin_oc_account_id": account_id,
+        "weixin_oc_sync_buf": sync_buf,
+        "weixin_oc_base_url": base_url,
+        "weixin_oc_context_tokens": context_tokens,
+    }
+
+
+@pytest.mark.asyncio
+async def test_save_account_state_restores_persisted_state_when_superseded():
+    persisted_state = _account_state(
+        token="persisted-token",
+        account_id="persisted-account",
+        sync_buf="persisted-sync",
+        base_url="https://persisted.example",
+        context_tokens={"persisted-user": "persisted-context"},
+    )
+    platform_config = {
+        "id": "weixin-oc-test",
+        "type": "weixin_oc",
+        **persisted_state,
+    }
+    adapter = _make_adapter(platform_config)
+    runtime_config = RuntimeConfig(platform_config, committed=False)
+    adapter.runtime_config = runtime_config
+
+    adapter.token = "candidate-token"
+    adapter.account_id = "candidate-account"
+    adapter._sync_buf = "candidate-sync"
+    adapter.base_url = "https://candidate.example"
+    adapter._context_tokens = {"candidate-user": "candidate-context"}
+    adapter._context_tokens_dirty = True
+    adapter._context_tokens_revision = 1
+
+    await adapter._save_account_state()
+
+    runtime_config.save_config_async.assert_awaited_once()
+    assert {key: platform_config[key] for key in persisted_state} == persisted_state
+    assert adapter.token == "persisted-token"
+    assert adapter.account_id == "persisted-account"
+    assert adapter._sync_buf == "persisted-sync"
+    assert adapter.base_url == "https://persisted.example"
+    assert adapter._context_tokens == {"persisted-user": "persisted-context"}
+    assert adapter._context_tokens_dirty is False
+    assert adapter.client.token == "persisted-token"
+    assert adapter.client.base_url == "https://persisted.example"
+
+
+@pytest.mark.asyncio
+async def test_save_account_state_keeps_newer_runtime_state_when_superseded():
+    persisted_state = _account_state(
+        token="persisted-token",
+        account_id="persisted-account",
+        sync_buf="persisted-sync",
+        base_url="https://persisted.example",
+        context_tokens={"persisted-user": "persisted-context"},
+    )
+    newer_state = _account_state(
+        token="newer-token",
+        account_id="newer-account",
+        sync_buf="newer-sync",
+        base_url="https://newer.example",
+        context_tokens={"newer-user": "newer-context"},
+    )
+    platform_config = {
+        "id": "weixin-oc-test",
+        "type": "weixin_oc",
+        **persisted_state,
+    }
+    adapter = _make_adapter(platform_config)
+    runtime_config = RuntimeConfig(platform_config, committed=False)
+
+    async def superseded_save() -> bool:
+        platform_config.update(newer_state)
+        return False
+
+    runtime_config.save_config_async.side_effect = superseded_save
+    adapter.runtime_config = runtime_config
+    adapter.token = "candidate-token"
+    adapter.account_id = "candidate-account"
+    adapter._sync_buf = "candidate-sync"
+    adapter.base_url = "https://candidate.example"
+    adapter._context_tokens = {"candidate-user": "candidate-context"}
+
+    await adapter._save_account_state()
+
+    assert {key: platform_config[key] for key in newer_state} == newer_state
+    assert adapter.token == "newer-token"
+    assert adapter.account_id == "newer-account"
+    assert adapter._sync_buf == "newer-sync"
+    assert adapter.base_url == "https://newer.example"
+    assert adapter._context_tokens == {"newer-user": "newer-context"}
+    assert adapter.client.token == "newer-token"
+    assert adapter.client.base_url == "https://newer.example"
+
+
+@pytest.mark.asyncio
+async def test_save_account_state_syncs_adapter_after_successful_commit():
+    persisted_state = _account_state(
+        token="persisted-token",
+        account_id="persisted-account",
+        sync_buf="persisted-sync",
+        base_url="https://persisted.example",
+        context_tokens={"persisted-user": "persisted-context"},
+    )
+    platform_config = {
+        "id": "weixin-oc-test",
+        "type": "weixin_oc",
+        **persisted_state,
+    }
+    adapter = _make_adapter(platform_config)
+    runtime_config = RuntimeConfig(platform_config, committed=True)
+    adapter.runtime_config = runtime_config
+    adapter.token = "candidate-token"
+    adapter.account_id = "candidate-account"
+    adapter._sync_buf = "candidate-sync"
+    adapter.base_url = "https://candidate.example"
+    adapter._context_tokens = {"candidate-user": "candidate-context"}
+    adapter._context_tokens_dirty = True
+    adapter._context_tokens_revision = 1
+
+    await adapter._save_account_state()
+
+    expected_state = _account_state(
+        token="candidate-token",
+        account_id="candidate-account",
+        sync_buf="candidate-sync",
+        base_url="https://candidate.example",
+        context_tokens={"candidate-user": "candidate-context"},
+    )
+    runtime_config.save_config_async.assert_awaited_once()
+    assert {key: platform_config[key] for key in expected_state} == expected_state
+    assert adapter.token == "candidate-token"
+    assert adapter.account_id == "candidate-account"
+    assert adapter._sync_buf == "candidate-sync"
+    assert adapter.base_url == "https://candidate.example"
+    assert adapter._context_tokens == {"candidate-user": "candidate-context"}
+    assert adapter._context_tokens_dirty is False
+    assert adapter.client.token == "candidate-token"
+    assert adapter.client.base_url == "https://candidate.example"
 
 
 @pytest.mark.asyncio

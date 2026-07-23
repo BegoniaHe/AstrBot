@@ -1,16 +1,20 @@
+import copy
 import enum
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar, overload
 
 from .filter import HandlerFilter
-from .star import star_map
+from .star import PluginRegistry
 
 T = TypeVar("T", bound="StarHandlerMetadata")
 
 
-class StarHandlerRegistry[T: "StarHandlerMetadata"]:
-    def __init__(self) -> None:
+class HandlerRegistry[T: "StarHandlerMetadata"]:
+    """Runtime-owned catalog of materialized plugin handlers."""
+
+    def __init__(self, plugins: PluginRegistry) -> None:
+        self.plugins = plugins
         self.star_handlers_map: dict[str, StarHandlerMetadata] = {}
         self._handlers: list[StarHandlerMetadata] = []
 
@@ -160,12 +164,12 @@ class StarHandlerRegistry[T: "StarHandlerMetadata"]:
                 continue
             # 过滤启用状态
             if only_activated:
-                plugin = star_map.get(handler.handler_module_path)
+                plugin = self.plugins.get_by_module(handler.handler_module_path)
                 if not (plugin and plugin.activated):
                     continue
             # 过滤插件白名单
             if plugins_name is not None and plugins_name != ["*"]:
-                plugin = star_map.get(handler.handler_module_path)
+                plugin = self.plugins.get_by_module(handler.handler_module_path)
                 if not plugin:
                     continue
                 if (
@@ -209,9 +213,6 @@ class StarHandlerRegistry[T: "StarHandlerMetadata"]:
 
     def __len__(self) -> int:
         return len(self._handlers)
-
-
-star_handlers_registry = StarHandlerRegistry()  # type: ignore
 
 
 class EventType(enum.Enum):
@@ -278,3 +279,62 @@ class StarHandlerMetadata[H: Callable[..., Any]]:
             "priority",
             0,
         )
+
+
+@dataclass(slots=True)
+class HandlerDeclaration[H: Callable[..., Any]]:
+    """Static handler declaration attached to the original function.
+
+    The declaration is intentionally not a runtime handler.  Plugin loading
+    deep-copies an entire declaration graph before creating
+    :class:`StarHandlerMetadata` instances, which keeps command filters and
+    bound methods isolated between application runtimes.
+    """
+
+    event_type: EventType
+    handler_full_name: str
+    handler_name: str
+    handler_module_path: str
+    handler: H
+    event_filters: list[HandlerFilter] = field(default_factory=list)
+    desc: str = ""
+    extras_configs: dict = field(default_factory=dict)
+
+
+def materialize_handler_declarations(
+    declarations: list[HandlerDeclaration],
+) -> list[StarHandlerMetadata]:
+    """Create runtime handlers from one shared declaration graph.
+
+    Copying the list as a single graph preserves command-group parent/child
+    identity while preventing mutable filters from leaking across runtimes.
+    """
+    copied_declarations = copy.deepcopy(declarations)
+    materialized = [
+        StarHandlerMetadata(
+            event_type=declaration.event_type,
+            handler_full_name=declaration.handler_full_name,
+            handler_name=declaration.handler_name,
+            handler_module_path=declaration.handler_module_path,
+            handler=declaration.handler,
+            event_filters=declaration.event_filters,
+            desc=declaration.desc,
+            extras_configs=declaration.extras_configs,
+        )
+        for declaration in copied_declarations
+    ]
+
+    from .filter.command import CommandFilter
+
+    command_handlers: dict[int, StarHandlerMetadata] = {}
+    for handler in materialized:
+        for filter_ref in handler.event_filters:
+            if isinstance(filter_ref, CommandFilter):
+                command_handlers[id(filter_ref)] = handler
+
+    for handler in materialized:
+        for filter_ref in handler.event_filters:
+            if isinstance(filter_ref, CommandFilter):
+                filter_ref.init_handler_md(command_handlers[id(filter_ref)])
+
+    return materialized

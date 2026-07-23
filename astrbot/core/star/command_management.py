@@ -3,13 +3,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from astrbot import logger
-from astrbot.core.db import BaseDatabase
 from astrbot.core.db.po import CommandConfig
+from astrbot.core.db.protocols import CommandStore
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
-from astrbot.core.star.star import star_map
-from astrbot.core.star.star_handler import StarHandlerMetadata, star_handlers_registry
+from astrbot.core.star.star_handler import HandlerRegistry, StarHandlerMetadata
 from astrbot.core.utils.shared_preferences import SharedPreferences
 
 
@@ -46,9 +45,12 @@ class CommandDescriptor:
     sub_commands: list[CommandDescriptor] = field(default_factory=list)
 
 
-async def sync_command_configs(db: BaseDatabase) -> None:
+async def sync_command_configs(
+    db: CommandStore,
+    handler_registry: HandlerRegistry,
+) -> None:
     """同步指令配置，清理过期配置。"""
-    descriptors = _collect_descriptors(include_sub_commands=True)
+    descriptors = _collect_descriptors(handler_registry, include_sub_commands=True)
     config_records = await db.get_command_configs()
     descriptor_map = {desc.handler_full_name: desc for desc in descriptors}
     migrated_records: list[CommandConfig] = []
@@ -83,7 +85,11 @@ async def sync_command_configs(db: BaseDatabase) -> None:
             )
         migrated_records.append(config)
     config_records = migrated_records
-    config_map = _bind_configs_to_descriptors(descriptors, config_records)
+    config_map = _bind_configs_to_descriptors(
+        handler_registry,
+        descriptors,
+        config_records,
+    )
     live_handlers = {desc.handler_full_name for desc in descriptors}
 
     stale_configs = [key for key in config_map if key not in live_handlers]
@@ -92,9 +98,12 @@ async def sync_command_configs(db: BaseDatabase) -> None:
 
 
 async def toggle_command(
-    db: BaseDatabase, handler_full_name: str, enabled: bool
+    db: CommandStore,
+    handler_registry: HandlerRegistry,
+    handler_full_name: str,
+    enabled: bool,
 ) -> CommandDescriptor:
-    descriptor = _build_descriptor_by_full_name(handler_full_name)
+    descriptor = _build_descriptor_by_full_name(handler_registry, handler_full_name)
     if not descriptor:
         raise ValueError("指定的处理函数不存在或不是指令。")
 
@@ -120,17 +129,18 @@ async def toggle_command(
         auto_managed=False,
     )
     _bind_descriptor_with_config(descriptor, config)
-    await sync_command_configs(db)
+    await sync_command_configs(db, handler_registry)
     return descriptor
 
 
 async def rename_command(
-    db: BaseDatabase,
+    db: CommandStore,
+    handler_registry: HandlerRegistry,
     handler_full_name: str,
     new_fragment: str,
     aliases: list[str] | None = None,
 ) -> CommandDescriptor:
-    descriptor = _build_descriptor_by_full_name(handler_full_name)
+    descriptor = _build_descriptor_by_full_name(handler_registry, handler_full_name)
     if not descriptor:
         raise ValueError("指定的处理函数不存在或不是指令。")
 
@@ -140,7 +150,7 @@ async def rename_command(
 
     # 校验主指令名
     candidate_full = _compose_command(descriptor.parent_signature, new_fragment)
-    if _is_command_in_use(handler_full_name, candidate_full):
+    if _is_command_in_use(handler_registry, handler_full_name, candidate_full):
         raise ValueError(f"指令名 '{candidate_full}' 已被其他指令占用。")
 
     # 校验别名
@@ -150,7 +160,7 @@ async def rename_command(
             if not alias:
                 continue
             alias_full = _compose_command(descriptor.parent_signature, alias)
-            if _is_command_in_use(handler_full_name, alias_full):
+            if _is_command_in_use(handler_registry, handler_full_name, alias_full):
                 raise ValueError(f"别名 '{alias_full}' 已被其他指令占用。")
 
     existing_cfg = await db.get_command_config(handler_full_name)
@@ -173,16 +183,17 @@ async def rename_command(
     )
     _bind_descriptor_with_config(descriptor, config)
 
-    await sync_command_configs(db)
+    await sync_command_configs(db, handler_registry)
     return descriptor
 
 
 async def update_command_permission(
     preferences: SharedPreferences,
+    handler_registry: HandlerRegistry,
     handler_full_name: str,
     permission_type: str,
 ) -> CommandDescriptor:
-    descriptor = _build_descriptor_by_full_name(handler_full_name)
+    descriptor = _build_descriptor_by_full_name(handler_registry, handler_full_name)
     if not descriptor:
         raise ValueError("指定的处理函数不存在或不是指令。")
 
@@ -190,7 +201,7 @@ async def update_command_permission(
         raise ValueError("权限类型必须为 admin 或 member。")
 
     handler = descriptor.handler
-    found_plugin = star_map.get(handler.handler_module_path)
+    found_plugin = handler_registry.plugins.get_by_module(handler.handler_module_path)
     if not found_plugin:
         raise ValueError("未找到指令所属插件")
 
@@ -220,13 +231,16 @@ async def update_command_permission(
         handler.event_filters.insert(0, PermissionTypeFilter(target_perm_type))
 
     # Re-build descriptor to reflect changes
-    return _build_descriptor(handler) or descriptor
+    return _build_descriptor(handler_registry, handler) or descriptor
 
 
-async def list_commands(db: BaseDatabase) -> list[dict[str, Any]]:
-    descriptors = _collect_descriptors(include_sub_commands=True)
+async def list_commands(
+    db: CommandStore,
+    handler_registry: HandlerRegistry,
+) -> list[dict[str, Any]]:
+    descriptors = _collect_descriptors(handler_registry, include_sub_commands=True)
     config_records = await db.get_command_configs()
-    _bind_configs_to_descriptors(descriptors, config_records)
+    _bind_configs_to_descriptors(handler_registry, descriptors, config_records)
 
     conflict_groups = _group_conflicts(descriptors)
     conflict_handler_names: set[str] = {
@@ -261,11 +275,14 @@ async def list_commands(db: BaseDatabase) -> list[dict[str, Any]]:
     return result
 
 
-async def list_command_conflicts(db: BaseDatabase) -> list[dict[str, Any]]:
+async def list_command_conflicts(
+    db: CommandStore,
+    handler_registry: HandlerRegistry,
+) -> list[dict[str, Any]]:
     """列出所有冲突的指令组。"""
-    descriptors = _collect_descriptors(include_sub_commands=False)
+    descriptors = _collect_descriptors(handler_registry, include_sub_commands=False)
     config_records = await db.get_command_configs()
-    _bind_configs_to_descriptors(descriptors, config_records)
+    _bind_configs_to_descriptors(handler_registry, descriptors, config_records)
 
     conflict_groups = _group_conflicts(descriptors)
     details = [
@@ -288,12 +305,15 @@ async def list_command_conflicts(db: BaseDatabase) -> list[dict[str, Any]]:
 # Internal helpers ----------------------------------------------------------
 
 
-def _collect_descriptors(include_sub_commands: bool) -> list[CommandDescriptor]:
+def _collect_descriptors(
+    handler_registry: HandlerRegistry,
+    include_sub_commands: bool,
+) -> list[CommandDescriptor]:
     """收集指令，按需包含子指令。"""
     descriptors: list[CommandDescriptor] = []
-    for handler in star_handlers_registry:
+    for handler in handler_registry:
         try:
-            desc = _build_descriptor(handler)
+            desc = _build_descriptor(handler_registry, handler)
             if not desc:
                 continue
             if not include_sub_commands and desc.is_sub_command:
@@ -307,12 +327,15 @@ def _collect_descriptors(include_sub_commands: bool) -> list[CommandDescriptor]:
     return descriptors
 
 
-def _build_descriptor(handler: StarHandlerMetadata) -> CommandDescriptor | None:
+def _build_descriptor(
+    handler_registry: HandlerRegistry,
+    handler: StarHandlerMetadata,
+) -> CommandDescriptor | None:
     filter_ref = _locate_primary_filter(handler)
     if filter_ref is None:
         return None
 
-    plugin_meta = star_map.get(handler.handler_module_path)
+    plugin_meta = handler_registry.plugins.get_by_module(handler.handler_module_path)
     plugin_name = (
         plugin_meta.name if plugin_meta else None
     ) or handler.handler_module_path
@@ -336,7 +359,9 @@ def _build_descriptor(handler: StarHandlerMetadata) -> CommandDescriptor | None:
         # 如果是子指令，尝试找到父指令组的 handler_full_name
         if is_sub_command and parent_signature:
             parent_group_handler = _find_parent_group_handler(
-                handler.handler_module_path, parent_signature
+                handler_registry,
+                handler.handler_module_path,
+                parent_signature,
             )
     else:
         raw_fragment = getattr(
@@ -392,11 +417,14 @@ def _build_descriptor(handler: StarHandlerMetadata) -> CommandDescriptor | None:
     return descriptor
 
 
-def _build_descriptor_by_full_name(full_name: str) -> CommandDescriptor | None:
-    handler = star_handlers_registry.get_handler_by_full_name(full_name)
+def _build_descriptor_by_full_name(
+    handler_registry: HandlerRegistry,
+    full_name: str,
+) -> CommandDescriptor | None:
+    handler = handler_registry.get_handler_by_full_name(full_name)
     if not handler:
         return None
-    return _build_descriptor(handler)
+    return _build_descriptor(handler_registry, handler)
 
 
 def _locate_primary_filter(
@@ -436,10 +464,14 @@ def _resolve_group_parent_signature(
     return " ".join(reversed(signatures)).strip()
 
 
-def _find_parent_group_handler(module_path: str, parent_signature: str) -> str:
+def _find_parent_group_handler(
+    handler_registry: HandlerRegistry,
+    module_path: str,
+    parent_signature: str,
+) -> str:
     """根据模块路径和父级签名，找到对应的指令组 handler_full_name。"""
     parent_sig_normalized = parent_signature.strip()
-    for handler in star_handlers_registry:
+    for handler in handler_registry:
         if handler.handler_module_path != module_path:
             continue
         filter_ref = _locate_primary_filter(handler)
@@ -540,6 +572,7 @@ def _apply_config_to_runtime(
 
 
 def _bind_configs_to_descriptors(
+    handler_registry: HandlerRegistry,
     descriptors: list[CommandDescriptor],
     config_records: list[CommandConfig],
 ) -> dict[str, CommandConfig]:
@@ -549,7 +582,7 @@ def _bind_configs_to_descriptors(
             _apply_config_to_runtime(desc, cfg)
 
     for index, desc in enumerate(descriptors):
-        rebuilt = _build_descriptor(desc.handler)
+        rebuilt = _build_descriptor(handler_registry, desc.handler)
         if rebuilt is None:
             continue
         if cfg := config_map.get(rebuilt.handler_full_name):
@@ -596,11 +629,12 @@ def _set_filter_aliases(
 
 
 def _is_command_in_use(
+    handler_registry: HandlerRegistry,
     target_handler_full_name: str,
     candidate_full_command: str,
 ) -> bool:
     candidate = candidate_full_command.strip()
-    for handler in star_handlers_registry:
+    for handler in handler_registry:
         if handler.handler_full_name == target_handler_full_name:
             continue
         filter_ref = _locate_primary_filter(handler)

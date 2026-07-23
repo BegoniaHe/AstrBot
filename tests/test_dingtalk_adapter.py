@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-import pytest_asyncio
 
 from astrbot.api.event import MessageChain
 from astrbot.api.message_components import At, File, Image, Plain, Record, Video
@@ -64,15 +63,6 @@ def _build_adapter() -> DingtalkPlatformAdapter:
         get_async=AsyncMock(return_value=""),
     )
     return adapter
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 @pytest.mark.asyncio
@@ -933,6 +923,7 @@ async def test_dingtalk_event_send_streaming_buffers_plain_segments_once():
     event.platform_meta = _dingtalk_platform_meta()
     event.route_identity = _dingtalk_route_identity("user-1")
     event._has_send_oper = False
+    event._background_tasks = set()
     event.send = AsyncMock()
 
     async def _generator():
@@ -994,6 +985,7 @@ async def test_dingtalk_event_send_streaming_merges_mixed_components_before_send
     event.platform_meta = _dingtalk_platform_meta()
     event.route_identity = _dingtalk_route_identity("user-1")
     event._has_send_oper = False
+    event._background_tasks = set()
     event.send = AsyncMock()
 
     async def _generator():

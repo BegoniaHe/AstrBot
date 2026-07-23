@@ -22,22 +22,25 @@ class Main(Star):
 
 ## 文件存储
 
-持久化文件应写入 `data/plugin_data/{plugin_name}/`，不要写入插件源码目录。公开
-SDK 中的 `StarTools.get_data_dir()` 会创建并返回当前插件的绝对数据目录
+持久化文件应写入 `data/plugin_data/{plugin_name}/`，不要写入插件源码目录。通过
+`PluginContext.storage.data_directory()` 能力可以创建并返回当前插件的绝对数据目录
 `Path`：
 
 ```python
-from astrbot.api.star import StarTools
+from astrbot.api.star import Star
 
-plugin_data_path = StarTools.get_data_dir()
-cache_path = plugin_data_path / "cache.json"
+
+class Main(Star):
+    async def initialize(self) -> None:
+        plugin_data_path = self.context.storage.data_directory()
+        cache_path = plugin_data_path / "cache.json"
 ```
 
 建议从插件模块或插件类方法中调用无参数版本，以便 AstrBot 根据调用方识别插件。
 如果代码位于无法自动识别的共享模块，可以显式传入插件名：
 
 ```python
-plugin_data_path = StarTools.get_data_dir("astrbot_plugin_example")
+plugin_data_path = self.context.storage.data_directory("astrbot_plugin_example")
 ```
 
 插件更新或重装不会覆盖该目录。插件若创建数据库连接、打开文件或启动后台写入任务，

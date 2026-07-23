@@ -35,10 +35,6 @@ from astrbot.core.utils.media_utils import (
     convert_video_format,
     get_media_duration,
 )
-from astrbot.core.utils.metrics import Metric
-from astrbot.core.utils.task_utils import create_tracked_task
-
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class LarkMessageEvent(AstrMessageEvent):
@@ -941,7 +937,7 @@ class LarkMessageEvent(AstrMessageEvent):
         done = False
         text_changed = asyncio.Event()
         sender_task = None
-        fallback_used = False  # 回退路径已处理 Metric，避免重复上报
+        fallback_used = False  # The fallback path already records its metric.
 
         async def _sender_loop() -> None:
             """信号驱动的文本发送循环，有新内容就发，RTT 自然限流。"""
@@ -977,10 +973,10 @@ class LarkMessageEvent(AstrMessageEvent):
             if buffer:
                 buffer.squash_plain()
                 await self.send(buffer)
-            create_tracked_task(
-                _BACKGROUND_TASKS,
-                Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
+            self._schedule_metric(
                 name=f"metric:lark-fallback-consume:{self.platform_meta.name}",
+                msg_event_tick=1,
+                adapter_name=self.platform_meta.name,
             )
             self._has_send_oper = True
 
@@ -1056,12 +1052,10 @@ class LarkMessageEvent(AstrMessageEvent):
         # If no text was produced at all, no card was created
         if card_id is None:
             if not fallback_used:
-                create_tracked_task(
-                    _BACKGROUND_TASKS,
-                    Metric.upload(
-                        msg_event_tick=1, adapter_name=self.platform_meta.name
-                    ),
+                self._schedule_metric(
                     name=f"metric:lark-empty-stream:{self.platform_meta.name}",
+                    msg_event_tick=1,
+                    adapter_name=self.platform_meta.name,
                 )
                 self._has_send_oper = True
             return
@@ -1069,9 +1063,9 @@ class LarkMessageEvent(AstrMessageEvent):
         await _flush_and_close_card()
 
         # 内联父类 send_streaming 的副作用
-        create_tracked_task(
-            _BACKGROUND_TASKS,
-            Metric.upload(msg_event_tick=1, adapter_name=self.platform_meta.name),
+        self._schedule_metric(
             name=f"metric:lark-stream:{self.platform_meta.name}",
+            msg_event_tick=1,
+            adapter_name=self.platform_meta.name,
         )
         self._has_send_oper = True

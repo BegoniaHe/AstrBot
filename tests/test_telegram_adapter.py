@@ -1,7 +1,6 @@
 import asyncio
 import importlib
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -10,14 +9,13 @@ import pytest
 
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
-from astrbot.core.platform.register import unregister_platform_adapters_by_module
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
-from astrbot.core.star.star import StarMetadata, star_map
+from astrbot.core.star.star import PluginRegistry, StarMetadata
 from astrbot.core.star.star_handler import (
     EventType,
+    HandlerRegistry,
     StarHandlerMetadata,
-    star_handlers_registry,
 )
 from tests.fixtures.helpers import (
     NoopAwaitable,
@@ -60,8 +58,6 @@ def _load_telegram_module(module_name: str):
         return module
 
     with patch.dict(sys.modules, _build_telegram_patched_modules()):
-        if module_name == "astrbot.core.platform.sources.telegram.tg_adapter":
-            unregister_platform_adapters_by_module(module_name)
         sys.modules.pop(module_name, None)
         module = importlib.import_module(module_name)
 
@@ -97,27 +93,11 @@ def _build_context() -> MagicMock:
     return context
 
 
-@dataclass
-class _RegistrySnapshot:
-    handlers: list
-    handlers_map: dict
-    stars: dict
-
-
-def _snapshot_star_registry_state() -> _RegistrySnapshot:
-    return _RegistrySnapshot(
-        handlers=list(star_handlers_registry._handlers),
-        handlers_map=dict(star_handlers_registry.star_handlers_map),
-        stars=dict(star_map),
-    )
-
-
-def _restore_star_registry_state(snapshot: _RegistrySnapshot) -> None:
-    star_handlers_registry._handlers[:] = snapshot.handlers
-    star_handlers_registry.star_handlers_map.clear()
-    star_handlers_registry.star_handlers_map.update(snapshot.handlers_map)
-    star_map.clear()
-    star_map.update(snapshot.stars)
+def _bind_runtime_registries(adapter) -> tuple[HandlerRegistry, PluginRegistry]:
+    plugins = PluginRegistry()
+    handlers = HandlerRegistry(plugins)
+    adapter.bind_runtime_registries(handlers, plugins)
+    return handlers, plugins
 
 
 @pytest.mark.asyncio
@@ -604,101 +584,111 @@ def test_telegram_collect_commands_filters_duplicates_invalid_and_inactive_handl
         {},
         asyncio.Queue(),
     )
-    snapshot = _snapshot_star_registry_state()
-    try:
-        star_handlers_registry.clear()
-        star_map.clear()
-        star_map["plugin.alpha"] = StarMetadata(name="Alpha", activated=True)
-        star_map["plugin.beta"] = StarMetadata(name="Beta", activated=True)
-        star_map["plugin.off"] = StarMetadata(name="Off", activated=False)
+    handlers, plugins = _bind_runtime_registries(adapter)
+    for metadata in (
+        StarMetadata(
+            name="Alpha",
+            module_path="plugin.alpha",
+            activated=True,
+        ),
+        StarMetadata(
+            name="Beta",
+            module_path="plugin.beta",
+            activated=True,
+        ),
+        StarMetadata(
+            name="Off",
+            module_path="plugin.off",
+            activated=False,
+        ),
+    ):
+        plugins.publish(metadata)
 
-        async def handler_alpha(event):
-            return None
+    async def handler_alpha(event):
+        return None
 
-        async def handler_beta(event):
-            return None
+    async def handler_beta(event):
+        return None
 
-        async def handler_invalid(event):
-            return None
+    async def handler_invalid(event):
+        return None
 
-        async def handler_off(event):
-            return None
+    async def handler_off(event):
+        return None
 
-        cmd_filter = CommandFilter("ask", alias={"ask_alias"})
-        dup_filter = CommandFilter("ask")
-        invalid_filter = CommandFilter("Bad-Name")
-        nested_filter = CommandFilter("child", parent_command_names=["root"])
-        group_filter = CommandGroupFilter("tools", alias={"toolbox"})
-
-        star_handlers_registry.append(
-            StarHandlerMetadata(
-                event_type=EventType.AdapterMessageEvent,
-                handler_full_name="plugin.alpha_handler_alpha",
-                handler_name="handler_alpha",
-                handler_module_path="plugin.alpha",
-                handler=handler_alpha,
-                event_filters=[cmd_filter, nested_filter],
-                desc="Primary ask command",
-                enabled=True,
-            )
+    handlers.append(
+        StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name="plugin.alpha_handler_alpha",
+            handler_name="handler_alpha",
+            handler_module_path="plugin.alpha",
+            handler=handler_alpha,
+            event_filters=[
+                CommandFilter("ask", alias={"ask_alias"}),
+                CommandFilter("child", parent_command_names=["root"]),
+            ],
+            desc="Primary ask command",
+            enabled=True,
         )
-        star_handlers_registry.append(
-            StarHandlerMetadata(
-                event_type=EventType.AdapterMessageEvent,
-                handler_full_name="plugin.beta_handler_beta",
-                handler_name="handler_beta",
-                handler_module_path="plugin.beta",
-                handler=handler_beta,
-                event_filters=[dup_filter, group_filter],
-                desc="Duplicate ask command should lose",
-                enabled=True,
-            )
+    )
+    handlers.append(
+        StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name="plugin.beta_handler_beta",
+            handler_name="handler_beta",
+            handler_module_path="plugin.beta",
+            handler=handler_beta,
+            event_filters=[
+                CommandFilter("ask"),
+                CommandGroupFilter("tools", alias={"toolbox"}),
+            ],
+            desc="Duplicate ask command should lose",
+            enabled=True,
         )
-        star_handlers_registry.append(
-            StarHandlerMetadata(
-                event_type=EventType.AdapterMessageEvent,
-                handler_full_name="plugin.beta_handler_invalid",
-                handler_name="handler_invalid",
-                handler_module_path="plugin.beta",
-                handler=handler_invalid,
-                event_filters=[invalid_filter],
-                desc="Should be filtered out",
-                enabled=True,
-            )
+    )
+    handlers.append(
+        StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name="plugin.beta_handler_invalid",
+            handler_name="handler_invalid",
+            handler_module_path="plugin.beta",
+            handler=handler_invalid,
+            event_filters=[CommandFilter("Bad-Name")],
+            desc="Should be filtered out",
+            enabled=True,
         )
-        star_handlers_registry.append(
-            StarHandlerMetadata(
-                event_type=EventType.AdapterMessageEvent,
-                handler_full_name="plugin.off_handler_off",
-                handler_name="handler_off",
-                handler_module_path="plugin.off",
-                handler=handler_off,
-                event_filters=[CommandFilter("hidden")],
-                desc="Inactive plugin",
-                enabled=True,
-            )
+    )
+    handlers.append(
+        StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name="plugin.off_handler_off",
+            handler_name="handler_off",
+            handler_module_path="plugin.off",
+            handler=handler_off,
+            event_filters=[CommandFilter("hidden")],
+            desc="Inactive plugin",
+            enabled=True,
         )
+    )
 
-        module_globals = adapter.collect_commands.__func__.__globals__
-        with patch.dict(
-            module_globals,
-            {
-                "BotCommand": lambda command, description: SimpleNamespace(
-                    command=command,
-                    description=description,
-                )
-            },
-        ):
-            commands = adapter.collect_commands()
+    module_globals = adapter.collect_commands.__func__.__globals__
+    with patch.dict(
+        module_globals,
+        {
+            "BotCommand": lambda command, description: SimpleNamespace(
+                command=command,
+                description=description,
+            )
+        },
+    ):
+        commands = adapter.collect_commands()
 
-        assert [(cmd.command, cmd.description) for cmd in commands] == [
-            ("ask", "Primary ask command"),
-            ("ask_alias", "Primary ask command"),
-            ("toolbox", "Duplicate ask command should l..."),
-            ("tools", "Duplicate ask command should l..."),
-        ]
-    finally:
-        _restore_star_registry_state(snapshot)
+    assert [(cmd.command, cmd.description) for cmd in commands] == [
+        ("ask", "Primary ask command"),
+        ("ask_alias", "Primary ask command"),
+        ("toolbox", "Duplicate ask command should l..."),
+        ("tools", "Duplicate ask command should l..."),
+    ]
 
 
 def test_telegram_extract_command_info_skips_nested_groups_and_long_descriptions():
@@ -1317,6 +1307,7 @@ async def test_telegram_run_rebuilds_application_after_repeated_polling_errors()
             {},
             asyncio.Queue(),
         )
+        _bind_runtime_registries(adapter)
         await adapter.run()
 
     assert builder.build.call_count == 2
@@ -1402,6 +1393,7 @@ async def test_telegram_run_rebuilds_fresh_application_after_recreate_init_failu
             {},
             asyncio.Queue(),
         )
+        _bind_runtime_registries(adapter)
         await adapter.run()
 
     assert builder.build.call_count == 3

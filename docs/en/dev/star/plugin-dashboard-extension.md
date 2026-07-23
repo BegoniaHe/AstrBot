@@ -318,6 +318,6 @@ from the Dashboard. During development, verify at least:
    logout.
 
 This protocol is a breaking contract. It provides no compatibility layer for
-legacy Page metadata, arbitrary HTTP proxies, or the old Context API. Existing
+legacy Page metadata, arbitrary HTTP proxies, or the legacy plugin runtime API. Existing
 plugins must migrate directly to the v1 manifest, Actions, and Page SDK
 described in this guide.

@@ -1,15 +1,21 @@
 """会话插件管理器 - 负责管理每个会话的插件启停状态"""
 
+from typing import TYPE_CHECKING
+
 from astrbot import logger
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.core.utils.shared_preferences import SharedPreferences
+
+if TYPE_CHECKING:
+    from astrbot.core.star.star import PluginRegistry
 
 
 class SessionPluginManager:
     """管理会话级别的插件启停状态"""
 
-    def __init__(self, preferences: SharedPreferences) -> None:
+    def __init__(self, preferences: SharedPreferences, plugins: PluginRegistry) -> None:
         self.preferences = preferences
+        self.plugins = plugins
 
     async def is_plugin_enabled_for_session(
         self,
@@ -64,8 +70,6 @@ class SessionPluginManager:
             List: 过滤后的处理器列表
 
         """
-        from astrbot.core.star.star import star_map
-
         session_id = event.unified_msg_origin
         filtered_handlers = []
 
@@ -81,7 +85,7 @@ class SessionPluginManager:
 
         for handler in handlers:
             # 获取处理器对应的插件
-            plugin = star_map.get(handler.handler_module_path)
+            plugin = self.plugins.get_by_module(handler.handler_module_path)
             if not plugin:
                 # 如果找不到插件元数据，允许执行（可能是系统插件）
                 filtered_handlers.append(handler)

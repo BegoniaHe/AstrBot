@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import copy
 import hashlib
 import io
 import time
@@ -32,6 +33,7 @@ from astrbot.core.utils.media_utils import (
     detect_image_mime_type_async,
 )
 
+from .provisioning import provision_weixin_oc_registration
 from .weixin_oc_client import WeixinOCClient
 from .weixin_oc_event import WeixinOCMessageEvent
 
@@ -96,8 +98,17 @@ class WeixinOCReplyMeta:
     "weixin_oc",
     "个人微信",
     support_streaming_message=False,
+    provisioner=provision_weixin_oc_registration,
 )
 class WeixinOCAdapter(Platform):
+    DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
+    ACCOUNT_STATE_KEYS = (
+        "weixin_oc_token",
+        "weixin_oc_account_id",
+        "weixin_oc_sync_buf",
+        "weixin_oc_base_url",
+        "weixin_oc_context_tokens",
+    )
     SESSION_TIMEOUT_ERRCODE = -14
     IMAGE_ITEM_TYPE = 2
     VOICE_ITEM_TYPE = 3
@@ -121,7 +132,7 @@ class WeixinOCAdapter(Platform):
 
         self.settings = platform_settings
         self.base_url = str(
-            platform_config.get("weixin_oc_base_url", "https://ilinkai.weixin.qq.com")
+            platform_config.get("weixin_oc_base_url", self.DEFAULT_BASE_URL)
         ).rstrip("/")
         self.bot_type = str(platform_config.get("weixin_oc_bot_type", "3"))
         self.qr_poll_interval = max(
@@ -559,15 +570,9 @@ class WeixinOCAdapter(Platform):
             normalized_context_tokens[normalized_user_id] = normalized_context_token
         return normalized_context_tokens
 
-    async def _save_account_state(self) -> None:
-        normalized_context_tokens = self._normalize_context_tokens(self._context_tokens)
-        context_tokens_revision = self._context_tokens_revision
-        self.config["weixin_oc_token"] = self.token or ""
-        self.config["weixin_oc_account_id"] = self.account_id or ""
-        self.config["weixin_oc_sync_buf"] = self._sync_buf
-        self.config["weixin_oc_base_url"] = self.base_url
-        self.config["weixin_oc_context_tokens"] = normalized_context_tokens
-
+    def _find_runtime_platform_config(self) -> dict[str, Any] | None:
+        if self.runtime_config is None:
+            return None
         for platform in self.runtime_config.get("platform", []):
             if not isinstance(platform, dict):
                 continue
@@ -575,17 +580,87 @@ class WeixinOCAdapter(Platform):
                 continue
             if platform.get("type") != self.config.get("type"):
                 continue
-            platform["weixin_oc_token"] = self.token or ""
-            platform["weixin_oc_account_id"] = self.account_id or ""
-            platform["weixin_oc_sync_buf"] = self._sync_buf
-            platform["weixin_oc_base_url"] = self.base_url
-            platform["weixin_oc_context_tokens"] = normalized_context_tokens
-            break
+            return platform
+        return None
 
-        self._sync_client_state()
-        committed = await self.runtime_config.save_config_async()
-        if committed and context_tokens_revision == self._context_tokens_revision:
+    def _account_state_from_config(self, config: Mapping[str, Any]) -> None:
+        self.token = str(config.get("weixin_oc_token", "")).strip() or None
+        self.account_id = str(config.get("weixin_oc_account_id", "")).strip() or None
+        self._sync_buf = str(config.get("weixin_oc_sync_buf", "")).strip()
+        self.base_url = (
+            str(config.get("weixin_oc_base_url", self.DEFAULT_BASE_URL)).strip()
+            or self.DEFAULT_BASE_URL
+        ).rstrip("/")
+        raw_context_tokens = config.get("weixin_oc_context_tokens", {})
+        self._context_tokens = self._normalize_context_tokens(
+            raw_context_tokens if isinstance(raw_context_tokens, Mapping) else {}
+        )
+
+    @classmethod
+    def _restore_owned_account_state(
+        cls,
+        config: dict[str, Any],
+        previous_state: Mapping[str, Any],
+        attempted_state: Mapping[str, Any],
+    ) -> None:
+        for key in cls.ACCOUNT_STATE_KEYS:
+            if config.get(key) != attempted_state[key]:
+                continue
+            if key in previous_state:
+                config[key] = previous_state[key]
+            else:
+                config.pop(key, None)
+
+    async def _save_account_state(self) -> None:
+        normalized_context_tokens = self._normalize_context_tokens(self._context_tokens)
+        context_tokens_revision = self._context_tokens_revision
+        attempted_state = {
+            "weixin_oc_token": self.token or "",
+            "weixin_oc_account_id": self.account_id or "",
+            "weixin_oc_sync_buf": self._sync_buf,
+            "weixin_oc_base_url": self.base_url,
+            "weixin_oc_context_tokens": normalized_context_tokens,
+        }
+        runtime_platform_config = self._find_runtime_platform_config()
+        state_targets = [self.config]
+        if (
+            runtime_platform_config is not None
+            and runtime_platform_config is not self.config
+        ):
+            state_targets.append(runtime_platform_config)
+        previous_states = [
+            (
+                target,
+                {
+                    key: copy.deepcopy(target[key])
+                    for key in self.ACCOUNT_STATE_KEYS
+                    if key in target
+                },
+            )
+            for target in state_targets
+        ]
+        for target in state_targets:
+            target.update(copy.deepcopy(attempted_state))
+
+        committed = False
+        try:
+            committed = await self.runtime_config.save_config_async()
+        finally:
+            if not committed:
+                for target, previous_state in previous_states:
+                    self._restore_owned_account_state(
+                        target,
+                        previous_state,
+                        attempted_state,
+                    )
+                current_state = self._find_runtime_platform_config() or self.config
+                self._account_state_from_config(current_state)
+                self._sync_client_state()
+
+        if context_tokens_revision == self._context_tokens_revision:
             self._context_tokens_dirty = False
+        if committed:
+            self._sync_client_state()
 
     def _is_login_session_valid(
         self, login_session: OpenClawLoginSession | None

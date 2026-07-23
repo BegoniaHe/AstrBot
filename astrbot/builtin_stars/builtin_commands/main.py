@@ -18,7 +18,7 @@ from .commands import (
 
 
 class Main(star.Star):
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
         self.admin_c = AdminCommands(self.context)

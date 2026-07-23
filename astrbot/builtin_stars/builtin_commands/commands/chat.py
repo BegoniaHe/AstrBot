@@ -1,17 +1,20 @@
 from astrbot.api import star
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
-from astrbot.core.star.session_llm_manager import SessionServiceManager
 
 
 class ChatCommands:
-    def __init__(self, context: star.Context) -> None:
+    def __init__(self, context: star.PluginContext) -> None:
         self.context = context
 
     async def status(self, event: AstrMessageEvent) -> None:
         """Show the LLM chat state for the current session."""
         umo = event.unified_msg_origin
-        services = SessionServiceManager(self.context.preferences)
-        enabled = await services.is_llm_enabled_for_session(umo)
+        settings = await self.context.preferences.session_get(
+            umo,
+            "session_service_config",
+            {},
+        )
+        enabled = settings.get("llm_enabled", True)
         status = "enabled" if enabled else "disabled"
         event.set_result(
             MessageEventResult().message(
@@ -26,8 +29,18 @@ class ChatCommands:
     ) -> None:
         """Set the LLM chat state for the current session."""
         umo = event.unified_msg_origin
-        services = SessionServiceManager(self.context.preferences)
-        await services.set_llm_status_for_session(umo, enabled)
+        settings = await self.context.preferences.session_get(
+            umo,
+            "session_service_config",
+            {},
+        )
+        settings = dict(settings or {})
+        settings["llm_enabled"] = enabled
+        await self.context.preferences.session_put(
+            umo,
+            "session_service_config",
+            settings,
+        )
         status = "enabled" if enabled else "disabled"
         event.set_result(
             MessageEventResult().message(

@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from astrbot.api.message_components import Image, Record
 from astrbot.core.message.message_event_result import MessageChain
@@ -43,15 +42,6 @@ def _discord_route_identity(target_id: str):
         message_type=discord_platform_adapter.MessageType.GROUP_MESSAGE,
         target_id=target_id,
     )
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 @pytest.mark.asyncio
@@ -483,6 +473,7 @@ async def test_discord_event_send_uses_reference_for_regular_messages_only(monke
     regular_event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
     regular_event._client = client
     regular_event.interaction_followup_webhook = None
+    regular_event._background_tasks = set()
     regular_event.session = MessageSession(
         "discord",
         discord_platform_adapter.MessageType.GROUP_MESSAGE,
@@ -511,6 +502,7 @@ async def test_discord_event_send_uses_reference_for_regular_messages_only(monke
     followup_event = DiscordPlatformEvent.__new__(DiscordPlatformEvent)
     followup_event._client = client
     followup_event.interaction_followup_webhook = followup
+    followup_event._background_tasks = set()
     followup_event.session = MessageSession(
         "discord",
         discord_platform_adapter.MessageType.GROUP_MESSAGE,

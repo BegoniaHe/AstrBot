@@ -979,9 +979,13 @@ async def test_result_decorate_segments_qqofficial_ws_plain_result():
         stage,
         "ctx",
         SimpleNamespace(
-            plugin_manager=SimpleNamespace(
-                context=SimpleNamespace(get_using_tts_provider=lambda _umo: None)
+            execution_context=SimpleNamespace(
+                get_using_tts_provider=lambda _umo: None
             ),
+            handlers=SimpleNamespace(
+                get_handlers_by_event_type=lambda *_args, **_kwargs: []
+            ),
+            plugins=SimpleNamespace(get_by_module=lambda _module_path: None),
             astrbot_config={
                 "provider_tts_settings": {
                     "enable": False,

@@ -24,8 +24,9 @@ def _build_adapter(monkeypatch: pytest.MonkeyPatch):
     from astrbot.core.platform.sources.discord.discord_platform_adapter import (
         DiscordPlatformAdapter,
     )
+    from astrbot.core.star.star import PluginRegistry
+    from astrbot.core.star.star_handler import HandlerRegistry
 
-    monkeypatch.setattr(discord_platform_adapter, "star_handlers_registry", [])
     monkeypatch.setattr(
         discord_platform_adapter.discord,
         "HTTPException",
@@ -38,6 +39,8 @@ def _build_adapter(monkeypatch: pytest.MonkeyPatch):
         {},
         asyncio.Queue(),
     )
+    plugins = PluginRegistry()
+    adapter.bind_runtime_registries(HandlerRegistry(plugins), plugins)
     adapter.client = MockDiscordBuilder.create_client()
     return adapter
 
@@ -68,6 +71,7 @@ async def test_discord_registers_native_command_groups_and_routes_subcommands(
     from astrbot.core.platform.sources.discord import discord_platform_adapter
     from astrbot.core.star.filter.command import CommandFilter
     from astrbot.core.star.filter.command_group import CommandGroupFilter
+    from astrbot.core.star.star import StarMetadata
     from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
     adapter = _build_adapter(monkeypatch)
@@ -143,16 +147,15 @@ async def test_discord_registers_native_command_groups_and_routes_subcommands(
     child_md.event_filters.append(child_filter)
     set_filter.add_sub_command_filter(child_filter)
 
-    monkeypatch.setattr(
-        discord_platform_adapter,
-        "star_handlers_registry",
-        [group_md, child_md],
+    adapter.get_plugin_registry().publish(
+        StarMetadata(
+            name="Demo",
+            module_path="plugin.demo",
+            activated=True,
+        ),
     )
-    monkeypatch.setattr(
-        discord_platform_adapter,
-        "star_map",
-        {"plugin.demo": SimpleNamespace(activated=True)},
-    )
+    adapter.get_handler_registry().append(group_md)
+    adapter.get_handler_registry().append(child_md)
 
     await adapter._collect_and_register_commands()
     first_group = adapter.client.add_application_command.call_args.args[0]
@@ -196,6 +199,7 @@ async def test_discord_native_options_preserve_orbit_argument_values(monkeypatch
     from astrbot.core.command.lexer import parse_arguments
     from astrbot.core.platform.sources.discord import discord_platform_adapter
     from astrbot.core.star.filter.command import CommandFilter
+    from astrbot.core.star.star import StarMetadata
     from astrbot.core.star.star_handler import EventType, StarHandlerMetadata
 
     adapter = _build_adapter(monkeypatch)
@@ -230,16 +234,14 @@ async def test_discord_native_options_preserve_orbit_argument_values(monkeypatch
     command_filter.init_handler_md(handler_md)
     handler_md.event_filters.append(command_filter)
 
-    monkeypatch.setattr(
-        discord_platform_adapter,
-        "star_handlers_registry",
-        [handler_md],
+    adapter.get_plugin_registry().publish(
+        StarMetadata(
+            name="Demo",
+            module_path="plugin.demo",
+            activated=True,
+        ),
     )
-    monkeypatch.setattr(
-        discord_platform_adapter,
-        "star_map",
-        {"plugin.demo": SimpleNamespace(activated=True)},
-    )
+    adapter.get_handler_registry().append(handler_md)
     monkeypatch.setattr(
         discord_platform_adapter.discord,
         "SlashCommand",

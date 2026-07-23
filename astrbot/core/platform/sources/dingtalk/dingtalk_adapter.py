@@ -34,6 +34,7 @@ from astrbot.core.utils.media_utils import (
 
 from ...register import register_platform_adapter
 from .dingtalk_event import DingtalkMessageEvent
+from .provisioning import provision_dingtalk_registration
 
 DINGTALK_RECONNECT_INITIAL_DELAY = 10
 DINGTALK_RECONNECT_MAX_DELAY = 300
@@ -50,7 +51,10 @@ def _dingtalk_reconnect_delay(retry_count: int) -> int:
 
 
 @register_platform_adapter(
-    "dingtalk", "钉钉机器人官方 API 适配器", support_streaming_message=True
+    "dingtalk",
+    "钉钉机器人官方 API 适配器",
+    support_streaming_message=True,
+    provisioner=provision_dingtalk_registration,
 )
 class DingtalkPlatformAdapter(Platform):
     def __init__(

@@ -4,13 +4,20 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from astrbot.api.message_components import Plain
+from astrbot.api.provider import Provider
+from astrbot.builtin_stars.astrbot.group_chat_context import GroupChatContext
 from astrbot.builtin_stars.astrbot.main import Main
 
 
 def make_main_with_conversation_manager(conv_mgr):
     main = Main.__new__(Main)
     main.context = MagicMock()
-    main.context.conversation_manager = conv_mgr
+    main.context.conversations = SimpleNamespace(
+        current_id=conv_mgr.get_curr_conversation_id,
+        get=conv_mgr.get_conversation,
+    )
+    main.context.models = SimpleNamespace(using_chat=MagicMock())
+    main.context.config = SimpleNamespace(get=MagicMock())
     return main
 
 
@@ -45,6 +52,22 @@ def make_event(
 
 
 @pytest.mark.asyncio
+async def test_group_context_image_caption_normalizes_missing_completion_text():
+    """A successful provider response without text must not render ``None``."""
+    provider = MagicMock(spec=Provider)
+    provider.text_chat = AsyncMock(return_value=MagicMock(completion_text=None))
+    context = SimpleNamespace(models=SimpleNamespace(using_chat=lambda: provider))
+
+    caption = await GroupChatContext(context).get_image_caption(
+        "https://example.com/image.png",
+        "",
+        "Describe the image.",
+    )
+
+    assert caption == ""
+
+
+@pytest.mark.asyncio
 async def test_active_reply_does_not_create_conversation_when_current_missing():
     conv_mgr = SimpleNamespace(
         get_curr_conversation_id=AsyncMock(return_value=None),
@@ -52,13 +75,13 @@ async def test_active_reply_does_not_create_conversation_when_current_missing():
         get_conversation=AsyncMock(),
     )
     main = make_main_with_conversation_manager(conv_mgr)
-    main.context.get_config.return_value = {
+    main.context.config.get.return_value = {
         "provider_ltm_settings": {
             "group_icl_enable": False,
             "active_reply": {"enable": True},
         },
     }
-    main.context.get_using_provider.return_value = object()
+    main.context.models.using_chat.return_value = object()
     main.group_chat_context = SimpleNamespace(
         need_active_reply=AsyncMock(return_value=True),
         handle_message=AsyncMock(),
@@ -83,13 +106,13 @@ async def test_active_reply_reuses_current_umo_conversation():
         get_conversation=AsyncMock(return_value=conv),
     )
     main = make_main_with_conversation_manager(conv_mgr)
-    main.context.get_config.return_value = {
+    main.context.config.get.return_value = {
         "provider_ltm_settings": {
             "group_icl_enable": False,
             "active_reply": {"enable": True},
         },
     }
-    main.context.get_using_provider.return_value = object()
+    main.context.models.using_chat.return_value = object()
     main.group_chat_context = SimpleNamespace(
         need_active_reply=AsyncMock(return_value=True),
         handle_message=AsyncMock(),
@@ -119,7 +142,7 @@ async def test_active_reply_reuses_current_umo_conversation():
 async def test_on_message_does_not_clear_group_context_on_first_enabled_message():
     main = Main.__new__(Main)
     main.context = MagicMock()
-    main.context.get_config.return_value = {
+    main.context.config.get.return_value = {
         "provider_ltm_settings": {
             "group_icl_enable": True,
             "active_reply": {"enable": False},
@@ -146,7 +169,7 @@ async def test_on_message_skips_recording_when_command_handler_matched():
     recorded into the group context buffer."""
     main = Main.__new__(Main)
     main.context = MagicMock()
-    main.context.get_config.return_value = {
+    main.context.config.get.return_value = {
         "provider_ltm_settings": {
             "group_icl_enable": True,
             "active_reply": {"enable": False},

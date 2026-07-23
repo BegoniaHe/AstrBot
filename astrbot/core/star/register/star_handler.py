@@ -1,17 +1,17 @@
+import inspect
 import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from dataclasses import dataclass, field
+from types import ModuleType
 from typing import Any
 
 import docstring_parser
 
 from astrbot import logger
-from astrbot.core.agent.agent import Agent
-from astrbot.core.agent.handoff import HandoffTool
 from astrbot.core.agent.hooks import BaseAgentRunHooks
 from astrbot.core.agent.tool import FunctionTool
 from astrbot.core.message.message_event_result import MessageEventResult
-from astrbot.core.provider.func_tool_manager import PY_TO_JSON_TYPE, SUPPORTED_TYPES
-from astrbot.core.provider.register import llm_tools
+from astrbot.core.tools.function_tool_manager import PY_TO_JSON_TYPE, SUPPORTED_TYPES
 
 from ..filter.command import CommandFilter
 from ..filter.command_group import CommandGroupFilter
@@ -23,7 +23,11 @@ from ..filter.platform_adapter_type import (
     PlatformAdapterTypeFilter,
 )
 from ..filter.regex import RegexFilter
-from ..star_handler import EventType, StarHandlerMetadata, star_handlers_registry
+from ..star_handler import EventType, HandlerDeclaration
+
+_HANDLER_DECLARATION_ATTR = "__astrbot_handler_declaration__"
+_FUNCTION_TOOL_DECLARATIONS_ATTR = "__astrbot_function_tool_declarations__"
+_AGENT_DECLARATION_ATTR = "__astrbot_agent_declaration__"
 
 
 def get_handler_full_name(
@@ -33,22 +37,25 @@ def get_handler_full_name(
     return f"{awaitable.__module__}_{awaitable.__name__}"
 
 
-def get_handler_or_create(
+def get_handler_declaration(
     handler: Callable[
         ...,
         Awaitable[MessageEventResult | str | None]
         | AsyncGenerator[MessageEventResult | str | None],
     ],
     event_type: EventType,
-    dont_add=False,
     **kwargs,
-) -> StarHandlerMetadata:
-    """获取 Handler 或者创建一个新的 Handler"""
+) -> HandlerDeclaration:
+    """Return the declaration attached to one handler function.
+
+    Decorators execute while a plugin module is imported.  They may enrich a
+    declaration, but they must not publish it to a runtime catalog.
+    """
     handler_full_name = get_handler_full_name(handler)
-    md = star_handlers_registry.get_handler_by_full_name(handler_full_name)
-    if md:
-        return md
-    md = StarHandlerMetadata(
+    declaration = getattr(handler, _HANDLER_DECLARATION_ATTR, None)
+    if isinstance(declaration, HandlerDeclaration):
+        return declaration
+    declaration = HandlerDeclaration(
         event_type=event_type,
         handler_full_name=handler_full_name,
         handler_name=handler.__name__,
@@ -59,15 +66,13 @@ def get_handler_or_create(
 
     # 插件handler的附加额外信息
     if handler.__doc__:
-        md.desc = handler.__doc__.strip()
+        declaration.desc = handler.__doc__.strip()
     if "desc" in kwargs:
-        md.desc = kwargs["desc"]
+        declaration.desc = kwargs["desc"]
         del kwargs["desc"]
-    md.extras_configs = kwargs
-
-    if not dont_add:
-        star_handlers_registry.append(md)
-    return md
+    declaration.extras_configs = kwargs
+    setattr(handler, _HANDLER_DECLARATION_ATTR, declaration)
+    return declaration
 
 
 def register_command(
@@ -108,14 +113,14 @@ def register_command(
             kwargs["sub_command"] = (
                 True  # 打一个标记，表示这是一个子指令，再 wakingstage 阶段这个 handler 将会直接被跳过（其父指令会接管）
             )
-        handler_md = get_handler_or_create(
+        handler_declaration = get_handler_declaration(
             awaitable,
             EventType.AdapterMessageEvent,
             **kwargs,
         )
         if new_command:
-            new_command.init_handler_md(handler_md)
-            handler_md.event_filters.append(new_command)
+            new_command.init_handler_declaration(handler_declaration)
+            handler_declaration.event_filters.append(new_command)
         return awaitable
 
     return decorator
@@ -158,7 +163,7 @@ def register_custom_filter(custom_type_filter, *args, **kwargs):
             # 指令组 与 根指令组，添加到本层的grouphandle中一起判断
             awaitable.parent_group.add_custom_filter(custom_filter)
         else:
-            handler_md = get_handler_or_create(
+            handler_md = get_handler_declaration(
                 awaitable,
                 EventType.AdapterMessageEvent,
                 **kwargs,
@@ -188,7 +193,7 @@ def register_custom_filter(custom_type_filter, *args, **kwargs):
                 # 裸指令
                 # 确保运行时是可调用的 handler，针对类型检查器添加忽略
                 assert isinstance(awaitable, Callable)
-                handler_md = get_handler_or_create(
+                handler_md = get_handler_declaration(
                     awaitable,
                     EventType.AdapterMessageEvent,
                     **kwargs,
@@ -227,14 +232,14 @@ def register_command_group(
 
     def decorator(obj):
         if new_group:
-            handler_md = get_handler_or_create(
+            handler_md = get_handler_declaration(
                 obj,
                 EventType.AdapterMessageEvent,
                 **kwargs,
             )
             handler_md.event_filters.append(new_group)
 
-            return RegisteringCommandable(new_group)
+            return RegisteringCommandable(new_group, handler_md)
         raise ValueError("注册指令组失败。")
 
     return decorator
@@ -247,15 +252,20 @@ class RegisteringCommandable:
     command: Callable[..., Callable[..., None]] = register_command
     custom_filter: Callable[..., Callable[..., Any]] = register_custom_filter
 
-    def __init__(self, parent_group: CommandGroupFilter) -> None:
+    def __init__(
+        self,
+        parent_group: CommandGroupFilter,
+        declaration: HandlerDeclaration,
+    ) -> None:
         self.parent_group = parent_group
+        self.declaration = declaration
 
 
 def register_event_message_type(event_message_type: EventMessageType, **kwargs):
     """注册一个 EventMessageType"""
 
     def decorator(awaitable):
-        handler_md = get_handler_or_create(
+        handler_md = get_handler_declaration(
             awaitable,
             EventType.AdapterMessageEvent,
             **kwargs,
@@ -273,7 +283,7 @@ def register_platform_adapter_type(
     """注册一个 PlatformAdapterType"""
 
     def decorator(awaitable):
-        handler_md = get_handler_or_create(
+        handler_md = get_handler_declaration(
             awaitable,
             EventType.AdapterMessageEvent,
             **kwargs,
@@ -290,7 +300,7 @@ def register_regex(regex: str | re.Pattern, **kwargs):
     """注册一个 Regex"""
 
     def decorator(awaitable):
-        handler_md = get_handler_or_create(
+        handler_md = get_handler_declaration(
             awaitable,
             EventType.AdapterMessageEvent,
             **kwargs,
@@ -313,7 +323,7 @@ def register_permission_type(
     """
 
     def decorator(awaitable):
-        handler_md = get_handler_or_create(
+        handler_md = get_handler_declaration(
             awaitable,
             EventType.AdapterMessageEvent,
             **kwargs,
@@ -330,7 +340,7 @@ def register_on_astrbot_loaded(**kwargs):
     """当 AstrBot 加载完成时"""
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnAstrBotLoadedEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnAstrBotLoadedEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -340,7 +350,9 @@ def register_on_platform_loaded(**kwargs):
     """当平台加载完成时"""
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnPlatformLoadedEvent, **kwargs)
+        _ = get_handler_declaration(
+            awaitable, EventType.OnPlatformLoadedEvent, **kwargs
+        )
         return awaitable
 
     return decorator
@@ -358,7 +370,7 @@ def register_on_plugin_error(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnPluginErrorEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnPluginErrorEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -375,7 +387,7 @@ def register_on_plugin_loaded(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnPluginLoadedEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnPluginLoadedEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -392,7 +404,9 @@ def register_on_plugin_unloaded(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnPluginUnloadedEvent, **kwargs)
+        _ = get_handler_declaration(
+            awaitable, EventType.OnPluginUnloadedEvent, **kwargs
+        )
         return awaitable
 
     return decorator
@@ -414,7 +428,7 @@ def register_on_waiting_llm_request(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(
+        _ = get_handler_declaration(
             awaitable, EventType.OnWaitingLLMRequestEvent, **kwargs
         )
         return awaitable
@@ -427,7 +441,7 @@ def register_on_llm_request(**kwargs):
 
     Examples:
     ```py
-    from astrbot.core.provider.entities import ProviderRequest
+    from astrbot.core.agent.llm_types import ProviderRequest
 
     @on_llm_request()
     async def test(self, event: AstrMessageEvent, req: ProviderRequest) -> None:
@@ -439,7 +453,7 @@ def register_on_llm_request(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnLLMRequestEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnLLMRequestEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -450,7 +464,7 @@ def register_on_llm_response(**kwargs):
 
     Examples:
     ```py
-    from astrbot.core.provider.entities import LLMResponse
+    from astrbot.core.agent.llm_types import LLMResponse
 
     @on_llm_response()
     async def test(self, event: AstrMessageEvent, response: LLMResponse) -> None:
@@ -462,7 +476,7 @@ def register_on_llm_response(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnLLMResponseEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnLLMResponseEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -490,7 +504,7 @@ def register_on_agent_begin(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnAgentBeginEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnAgentBeginEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -503,7 +517,7 @@ def register_on_agent_done(**kwargs):
     ```py
     from astrbot.core.agent.run_context import ContextWrapper
     from astrbot.core.astr_agent_context import AstrAgentContext
-    from astrbot.core.provider.entities import LLMResponse
+    from astrbot.core.agent.llm_types import LLMResponse
 
     @on_agent_done()
     async def test(
@@ -520,7 +534,7 @@ def register_on_agent_done(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnAgentDoneEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnAgentDoneEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -544,7 +558,7 @@ def register_on_using_llm_tool(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnUsingLLMToolEvent, **kwargs)
+        _ = get_handler_declaration(awaitable, EventType.OnUsingLLMToolEvent, **kwargs)
         return awaitable
 
     return decorator
@@ -569,10 +583,46 @@ def register_on_llm_tool_respond(**kwargs):
     """
 
     def decorator(awaitable):
-        _ = get_handler_or_create(awaitable, EventType.OnLLMToolRespondEvent, **kwargs)
+        _ = get_handler_declaration(
+            awaitable, EventType.OnLLMToolRespondEvent, **kwargs
+        )
         return awaitable
 
     return decorator
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionToolDeclaration:
+    """Static declaration for one plugin-provided function tool."""
+
+    name: str
+    description: str
+    parameters: tuple[dict[str, Any], ...]
+    handler: Callable[..., Any]
+    handler_declaration: HandlerDeclaration | None = None
+    handoff_name: str | None = None
+
+    @property
+    def module_path(self) -> str:
+        """Return the module that owns the tool implementation."""
+        return self.handler.__module__
+
+
+@dataclass(slots=True)
+class HandoffToolDeclaration:
+    """Static declaration for a plugin-defined sub-agent handoff."""
+
+    name: str
+    instruction: str
+    tools: list[str | FunctionTool]
+    run_hooks: BaseAgentRunHooks[Any]
+    handler: Callable[..., Awaitable[Any]]
+    tool_declarations: list[FunctionToolDeclaration] = field(default_factory=list)
+
+    @property
+    def module_path(self) -> str:
+        """Return the module that owns the handoff implementation."""
+        return self.handler.__module__
 
 
 def register_llm_tool(name: str | None = None, **kwargs):
@@ -609,9 +659,7 @@ def register_llm_tool(name: str | None = None, **kwargs):
 
     """
     name_ = name
-    registering_agent = None
-    if kwargs.get("registering_agent"):
-        registering_agent = kwargs["registering_agent"]
+    registering_agent = kwargs.pop("registering_agent", None)
 
     def decorator(
         awaitable: Callable[
@@ -656,19 +704,35 @@ def register_llm_tool(name: str | None = None, **kwargs):
                     arg_json_schema["items"] = {"type": sub_type_name}
             args.append(arg_json_schema)
 
-        if not registering_agent:
-            doc_desc = docstring.description.strip() if docstring.description else ""
-            md = get_handler_or_create(awaitable, EventType.OnCallingFuncToolEvent)
-            llm_tools.add_tool(llm_tool_name, args, doc_desc, md.handler)
-        else:
-            assert isinstance(registering_agent, RegisteringAgent)
-            # print(f"Registering tool {llm_tool_name} for agent", registering_agent._agent.name)
-            if registering_agent._agent.tools is None:
-                registering_agent._agent.tools = []
+        handler_declaration = None
+        if registering_agent is None:
+            handler_declaration = get_handler_declaration(
+                awaitable,
+                EventType.OnCallingFuncToolEvent,
+            )
 
-            desc = docstring.description.strip() if docstring.description else ""
-            tool = llm_tools.spec_to_func(llm_tool_name, args, desc, awaitable)
-            registering_agent._agent.tools.append(tool)
+        description = docstring.description.strip() if docstring.description else ""
+        declaration = FunctionToolDeclaration(
+            name=llm_tool_name,
+            description=description,
+            parameters=tuple(args),
+            handler=awaitable,
+            handler_declaration=handler_declaration,
+            handoff_name=(
+                registering_agent.declaration.name
+                if isinstance(registering_agent, RegisteringAgent)
+                else None
+            ),
+        )
+        existing = tuple(getattr(awaitable, _FUNCTION_TOOL_DECLARATIONS_ATTR, ()))
+        setattr(
+            awaitable,
+            _FUNCTION_TOOL_DECLARATIONS_ATTR,
+            (*existing, declaration),
+        )
+        if registering_agent is not None:
+            assert isinstance(registering_agent, RegisteringAgent)
+            registering_agent.declaration.tool_declarations.append(declaration)
 
         return awaitable
 
@@ -682,8 +746,88 @@ class RegisteringAgent:
         kwargs["registering_agent"] = self
         return register_llm_tool(*args, **kwargs)
 
-    def __init__(self, agent: Agent[Any]) -> None:
-        self._agent = agent
+    def __init__(self, declaration: HandoffToolDeclaration) -> None:
+        self.declaration = declaration
+
+
+@dataclass(frozen=True, slots=True)
+class PluginModuleDeclarations:
+    """All static registrations directly owned by one plugin entry module."""
+
+    handlers: tuple[HandlerDeclaration, ...]
+    function_tools: tuple[FunctionToolDeclaration, ...]
+    handoffs: tuple[HandoffToolDeclaration, ...]
+
+
+def collect_plugin_module_declarations(module: ModuleType) -> PluginModuleDeclarations:
+    """Collect declarations from a module without publishing runtime state.
+
+    Plugin handlers are normally class attributes.  Command-group and agent
+    decorators replace those attributes with registration objects, so those
+    objects are collected explicitly as well.
+    """
+    handlers: list[HandlerDeclaration] = []
+    function_tools: list[FunctionToolDeclaration] = []
+    handoffs: list[HandoffToolDeclaration] = []
+    seen_handlers: set[int] = set()
+    seen_tools: set[int] = set()
+    seen_handoffs: set[int] = set()
+
+    def add_handler(declaration: HandlerDeclaration) -> None:
+        if id(declaration) not in seen_handlers:
+            seen_handlers.add(id(declaration))
+            handlers.append(declaration)
+
+    def add_tool(declaration: FunctionToolDeclaration) -> None:
+        if id(declaration) not in seen_tools:
+            seen_tools.add(id(declaration))
+            function_tools.append(declaration)
+
+    def add_handoff(declaration: HandoffToolDeclaration) -> None:
+        if id(declaration) not in seen_handoffs:
+            seen_handoffs.add(id(declaration))
+            handoffs.append(declaration)
+            for tool in declaration.tool_declarations:
+                add_tool(tool)
+
+    def inspect_owner(value: object) -> None:
+        if isinstance(value, RegisteringCommandable):
+            add_handler(value.declaration)
+            return
+        if isinstance(value, RegisteringAgent):
+            add_handoff(value.declaration)
+            return
+        if isinstance(value, staticmethod | classmethod):
+            inspect_owner(value.__func__)
+            return
+        declaration = getattr(value, _HANDLER_DECLARATION_ATTR, None)
+        if isinstance(declaration, HandlerDeclaration):
+            add_handler(declaration)
+        tool_declarations = getattr(value, _FUNCTION_TOOL_DECLARATIONS_ATTR, ())
+        for tool_declaration in tool_declarations:
+            if (
+                isinstance(tool_declaration, FunctionToolDeclaration)
+                and tool_declaration.handoff_name is None
+            ):
+                add_tool(tool_declaration)
+        agent_declaration = getattr(value, _AGENT_DECLARATION_ATTR, None)
+        if isinstance(agent_declaration, HandoffToolDeclaration):
+            add_handoff(agent_declaration)
+
+    for candidate in vars(module).values():
+        if inspect.isclass(candidate):
+            if candidate.__module__ != module.__name__:
+                continue
+            for member in candidate.__dict__.values():
+                inspect_owner(member)
+        else:
+            inspect_owner(candidate)
+
+    return PluginModuleDeclarations(
+        handlers=tuple(handlers),
+        function_tools=tuple(function_tools),
+        handoffs=tuple(handoffs),
+    )
 
 
 def register_agent(
@@ -701,20 +845,18 @@ def register_agent(
         run_hooks: Agent 运行时的钩子函数
 
     """
-    tools_ = tools or []
+    tools_ = list(tools or [])
 
     def decorator(awaitable: Callable[..., Awaitable[Any]]):
-        AstrAgent = Agent[Any]
-        agent = AstrAgent(
+        declaration = HandoffToolDeclaration(
             name=name,
-            instructions=instruction,
+            instruction=instruction,
             tools=tools_,
             run_hooks=run_hooks or BaseAgentRunHooks[Any](),
+            handler=awaitable,
         )
-        handoff_tool = HandoffTool(agent=agent)
-        handoff_tool.handler = awaitable
-        llm_tools.func_list.append(handoff_tool)
-        return RegisteringAgent(agent)
+        setattr(awaitable, _AGENT_DECLARATION_ATTR, declaration)
+        return RegisteringAgent(declaration)
 
     return decorator
 
@@ -723,7 +865,7 @@ def register_on_decorating_result(**kwargs):
     """在发送消息前的事件"""
 
     def decorator(awaitable):
-        _ = get_handler_or_create(
+        _ = get_handler_declaration(
             awaitable,
             EventType.OnDecoratingResultEvent,
             **kwargs,
@@ -737,7 +879,7 @@ def register_after_message_sent(**kwargs):
     """在消息发送后的事件"""
 
     def decorator(awaitable):
-        _ = get_handler_or_create(
+        _ = get_handler_declaration(
             awaitable,
             EventType.OnAfterMessageSentEvent,
             **kwargs,

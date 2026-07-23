@@ -5,7 +5,7 @@ with a disabled built-in tool, the MCP tool should not be removed as collateral 
 """
 
 from astrbot.core.agent.tool import FunctionTool, ToolSet
-from astrbot.core.provider.func_tool_manager import FunctionToolManager
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 
 
 def make_tool(name: str, active: bool = True) -> FunctionTool:
@@ -180,7 +180,7 @@ class TestFunctionToolManagerGetFullToolSet:
 
     def test_wrapping_preserves_tool_name_and_description(self):
         """_PermissionGuardedTool wrapping should preserve name and description."""
-        from astrbot.core.provider.func_tool_manager import _PermissionGuardedTool
+        from astrbot.core.tools.function_tool_manager import _PermissionGuardedTool
 
         manager = FunctionToolManager()
         tool = make_tool("web_search")

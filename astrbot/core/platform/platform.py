@@ -7,10 +7,10 @@ from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from astrbot.core.message.message_event_result import MessageChain
-from astrbot.core.utils.metrics import Metric
+from astrbot.core.utils.metrics import MetricsSink
 from astrbot.core.utils.task_utils import cancel_tracked_tasks, create_tracked_task
 
 from .astr_message_event import AstrMessageEvent
@@ -19,6 +19,10 @@ from .message_session import MessageSession
 from .platform_metadata import PlatformMetadata
 from .route_identity import PlatformRouteIdentity
 from .send_result import PlatformSendResult
+
+if TYPE_CHECKING:
+    from astrbot.core.star.star import PluginRegistry
+    from astrbot.core.star.star_handler import HandlerRegistry
 
 PLATFORM_ACTION_METHOD_NAMES = (
     "set_group_admin",
@@ -79,6 +83,9 @@ class Platform(abc.ABC):
         self.database: Any = None
         self.runtime_config: Any = None
         self.preferences: Any = None
+        self._handler_registry: HandlerRegistry | None = None
+        self._plugin_registry: PluginRegistry | None = None
+        self._metrics: MetricsSink | None = None
         # 维护了消息平台的事件队列，EventBus 会从这里取出事件并处理。
         self._event_queue = event_queue
         self.client_self_id = uuid.uuid4().hex
@@ -177,6 +184,49 @@ class Platform(abc.ABC):
     async def refresh_registered_commands(self) -> None:
         """Refresh platform-native command registrations when supported."""
 
+    def bind_runtime_registries(
+        self,
+        handler_registry: HandlerRegistry,
+        plugin_registry: PluginRegistry,
+    ) -> None:
+        """Bind the narrow runtime catalogs required by native command adapters."""
+
+        if handler_registry.plugins is not plugin_registry:
+            raise ValueError("Handler and plugin registries must share one runtime")
+        self._handler_registry = handler_registry
+        self._plugin_registry = plugin_registry
+
+    def bind_metrics(self, metrics: MetricsSink) -> None:
+        """Bind the telemetry capability owned by this platform runtime."""
+
+        self._metrics = metrics
+
+    def _schedule_metric(self, *, name: str, **kwargs: Any) -> None:
+        """Schedule a metric under this adapter's task ownership."""
+
+        metrics = getattr(self, "_metrics", None)
+        if metrics is None:
+            return
+        create_tracked_task(
+            self._background_tasks,
+            metrics.upload(**kwargs),
+            name=name,
+        )
+
+    def get_handler_registry(self) -> HandlerRegistry:
+        """Return the runtime-owned handler catalog injected by the manager."""
+
+        if self._handler_registry is None:
+            raise RuntimeError("Platform handler registry has not been injected")
+        return self._handler_registry
+
+    def get_plugin_registry(self) -> PluginRegistry:
+        """Return the runtime-owned plugin catalog injected by the manager."""
+
+        if self._plugin_registry is None:
+            raise RuntimeError("Platform plugin registry has not been injected")
+        return self._plugin_registry
+
     @abc.abstractmethod
     def meta(self) -> PlatformMetadata:
         """得到一个平台的元数据。"""
@@ -191,10 +241,10 @@ class Platform(abc.ABC):
 
         异步方法。
         """
-        create_tracked_task(
-            self._background_tasks,
-            Metric.upload(msg_event_tick=1, adapter_name=self.meta().name),
+        self._schedule_metric(
             name=f"metric:send-by-session:{self.meta().name}",
+            msg_event_tick=1,
+            adapter_name=self.meta().name,
         )
         return PlatformSendResult(
             platform_id=self.meta().id,
@@ -226,6 +276,9 @@ class Platform(abc.ABC):
 
     def commit_event(self, event: AstrMessageEvent) -> bool:
         """提交一个事件到事件队列。"""
+        event.bind_background_tasks(self._background_tasks)
+        if self._metrics is not None:
+            event.bind_metrics(self._metrics)
         try:
             self._event_queue.put_nowait(event)
         except QueueFull:

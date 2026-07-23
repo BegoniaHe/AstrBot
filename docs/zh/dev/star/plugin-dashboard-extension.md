@@ -285,5 +285,5 @@ Page 最多同时保留 64 个 pending 请求；Bridge JSON 消息最大 256 KiB
 5. inline object URL 被回收，attachment 能完成流式下载。
 6. reload、disable、uninstall 和 logout 后旧页面不再调用成功。
 
-协议是 breaking contract，不提供旧 Page metadata、任意 HTTP proxy 或旧 Context API 的
+协议是 breaking contract，不提供旧 Page metadata、任意 HTTP proxy 或旧插件运行时 API 的
 兼容层。迁移现有插件时必须直接改用本指南描述的 v1 manifest、Action 和 Page SDK。

@@ -7,10 +7,6 @@ from typing import TYPE_CHECKING
 
 from astrbot.core.config import AstrBotConfig
 
-star_registry: list[StarMetadata] = []
-star_map: dict[str, StarMetadata] = {}
-"""key 是模块路径，__module__"""
-
 if TYPE_CHECKING:
     from . import Star
     from .dashboard_extension import DashboardExtensionManifest
@@ -91,3 +87,148 @@ class StarMetadata:
 
     def __repr__(self) -> str:
         return f"Plugin {self.name} ({self.version}) by {self.author}: {self.desc}"
+
+
+@dataclass(frozen=True, slots=True)
+class StarDeclaration:
+    """Static plugin declaration attached to a :class:`Star` subclass.
+
+    Importing a plugin may create declarations, but it must not publish mutable
+    state into a process-wide registry.  A runtime catalog materializes this
+    declaration only after the plugin module has been validated.
+    """
+
+    star_cls_type: type[Star]
+    module_path: str
+
+
+class PluginRegistry:
+    """Runtime-owned catalog of published plugins.
+
+    Each application runtime owns one instance.  The catalog deliberately
+    exposes query operations instead of a mutable ``dict``/``list`` pair so a
+    plugin reload can remove an exact module without affecting another
+    runtime.
+    """
+
+    def __init__(self) -> None:
+        self._by_module: dict[str, StarMetadata] = {}
+        self._items: list[StarMetadata] = []
+
+    def publish(self, metadata: StarMetadata) -> None:
+        """Publish one fully initialized plugin metadata object.
+
+        Args:
+            metadata: Metadata whose ``module_path`` identifies the plugin.
+
+        Raises:
+            ValueError: If the metadata has no module path or the module is
+                already published by a different object.
+        """
+        module_path = metadata.module_path
+        if not module_path:
+            raise ValueError("Plugin metadata must have a module path")
+        existing = self._by_module.get(module_path)
+        if existing is not None and existing is not metadata:
+            raise ValueError(f"Plugin module already published: {module_path}")
+        if existing is None:
+            if metadata.name:
+                same_name = self.get_by_name(metadata.name)
+                if same_name is not None and same_name is not metadata:
+                    raise ValueError(f"Plugin name already published: {metadata.name}")
+            self._by_module[module_path] = metadata
+            self._items.append(metadata)
+
+    def replace_module(self, metadata: StarMetadata) -> StarMetadata | None:
+        """Atomically replace an exact module after a successful reload.
+
+        The caller prepares and initializes ``metadata`` before invoking this
+        method.  A failed preparation therefore leaves the existing catalog
+        entry untouched.
+        """
+        module_path = metadata.module_path
+        if not module_path:
+            raise ValueError("Plugin metadata must have a module path")
+        previous = self._by_module.get(module_path)
+        if previous is None:
+            self.publish(metadata)
+            return None
+        if metadata.name:
+            same_name = self.get_by_name(metadata.name)
+            if same_name is not None and same_name is not previous:
+                raise ValueError(f"Plugin name already published: {metadata.name}")
+        self._by_module[module_path] = metadata
+        self._items[self._items.index(previous)] = metadata
+        return previous
+
+    def get_by_module(self, module_path: str | None) -> StarMetadata | None:
+        """Return metadata for an exact module path."""
+        if not module_path:
+            return None
+        return self._by_module.get(module_path)
+
+    def get_by_name(self, name: str) -> StarMetadata | None:
+        """Return the published plugin with an exact display name."""
+        return next((item for item in self._items if item.name == name), None)
+
+    def all(self) -> tuple[StarMetadata, ...]:
+        """Return an immutable snapshot in publication order."""
+        return tuple(self._items)
+
+    def unregister_module(self, module_path: str) -> StarMetadata | None:
+        """Remove and return metadata belonging to one exact module."""
+        metadata = self._by_module.pop(module_path, None)
+        if metadata is not None:
+            self._items.remove(metadata)
+        return metadata
+
+    def unregister_prefix(self, module_prefix: str) -> tuple[StarMetadata, ...]:
+        """Remove every plugin owned by a module prefix."""
+        removed = tuple(
+            metadata
+            for metadata in self._items
+            if metadata.module_path
+            and (
+                metadata.module_path == module_prefix
+                or metadata.module_path.startswith(f"{module_prefix}.")
+            )
+        )
+        for metadata in removed:
+            assert metadata.module_path is not None
+            self.unregister_module(metadata.module_path)
+        return removed
+
+    def clear(self) -> None:
+        """Remove all published plugin metadata from this runtime."""
+        self._by_module.clear()
+        self._items.clear()
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+def collect_star_declaration(module: ModuleType) -> StarDeclaration | None:
+    """Find the one Star declaration directly owned by a plugin module.
+
+    Imported classes are intentionally ignored.  A plugin entry module with
+    multiple Star declarations is ambiguous and rejected rather than relying
+    on import order to select one.
+    """
+    declarations = [
+        candidate.__dict__.get("__astrbot_star_declaration__")
+        for candidate in vars(module).values()
+        if isinstance(candidate, type) and candidate.__module__ == module.__name__
+    ]
+    owned = [
+        declaration
+        for declaration in declarations
+        if isinstance(declaration, StarDeclaration)
+    ]
+    if len(owned) > 1:
+        raise ValueError(
+            f"Plugin module {module.__name__!r} declares multiple Star classes"
+        )
+    return owned[0] if owned else None

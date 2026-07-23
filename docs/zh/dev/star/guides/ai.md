@@ -1,20 +1,20 @@
 # 在插件中调用 AI
 
-Star 应通过 `astrbot.api` 的事件、`Context` 和工具接口调用模型。不要从 `astrbot.core.agent`、`astrbot.core.conversation_mgr` 或 Provider 具体实现导入内部类型；这些模块会随 Agent Runtime 演进。
+Star 应通过 `astrbot.api` 的事件、`PluginContext` 能力和工具接口调用模型。不要从 `astrbot.core.agent`、`astrbot.core.conversation_mgr` 或 Provider 具体实现导入内部类型；这些模块会随 Agent Runtime 演进。
 
 ## 选择调用方式
 
-| 需求                                                           | 推荐接口                                        |
-| -------------------------------------------------------------- | ----------------------------------------------- |
-| 让当前消息继续走 AstrBot 的标准 Persona、会话和 Agent pipeline | `yield event.request_llm(...)`                  |
-| 直接调用一个指定聊天模型，不自动执行工具                       | `await self.context.llm_generate(...)`          |
-| 在插件内运行指定工具集的多 step Agent                          | `await self.context.tool_loop_agent(...)`       |
-| 为普通 AstrBot 对话注册一个可被模型调用的工具                  | `@filter.llm_tool` 或 `Context.add_llm_tools()` |
+| 需求                                                           | 推荐接口                                         |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| 让当前消息继续走 AstrBot 的标准 Persona、会话和 Agent pipeline | `yield event.request_llm(...)`                   |
+| 直接调用一个指定聊天模型，不自动执行工具                       | `await self.context.models.generate(...)`        |
+| 在插件内运行指定工具集的多 step Agent                          | `await self.context.models.tool_loop(...)`       |
+| 为普通 AstrBot 对话注册一个可被模型调用的工具                  | `@filter.llm_tool` 或 `self.context.tools.add()` |
 
 ## 使用当前会话模型
 
 ```python
-provider_id = await self.context.get_current_chat_provider_id(
+provider_id = await self.context.models.current_chat_provider_id(
     event.unified_msg_origin
 )
 ```
@@ -43,7 +43,7 @@ async def ask(self, event: AstrMessageEvent):
 ## 直接生成文本
 
 ```python
-response = await self.context.llm_generate(
+response = await self.context.models.generate(
     chat_provider_id=provider_id,
     prompt="Summarize the following text: ...",
     system_prompt="Return a concise factual summary.",
@@ -54,7 +54,7 @@ response = await self.context.llm_generate(
 text = response.completion_text
 ```
 
-`llm_generate()` 只执行一次 Provider 请求。即使传入 `ToolSet`，它也不会自动执行返回的工具调用；需要工具循环时使用 `tool_loop_agent()`。
+`models.generate()` 只执行一次 Provider 请求。即使传入 `ToolSet`，它也不会自动执行返回的工具调用；需要工具循环时使用 `models.tool_loop()`。
 
 直接调用不会自动把本次输入输出保存进当前会话历史。插件如果需要用户可见的连续会话，应优先使用标准 pipeline，而不是直接操作 `conversation_manager` 内部对象。
 
@@ -113,10 +113,10 @@ weather_tool = FunctionTool(
     handler=weather_handler,
 )
 
-self.context.add_llm_tools(weather_tool)
+self.context.tools.add(weather_tool)
 ```
 
-注册工具名是全局名字。替换同名工具会影响其他 Persona 和插件；使用插件前缀并在 `terminate()` / 热重载测试中确认不会留下旧 handler。
+工具名在一个运行时内必须唯一。使用插件前缀并在 `terminate()` / 热重载测试中确认不会留下旧 handler。
 
 ## 运行工具循环 Agent
 
@@ -124,7 +124,7 @@ self.context.add_llm_tools(weather_tool)
 from astrbot.api import ToolSet
 
 tools = ToolSet([weather_tool])
-response = await self.context.tool_loop_agent(
+response = await self.context.models.tool_loop(
     event=event,
     chat_provider_id=provider_id,
     prompt="Check the weather in Beijing and give one travel suggestion.",
@@ -137,7 +137,7 @@ response = await self.context.tool_loop_agent(
 yield event.plain_result(response.completion_text)
 ```
 
-`tool_loop_agent()` 会重复执行模型 → 工具 → 模型，直到得到最终回复或达到 `max_steps`。注意：
+`models.tool_loop()` 会重复执行模型 → 工具 → 模型，直到得到最终回复或达到 `max_steps`。注意：
 
 - `event` 提供本次运行的权限、工作区和取消上下文；不要伪造其他用户的 event。
 - 只传递完成任务所需的工具；`None` 表示无显式工具集，不应拿“所有工具”作默认。
@@ -145,19 +145,10 @@ yield event.plain_result(response.completion_text)
 - 插件创建的 HTTP client、子进程和任务仍需在超时、取消与 `terminate()` 中清理。
 - 返回内容不会自动写入普通会话历史，除非调用链明确使用标准会话 pipeline。
 
-## 复用已注册工具
+## 工具归属
 
-```python
-from astrbot.api import ToolSet
-
-manager = self.context.get_llm_tool_manager()
-search_tool = manager.get_tool("web_search")
-tools = ToolSet()
-if search_tool and search_tool.active:
-    tools.add_tool(search_tool)
-```
-
-工具可能因为配置档、Persona、插件状态或运行环境不可用。每次使用前检查是否存在和 active，不要缓存跨热重载的工具对象。
+公开 SDK 有意不暴露可变的全运行时工具管理器。请通过 `@filter.llm_tool`
+声明工具、用 `self.context.tools.add(...)` 添加插件自有的 `FunctionTool`，或从插件自有工具构造显式 `ToolSet`。不要跨热重载缓存工具对象。
 
 ## Agent-as-tool 与子代理
 
@@ -167,12 +158,12 @@ if search_tool and search_tool.active:
 
 ## Provider 访问
 
-公共 `Context` 还提供：
+`PluginContext.models` 还提供：
 
-- `get_provider_by_id()`；
-- `get_using_provider(umo)`；
-- `get_all_providers()`；
-- 对应的 STT、TTS、Embedding 和 Rerank 查询方法。
+- `get(provider_id)`；
+- `using_chat(umo)`；
+- `chat()`；
+- 对应的 TTS、STT 和 Embedding 查询方法。
 
 这些返回当前 Provider 抽象实例。插件可以调用抽象能力，但不得导入 `provider/sources/*` 或依赖某个具体适配器的私有字段。需要某服务专用参数时，把它作为插件配置并通过受支持的公共调用传入。
 

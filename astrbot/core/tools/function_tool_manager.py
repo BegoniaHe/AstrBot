@@ -1,13 +1,17 @@
+"""Runtime-owned function-tool and MCP catalog implementation."""
+
 import asyncio
 import copy
+import inspect
 import json
 import os
 import threading
 import urllib.parse
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from importlib import import_module
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Protocol
 
 import aiohttp
 
@@ -15,10 +19,11 @@ from astrbot import logger
 from astrbot.core.agent.mcp_client import MCPClient, MCPTool
 from astrbot.core.agent.tool import FunctionTool, ToolSet
 from astrbot.core.tools.registry import (
-    ensure_builtin_tools_loaded,
-    get_builtin_tool_class,
-    get_builtin_tool_name,
-    iter_builtin_tool_classes,
+    BUILTIN_TOOL_DECLARATION_ATTR,
+    BUILTIN_TOOL_MODULES,
+    DEFAULT_BUILTIN_TOOL_CONFIG_RULES,
+    BuiltinToolConfigRule,
+    BuiltinToolDeclaration,
 )
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 from astrbot.core.utils.shared_preferences import SharedPreferences
@@ -30,6 +35,12 @@ DEFAULT_ENABLE_MCP_TIMEOUT_SECONDS = 180.0
 MCP_INIT_TIMEOUT_ENV = "ASTRBOT_MCP_INIT_TIMEOUT"
 ENABLE_MCP_TIMEOUT_ENV = "ASTRBOT_MCP_ENABLE_TIMEOUT"
 MAX_MCP_TIMEOUT_SECONDS = 300.0
+
+
+class PluginLookup(Protocol):
+    """The narrow plugin capability required for tool activation."""
+
+    def get_by_module(self, module_path: str | None) -> Any: ...
 
 
 class MCPInitError(Exception):
@@ -253,10 +264,16 @@ class _PermissionGuardedTool(FunctionTool):
 class FunctionToolManager:
     def __init__(self) -> None:
         self.preferences: SharedPreferences | None = None
+        self._plugins: PluginLookup | None = None
         self.func_list: list[FunctionTool] = []
         """All tools include mcp tools and plugin tools, except astrbot builtin tools."""
         self.builtin_func_list: dict[type[FunctionTool], FunctionTool] = {}
         """All astrbot builtin tools, keyed by their class. Values are instantiated tool objects, created on demand."""
+        self._builtin_tool_classes_by_name: dict[str, type[FunctionTool]] = {}
+        self._builtin_tool_names_by_class: dict[type[FunctionTool], str] = {}
+        self._builtin_tool_config_rules: dict[str, BuiltinToolConfigRule] = {}
+        self._builtin_tools_loaded = False
+        self._runtime_state: dict[str, object] = {}
 
         self._mcp_server_runtime: dict[str, _MCPServerRuntime] = {}
         """MCP runtime metadata, keyed by server name. Updated atomically on MCP lifecycle changes."""
@@ -284,17 +301,26 @@ class FunctionToolManager:
         """Bind runtime preferences after the tool registry has been imported."""
         self.preferences = preferences
 
+    def bind_plugin_lookup(self, plugins: PluginLookup) -> None:
+        """Bind the runtime-owned plugin catalog used for activation checks."""
+        self._plugins = plugins
+
+    def get_or_create_runtime_state(
+        self,
+        key: str,
+        factory: Callable[[], object],
+    ) -> object:
+        """Return state shared by builtin tools within this manager only."""
+        state = self._runtime_state.get(key)
+        if state is None:
+            state = factory()
+            self._runtime_state[key] = state
+        return state
+
     @property
     def mcp_server_runtime_view(self) -> Mapping[str, _MCPServerRuntime]:
         """Read-only view of MCP runtime metadata for external callers."""
         return self._mcp_server_runtime_view
-
-    @property
-    def mcp_client_dict(self) -> dict[str, MCPClient]:
-        """Compatibility view keyed by MCP server name."""
-        return {
-            name: runtime.client for name, runtime in self._mcp_server_runtime.items()
-        }
 
     def empty(self) -> bool:
         return len(self.func_list) == 0
@@ -379,15 +405,15 @@ class FunctionToolManager:
         self,
         tool: str | type[FunctionTool],
     ) -> FunctionTool:
-        ensure_builtin_tools_loaded()
+        self._ensure_builtin_tools_loaded()
 
         if isinstance(tool, str):
-            tool_cls = get_builtin_tool_class(tool)
+            tool_cls = self._builtin_tool_classes_by_name.get(tool)
             if tool_cls is None:
                 raise KeyError(f"Builtin tool {tool} is not registered.")
         elif isinstance(tool, type) and issubclass(tool, FunctionTool):
             tool_cls = tool
-            if get_builtin_tool_name(tool_cls) is None:
+            if tool_cls not in self._builtin_tool_names_by_class:
                 raise KeyError(
                     f"Builtin tool class {tool_cls.__module__}.{tool_cls.__name__} is not registered.",
                 )
@@ -403,14 +429,95 @@ class FunctionToolManager:
         return builtin_tool
 
     def iter_builtin_tools(self) -> list[FunctionTool]:
-        ensure_builtin_tools_loaded()
+        self._ensure_builtin_tools_loaded()
         return [
-            self.get_builtin_tool(tool_cls) for tool_cls in iter_builtin_tool_classes()
+            self.get_builtin_tool(tool_cls)
+            for tool_cls in self._builtin_tool_classes_by_name.values()
         ]
 
     def is_builtin_tool(self, name: str) -> bool:
-        ensure_builtin_tools_loaded()
-        return get_builtin_tool_class(name) is not None
+        self._ensure_builtin_tools_loaded()
+        return name in self._builtin_tool_classes_by_name
+
+    def get_builtin_tool_config_statuses(
+        self,
+        tool_name: str,
+        config_entries: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Evaluate one builtin tool's declared configuration requirements."""
+        self._ensure_builtin_tools_loaded()
+        rule = self._builtin_tool_config_rules.get(tool_name)
+        if rule is None:
+            return []
+
+        statuses: list[dict[str, Any]] = []
+        for entry in config_entries:
+            config = entry.get("config")
+            if not isinstance(config, dict):
+                continue
+
+            conditions = rule.evaluate(config)
+            enabled = bool(conditions) and all(
+                bool(condition.get("matched")) for condition in conditions
+            )
+            statuses.append(
+                {
+                    "conf_id": entry.get("conf_id"),
+                    "conf_name": entry.get("conf_name"),
+                    "enabled": enabled,
+                    "matched_conditions": [
+                        condition
+                        for condition in conditions
+                        if condition.get("matched")
+                    ],
+                    "failed_conditions": [
+                        condition
+                        for condition in conditions
+                        if not condition.get("matched")
+                    ],
+                }
+            )
+        return statuses
+
+    def _ensure_builtin_tools_loaded(self) -> None:
+        """Discover builtin declarations into this runtime-owned manager.
+
+        Modules may already be present in ``sys.modules`` after another runtime
+        has started.  Discovery therefore scans class-local descriptors after
+        every import rather than relying on decorator execution.
+        """
+        if self._builtin_tools_loaded:
+            return
+
+        for module_name in BUILTIN_TOOL_MODULES:
+            module = import_module(module_name)
+            for candidate in vars(module).values():
+                if not inspect.isclass(candidate) or not issubclass(
+                    candidate, FunctionTool
+                ):
+                    continue
+                self._register_builtin_tool_class(candidate)
+        self._builtin_tools_loaded = True
+
+    def _register_builtin_tool_class(self, tool_cls: type[FunctionTool]) -> None:
+        declaration = vars(tool_cls).get(BUILTIN_TOOL_DECLARATION_ATTR)
+        if not isinstance(declaration, BuiltinToolDeclaration):
+            return
+
+        existing = self._builtin_tool_classes_by_name.get(declaration.name)
+        if existing is not None and existing is not tool_cls:
+            raise ValueError(
+                f"Builtin tool name conflict detected: {declaration.name} is already registered by "
+                f"{existing.__module__}.{existing.__name__}.",
+            )
+
+        self._builtin_tool_classes_by_name[declaration.name] = tool_cls
+        self._builtin_tool_names_by_class[tool_cls] = declaration.name
+        rule = declaration.config_rule or DEFAULT_BUILTIN_TOOL_CONFIG_RULES.get(
+            declaration.name,
+        )
+        if rule is not None:
+            self._builtin_tool_config_rules[declaration.name] = rule
 
     def _default_permission(self, tool_name: str) -> str:
         """Compute the fallback permission for a non-builtin tool.
@@ -1006,14 +1113,18 @@ class FunctionToolManager:
             return True
         return False
 
-    # 因为不想解决循环引用，所以这里直接传入 star_map 先了...
-    async def activate_llm_tool(self, name: str, star_map: dict) -> bool:
+    async def activate_llm_tool(self, name: str) -> bool:
         func_tool = self.get_tool(name)
         if func_tool is not None:
-            if func_tool.handler_module_path in star_map:
-                if not star_map[func_tool.handler_module_path].activated:
+            plugin = (
+                self._plugins.get_by_module(func_tool.handler_module_path)
+                if self._plugins is not None
+                else None
+            )
+            if plugin is not None:
+                if not plugin.activated:
                     raise ValueError(
-                        f"此函数调用工具所属的插件 {star_map[func_tool.handler_module_path].name} 已被禁用，请先在管理面板启用再激活此工具。",
+                        f"此函数调用工具所属的插件 {plugin.name} 已被禁用，请先在管理面板启用再激活此工具。",
                     )
 
             func_tool.active = True

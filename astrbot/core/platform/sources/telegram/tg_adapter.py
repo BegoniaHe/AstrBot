@@ -26,8 +26,7 @@ from astrbot.core.platform.astr_message_event import MessageSession
 from astrbot.core.platform.register import register_platform_adapter
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.filter.command_group import CommandGroupFilter
-from astrbot.core.star.star import star_map
-from astrbot.core.star.star_handler import star_handlers_registry
+from astrbot.core.star.star_handler import EventType
 
 from .tg_event import TelegramPlatformEvent
 
@@ -341,15 +340,16 @@ class TelegramPlatformAdapter(Platform):
         command_dict = {}
         skip_commands = {"start"}
 
-        for handler_md in star_handlers_registry:
+        for handler_md in self.get_handler_registry().get_handlers_by_event_type(
+            EventType.AdapterMessageEvent,
+            only_activated=False,
+        ):
+            plugin = self.get_plugin_registry().get_by_module(
+                handler_md.handler_module_path,
+            )
+            if plugin is None or not plugin.activated:
+                continue
             handler_metadata = handler_md
-            if (
-                handler_metadata.handler_module_path not in star_map
-                or not star_map[handler_metadata.handler_module_path].activated
-            ):
-                continue
-            if not handler_metadata.enabled:
-                continue
             for event_filter in handler_metadata.event_filters:
                 cmd_info_list = self._extract_command_info(
                     event_filter,

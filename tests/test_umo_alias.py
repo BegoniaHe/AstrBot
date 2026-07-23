@@ -1,5 +1,3 @@
-import importlib
-import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -7,16 +5,14 @@ import pytest
 
 from astrbot.builtin_stars.builtin_commands.commands.session import SessionCommands
 from astrbot.core.star.filter.permission import PermissionType, PermissionTypeFilter
-from astrbot.core.star.star_handler import star_handlers_registry
+from astrbot.core.star.register.star_handler import get_handler_declaration
+from astrbot.core.star.star_handler import EventType
 from astrbot.core.umo_alias import (
     get_event_auto_name,
     normalize_umo_name,
     parse_umo,
     serialize_umo_alias,
 )
-
-BUILTIN_COMMANDS_PACKAGE = "astrbot.builtin_stars.builtin_commands"
-BUILTIN_MAIN_MODULE = f"{BUILTIN_COMMANDS_PACKAGE}.main"
 
 
 def make_group_event() -> SimpleNamespace:
@@ -29,6 +25,20 @@ def make_group_event() -> SimpleNamespace:
         get_sender_id=lambda: "sender-1",
         get_sender_name=lambda: "Alice",
         set_result=MagicMock(),
+    )
+
+
+def make_session_context(db) -> SimpleNamespace:
+    """Create the narrow session-alias capability used by the command."""
+
+    async def alias(umo: str):
+        return await db.get_umo_alias(umo)
+
+    async def set_alias(**kwargs):
+        return await db.upsert_umo_alias(**kwargs)
+
+    return SimpleNamespace(
+        sessions=SimpleNamespace(alias=alias, set_alias=set_alias),
     )
 
 
@@ -60,7 +70,7 @@ async def test_umo_alias_upsert_updates_existing_record(temp_db):
 
 @pytest.mark.asyncio
 async def test_session_name_saves_group_alias_with_auto_name(temp_db):
-    context = SimpleNamespace(get_db=lambda: temp_db)
+    context = make_session_context(temp_db)
     event = make_group_event()
 
     await SessionCommands(context).name(event, "Backend Room")
@@ -86,7 +96,7 @@ async def test_session_name_without_alias_shows_current_names(temp_db):
         auto_name="Old Group",
         user_alias="Backend Room",
     )
-    context = SimpleNamespace(get_db=lambda: temp_db)
+    context = make_session_context(temp_db)
     event = make_group_event()
 
     await SessionCommands(context).name(event, "")
@@ -104,44 +114,15 @@ async def test_session_name_without_alias_shows_current_names(temp_db):
 
 
 def test_session_name_requires_admin_permission():
-    missing_package_attr = object()
-    original_handlers = list(star_handlers_registry)
-    original_module = sys.modules.get(BUILTIN_MAIN_MODULE)
-    commands_package = sys.modules.get(BUILTIN_COMMANDS_PACKAGE)
-    original_package_main = (
-        getattr(commands_package, "main", missing_package_attr)
-        if commands_package
-        else missing_package_attr
-    )
-    try:
-        star_handlers_registry.clear()
-        sys.modules.pop(BUILTIN_MAIN_MODULE, None)
-        reloaded_main = importlib.import_module(BUILTIN_MAIN_MODULE)
-        handler = star_handlers_registry.get_handler_by_full_name(
-            f"{reloaded_main.Main.name.__module__}_{reloaded_main.Main.name.__name__}"
-        )
+    from astrbot.builtin_stars.builtin_commands.main import Main
 
-        assert handler is not None
-        assert any(
-            isinstance(filter_, PermissionTypeFilter)
-            and filter_.permission_type == PermissionType.ADMIN
-            for filter_ in handler.event_filters
-        )
-    finally:
-        if original_module is None:
-            sys.modules.pop(BUILTIN_MAIN_MODULE, None)
-        else:
-            sys.modules[BUILTIN_MAIN_MODULE] = original_module
-        commands_package = sys.modules.get(BUILTIN_COMMANDS_PACKAGE)
-        if commands_package:
-            if original_package_main is missing_package_attr:
-                if hasattr(commands_package, "main"):
-                    delattr(commands_package, "main")
-            else:
-                commands_package.main = original_package_main
-        star_handlers_registry.clear()
-        for handler in original_handlers:
-            star_handlers_registry.append(handler)
+    declaration = get_handler_declaration(Main.name, EventType.AdapterMessageEvent)
+
+    assert any(
+        isinstance(filter_, PermissionTypeFilter)
+        and filter_.permission_type == PermissionType.ADMIN
+        for filter_ in declaration.event_filters
+    )
 
 
 def test_umo_name_helpers_accept_numeric_ids():

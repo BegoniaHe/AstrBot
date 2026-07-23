@@ -21,7 +21,7 @@ async def hello(self, event: AstrMessageEvent):
 ## 主动发送
 
 定时任务或其他延迟流程可以保存 `event.unified_msg_origin`，之后通过
-`Context.send_message()` 向同一会话发送消息：
+`PluginContext.messages.send()` 向同一会话发送消息：
 
 ```python
 from astrbot.api import logger
@@ -33,7 +33,7 @@ async def remember_me(self, event: AstrMessageEvent):
     session = event.unified_msg_origin
     chain = MessageChain().message("Hello!").file_image("path/to/image.jpg")
 
-    send_result = await self.context.send_message(session, chain)
+    send_result = await self.context.messages.send(session, chain)
     if not send_result.success:
         logger.warning(
             "Message delivery failed: %s",
@@ -43,7 +43,7 @@ async def remember_me(self, event: AstrMessageEvent):
     yield event.plain_result("已尝试主动发送消息。")
 ```
 
-`Context.send_message()` 返回 `PlatformSendResult`，其中包含 `platform_id`、
+`PluginContext.messages.send()` 返回 `PlatformSendResult`，其中包含 `platform_id`、
 `success`、`target`、`message_count` 和 `error_message`。平台不存在、平台发送
 抛出异常等情况会返回 `success=False`；格式非法的会话字符串会抛出 `ValueError`。
 并非所有平台都支持主动发送。QQ 官方机器人需要仍可用的本地缓存会话状态；微信公众号适配器目前会明确拒绝主动发送。插件应检查 `send_result`，并为平台限制准备降级行为。

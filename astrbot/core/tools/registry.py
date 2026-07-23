@@ -1,13 +1,16 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from importlib import import_module
+from types import MappingProxyType
 from typing import Any, TypeVar, overload
 
 from astrbot.core.agent.tool import FunctionTool
 
 TFunctionTool = TypeVar("TFunctionTool", bound=type[FunctionTool])
 
-_BUILTIN_TOOL_MODULES = (
+_MISSING = object()
+BUILTIN_TOOL_DECLARATION_ATTR = "__astrbot_builtin_tool_declaration__"
+
+BUILTIN_TOOL_MODULES = (
     "astrbot.core.memory.tools.memory_tools",
     "astrbot.core.tools.computer_tools",
     "astrbot.core.tools.cron_tools",
@@ -15,11 +18,6 @@ _BUILTIN_TOOL_MODULES = (
     "astrbot.core.tools.message_tools",
     "astrbot.core.tools.web_search_tools",
 )
-
-_builtin_tool_classes_by_name: dict[str, type[FunctionTool]] = {}
-_builtin_tool_names_by_class: dict[type[FunctionTool], str] = {}
-_builtin_tools_loaded = False
-_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -65,6 +63,19 @@ class BuiltinToolConfigRule:
         if self.evaluator is not None:
             return self.evaluator(config)
         return [condition.evaluate(config) for condition in self.conditions]
+
+
+@dataclass(frozen=True, slots=True)
+class BuiltinToolDeclaration:
+    """Immutable declaration attached to one builtin tool class.
+
+    Runtime discovery belongs to :class:`FunctionToolManager`.  The decorator
+    deliberately records only class-local metadata so importing a builtin tool
+    module cannot mutate process-wide runtime registrations.
+    """
+
+    name: str
+    config_rule: BuiltinToolConfigRule | None = None
 
 
 def _get_config_value(config: dict[str, Any], key_path: str) -> Any:
@@ -180,20 +191,14 @@ def _evaluate_send_message_tool(config: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-_BUILTIN_TOOL_CONFIG_RULES: dict[str, BuiltinToolConfigRule] = {}
-
-
-def _register_builtin_tool_config_rule(
-    tool_names: tuple[str, ...],
-    rule: BuiltinToolConfigRule,
-) -> None:
-    for tool_name in tool_names:
-        _BUILTIN_TOOL_CONFIG_RULES[tool_name] = rule
-
-
-_register_builtin_tool_config_rule(
-    ("send_message_to_user",),
-    BuiltinToolConfigRule(evaluator=_evaluate_send_message_tool),
+DEFAULT_BUILTIN_TOOL_CONFIG_RULES: Mapping[str, BuiltinToolConfigRule] = (
+    MappingProxyType(
+        {
+            "send_message_to_user": BuiltinToolConfigRule(
+                evaluator=_evaluate_send_message_tool,
+            ),
+        }
+    )
 )
 
 
@@ -233,111 +238,32 @@ def builtin_tool[TFunctionTool: type[FunctionTool]](
     *,
     config: dict[str, Any] | None = None,
 ) -> TFunctionTool | Callable[[TFunctionTool], TFunctionTool]:
-    def _register(cls: TFunctionTool) -> TFunctionTool:
+    def _declare(cls: TFunctionTool) -> TFunctionTool:
         tool_name = _resolve_builtin_tool_name(cls)
-        existing = _builtin_tool_classes_by_name.get(tool_name)
-        if existing is not None and existing is not cls:
+        declaration = BuiltinToolDeclaration(
+            name=tool_name,
+            config_rule=(
+                _build_rule_from_config_map(config) if config is not None else None
+            ),
+        )
+        existing = cls.__dict__.get(BUILTIN_TOOL_DECLARATION_ATTR)
+        if existing is not None and existing != declaration:
             raise ValueError(
-                f"Builtin tool name conflict detected: {tool_name} is already registered by "
-                f"{existing.__module__}.{existing.__name__}.",
+                f"Builtin tool {cls.__module__}.{cls.__name__} has conflicting declarations.",
             )
-
-        _builtin_tool_classes_by_name[tool_name] = cls
-        _builtin_tool_names_by_class[cls] = tool_name
-        if config is not None:
-            _BUILTIN_TOOL_CONFIG_RULES[tool_name] = _build_rule_from_config_map(config)
+        setattr(cls, BUILTIN_TOOL_DECLARATION_ATTR, declaration)
         return cls
 
     if tool_cls is None:
-        return _register
-    return _register(tool_cls)
-
-
-def ensure_builtin_tools_loaded() -> None:
-    global _builtin_tools_loaded
-    if _builtin_tools_loaded:
-        return
-
-    for module_name in _BUILTIN_TOOL_MODULES:
-        import_module(module_name)
-
-    _builtin_tools_loaded = True
-
-
-def get_builtin_tool_class(name: str) -> type[FunctionTool] | None:
-    ensure_builtin_tools_loaded()
-    return _builtin_tool_classes_by_name.get(name)
-
-
-def get_builtin_tool_name(tool_cls: type[FunctionTool]) -> str | None:
-    ensure_builtin_tools_loaded()
-    return _builtin_tool_names_by_class.get(tool_cls)
-
-
-def iter_builtin_tool_classes() -> tuple[type[FunctionTool], ...]:
-    ensure_builtin_tools_loaded()
-    return tuple(_builtin_tool_classes_by_name.values())
-
-
-def get_builtin_tool_config_rule(name: str) -> BuiltinToolConfigRule | None:
-    ensure_builtin_tools_loaded()
-    return _BUILTIN_TOOL_CONFIG_RULES.get(name)
-
-
-def get_builtin_tool_config_statuses(
-    tool_name: str,
-    config_entries: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    rule = get_builtin_tool_config_rule(tool_name)
-    if rule is None:
-        return []
-
-    statuses: list[dict[str, Any]] = []
-    for entry in config_entries:
-        config = entry.get("config")
-        if not isinstance(config, dict):
-            continue
-
-        conditions = rule.evaluate(config)
-        enabled = bool(conditions) and all(
-            bool(condition.get("matched")) for condition in conditions
-        )
-        statuses.append(
-            {
-                "conf_id": entry.get("conf_id"),
-                "conf_name": entry.get("conf_name"),
-                "enabled": enabled,
-                "matched_conditions": [
-                    condition for condition in conditions if condition.get("matched")
-                ],
-                "failed_conditions": [
-                    condition
-                    for condition in conditions
-                    if not condition.get("matched")
-                ],
-            }
-        )
-    return statuses
-
-
-def get_builtin_tool_config_tags(
-    tool_name: str,
-    config_entries: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        status
-        for status in get_builtin_tool_config_statuses(tool_name, config_entries)
-        if status["enabled"]
-    ]
+        return _declare
+    return _declare(tool_cls)
 
 
 __all__ = [
+    "BUILTIN_TOOL_DECLARATION_ATTR",
+    "BUILTIN_TOOL_MODULES",
+    "DEFAULT_BUILTIN_TOOL_CONFIG_RULES",
+    "BuiltinToolConfigRule",
+    "BuiltinToolDeclaration",
     "builtin_tool",
-    "ensure_builtin_tools_loaded",
-    "get_builtin_tool_config_rule",
-    "get_builtin_tool_config_statuses",
-    "get_builtin_tool_config_tags",
-    "get_builtin_tool_class",
-    "get_builtin_tool_name",
-    "iter_builtin_tool_classes",
 ]

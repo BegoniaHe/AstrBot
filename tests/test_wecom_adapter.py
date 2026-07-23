@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 from requests import Response
 from wechatpy.enterprise.messages import ImageMessage, TextMessage, VoiceMessage
 from wechatpy.exceptions import InvalidSignatureException
@@ -69,15 +68,6 @@ def _patch_media_resolver(monkeypatch, *, result: str = "/tmp/wecom.wav", error=
     FakeMediaResolver.result = result
     FakeMediaResolver.error = error
     monkeypatch.setattr(wecom_adapter, "MediaResolver", FakeMediaResolver)
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 def test_extract_wecom_media_filename_prefers_utf8_filename_star():
@@ -271,38 +261,30 @@ async def test_wecom_send_by_session_rejects_kf_mode():
     adapter = _adapter()
     adapter.client.kf_message = object()
 
-    with patch(
-        "astrbot.core.platform.platform.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        with pytest.raises(Exception, match="企业微信客服模式不支持 send_by_session"):
-            await adapter.send_by_session(
-                MessageSession(
-                    platform_name="wecom",
-                    message_type=MessageType.FRIEND_MESSAGE,
-                    session_id="session-1",
-                ),
-                MessageChain([Plain("hello")]),
-            )
+    with pytest.raises(Exception, match="企业微信客服模式不支持 send_by_session"):
+        await adapter.send_by_session(
+            MessageSession(
+                platform_name="wecom",
+                message_type=MessageType.FRIEND_MESSAGE,
+                session_id="session-1",
+            ),
+            MessageChain([Plain("hello")]),
+        )
 
 
 @pytest.mark.asyncio
 async def test_wecom_send_by_session_requires_agent_id():
     adapter = _adapter()
 
-    with patch(
-        "astrbot.core.platform.platform.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        with pytest.raises(Exception, match="无法为会话 session-1 推断 agent_id"):
-            await adapter.send_by_session(
-                MessageSession(
-                    platform_name="wecom",
-                    message_type=MessageType.FRIEND_MESSAGE,
-                    session_id="session-1",
-                ),
-                MessageChain([Plain("hello")]),
-            )
+    with pytest.raises(Exception, match="无法为会话 session-1 推断 agent_id"):
+        await adapter.send_by_session(
+            MessageSession(
+                platform_name="wecom",
+                message_type=MessageType.FRIEND_MESSAGE,
+                session_id="session-1",
+            ),
+            MessageChain([Plain("hello")]),
+        )
 
 
 @pytest.mark.asyncio

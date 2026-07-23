@@ -96,7 +96,7 @@ Plugins and built-in Stars should use the SDK under `astrbot.api`, not concrete 
 - only registration/discovery owners in shared `astrbot/core/` may directly import concrete platform or provider sources.
 - `astrbot/builtin_stars/` cannot directly import concrete sources.
 
-Use the Star KV API for small persistent values. Import the public interface with `from astrbot.api.star import StarTools`, then store files in the `data/plugin_data/<plugin>` directory returned by `StarTools.get_data_dir()`, not beside plugin source code.
+Use the Star KV API for small persistent values. From a `Star` instance, store files in the `data/plugin_data/<plugin>` directory returned by `self.context.storage.data_directory()`, not beside plugin source code.
 
 Plugin Dashboard pages use Extension Protocol v1. Metadata declares both `requires.dashboard_extension: 1` and `dashboard`, `assets.v1.json` fully lists content-addressed static assets, and Python Actions can be registered only during `initialize()` through `astrbot.api.dashboard`. Pages run in a sandboxed iframe with only `allow-scripts`; privileged work must cross host-managed structured Actions. Legacy Page metadata, arbitrary HTTP proxies, and direct access to Dashboard authentication state are not supported. See the [Plugin Dashboard Extension Development Guide](/dev/star/plugin-dashboard-extension) for the complete contract.
 
@@ -130,7 +130,7 @@ Mutable state normally lives under `<runtime-root>/data/`:
 - `t2i_templates/`
 - `backups/`, `temp/`, and `webchat/`
 
-Runtime-root helpers in `astrbot.core.utils.astrbot_path` currently return strings. Wrap those values in `Path(...)` before new core path arithmetic. Do not apply this rule to CLI helpers or `StarTools.get_data_dir()`, which already return `Path` objects.
+Runtime-root helpers in `astrbot.core.utils.astrbot_path` currently return strings. Wrap those values in `Path(...)` before new core path arithmetic. Do not apply this rule to CLI helpers or the plugin storage capability's `data_directory()`, which already returns a `Path` object.
 
 ## Network and Security Defaults
 

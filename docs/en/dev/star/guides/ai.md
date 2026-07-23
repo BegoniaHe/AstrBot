@@ -1,20 +1,20 @@
 # Calling AI from a Plugin
 
-A Star should call models through public `astrbot.api` events, `Context`, and tool interfaces. Do not import internal types from `astrbot.core.agent`, `astrbot.core.conversation_mgr`, or concrete Provider implementations; those modules evolve with the Agent Runtime.
+A Star should call models through public `astrbot.api` events, `PluginContext` capabilities, and tool interfaces. Do not import internal types from `astrbot.core.agent`, `astrbot.core.conversation_mgr`, or concrete Provider implementations; those modules evolve with the Agent Runtime.
 
 ## Choose the right path
 
-| Need                                                                          | Recommended interface                           |
-| ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| Continue through AstrBot's standard Persona, conversation, and Agent pipeline | `yield event.request_llm(...)`                  |
-| Call one selected chat model without executing tools                          | `await self.context.llm_generate(...)`          |
-| Run a multi-step Agent over an explicit tool set                              | `await self.context.tool_loop_agent(...)`       |
-| Register a tool for ordinary AstrBot conversations                            | `@filter.llm_tool` or `Context.add_llm_tools()` |
+| Need                                                                          | Recommended interface                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| Continue through AstrBot's standard Persona, conversation, and Agent pipeline | `yield event.request_llm(...)`                   |
+| Call one selected chat model without executing tools                          | `await self.context.models.generate(...)`        |
+| Run a multi-step Agent over an explicit tool set                              | `await self.context.models.tool_loop(...)`       |
+| Register a tool for ordinary AstrBot conversations                            | `@filter.llm_tool` or `self.context.tools.add()` |
 
 ## Resolve the current session model
 
 ```python
-provider_id = await self.context.get_current_chat_provider_id(
+provider_id = await self.context.models.current_chat_provider_id(
     event.unified_msg_origin
 )
 ```
@@ -43,7 +43,7 @@ This does not immediately return model text. It hands the request to the remaini
 ## Generate text directly
 
 ```python
-response = await self.context.llm_generate(
+response = await self.context.models.generate(
     chat_provider_id=provider_id,
     prompt="Summarize the following text: ...",
     system_prompt="Return a concise factual summary.",
@@ -54,7 +54,7 @@ response = await self.context.llm_generate(
 text = response.completion_text
 ```
 
-`llm_generate()` performs one Provider request. Even when given a `ToolSet`, it does not execute returned tool calls. Use `tool_loop_agent()` for a tool loop.
+`models.generate()` performs one Provider request. Even when given a `ToolSet`, it does not execute returned tool calls. Use `models.tool_loop()` for a tool loop.
 
 A direct call does not automatically save its input and output into the current conversation history. Prefer the standard pipeline for user-visible continuous conversations instead of manipulating internal `conversation_manager` objects.
 
@@ -113,10 +113,10 @@ weather_tool = FunctionTool(
     handler=weather_handler,
 )
 
-self.context.add_llm_tools(weather_tool)
+self.context.tools.add(weather_tool)
 ```
 
-Tool names are global. Replacing a same-named tool affects other Personas and plugins. Use a plugin prefix and test that disable or hot reload leaves no stale handler behind.
+Tool names must be unique within a runtime. Use a plugin prefix and test that disable or hot reload leaves no stale handler behind.
 
 ## Run a tool-loop Agent
 
@@ -124,7 +124,7 @@ Tool names are global. Replacing a same-named tool affects other Personas and pl
 from astrbot.api import ToolSet
 
 tools = ToolSet([weather_tool])
-response = await self.context.tool_loop_agent(
+response = await self.context.models.tool_loop(
     event=event,
     chat_provider_id=provider_id,
     prompt="Check the weather in Beijing and give one travel suggestion.",
@@ -137,7 +137,7 @@ response = await self.context.tool_loop_agent(
 yield event.plain_result(response.completion_text)
 ```
 
-`tool_loop_agent()` repeats model → tool → model until a final response or `max_steps`. Keep in mind:
+`models.tool_loop()` repeats model → tool → model until a final response or `max_steps`. Keep in mind:
 
 - `event` supplies permission, workspace, and cancellation context. Do not fabricate another user's event.
 - Pass only the tools required for the task. `None` means no explicit tool set and should not be treated as “all tools.”
@@ -145,19 +145,12 @@ yield event.plain_result(response.completion_text)
 - HTTP clients, subprocesses, and tasks created by the plugin still need cleanup on timeout, cancellation, and `terminate()`.
 - Output is not automatically added to ordinary conversation history unless the call path explicitly uses the standard conversation pipeline.
 
-## Reuse registered tools
+## Tool ownership
 
-```python
-from astrbot.api import ToolSet
-
-manager = self.context.get_llm_tool_manager()
-search_tool = manager.get_tool("web_search")
-tools = ToolSet()
-if search_tool and search_tool.active:
-    tools.add_tool(search_tool)
-```
-
-A tool can be unavailable because of profile, Persona, plugin state, or runtime selection. Check existence and active state each time, and do not cache tool objects across hot reload.
+The public SDK deliberately does not expose a mutable runtime-wide tool manager.
+Declare a tool with `@filter.llm_tool`, add a plugin-owned `FunctionTool` through
+`self.context.tools.add(...)`, or build an explicit `ToolSet` from tools your
+plugin owns. Do not cache tool objects across hot reload.
 
 ## Agent-as-tool and SubAgents
 
@@ -167,12 +160,12 @@ A SubAgent is not a security container. Whether created in code or the WebUI, gi
 
 ## Provider access
 
-Public `Context` also exposes:
+`PluginContext.models` also exposes:
 
-- `get_provider_by_id()`;
-- `get_using_provider(umo)`;
-- `get_all_providers()`;
-- corresponding STT, TTS, embedding, and rerank query methods.
+- `get(provider_id)`;
+- `using_chat(umo)`;
+- `chat()`;
+- corresponding TTS, STT, and embedding query methods.
 
 These return current Provider abstractions. A plugin can call abstract capabilities but must not import `provider/sources/*` or depend on private fields of one adapter. Put service-specific values in plugin configuration and pass them only through supported public calls.
 

@@ -8,11 +8,12 @@ from typing import Protocol, runtime_checkable
 
 from astrbot import logger
 from astrbot.core.astrbot_config_mgr import AstrBotConfigManager
-from astrbot.core.db import BaseDatabase
+from astrbot.core.tools.function_tool_manager import FunctionToolManager
 from astrbot.core.utils.error_redaction import safe_error
 from astrbot.core.utils.shared_preferences import SharedPreferences
 
 from ..persona_mgr import PersonaManager
+from .catalog import ProviderAdapterDescriptor, ProviderCatalog
 from .entities import ProviderType
 from .provider import (
     EmbeddingProvider,
@@ -23,7 +24,6 @@ from .provider import (
     TTSProvider,
 )
 from .provider_modules import PROVIDER_MODULES
-from .register import llm_tools, provider_cls_map
 
 
 @runtime_checkable
@@ -35,14 +35,16 @@ class ProviderManager:
     def __init__(
         self,
         acm: AstrBotConfigManager,
-        db_helper: BaseDatabase,
         persona_mgr: PersonaManager,
         preferences: SharedPreferences,
+        catalog: ProviderCatalog,
+        tools: FunctionToolManager,
     ) -> None:
         self.reload_lock = asyncio.Lock()
         self.resource_lock = asyncio.Lock()
         self.persona_mgr = persona_mgr
         self.acm = acm
+        self.catalog = catalog
         config = acm.confs["default"]
         self.providers_config: list = config["provider"]
         self.provider_sources_config: list = config.get("provider_sources", [])
@@ -68,10 +70,9 @@ class ProviderManager:
             Providers,
         ] = {}
         """Provider 实例映射. key: provider_id, value: Provider 实例"""
-        self.llm_tools = llm_tools
-        self.llm_tools.bind_preferences(preferences)
+        self.tool_manager = tools
+        self.tool_manager.bind_preferences(preferences)
 
-        self.db_helper = db_helper
         self.preferences = preferences
         self._provider_change_hooks: list[
             Callable[[str, ProviderType, str | None], None]
@@ -122,43 +123,71 @@ class ProviderManager:
         if provider_id not in self.inst_map:
             raise ValueError(f"提供商 {provider_id} 不存在，无法设置。")
         if umo:
-            self._session_provider_overrides.setdefault(umo, {})[provider_type] = (
-                provider_id
-            )
             await self.preferences.session_put(
                 umo,
                 f"provider_perf_{provider_type.value}",
                 provider_id,
             )
-            self._notify_provider_changed(provider_id, provider_type, umo)
-            return
-        # Global selection belongs to the active default configuration, not a
-        # runtime cache or a second preference-backed source of truth.
-        prov = self.inst_map[provider_id]
-        if provider_type == ProviderType.TEXT_TO_SPEECH and isinstance(
-            prov,
-            TTSProvider,
-        ):
-            self.acm.default_conf["provider_tts_settings"]["provider_id"] = provider_id
-            self.acm.default_conf["provider_tts_settings"]["enable"] = True
-            self.acm.default_conf.save_config()
-            self._notify_provider_changed(provider_id, provider_type, umo)
-        elif provider_type == ProviderType.SPEECH_TO_TEXT and isinstance(
-            prov,
-            STTProvider,
-        ):
-            self.acm.default_conf["provider_stt_settings"]["provider_id"] = provider_id
-            self.acm.default_conf["provider_stt_settings"]["enable"] = True
-            self.acm.default_conf.save_config()
-            self._notify_provider_changed(provider_id, provider_type, umo)
-        elif provider_type == ProviderType.CHAT_COMPLETION and isinstance(
-            prov,
-            Provider,
-        ):
-            self.acm.default_conf["provider_settings"]["default_provider_id"] = (
+            self._session_provider_overrides.setdefault(umo, {})[provider_type] = (
                 provider_id
             )
-            self.acm.default_conf.save_config()
+            self._notify_provider_changed(provider_id, provider_type, umo)
+            return
+
+        async with self.resource_lock:
+            # Global selection belongs to the active default configuration, not a
+            # runtime cache or a second preference-backed source of truth.
+            prov = self.inst_map.get(provider_id)
+            if prov is None:
+                raise ValueError(f"提供商 {provider_id} 不存在，无法设置。")
+
+            settings_key: str | None = None
+            selection: dict[str, object] = {}
+            if provider_type == ProviderType.TEXT_TO_SPEECH and isinstance(
+                prov,
+                TTSProvider,
+            ):
+                settings_key = "provider_tts_settings"
+                selection = {"provider_id": provider_id, "enable": True}
+            elif provider_type == ProviderType.SPEECH_TO_TEXT and isinstance(
+                prov,
+                STTProvider,
+            ):
+                settings_key = "provider_stt_settings"
+                selection = {"provider_id": provider_id, "enable": True}
+            elif provider_type == ProviderType.CHAT_COMPLETION and isinstance(
+                prov,
+                Provider,
+            ):
+                settings_key = "provider_settings"
+                selection = {"default_provider_id": provider_id}
+
+            if settings_key is None:
+                return
+
+            config = self.acm.default_conf
+            next_config = copy.deepcopy(dict(config))
+            next_settings = next_config[settings_key]
+            next_settings.update(selection)
+            settings = config[settings_key]
+            previous_settings = copy.deepcopy(settings)
+            settings.clear()
+            settings.update(next_settings)
+            try:
+                committed = await config.save_config_async()
+                if not committed:
+                    raise RuntimeError(
+                        "Provider selection was superseded by a newer configuration write."
+                    )
+            except BaseException:
+                # A concurrent selection may have updated the same nested
+                # mapping while this snapshot was being written. Restore only
+                # the value still owned by this operation.
+                if settings == next_settings:
+                    settings.clear()
+                    settings.update(previous_settings)
+                raise
+
             self._notify_provider_changed(provider_id, provider_type, umo)
 
     async def get_provider_by_id(self, provider_id: str) -> Providers | None:
@@ -168,6 +197,30 @@ class ProviderManager:
     @staticmethod
     def _provider_pref_key(provider_type: ProviderType) -> str:
         return f"provider_perf_{provider_type.value}"
+
+    async def _persist_provider_configs(self, provider_configs: list[dict]) -> None:
+        """Persist a complete provider list before changing live adapters.
+
+        The manager retains its previous list while the write is in progress, so
+        callers cannot reload or terminate providers after a failed save.
+        """
+
+        config = self.acm.default_conf
+        previous_provider_configs = config["provider"]
+        config["provider"] = provider_configs
+        try:
+            committed = await config.save_config_async()
+            if not committed:
+                raise RuntimeError(
+                    "Provider configuration write was superseded by a newer revision."
+                )
+        except BaseException:
+            # A concurrent config operation may have installed a newer list while
+            # this write was in flight. Only restore the list still owned by this
+            # operation; never clobber that newer in-memory state.
+            if config.get("provider") is provider_configs:
+                config["provider"] = previous_provider_configs
+            raise
 
     async def _load_session_provider_overrides(self) -> None:
         overrides: dict[str, dict[ProviderType, str]] = {}
@@ -283,7 +336,7 @@ class ProviderManager:
 
         async def _init_mcp_clients_bg() -> None:
             try:
-                await self.llm_tools.init_mcp_clients()
+                await self.tool_manager.init_mcp_clients()
             except Exception:
                 logger.error("MCP init background task failed", exc_info=True)
 
@@ -293,18 +346,28 @@ class ProviderManager:
                 name="provider-manager:mcp-init",
             )
 
-    def dynamic_import_provider(self, type: str) -> None:
+    def dynamic_import_provider(self, provider_type: str) -> None:
         """动态导入提供商适配器模块
 
         Args:
-            type (str): 提供商请求类型。
+            provider_type: 提供商请求类型。
 
         Raises:
             ImportError: 如果提供商类型未知或无法导入对应模块，则抛出异常。
         """
-        module = PROVIDER_MODULES.get(type)
-        if module is not None:
-            importlib.import_module(module)
+        module_name = PROVIDER_MODULES.get(provider_type)
+        if module_name is not None:
+            module = importlib.import_module(module_name)
+            self.catalog.register_module(module)
+
+    @staticmethod
+    def _bind_adapter_descriptor(
+        provider: object,
+        descriptor: ProviderAdapterDescriptor,
+    ) -> None:
+        """Bind catalog metadata to instances without a class declaration."""
+
+        setattr(provider, "_provider_adapter_descriptor", descriptor)
 
     def get_merged_provider_config(self, provider_config: dict) -> dict:
         """获取 provider 配置和 provider_source 配置合并后的结果
@@ -411,22 +474,21 @@ class ProviderManager:
             )
             return
 
-        if provider_config["type"] not in provider_cls_map:
+        registration = self.catalog.get(provider_config["type"])
+        if registration is None:
             logger.error(
                 f"Provider adapter not found: {provider_config['type']}({provider_config['id']}). Skipped.",
                 exc_info=True,
             )
             return
 
-        provider_metadata = provider_cls_map[provider_config["type"]]
+        provider_metadata = registration.descriptor
         try:
             # 按任务实例化提供商
-            cls_type = provider_metadata.cls_type
+            cls_type = registration.cls_type
             if not cls_type:
                 logger.error(f"无法找到 {provider_metadata.type} 的类")
                 return
-
-            provider_metadata.id = provider_config["id"]
 
             match provider_metadata.provider_type:
                 case ProviderType.SPEECH_TO_TEXT:
@@ -436,6 +498,7 @@ class ProviderManager:
                             f"Provider class {cls_type} is not a subclass of STTProvider"
                         )
                     inst = cls_type(provider_config, self.provider_settings)
+                    self._bind_adapter_descriptor(inst, provider_metadata)
 
                     if isinstance(inst, HasInitialize):
                         await inst.initialize()
@@ -449,6 +512,7 @@ class ProviderManager:
                             f"Provider class {cls_type} is not a subclass of TTSProvider"
                         )
                     inst = cls_type(provider_config, self.provider_settings)
+                    self._bind_adapter_descriptor(inst, provider_metadata)
 
                     if isinstance(inst, HasInitialize):
                         await inst.initialize()
@@ -465,6 +529,7 @@ class ProviderManager:
                         provider_config,
                         self.provider_settings,
                     )
+                    self._bind_adapter_descriptor(inst, provider_metadata)
 
                     if isinstance(inst, HasInitialize):
                         await inst.initialize()
@@ -477,6 +542,7 @@ class ProviderManager:
                             f"Provider class {cls_type} is not a subclass of EmbeddingProvider"
                         )
                     inst = cls_type(provider_config, self.provider_settings)
+                    self._bind_adapter_descriptor(inst, provider_metadata)
                     if isinstance(inst, HasInitialize):
                         await inst.initialize()
                     self.embedding_provider_insts.append(inst)
@@ -486,6 +552,7 @@ class ProviderManager:
                             f"Provider class {cls_type} is not a subclass of RerankProvider"
                         )
                     inst = cls_type(provider_config, self.provider_settings)
+                    self._bind_adapter_descriptor(inst, provider_metadata)
                     if isinstance(inst, HasInitialize):
                         await inst.initialize()
                     self.rerank_provider_insts.append(inst)
@@ -565,21 +632,27 @@ class ProviderManager:
     ) -> None:
         """Delete provider and/or provider source from config and terminate the instances. Config will be saved after deletion."""
         async with self.resource_lock:
-            # delete from config
-            target_prov_ids = []
+            target_prov_ids: list[str] = []
             if provider_id:
                 target_prov_ids.append(provider_id)
             else:
                 for prov in self.providers_config:
-                    if prov.get("provider_source_id") == provider_source_id:
-                        target_prov_ids.append(prov.get("id"))
+                    target_id = prov.get("id")
+                    if prov.get(
+                        "provider_source_id"
+                    ) == provider_source_id and isinstance(target_id, str):
+                        target_prov_ids.append(target_id)
             config = self.acm.default_conf
+            new_provider_configs = [
+                prov
+                for prov in config["provider"]
+                if prov.get("id") not in target_prov_ids
+            ]
+            await self._persist_provider_configs(new_provider_configs)
+            self.providers_config = config["provider"]
+
             for tpid in target_prov_ids:
                 await self.terminate_provider(tpid)
-                config["provider"] = [
-                    prov for prov in config["provider"] if prov.get("id") != tpid
-                ]
-            config.save_config()
             logger.info(f"Provider {target_prov_ids} 已从配置中删除。")
 
     async def update_provider(self, origin_provider_id: str, new_config: dict) -> None:
@@ -595,15 +668,20 @@ class ProviderManager:
                     and provider.get("id", None) != origin_provider_id
                 ):
                     raise ValueError(f"Provider ID {npid} already exists")
-            # update config
-            for idx, provider in enumerate(config["provider"]):
-                if provider.get("id", None) == origin_provider_id:
-                    config["provider"][idx] = new_config
-                    break
-            else:
+            if not any(
+                provider.get("id", None) == origin_provider_id
+                for provider in config["provider"]
+            ):
                 raise ValueError(f"Provider ID {origin_provider_id} not found")
-            config.save_config()
-            # reload instance
+            new_provider_configs = [
+                (
+                    new_config
+                    if provider.get("id", None) == origin_provider_id
+                    else provider
+                )
+                for provider in config["provider"]
+            ]
+            await self._persist_provider_configs(new_provider_configs)
             await self.reload(new_config)
 
     async def create_provider(self, new_config: dict) -> None:
@@ -616,12 +694,9 @@ class ProviderManager:
             for provider in config["provider"]:
                 if provider.get("id", None) == npid:
                     raise ValueError(f"Provider ID {npid} already exists")
-            # add to config
-            config["provider"].append(new_config)
-            config.save_config()
-            # load instance
+            new_provider_configs = [*config["provider"], new_config]
+            await self._persist_provider_configs(new_provider_configs)
             await self.load_provider(new_config)
-            # sync in-memory config for API queries (e.g., embedding provider list)
             self.providers_config = self.acm.default_conf["provider"]
 
     async def terminate(self) -> None:
@@ -648,6 +723,6 @@ class ProviderManager:
                 if hasattr(provider_inst, "terminate"):
                     await provider_inst.terminate()  # type: ignore
         try:
-            await self.llm_tools.disable_mcp_server()
+            await self.tool_manager.disable_mcp_server()
         except Exception:
             logger.error("Error while disabling MCP servers", exc_info=True)

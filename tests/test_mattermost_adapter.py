@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-import pytest_asyncio
 
 import astrbot.api.message_components as Comp
 from astrbot.api.event import MessageChain
@@ -37,15 +36,6 @@ def _build_adapter() -> MattermostPlatformAdapter:
     adapter.bot_username = "bot"
     adapter._mention_pattern = adapter._build_mention_pattern(adapter.bot_username)
     return adapter
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def _isolate_metrics_and_dispose_global_db_helper():
-    with patch(
-        "astrbot.core.platform.astr_message_event.Metric.upload",
-        AsyncMock(return_value=None),
-    ):
-        yield
 
 
 @pytest.mark.asyncio

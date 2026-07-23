@@ -3,7 +3,6 @@ import zipfile
 from pathlib import Path
 
 import click
-
 import pytest
 
 from astrbot.cli.utils.plugin import PluginStatus, build_plug_list, get_git_repo

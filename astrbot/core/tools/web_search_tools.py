@@ -8,7 +8,6 @@ import aiohttp
 from pydantic import Field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from astrbot import logger
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 from astrbot.core.tools.registry import builtin_tool
@@ -49,7 +48,6 @@ _BAIDU_WEB_SEARCH_TOOL_CONFIG = {
     "provider_settings.websearch_provider": "baidu_ai_search",
 }
 _DEFAULT_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=20, connect=10, sock_read=20)
-_favicon_cache: dict[str, str] = {}
 
 
 def _client_session() -> aiohttp.ClientSession:
@@ -129,56 +127,72 @@ class _KeyRotator:
 # 432 - Tavily quota exceeded.
 _RETRYABLE_HTTP_STATUSES: frozenset[int] = frozenset({401, 403, 429, 432})
 
-_TAVILY_KEY_ROTATOR = _KeyRotator("websearch_tavily_key", "Tavily")
-_BOCHA_KEY_ROTATOR = _KeyRotator("websearch_bocha_key", "BoCha")
-_BRAVE_KEY_ROTATOR = _KeyRotator("websearch_brave_key", "Brave")
-_EXA_KEY_ROTATOR = _KeyRotator("websearch_exa_key", "Exa")
-_FIRECRAWL_KEY_ROTATOR = _KeyRotator("websearch_firecrawl_key", "Firecrawl")
+
+@std_dataclass
+class _WebSearchRuntimeState:
+    """API-key rotation state owned by one function-tool manager."""
+
+    rotators: dict[str, _KeyRotator] = field(default_factory=dict)
+
+    def get_rotator(self, setting_name: str, provider_name: str) -> _KeyRotator:
+        rotator = self.rotators.get(setting_name)
+        if rotator is None:
+            rotator = _KeyRotator(setting_name, provider_name)
+            self.rotators[setting_name] = rotator
+        return rotator
 
 
-def normalize_legacy_web_search_config(cfg) -> None:
-    provider_settings = cfg.get("provider_settings")
-    if not provider_settings:
-        return
+class _RuntimeProviderSettings(dict):
+    """A configuration snapshot with runtime-owned web-search state."""
 
-    changed = False
-    if provider_settings.get(
-        "websearch_provider"
-    ) == "default" and provider_settings.get("web_search", False):
-        provider_settings["web_search"] = False
-        changed = True
-        logger.warning(
-            "The default websearch provider is no longer supported. "
-            "Web search has been disabled and the config was saved.",
-        )
+    __slots__ = ("web_search_state",)
 
-    for setting_name in (
-        "websearch_tavily_key",
-        "websearch_bocha_key",
-        "websearch_brave_key",
-        "websearch_firecrawl_key",
-        "websearch_exa_key",
-    ):
-        value = provider_settings.get(setting_name)
-        if isinstance(value, str):
-            provider_settings[setting_name] = [value] if value else []
-            changed = True
+    def __init__(self, values: dict, state: _WebSearchRuntimeState) -> None:
+        super().__init__(values)
+        self.web_search_state = state
 
-    if changed:
-        cfg.save_config()
+
+def _runtime_provider_settings(
+    execution_context,
+    provider_settings: dict,
+) -> dict:
+    get_tool_manager = getattr(execution_context, "get_llm_tool_manager", None)
+    if not callable(get_tool_manager):
+        return provider_settings
+
+    tool_manager = get_tool_manager()
+    get_or_create_state = getattr(tool_manager, "get_or_create_runtime_state", None)
+    if not callable(get_or_create_state):
+        return provider_settings
+
+    state = get_or_create_state("web_search_key_rotators", _WebSearchRuntimeState)
+    if not isinstance(state, _WebSearchRuntimeState):
+        raise TypeError("Invalid runtime state for web-search key rotation")
+    return _RuntimeProviderSettings(provider_settings, state)
+
+
+def _get_key_rotator(
+    provider_settings: dict,
+    setting_name: str,
+    provider_name: str,
+) -> _KeyRotator:
+    state = getattr(provider_settings, "web_search_state", None)
+    if not isinstance(state, _WebSearchRuntimeState):
+        state = _WebSearchRuntimeState()
+    return state.get_rotator(setting_name, provider_name)
 
 
 def _get_runtime(context) -> tuple[dict, dict, str]:
     agent_ctx = context.context
     event = agent_ctx.event
-    cfg = agent_ctx.context.get_config(umo=event.unified_msg_origin)
+    execution_context = agent_ctx.context
+    cfg = execution_context.get_config(umo=event.unified_msg_origin)
     provider_settings = cfg.get("provider_settings", {})
-    return cfg, provider_settings, event.unified_msg_origin
-
-
-def _cache_favicon(url: str, favicon: str | None) -> None:
-    if favicon:
-        _favicon_cache[url] = favicon
+    return (
+        cfg,
+        _runtime_provider_settings(execution_context, provider_settings),
+        event.unified_msg_origin,
+    )
 
 
 def _search_result_payload(results: list[SearchResult]) -> str:
@@ -194,7 +208,6 @@ def _search_result_payload(results: list[SearchResult]) -> str:
                 "index": index,
             }
         )
-        _cache_favicon(result.url, result.favicon)
     return json.dumps({"results": ret_ls}, ensure_ascii=False)
 
 
@@ -224,7 +237,11 @@ async def _tavily_search(
     # non-retryable errors such as server-side 5xx responses.
     last_error = None
     for _ in range(len(keys)):
-        tavily_key = await _TAVILY_KEY_ROTATOR.get(provider_settings)
+        tavily_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_tavily_key",
+            "Tavily",
+        ).get(provider_settings)
         header = {
             "Authorization": f"Bearer {tavily_key}",
             "Content-Type": "application/json",
@@ -285,7 +302,11 @@ async def _tavily_extract(provider_settings: dict, payload: dict) -> list[dict]:
 
     last_error = None
     for _ in range(len(keys)):
-        tavily_key = await _TAVILY_KEY_ROTATOR.get(provider_settings)
+        tavily_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_tavily_key",
+            "Tavily",
+        ).get(provider_settings)
         header = {
             "Authorization": f"Bearer {tavily_key}",
             "Content-Type": "application/json",
@@ -344,7 +365,11 @@ async def _bocha_search(
 
     last_error = None
     for _ in range(len(keys)):
-        bocha_key = await _BOCHA_KEY_ROTATOR.get(provider_settings)
+        bocha_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_bocha_key",
+            "BoCha",
+        ).get(provider_settings)
         header = {
             "Authorization": f"Bearer {bocha_key}",
             "Content-Type": "application/json",
@@ -411,7 +436,11 @@ async def _brave_search(
 
     last_error = None
     for _ in range(len(keys)):
-        brave_key = await _BRAVE_KEY_ROTATOR.get(provider_settings)
+        brave_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_brave_key",
+            "Brave",
+        ).get(provider_settings)
         header = {
             "Accept": "application/json",
             "X-Subscription-Token": brave_key,
@@ -473,7 +502,11 @@ async def _firecrawl_search(
 
     last_error = None
     for _ in range(len(keys)):
-        firecrawl_key = await _FIRECRAWL_KEY_ROTATOR.get(provider_settings)
+        firecrawl_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_firecrawl_key",
+            "Firecrawl",
+        ).get(provider_settings)
         header = {
             "Authorization": f"Bearer {firecrawl_key}",
             "Content-Type": "application/json",
@@ -541,7 +574,11 @@ async def _firecrawl_scrape(provider_settings: dict, payload: dict) -> dict:
 
     last_error = None
     for _ in range(len(keys)):
-        firecrawl_key = await _FIRECRAWL_KEY_ROTATOR.get(provider_settings)
+        firecrawl_key = await _get_key_rotator(
+            provider_settings,
+            "websearch_firecrawl_key",
+            "Firecrawl",
+        ).get(provider_settings)
         header = {
             "Authorization": f"Bearer {firecrawl_key}",
             "Content-Type": "application/json",
@@ -580,7 +617,11 @@ async def _exa_search(
     provider_settings: dict,
     payload: dict,
 ) -> list[SearchResult]:
-    exa_key = await _EXA_KEY_ROTATOR.get(provider_settings)
+    exa_key = await _get_key_rotator(
+        provider_settings,
+        "websearch_exa_key",
+        "Exa",
+    ).get(provider_settings)
     headers = {
         "x-api-key": exa_key,
         "Content-Type": "application/json",
@@ -617,7 +658,11 @@ async def _exa_get_contents(
     provider_settings: dict,
     payload: dict,
 ) -> list[dict]:
-    exa_key = await _EXA_KEY_ROTATOR.get(provider_settings)
+    exa_key = await _get_key_rotator(
+        provider_settings,
+        "websearch_exa_key",
+        "Exa",
+    ).get(provider_settings)
     headers = {
         "x-api-key": exa_key,
         "Content-Type": "application/json",
@@ -1270,5 +1315,4 @@ __all__ = [
     "TavilyExtractWebPageTool",
     "TavilyWebSearchTool",
     "WEB_SEARCH_TOOL_NAMES",
-    "normalize_legacy_web_search_config",
 ]

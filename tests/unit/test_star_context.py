@@ -1,53 +1,49 @@
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from astrbot.core.agent.tool import FunctionTool
+from astrbot.core.agent.tool_image_cache import ToolImageCache
+from astrbot.core.computer.computer_client import ComputerRuntime
+from astrbot.core.execution_context import CoreExecutionContext
 from astrbot.core.message.components import Plain
 from astrbot.core.message.message_event_result import MessageChain
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.platform.send_result import PlatformSendResult
-from astrbot.core.provider.func_tool_manager import FunctionToolManager
-from astrbot.core.star.context import Context
-from astrbot.core.star.star import StarMetadata, star_registry
-from astrbot.core.star.star_tools import StarTools
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
+from astrbot.core.star.plugin_context import PluginContext
+from astrbot.core.star.star import StarMetadata
 
 
-@pytest.fixture(autouse=True)
-def restore_star_registry():
-    original_registry = list(star_registry)
-    star_registry.clear()
-    try:
-        yield
-    finally:
-        star_registry[:] = original_registry
-
-
-def make_context() -> Context:
-    context = Context.__new__(Context)
-    context.provider_manager = SimpleNamespace(llm_tools=FunctionToolManager())
+def make_context() -> CoreExecutionContext:
+    context = CoreExecutionContext.__new__(CoreExecutionContext)
+    context.catalogs = RuntimeCatalogs()
     return context
 
 
-def make_initialized_context() -> Context:
+def make_initialized_context() -> CoreExecutionContext:
     from asyncio import Queue
 
-    return Context(
-        Queue(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
-        MagicMock(),
+    return CoreExecutionContext(
+        event_queue=Queue(),
+        config=MagicMock(),
+        db=MagicMock(),
+        provider_manager=MagicMock(),
+        platform_manager=MagicMock(),
+        conversation_manager=MagicMock(),
+        message_history_manager=MagicMock(),
+        persona_manager=MagicMock(),
+        astrbot_config_mgr=MagicMock(),
+        knowledge_base_manager=MagicMock(),
+        cron_manager=MagicMock(),
+        preferences=MagicMock(),
+        html_renderer=MagicMock(),
+        file_token_service=MagicMock(),
+        catalogs=RuntimeCatalogs(),
+        computer_runtime=ComputerRuntime(),
+        tool_image_cache=MagicMock(spec=ToolImageCache),
+        metrics=SimpleNamespace(upload=AsyncMock()),
     )
 
 
@@ -62,14 +58,14 @@ def make_tool(name: str, module_path: str) -> FunctionTool:
 
 
 def test_add_llm_tools_resolves_subdirectory_plugin_without_name_prefix():
-    star_registry.append(
+    context = make_context()
+    context.catalogs.plugins.publish(
         StarMetadata(
             name="Custom Plugin",
             root_dir_name="custom_plugin",
             module_path="data.plugins.custom_plugin.main",
         )
     )
-    context = make_context()
     tool = make_tool("search", "custom_plugin.tools.search")
 
     context.add_llm_tools(tool)
@@ -78,13 +74,13 @@ def test_add_llm_tools_resolves_subdirectory_plugin_without_name_prefix():
 
 
 def test_add_llm_tools_uses_registered_non_main_plugin_entrypoint():
-    star_registry.append(
+    context = make_context()
+    context.catalogs.plugins.publish(
         StarMetadata(
             name="Custom Plugin",
             module_path="data.plugins.custom_plugin.custom_plugin",
         )
     )
-    context = make_context()
     tool = make_tool("search", "custom_plugin.tools.search")
 
     context.add_llm_tools(tool)
@@ -93,14 +89,14 @@ def test_add_llm_tools_uses_registered_non_main_plugin_entrypoint():
 
 
 def test_add_llm_tools_resolves_prefixed_subdirectory_tool_from_registry():
-    star_registry.append(
+    context = make_context()
+    context.catalogs.plugins.publish(
         StarMetadata(
             name="Custom Plugin",
             root_dir_name="custom_plugin",
             module_path="data.plugins.custom_plugin.custom_plugin",
         )
     )
-    context = make_context()
     tool = make_tool("search", "data.plugins.custom_plugin.tools.search")
 
     context.add_llm_tools(tool)
@@ -109,14 +105,14 @@ def test_add_llm_tools_resolves_prefixed_subdirectory_tool_from_registry():
 
 
 def test_add_llm_tools_does_not_treat_unknown_module_as_plugin():
-    star_registry.append(
+    context = make_context()
+    context.catalogs.plugins.publish(
         StarMetadata(
             name="Custom Plugin",
             root_dir_name="custom_plugin",
             module_path="data.plugins.custom_plugin.main",
         )
     )
-    context = make_context()
     tool = make_tool("search", "external_package.tools.search")
 
     context.add_llm_tools(tool)
@@ -283,20 +279,17 @@ async def test_context_invoke_event_platform_action_uses_event_platform_id():
     )
 
 
-@pytest.mark.asyncio
-async def test_startools_create_event_prefers_platform_id_lookup():
+def test_plugin_messages_create_event_prefers_platform_id_lookup():
     context = make_initialized_context()
     context.create_platform_event = MagicMock()
+    plugin_context = PluginContext.from_execution_context(context)
+    payload = MagicMock()
 
-    StarTools.initialize(context)
-    try:
-        await StarTools.create_event(MagicMock(), platform="telegram", is_wake=False)
-    finally:
-        StarTools._context = None
+    plugin_context.messages.create_event("telegram", payload, is_wake=False)
 
     context.create_platform_event.assert_called_once_with(
         "telegram",
-        ANY,
+        payload,
         is_wake=False,
     )
 
@@ -326,21 +319,18 @@ def test_context_create_platform_event_propagates_platform_error():
 
 
 @pytest.mark.asyncio
-async def test_startools_invoke_platform_action_uses_context_boundary():
+async def test_plugin_platform_actions_use_context_boundary():
     context = make_initialized_context()
     context.invoke_platform_action = AsyncMock(
         return_value={"status": "ok", "data": {"done": True}}
     )
 
-    StarTools.initialize(context)
-    try:
-        result = await StarTools.invoke_platform_action(
-            "telegram",
-            "send_poke",
-            user_id="123456",
-        )
-    finally:
-        StarTools._context = None
+    plugin_context = PluginContext.from_execution_context(context)
+    result = await plugin_context.platform_actions.invoke(
+        "telegram",
+        "send_poke",
+        user_id="123456",
+    )
 
     assert result == {"status": "ok", "data": {"done": True}}
     context.invoke_platform_action.assert_awaited_once_with(
@@ -351,22 +341,19 @@ async def test_startools_invoke_platform_action_uses_context_boundary():
 
 
 @pytest.mark.asyncio
-async def test_startools_invoke_event_platform_action_uses_context_boundary():
+async def test_plugin_event_platform_actions_use_context_boundary():
     context = make_initialized_context()
     context.invoke_event_platform_action = AsyncMock(
         return_value={"status": "ok", "data": {"done": True}}
     )
     event = MagicMock()
 
-    StarTools.initialize(context)
-    try:
-        result = await StarTools.invoke_event_platform_action(
-            event,
-            "send_poke",
-            user_id="123456",
-        )
-    finally:
-        StarTools._context = None
+    plugin_context = PluginContext.from_execution_context(context)
+    result = await plugin_context.platform_actions.invoke_for_event(
+        event,
+        "send_poke",
+        user_id="123456",
+    )
 
     assert result == {"status": "ok", "data": {"done": True}}
     context.invoke_event_platform_action.assert_awaited_once_with(
@@ -376,7 +363,27 @@ async def test_startools_invoke_event_platform_action_uses_context_boundary():
     )
 
 
-def test_context_does_not_expose_platform_manager_attribute():
+def test_plugin_context_exposes_capabilities_not_core_managers():
     context = make_initialized_context()
+    plugin_context = PluginContext.from_execution_context(context)
 
-    assert not hasattr(context, "platform_manager")
+    assert plugin_context.messages is not None
+    assert plugin_context.models is not None
+    assert plugin_context.tools is not None
+    assert plugin_context.storage is not None
+    assert plugin_context.config is not None
+    assert plugin_context.cron is not None
+    assert plugin_context.knowledge is not None
+    assert plugin_context.platform_actions is not None
+    assert plugin_context.dashboard_extensions is not None
+    assert plugin_context.runtime_info is not None
+    for forbidden in (
+        "database",
+        "provider_manager",
+        "platform_manager",
+        "catalogs",
+        "get_db",
+        "get_config",
+        "send_message",
+    ):
+        assert not hasattr(plugin_context, forbidden)

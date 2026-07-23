@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import importlib
 
-from astrbot.core.platform.register import platform_cls_map
+from astrbot.core.platform.catalog import PlatformCatalog
 
 BUILTIN_PLATFORM_MODULES = {
     "aiocqhttp": "astrbot.core.platform.sources.aiocqhttp.aiocqhttp_platform_adapter",
@@ -33,15 +33,21 @@ BUILTIN_PLATFORM_MODULES = {
 }
 
 
-def discover_platform_adapter(adapter_type: str) -> type | None:
-    """Load a built-in adapter on demand and return its registered class.
+def discover_platform_adapter(
+    adapter_type: str,
+    catalog: PlatformCatalog,
+) -> type | None:
+    """Load a built-in adapter on demand and return its cataloged class.
 
     ImportError is intentionally allowed to propagate so callers retain the
     existing optional-dependency diagnostic.
     """
-    if adapter_type not in platform_cls_map:
+    registration = catalog.get(adapter_type)
+    if registration is None:
         module_name = BUILTIN_PLATFORM_MODULES.get(adapter_type)
         if module_name is None:
             return None
-        importlib.import_module(module_name)
-    return platform_cls_map.get(adapter_type)
+        module = importlib.import_module(module_name)
+        catalog.register_module(module)
+        registration = catalog.get(adapter_type)
+    return registration.cls_type if registration is not None else None

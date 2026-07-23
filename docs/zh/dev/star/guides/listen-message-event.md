@@ -71,10 +71,10 @@ class AstrBotMessage:
 
 ```python
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 
 class MyPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: PluginContext):
         super().__init__(context)
 
     @filter.command("helloworld") # from astrbot.api.event.filter import command

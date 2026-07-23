@@ -1,10 +1,12 @@
 import asyncio
 import functools
 import hashlib
+import importlib
 import json
 import os
+import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,19 +15,32 @@ import pytest_asyncio
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from astrbot.core.agent.handoff import FunctionTool
 from astrbot.core.command import CommandEngine, CommandResolutionKind
+from astrbot.core.platform.catalog import PlatformAdapterDescriptor
+from astrbot.core.provider.catalog import ProviderAdapterDescriptor
+from astrbot.core.provider.entities import ProviderType
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
+from astrbot.core.star import plugin_runtime_common as runtime_common_module
+from astrbot.core.star import plugin_runtime_loader as loader_module
 from astrbot.core.star import star_manager as star_manager_module
 from astrbot.core.star.dashboard_extension import (
+    DashboardExtensionAccess,
+    DashboardExtensionRegistry,
     DashboardJsonAction,
 )
 from astrbot.core.star.filter.command import CommandFilter
-from astrbot.core.star.star import StarMetadata
+from astrbot.core.star.plugin_catalog import PluginCatalog
+from astrbot.core.star.plugin_extension_coordinator import PluginExtensionCoordinator
+from astrbot.core.star.plugin_lifecycle import PluginLifecycle
+from astrbot.core.star.plugin_runtime_common import PluginDependencyInstallError
+from astrbot.core.star.plugin_runtime_loader import PluginRuntimeLoader
+from astrbot.core.star.star import StarDeclaration, StarMetadata
 from astrbot.core.star.star_handler import (
     EventType,
     StarHandlerMetadata,
-    StarHandlerRegistry,
 )
-from astrbot.core.star.star_manager import PluginDependencyInstallError, PluginManager
+from astrbot.core.star.star_manager import PluginManager
 from astrbot.core.utils.pip_installer import PipInstallError
 from astrbot.core.utils.requirements_utils import MissingRequirementsPlan
 from astrbot.core.utils.task_utils import cancel_tracked_tasks
@@ -43,6 +58,10 @@ class MockStar:
         self.name = TEST_PLUGIN_NAME
         self.repo = TEST_PLUGIN_REPO
         self.reserved = False
+        self.module_path = f"data.plugins.{TEST_PLUGIN_DIR}.main"
+        self.activated = True
+        self.star_cls = None
+        self.star_cls_type = None
         self.info = {"repo": TEST_PLUGIN_REPO, "readme": ""}
 
 
@@ -52,6 +71,28 @@ class _DashboardEmptyRequest(BaseModel):
 
 class _DashboardResult(BaseModel):
     ok: bool
+
+
+@pytest.mark.asyncio
+async def test_plugin_lifecycle_refreshes_only_its_injected_platform_port() -> None:
+    command_catalog = MagicMock()
+    refresh_platform_commands = AsyncMock()
+    lifecycle = PluginLifecycle(
+        refresh_platform_commands=refresh_platform_commands,
+        catalog=command_catalog,
+        loader=MagicMock(),
+        packages=MagicMock(),
+        extensions=MagicMock(),
+        preferences=MagicMock(),
+        plugin_store_path="plugins",
+        reserved_plugin_path="builtin_stars",
+        background_tasks=set(),
+    )
+
+    await lifecycle._refresh_command_surfaces()
+
+    command_catalog.refresh_command_catalogs.assert_called_once_with()
+    refresh_platform_commands.assert_awaited_once_with()
 
 
 def _write_local_test_plugin(plugin_path: Path, repo_url: str, version: str = "1.0.0"):
@@ -68,9 +109,9 @@ def _write_local_test_plugin(plugin_path: Path, repo_url: str, version: str = "1
     with open(plugin_path / "metadata.yaml", "w", encoding="utf-8") as f:
         yaml.dump(metadata, f)
     with open(plugin_path / "main.py", "w", encoding="utf-8") as f:
-        f.write("from astrbot.api.star import Star, Context\n")
+        f.write("from astrbot.api.star import PluginContext, Star\n")
         f.write("class HelloWorld(Star):\n")
-        f.write("    def __init__(self, context: Context): ...\n")
+        f.write("    def __init__(self, context: PluginContext): ...\n")
 
 
 def _write_requirements(plugin_path: Path):
@@ -146,7 +187,7 @@ def test_load_plugin_i18n_reads_supported_locale_files(tmp_path: Path):
     )
     (i18n_path / "README.md").write_text("ignored", encoding="utf-8")
 
-    assert PluginManager._load_plugin_i18n(str(plugin_path)) == {
+    assert PluginRuntimeLoader.load_i18n(str(plugin_path)) == {
         "zh-CN": {"metadata": {"desc": "中文描述"}},
         "en-US": {"metadata": {"desc": "English description"}},
     }
@@ -156,16 +197,22 @@ def test_load_plugin_i18n_reads_supported_locale_files(tmp_path: Path):
 async def test_load_plugin_schema_accepts_utf8_bom(
     plugin_manager_pm: PluginManager, tmp_path: Path, monkeypatch
 ):
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "bom_schema_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     plugin_path.mkdir()
     (plugin_path / "_conf_schema.json").write_text(
         json.dumps({"enabled": {"type": "bool", "default": True}}),
         encoding="utf-8-sig",
     )
-    metadata = star_manager_module.StarMetadata(
+
+    class SchemaPlugin:
+        def __init__(self, context, config=None):
+            self.context = context
+            self.config = config
+
+    metadata = StarMetadata(
         name=plugin_name,
         author="AstrBot Team",
         desc="BOM schema test plugin",
@@ -173,8 +220,6 @@ async def test_load_plugin_schema_accepts_utf8_bom(
         root_dir_name=plugin_name,
         module_path=module_path,
     )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
 
     async def mock_global_get(_key, default=None):
         return default
@@ -182,42 +227,53 @@ async def test_load_plugin_schema_accepts_utf8_bom(
     async def mock_import_plugin_with_dependency_recovery(**_kwargs):
         return ModuleType(module_path)
 
-    async def mock_sync_command_configs():
+    async def mock_sync_command_configs(*_args):
         return None
 
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_get_plugin_modules",
+        plugin_manager_pm.lifecycle._preferences, "global_get", mock_global_get
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.loader,
+        "discover_modules",
         lambda: [{"pname": plugin_name, "module": "main"}],
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_import_plugin_with_dependency_recovery",
+        plugin_manager_pm.loader,
+        "import_with_dependency_recovery",
         mock_import_plugin_with_dependency_recovery,
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_load_plugin_metadata",
+        plugin_manager_pm.loader,
+        "load_metadata",
         lambda **_kwargs: metadata,
     )
     monkeypatch.setattr(
-        star_manager_module,
-        "sync_command_configs",
-        mock_sync_command_configs,
+        loader_module, "sync_command_configs", mock_sync_command_configs
     )
+    _mock_star_declaration(monkeypatch, module_path, SchemaPlugin)
     config_path = tmp_path / "config"
     config_path.mkdir()
-    monkeypatch.setattr(plugin_manager_pm, "plugin_config_path", str(config_path))
+    monkeypatch.setattr(
+        plugin_manager_pm.loader,
+        "_plugin_config_path",
+        str(config_path),
+    )
 
     try:
-        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name
+        )
+        registered = plugin_manager_pm.catalog.runtime_catalogs.plugins.get_by_module(
+            module_path
+        )
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
     assert success is True
     assert error is None
-    assert metadata.config is not None
+    assert registered is not None
+    assert registered.config is not None
 
 
 def test_load_plugin_i18n_ignores_legacy_directories(tmp_path: Path):
@@ -235,7 +291,7 @@ def test_load_plugin_i18n_ignores_legacy_directories(tmp_path: Path):
         encoding="utf-8",
     )
 
-    assert PluginManager._load_plugin_i18n(str(plugin_path)) == {}
+    assert PluginRuntimeLoader.load_i18n(str(plugin_path)) == {}
 
 
 def test_load_plugin_metadata_includes_i18n(tmp_path: Path):
@@ -248,7 +304,7 @@ def test_load_plugin_metadata_includes_i18n(tmp_path: Path):
         encoding="utf-8",
     )
 
-    metadata = PluginManager._load_plugin_metadata(str(plugin_path))
+    metadata = PluginRuntimeLoader.load_metadata(str(plugin_path))
 
     assert metadata is not None
     assert metadata.short_desc == "Local test short description"
@@ -264,7 +320,7 @@ def test_load_plugin_metadata_rejects_top_level_pages(tmp_path: Path):
     metadata_path.write_text(yaml.dump(metadata), encoding="utf-8")
 
     with pytest.raises(Exception, match="top-level pages is unsupported"):
-        PluginManager._load_plugin_metadata(str(plugin_path))
+        PluginRuntimeLoader.load_metadata(str(plugin_path))
 
 
 def test_load_plugin_metadata_raises_without_metadata_yaml(tmp_path: Path):
@@ -273,7 +329,7 @@ def test_load_plugin_metadata_raises_without_metadata_yaml(tmp_path: Path):
     (plugin_path / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     with pytest.raises(Exception, match="未找到 metadata.yaml"):
-        PluginManager._load_plugin_metadata(str(plugin_path))
+        PluginRuntimeLoader.load_metadata(str(plugin_path))
 
 
 def test_load_plugin_metadata_rejects_description_alias(tmp_path: Path):
@@ -293,7 +349,7 @@ def test_load_plugin_metadata_rejects_description_alias(tmp_path: Path):
     )
 
     with pytest.raises(Exception, match="插件元数据信息不完整"):
-        PluginManager._load_plugin_metadata(str(plugin_path))
+        PluginRuntimeLoader.load_metadata(str(plugin_path))
 
 
 @pytest.mark.asyncio
@@ -301,10 +357,10 @@ async def test_plugin_initialize_commits_dashboard_registration_atomically(
     plugin_manager_pm: PluginManager,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "dashboard_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     plugin_path.mkdir()
     _write_dashboard_extension_metadata(plugin_path, plugin_name)
 
@@ -326,38 +382,35 @@ async def test_plugin_initialize_commits_dashboard_registration_atomically(
         async def read_config(self, _payload, _context):
             return _DashboardResult(ok=True)
 
-    metadata = star_manager_module.StarMetadata(
-        star_cls_type=DashboardPlugin,
-        module_path=module_path,
-    )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_get_plugin_modules",
+        plugin_manager_pm.loader,
+        "discover_modules",
         lambda: [{"pname": plugin_name, "module": "main"}],
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_import_plugin_with_dependency_recovery",
+        plugin_manager_pm.loader,
+        "import_with_dependency_recovery",
         AsyncMock(return_value=ModuleType(module_path)),
     )
     monkeypatch.setattr(
-        plugin_manager_pm.preferences,
+        plugin_manager_pm.lifecycle._preferences,
         "global_get",
         AsyncMock(side_effect=lambda _key, default=None: default),
     )
     monkeypatch.setattr(
-        star_manager_module,
+        loader_module,
         "sync_command_configs",
         AsyncMock(),
     )
+    _mock_star_declaration(monkeypatch, module_path, DashboardPlugin)
 
     try:
-        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
-        snapshots = plugin_manager_pm.dashboard_extension_registry.snapshots()
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name
+        )
+        snapshots = plugin_manager_pm.extensions.registry.snapshots()
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
     assert success is True
     assert error is None
@@ -371,10 +424,10 @@ async def test_plugin_initialize_failure_rolls_back_dashboard_registration(
     plugin_manager_pm: PluginManager,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "dashboard_plugin_failure"
     module_path = f"data.plugins.{plugin_name}.main"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     plugin_path.mkdir()
     _write_dashboard_extension_metadata(plugin_path, plugin_name)
 
@@ -397,34 +450,31 @@ async def test_plugin_initialize_failure_rolls_back_dashboard_registration(
         async def read_config(self, _payload, _context):
             return _DashboardResult(ok=True)
 
-    metadata = star_manager_module.StarMetadata(
-        star_cls_type=DashboardPlugin,
-        module_path=module_path,
-    )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_get_plugin_modules",
+        plugin_manager_pm.loader,
+        "discover_modules",
         lambda: [{"pname": plugin_name, "module": "main"}],
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_import_plugin_with_dependency_recovery",
+        plugin_manager_pm.loader,
+        "import_with_dependency_recovery",
         AsyncMock(return_value=ModuleType(module_path)),
     )
     monkeypatch.setattr(
-        plugin_manager_pm.preferences,
+        plugin_manager_pm.lifecycle._preferences,
         "global_get",
         AsyncMock(side_effect=lambda _key, default=None: default),
     )
-    monkeypatch.setattr(star_manager_module, "sync_command_configs", AsyncMock())
+    monkeypatch.setattr(loader_module, "sync_command_configs", AsyncMock())
+    _mock_star_declaration(monkeypatch, module_path, DashboardPlugin)
 
     try:
-        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
-        snapshots = plugin_manager_pm.dashboard_extension_registry.snapshots()
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name
+        )
+        snapshots = plugin_manager_pm.extensions.registry.snapshots()
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
     assert success is False
     assert "initialize failed" in str(error)
@@ -436,10 +486,10 @@ async def test_plugin_constructor_cannot_register_dashboard_action(
     plugin_manager_pm: PluginManager,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "dashboard_constructor_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     plugin_path.mkdir()
     _write_dashboard_extension_metadata(plugin_path, plugin_name)
 
@@ -447,37 +497,34 @@ async def test_plugin_constructor_cannot_register_dashboard_action(
         def __init__(self, context):
             context.dashboard_extensions.for_plugin(self)
 
-    metadata = star_manager_module.StarMetadata(
-        star_cls_type=DashboardPlugin,
-        module_path=module_path,
-    )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_get_plugin_modules",
+        plugin_manager_pm.loader,
+        "discover_modules",
         lambda: [{"pname": plugin_name, "module": "main"}],
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_import_plugin_with_dependency_recovery",
+        plugin_manager_pm.loader,
+        "import_with_dependency_recovery",
         AsyncMock(return_value=ModuleType(module_path)),
     )
     monkeypatch.setattr(
-        plugin_manager_pm.preferences,
+        plugin_manager_pm.lifecycle._preferences,
         "global_get",
         AsyncMock(side_effect=lambda _key, default=None: default),
     )
-    monkeypatch.setattr(star_manager_module, "sync_command_configs", AsyncMock())
+    monkeypatch.setattr(loader_module, "sync_command_configs", AsyncMock())
+    _mock_star_declaration(monkeypatch, module_path, DashboardPlugin)
 
     try:
-        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name
+        )
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
     assert success is False
     assert "during initialize" in str(error)
-    assert plugin_manager_pm.dashboard_extension_registry.snapshots() == ()
+    assert plugin_manager_pm.extensions.registry.snapshots() == ()
 
 
 @pytest.mark.asyncio
@@ -486,7 +533,7 @@ async def test_install_validates_dashboard_manifest_before_dependencies(
     monkeypatch: pytest.MonkeyPatch,
 ):
     plugin_name = "invalid_dashboard_install"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     ensure_requirements = AsyncMock()
 
     async def mock_install(_repo_url, _proxy):
@@ -502,26 +549,28 @@ async def test_install_validates_dashboard_manifest_before_dependencies(
         return str(plugin_path)
 
     monkeypatch.setattr(
-        plugin_manager_pm.updator,
+        plugin_manager_pm.packages._updator,
         "parse_github_url",
         lambda _url: ("owner", plugin_name, ""),
     )
     monkeypatch.setattr(
-        plugin_manager_pm.updator,
+        plugin_manager_pm.packages._updator,
         "format_name",
         lambda name: name,
     )
-    monkeypatch.setattr(plugin_manager_pm.updator, "install", mock_install)
+    monkeypatch.setattr(plugin_manager_pm.packages._updator, "install", mock_install)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_ensure_plugin_requirements",
+        plugin_manager_pm.packages,
+        "ensure_requirements",
         ensure_requirements,
     )
 
     with pytest.raises(
         Exception, match="Invalid asset path segment|escapes plugin root"
     ):
-        await plugin_manager_pm.install_plugin("https://example.invalid/plugin.git")
+        await plugin_manager_pm.lifecycle.install_plugin(
+            "https://example.invalid/plugin.git"
+        )
 
     ensure_requirements.assert_not_awaited()
 
@@ -532,7 +581,7 @@ def test_get_modules_ignores_directory_name_entrypoint(tmp_path: Path):
     plugin_dir.mkdir(parents=True, exist_ok=True)
     (plugin_dir / "legacy_plugin.py").write_text("VALUE = 1\n", encoding="utf-8")
 
-    assert PluginManager._get_modules(str(plugin_root)) == []
+    assert PluginRuntimeLoader.get_modules(str(plugin_root)) == []
 
 
 def test_loaded_metadata_can_copy_i18n_into_existing_star_metadata(tmp_path: Path):
@@ -545,8 +594,8 @@ def test_loaded_metadata_can_copy_i18n_into_existing_star_metadata(tmp_path: Pat
         encoding="utf-8",
     )
 
-    existing_metadata = star_manager_module.StarMetadata(name="old")
-    loaded_metadata = PluginManager._load_plugin_metadata(str(plugin_path))
+    existing_metadata = StarMetadata(name="old")
+    loaded_metadata = PluginRuntimeLoader.load_metadata(str(plugin_path))
 
     assert loaded_metadata is not None
     existing_metadata.i18n = loaded_metadata.i18n
@@ -567,16 +616,34 @@ def _clear_module_cache():
         del sys.modules[m]
 
 
-def _clear_star_runtime_state():
-    star_manager_module.star_map.clear()
-    star_manager_module.star_registry.clear()
-    star_manager_module.star_handlers_registry.clear()
+def _clear_plugin_runtime_state(catalogs: RuntimeCatalogs) -> None:
+    """Clear registrations owned by one test runtime."""
+    catalogs.handlers.clear()
+    catalogs.tools.func_list.clear()
+    catalogs.plugins.clear()
+
+
+def _mock_star_declaration(
+    monkeypatch: pytest.MonkeyPatch,
+    module_path: str,
+    star_cls_type: type,
+) -> None:
+    """Make an imported test module expose one static Star declaration."""
+    declaration = StarDeclaration(
+        star_cls_type=cast(Any, star_cls_type),
+        module_path=module_path,
+    )
+    monkeypatch.setattr(
+        loader_module,
+        "collect_star_declaration",
+        lambda _module: declaration,
+    )
 
 
 def test_bind_plugin_handlers_is_idempotent(
     plugin_manager_pm: PluginManager,
-    monkeypatch,
 ) -> None:
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     module_path = "data.plugins.test_plugin.main"
     plugin_instance = object()
     metadata = StarMetadata(
@@ -593,7 +660,6 @@ def test_bind_plugin_handlers_is_idempotent(
 
     raw_event_handler.__module__ = module_path
     raw_tool_handler.__module__ = module_path
-    registry = StarHandlerRegistry()
     event_handler = StarHandlerMetadata(
         event_type=EventType.AdapterMessageEvent,
         handler_full_name=f"{module_path}.raw_event_handler",
@@ -602,35 +668,36 @@ def test_bind_plugin_handlers_is_idempotent(
         handler=raw_event_handler,
         event_filters=[],
     )
-    registry.append(event_handler)
-    monkeypatch.setattr(star_manager_module, "star_handlers_registry", registry)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(metadata)
+    plugin_manager_pm.catalog.runtime_catalogs.handlers.append(event_handler)
 
-    tool = star_manager_module.FunctionTool(
+    tool = FunctionTool(
         name="test_plugin_tool",
         description="test tool",
         parameters={"type": "object", "properties": {}},
         handler=raw_tool_handler,
+        handler_module_path=module_path,
     )
-    original_func_list = star_manager_module.llm_tools.func_list
-    monkeypatch.setattr(star_manager_module.llm_tools, "func_list", [tool])
+    plugin_manager_pm.catalog.runtime_catalogs.tools.func_list = [tool]
 
-    plugin_manager_pm._bind_plugin_handlers(metadata, [])
-    plugin_manager_pm._bind_plugin_handlers(metadata, [])
+    try:
+        plugin_manager_pm.loader.bind_handlers(metadata, [])
+        plugin_manager_pm.loader.bind_handlers(metadata, [])
 
-    assert isinstance(event_handler.handler, functools.partial)
-    assert event_handler.handler.func is raw_event_handler
-    assert event_handler.handler.args == (plugin_instance,)
-    assert isinstance(tool.handler, functools.partial)
-    assert tool.handler.func is raw_tool_handler
-    assert tool.handler.args == (plugin_instance,)
+        assert isinstance(event_handler.handler, functools.partial)
+        assert event_handler.handler.func is raw_event_handler
+        assert event_handler.handler.args == (plugin_instance,)
+        assert isinstance(tool.handler, functools.partial)
+        assert tool.handler.func is raw_tool_handler
+        assert tool.handler.args == (plugin_instance,)
 
-    metadata.star_cls = None
-    plugin_manager_pm._bind_plugin_handlers(metadata, [])
-    assert event_handler.handler is raw_event_handler
-    assert tool.handler is raw_tool_handler
-    assert tool.active is False
-
-    monkeypatch.setattr(star_manager_module.llm_tools, "func_list", original_func_list)
+        metadata.star_cls = None
+        plugin_manager_pm.loader.bind_handlers(metadata, [])
+        assert event_handler.handler is raw_event_handler
+        assert tool.handler is raw_tool_handler
+        assert tool.active is False
+    finally:
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
 
 def _build_load_mock(events):
@@ -690,7 +757,8 @@ def _mock_missing_requirements_plan(
     fallback_reason: str | None = None,
 ):
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        runtime_common_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: MissingRequirementsPlan(
             missing_names=frozenset(missing_names),
             version_mismatch_names=frozenset(version_mismatch_names),
@@ -702,7 +770,8 @@ def _mock_missing_requirements_plan(
 
 def _mock_precheck_fails(monkeypatch):
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        runtime_common_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: None,
     )
 
@@ -739,68 +808,89 @@ async def plugin_manager_pm(tmp_path, monkeypatch):
     # Clear module cache before setup to ensure isolation
     _clear_module_cache()
 
-    plugin_dir = tmp_path / "astrbot_root" / "data" / "plugins"
+    runtime_root = tmp_path / "astrbot_root"
+    plugin_dir = runtime_root / "data" / "plugins"
     plugin_dir.mkdir(parents=True, exist_ok=True)
+    plugin_config_dir = runtime_root / "data" / "config"
+    plugin_config_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_root / "astrbot" / "builtin_stars").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        star_manager_module,
+        "get_astrbot_plugin_path",
+        lambda: str(plugin_dir),
+    )
+    monkeypatch.setattr(
+        star_manager_module,
+        "get_astrbot_config_path",
+        lambda: str(plugin_config_dir),
+    )
+    monkeypatch.setattr(
+        star_manager_module,
+        "get_astrbot_path",
+        lambda: str(runtime_root),
+    )
 
     class MockContext:
-        def __init__(self):
-            self.stars = []
+        def __init__(self, catalogs: RuntimeCatalogs):
+            self.catalogs = catalogs
+            self._db = MagicMock()
+            self._db.get_command_configs = AsyncMock(return_value=[])
+            self.database = self._db
+            self._config = {}
+            self.provider_manager = MagicMock()
+            self.preferences = MagicMock()
+            self.astrbot_config_mgr = MagicMock()
+            self.conversation_manager = MagicMock()
+            self.persona_manager = MagicMock()
+            self.cron_manager = MagicMock()
+            self.kb_manager = MagicMock()
+            self.html_renderer = MagicMock()
+            self.file_token_service = MagicMock()
+            self.metrics = SimpleNamespace(upload=AsyncMock())
+            self.demo_mode = False
+            self.dashboard_extension_registry = DashboardExtensionRegistry()
+            self.dashboard_extensions = DashboardExtensionAccess(
+                self.dashboard_extension_registry,
+            )
             self._platform_manager = MagicMock()
             self._platform_manager.refresh_registered_commands = AsyncMock()
 
         def get_all_stars(self):
-            return self.stars
+            return list(self.catalogs.plugins)
 
         def get_registered_star(self, name):
-            for s in self.stars:
-                if s.root_dir_name == name or s.name == name:
-                    return s
-            return None
+            return self.catalogs.plugins.get_by_name(name)
 
-    mock_context = MockContext()
+        async def refresh_platform_commands(self):
+            await self._platform_manager.refresh_registered_commands()
+
+    catalogs = RuntimeCatalogs()
+    mock_context = MockContext(catalogs)
     mock_config = {}
     pm = PluginManager(
         cast(Any, mock_context),
         cast(Any, mock_config),
         AsyncMock(),
         MagicMock(),
+        catalogs,
     )
-    monkeypatch.setattr(
-        star_manager_module, "pip_installer", pm.pip_installer, raising=False
-    )
-
-    # Patch paths to use tmp_path
-    monkeypatch.setattr(pm, "plugin_store_path", str(plugin_dir))
-    monkeypatch.setattr(
-        "astrbot.core.star.star_manager.get_astrbot_plugin_path",
-        lambda: str(plugin_dir),
-    )
-    # Installation metrics own a process-wide periodic flush task. Plugin-manager
-    # tests exercise install state transitions, not telemetry delivery, so keep the
-    # fixture offline and make its manager-owned tasks explicitly cancellable.
-    monkeypatch.setattr(
-        star_manager_module.Metric,
-        "upload",
-        AsyncMock(return_value=None),
-    )
-
     try:
         yield pm
     finally:
-        await cancel_tracked_tasks(pm._background_tasks)
+        await cancel_tracked_tasks(pm.lifecycle._background_tasks)
 
 
 def test_plugin_manager_atomically_replaces_owned_command_catalog(
     plugin_manager_pm: PluginManager,
 ):
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     module_path = "plugin.catalog_demo"
     plugin = StarMetadata(
         name="catalog_demo",
         module_path=module_path,
         activated=True,
     )
-    star_manager_module.star_map[module_path] = plugin
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(plugin)
 
     async def handler(self, event, value: str) -> None: ...
 
@@ -815,10 +905,10 @@ def test_plugin_manager_atomically_replaces_owned_command_catalog(
     command_filter = CommandFilter("demo")
     command_filter.init_handler_md(metadata)
     metadata.event_filters.append(command_filter)
-    star_manager_module.star_handlers_registry.append(metadata)
+    plugin_manager_pm.catalog.runtime_catalogs.handlers.append(metadata)
 
     try:
-        store = plugin_manager_pm.get_command_catalog("default", None)
+        store = plugin_manager_pm.catalog.get_command_catalog("default", None)
         first_snapshot = store.snapshot
         assert CommandEngine(first_snapshot).resolve("demo value").invocation.argv == (
             "value",
@@ -826,9 +916,9 @@ def test_plugin_manager_atomically_replaces_owned_command_catalog(
 
         command_filter.command_name = "renamed"
         command_filter._cmpl_cmd_names = None
-        plugin_manager_pm.refresh_command_catalogs()
+        plugin_manager_pm.catalog.refresh_command_catalogs()
 
-        assert plugin_manager_pm.get_command_catalog("default", None) is store
+        assert plugin_manager_pm.catalog.get_command_catalog("default", None) is store
         assert store.snapshot is not first_snapshot
         assert (
             CommandEngine(store.snapshot).resolve("demo value").resolution.kind
@@ -838,13 +928,73 @@ def test_plugin_manager_atomically_replaces_owned_command_catalog(
             "renamed value"
         ).invocation.argv == ("value",)
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+
+
+def test_plugin_manager_runtime_catalogs_are_isolated(
+    plugin_manager_pm: PluginManager,
+) -> None:
+    """Registrations from one PluginManager runtime never leak into another."""
+    catalogs = plugin_manager_pm.catalog.runtime_catalogs
+    other_catalogs = RuntimeCatalogs()
+    _clear_plugin_runtime_state(catalogs)
+    try:
+        module_path = "data.plugins.isolated.main"
+        plugin = StarMetadata(name="isolated", module_path=module_path)
+        other_plugin = StarMetadata(name="isolated", module_path=module_path)
+        catalogs.plugins.publish(plugin)
+        other_catalogs.plugins.publish(other_plugin)
+
+        async def handler(*_args):
+            return None
+
+        handler_metadata = StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name=f"{module_path}.handler",
+            handler_name="handler",
+            handler_module_path=module_path,
+            handler=handler,
+            event_filters=[],
+        )
+        other_handler_metadata = StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name=f"{module_path}.other_handler",
+            handler_name="other_handler",
+            handler_module_path=module_path,
+            handler=handler,
+            event_filters=[],
+        )
+        catalogs.handlers.append(handler_metadata)
+        other_catalogs.handlers.append(other_handler_metadata)
+        tool = FunctionTool(
+            name="isolated_tool",
+            description="test tool",
+            parameters={"type": "object", "properties": {}},
+            handler_module_path=f"{module_path}.tools.search",
+        )
+        other_tool = FunctionTool(
+            name="other_isolated_tool",
+            description="test tool",
+            parameters={"type": "object", "properties": {}},
+            handler_module_path=f"{module_path}.tools.search",
+        )
+        catalogs.tools.func_list.append(tool)
+        other_catalogs.tools.func_list.append(other_tool)
+
+        _clear_plugin_runtime_state(catalogs)
+
+        assert other_catalogs.plugins.get_by_module(module_path) is other_plugin
+        assert list(other_catalogs.handlers) == [other_handler_metadata]
+        assert other_catalogs.tools.func_list == [other_tool]
+    finally:
+        _clear_plugin_runtime_state(catalogs)
+        _clear_plugin_runtime_state(other_catalogs)
 
 
 @pytest.fixture
 def local_updator(plugin_manager_pm):
     """Helper to setup a local plugin directory simulating a download."""
-    path = Path(plugin_manager_pm.plugin_store_path) / TEST_PLUGIN_DIR
+    path = Path(plugin_manager_pm.packages.store_path) / TEST_PLUGIN_DIR
     _write_local_test_plugin(path, TEST_PLUGIN_REPO)
     return path
 
@@ -857,7 +1007,7 @@ def local_updator(plugin_manager_pm):
 async def test_install_plugin_dependency_install_flow(
     plugin_manager_pm: PluginManager, monkeypatch, dependency_install_fails: bool
 ):
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / TEST_PLUGIN_DIR
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / TEST_PLUGIN_DIR
     events = []
     _mock_missing_requirements(monkeypatch, {"networkx"})
 
@@ -867,21 +1017,26 @@ async def test_install_plugin_dependency_install_flow(
         _write_requirements(plugin_path)
         return str(plugin_path)
 
-    monkeypatch.setattr(plugin_manager_pm.updator, "install", mock_install)
+    monkeypatch.setattr(plugin_manager_pm.packages._updator, "install", mock_install)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, dependency_install_fails),
     )
 
     def mock_load_and_register(*args, **kwargs):
-        cast(Any, plugin_manager_pm.context).stars.append(MockStar())
+        plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+            cast(StarMetadata, MockStar())
+        )
         return _build_load_mock(events)(*args, **kwargs)
 
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load_and_register)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_load_unlocked", mock_load_and_register
+    )
 
     if dependency_install_fails:
         with pytest.raises(PluginDependencyInstallError, match="pip failed"):
-            await plugin_manager_pm.install_plugin(TEST_PLUGIN_REPO)
+            await plugin_manager_pm.lifecycle.install_plugin(TEST_PLUGIN_REPO)
         assert len(events) == 1
         _assert_dependency_install_event_matches(
             events[0],
@@ -889,7 +1044,7 @@ async def test_install_plugin_dependency_install_flow(
             expected_content="networkx\n",
         )
     else:
-        await plugin_manager_pm.install_plugin(TEST_PLUGIN_REPO)
+        await plugin_manager_pm.lifecycle.install_plugin(TEST_PLUGIN_REPO)
         assert len(events) == 2
         _assert_dependency_install_event_matches(
             events[0],
@@ -918,24 +1073,33 @@ async def test_install_plugin_from_file_dependency_install_flow(
         _write_local_test_plugin(plugin_path, TEST_PLUGIN_REPO)
         _write_requirements(plugin_path)
 
-    monkeypatch.setattr(plugin_manager_pm.updator, "unzip_file", mock_unzip_file)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._updator, "unzip_file", mock_unzip_file
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, dependency_install_fails),
     )
 
     def mock_load_and_register(*args, **kwargs):
-        cast(Any, plugin_manager_pm.context).stars.append(MockStar())
+        plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+            cast(StarMetadata, MockStar())
+        )
         return _build_load_mock(events)(*args, **kwargs)
 
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load_and_register)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_load_unlocked", mock_load_and_register
+    )
 
     if dependency_install_fails:
         with pytest.raises(PluginDependencyInstallError, match="pip failed"):
-            await plugin_manager_pm.install_plugin_from_file(str(zip_file_path))
+            await plugin_manager_pm.lifecycle.install_plugin_from_file(
+                str(zip_file_path)
+            )
         assert any(e[0] == "deps" for e in events)
     else:
-        await plugin_manager_pm.install_plugin_from_file(str(zip_file_path))
+        await plugin_manager_pm.lifecycle.install_plugin_from_file(str(zip_file_path))
         assert any(e[0] == "deps" for e in events)
         assert ("load", TEST_PLUGIN_DIR) in events
 
@@ -949,7 +1113,7 @@ async def test_install_plugin_from_file_conflict_keeps_failed_plugins_clean(
 ):
     zip_file_path = tmp_path / "plugin_upload_helloworld_v2.zip"
     zip_file_path.write_text("placeholder", encoding="utf-8")
-    plugin_store_path = Path(plugin_manager_pm.plugin_store_path)
+    plugin_store_path = Path(plugin_manager_pm.packages.store_path)
     existing_upload_dirs = set(plugin_store_path.glob("plugin_upload_*"))
 
     def mock_unzip_file(zip_path: str, target_dir: str) -> None:
@@ -961,17 +1125,19 @@ async def test_install_plugin_from_file_conflict_keeps_failed_plugins_clean(
         )
 
     assert local_updator.is_dir()
-    monkeypatch.setattr(plugin_manager_pm.updator, "unzip_file", mock_unzip_file)
+    monkeypatch.setattr(
+        plugin_manager_pm.packages._updator, "unzip_file", mock_unzip_file
+    )
 
     with pytest.raises(Exception, match=f"安装失败：目录 {TEST_PLUGIN_DIR} 已存在。"):
-        await plugin_manager_pm.install_plugin_from_file(str(zip_file_path))
+        await plugin_manager_pm.lifecycle.install_plugin_from_file(str(zip_file_path))
 
     new_upload_dirs = [
         upload_dir
         for upload_dir in plugin_store_path.glob("plugin_upload_*")
         if upload_dir not in existing_upload_dirs
     ]
-    assert plugin_manager_pm.failed_plugin_dict == {}
+    assert plugin_manager_pm.loader._failed_plugins == {}
     assert new_upload_dirs == []
 
 
@@ -984,24 +1150,29 @@ async def test_reload_failed_plugin_dependency_install_flow(
     dependency_install_fails: bool,
 ):
     _write_requirements(local_updator)
-    plugin_manager_pm.failed_plugin_dict[TEST_PLUGIN_DIR] = {"error": "init fail"}
+    plugin_manager_pm.loader._failed_plugins[TEST_PLUGIN_DIR] = {"error": "init fail"}
     events = []
     _mock_missing_requirements(monkeypatch, {"networkx"})
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, dependency_install_fails),
     )
 
     def mock_load_and_register(*args, **kwargs):
-        cast(Any, plugin_manager_pm.context).stars.append(MockStar())
+        plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+            cast(StarMetadata, MockStar())
+        )
         return _build_load_mock(events)(*args, **kwargs)
 
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load_and_register)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_load_unlocked", mock_load_and_register
+    )
 
     if dependency_install_fails:
         with pytest.raises(PluginDependencyInstallError, match="pip failed"):
-            await plugin_manager_pm.reload_failed_plugin(TEST_PLUGIN_DIR)
+            await plugin_manager_pm.lifecycle.reload_failed_plugin(TEST_PLUGIN_DIR)
         assert len(events) == 1
         _assert_dependency_install_event_matches(
             events[0],
@@ -1009,7 +1180,7 @@ async def test_reload_failed_plugin_dependency_install_flow(
             expected_content="networkx\n",
         )
     else:
-        await plugin_manager_pm.reload_failed_plugin(TEST_PLUGIN_DIR)
+        await plugin_manager_pm.lifecycle.reload_failed_plugin(TEST_PLUGIN_DIR)
         assert len(events) == 2
         _assert_dependency_install_event_matches(
             events[0],
@@ -1020,76 +1191,135 @@ async def test_reload_failed_plugin_dependency_install_flow(
 
 
 @pytest.mark.asyncio
-async def test_reload_all_unbinds_every_registered_plugin(
+async def test_failed_reload_keeps_live_plugin_catalog_and_extension_generation(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    _clear_star_runtime_state()
-    plugin_names = ["plugin_one", "plugin_two", "plugin_three"]
-    for plugin_name in plugin_names:
-        module_path = f"data.plugins.{plugin_name}.main"
-        metadata = star_manager_module.StarMetadata(
+    """A failed staged reload must leave the published generation executable."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    plugin_name = "staged_plugin"
+    module_path = f"data.plugins.{plugin_name}.main"
+    metadata = StarMetadata(
+        name=plugin_name,
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    catalogs = plugin_manager_pm.catalog.runtime_catalogs
+    catalogs.plugins.publish(metadata)
+
+    async def handler(*_args: object) -> None:
+        return None
+
+    handler_metadata = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name=f"{module_path}.handler",
+        handler_name="handler",
+        handler_module_path=module_path,
+        handler=handler,
+        event_filters=[],
+    )
+    catalogs.handlers.append(handler_metadata)
+    tool = FunctionTool(
+        name="staged_plugin_tool",
+        description="test tool",
+        parameters={"type": "object", "properties": {}},
+        handler_module_path=f"{module_path}.tools.test",
+    )
+    catalogs.tools.func_list.append(tool)
+
+    class ExistingProvider:
+        pass
+
+    ExistingProvider.__module__ = f"{module_path}.provider"
+    catalogs.providers.register(
+        ProviderAdapterDescriptor.create(
+            type="staged-plugin-provider",
+            desc="existing provider",
+            provider_type=ProviderType.CHAT_COMPLETION,
+            default_config_tmpl=None,
+            provider_display_name=None,
+        ),
+        ExistingProvider,
+        module_path=ExistingProvider.__module__,
+    )
+
+    class ExistingPlatform:
+        pass
+
+    ExistingPlatform.__module__ = f"{module_path}.platform"
+    catalogs.platforms.register(
+        PlatformAdapterDescriptor.create(
+            name="staged-plugin-platform",
+            description="existing platform",
+            default_config_tmpl=None,
+            adapter_display_name=None,
+            logo_path=None,
+            support_streaming_message=True,
+            i18n_resources=None,
+            config_metadata=None,
+        ),
+        ExistingPlatform,
+        module_path=ExistingPlatform.__module__,
+    )
+
+    staged_sync_flags: list[bool] = []
+
+    async def failed_staged_load(self, **kwargs):
+        staged_sync_flags.append(kwargs["sync_command_configs_after_load"])
+        replacement = StarMetadata(
             name=plugin_name,
             root_dir_name=plugin_name,
             module_path=module_path,
         )
-        star_manager_module.star_map[module_path] = metadata
-        star_manager_module.star_registry.append(metadata)
+        self._catalog.plugins.publish(replacement)
+        self._catalog.runtime_catalogs.handlers.append(
+            StarHandlerMetadata(
+                event_type=EventType.AdapterMessageEvent,
+                handler_full_name=f"{module_path}.replacement",
+                handler_name="replacement",
+                handler_module_path=module_path,
+                handler=handler,
+                event_filters=[],
+            )
+        )
+        self._catalog.runtime_catalogs.tools.func_list.append(
+            FunctionTool(
+                name="replacement_tool",
+                description="replacement tool",
+                parameters={"type": "object", "properties": {}},
+                handler_module_path=module_path,
+            )
+        )
+        return False, "replacement initialize failed"
 
-    terminated = []
-    unbound = []
-    transition_order = []
-
-    async def mock_deactivate(plugin, *, reason, release=False):
-        assert reason == "reload"
-        assert release is False
-        transition_order.append(f"drain:{plugin.name}")
-
-    async def mock_terminate(plugin):
-        terminated.append(plugin.name)
-        transition_order.append(f"terminate:{plugin.name}")
-
-    async def mock_unbind(plugin_name, plugin_module_path):
-        unbound.append(plugin_name)
-        transition_order.append(f"unbind:{plugin_name}")
-        star_manager_module.star_map.pop(plugin_module_path, None)
-        for index, metadata in enumerate(star_manager_module.star_registry):
-            if metadata.name == plugin_name:
-                del star_manager_module.star_registry[index]
-                break
-
-    async def mock_load(
-        specified_module_path=None,
-        specified_dir_name=None,
-        ignore_version_check=False,
-    ):
-        del specified_module_path, specified_dir_name, ignore_version_check
-        return True, None
-
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
+    terminate_plugin = AsyncMock()
+    promote_extension = AsyncMock()
+    monkeypatch.setattr(PluginRuntimeLoader, "load", failed_staged_load)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "deactivate_plugin_extension",
-        mock_deactivate,
+        plugin_manager_pm.lifecycle, "terminate_plugin", terminate_plugin
     )
-    monkeypatch.setattr(plugin_manager_pm, "_unbind_plugin", mock_unbind)
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load)
+    monkeypatch.setattr(
+        type(plugin_manager_pm.extensions),
+        "promote_staged_generation",
+        promote_extension,
+    )
 
     try:
-        await plugin_manager_pm.reload()
-    finally:
-        _clear_star_runtime_state()
+        success, error = await plugin_manager_pm.lifecycle.reload(plugin_name)
 
-    assert terminated == plugin_names
-    assert unbound == plugin_names
-    assert transition_order == [
-        step
-        for plugin_name in plugin_names
-        for step in (
-            f"drain:{plugin_name}",
-            f"terminate:{plugin_name}",
-            f"unbind:{plugin_name}",
-        )
-    ]
+        assert success is False
+        assert error == "replacement initialize failed"
+        assert catalogs.plugins.get_by_module(module_path) is metadata
+        assert list(catalogs.handlers) == [handler_metadata]
+        assert catalogs.tools.func_list == [tool]
+        assert catalogs.providers.get("staged-plugin-provider") is not None
+        assert catalogs.platforms.get("staged-plugin-platform") is not None
+        assert staged_sync_flags == [False]
+        terminate_plugin.assert_not_awaited()
+        promote_extension.assert_not_awaited()
+    finally:
+        catalogs.providers.unregister_module(ExistingProvider.__module__)
+        catalogs.platforms.unregister_module(ExistingPlatform.__module__)
+        _clear_plugin_runtime_state(catalogs)
 
 
 @pytest.mark.asyncio
@@ -1097,27 +1327,27 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
     plugin_manager_pm: PluginManager,
     monkeypatch,
 ):
-    plugin = star_manager_module.StarMetadata(
+    plugin = StarMetadata(
         name="demo_plugin",
         root_dir_name="demo_plugin",
         module_path="data.plugins.demo_plugin.main",
     )
-    cast(Any, plugin_manager_pm.context).stars.append(plugin)
-    plugin_tool = star_manager_module.FunctionTool(
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(plugin)
+    plugin_tool = FunctionTool(
         name="plugin_search",
         description="plugin search",
         parameters={"type": "object", "properties": {}},
         handler_module_path="data.plugins.demo_plugin.main.tools.search",
     )
-    other_tool = star_manager_module.FunctionTool(
+    other_tool = FunctionTool(
         name="other_search",
         description="other search",
         parameters={"type": "object", "properties": {}},
         handler_module_path="data.plugins.other_plugin.main.tools.search",
     )
-    llm_tools = cast(Any, star_manager_module.llm_tools)
-    original_func_list = llm_tools.func_list
-    llm_tools.func_list = [plugin_tool, other_tool]
+    tool_manager = plugin_manager_pm.catalog.runtime_catalogs.tools
+    original_func_list = tool_manager.func_list
+    tool_manager.func_list = [plugin_tool, other_tool]
     preferences = {
         "inactivated_plugins": [],
         "inactivated_llm_tools": [],
@@ -1134,7 +1364,7 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
 
     transition_order = []
 
-    async def mock_deactivate(star_metadata, *, reason, release=False):
+    async def mock_deactivate(_coordinator, star_metadata, *, reason, release=False):
         assert star_metadata is plugin
         assert reason == "disable"
         assert release is False
@@ -1148,18 +1378,30 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
         assert plugin_name == plugin.root_dir_name
         return True, None
 
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_put", mock_global_put)
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", ordered_terminate)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "deactivate_plugin_extension",
+        plugin_manager_pm.lifecycle._preferences, "global_get", mock_global_get
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle._preferences, "global_put", mock_global_put
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "terminate_plugin",
+        ordered_terminate,
+    )
+    monkeypatch.setattr(
+        type(plugin_manager_pm.extensions),
+        "deactivate",
         mock_deactivate,
     )
-    monkeypatch.setattr(plugin_manager_pm, "reload", mock_reload)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "_reload_unlocked",
+        mock_reload,
+    )
 
     try:
-        await plugin_manager_pm.turn_off_plugin(plugin.root_dir_name)
+        await plugin_manager_pm.lifecycle.turn_off_plugin(plugin.root_dir_name)
 
         assert plugin_tool.active is False
         assert other_tool.active is True
@@ -1169,27 +1411,28 @@ async def test_turn_plugin_toggles_llm_tools_from_plugin_child_module(
         assert transition_order == ["drain", "terminate"]
         cast(
             Any,
-            plugin_manager_pm.context,
+            plugin_manager_pm.loader._execution_context,
         )._platform_manager.refresh_registered_commands.assert_awaited_once()
 
-        await plugin_manager_pm.turn_on_plugin(plugin.root_dir_name)
+        await plugin_manager_pm.lifecycle.turn_on_plugin(plugin.root_dir_name)
 
         assert plugin_tool.active is True
         assert other_tool.active is True
         assert preferences["inactivated_plugins"] == []
         assert preferences["inactivated_llm_tools"] == []
     finally:
-        llm_tools.func_list = original_func_list
+        tool_manager.func_list = original_func_list
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
 
 @pytest.mark.asyncio
 async def test_load_reports_unregistered_plugin_without_index_error(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    _clear_star_runtime_state()
-    plugin_root = Path(plugin_manager_pm.plugin_store_path).parents[1]
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    plugin_root = Path(plugin_manager_pm.packages.store_path).parents[1]
     plugin_name = "broken_plugin"
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / plugin_name
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
     plugin_path.mkdir(parents=True)
     (plugin_path / "metadata.yaml").write_text(
         yaml.dump(
@@ -1212,25 +1455,27 @@ async def test_load_reports_unregistered_plugin_without_index_error(
         return None
 
     monkeypatch.syspath_prepend(str(plugin_root))
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
     monkeypatch.setattr(
-        star_manager_module,
-        "sync_command_configs",
-        mock_sync_command_configs,
+        plugin_manager_pm.lifecycle._preferences, "global_get", mock_global_get
+    )
+    monkeypatch.setattr(
+        loader_module, "sync_command_configs", mock_sync_command_configs
     )
 
     try:
-        success, error = await plugin_manager_pm.load(specified_dir_name=plugin_name)
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name
+        )
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
         _clear_module_cache()
 
     assert success is False
     assert error is not None
-    assert "未通过 Star 注册" in error
+    assert "未声明 Star 类" in error
     assert "继承自 Star 的插件主类" in error
     assert "list index out of range" not in error
-    assert plugin_name in plugin_manager_pm.failed_plugin_dict
+    assert plugin_name in plugin_manager_pm.loader._failed_plugins
 
 
 @pytest.mark.asyncio
@@ -1244,12 +1489,13 @@ async def test_ensure_plugin_requirements_reraises_cancelled_error(
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
 
     with pytest.raises(asyncio.CancelledError):
-        await plugin_manager_pm._ensure_plugin_requirements(
+        await plugin_manager_pm.packages.ensure_requirements(
             str(local_updator),
             TEST_PLUGIN_DIR,
         )
@@ -1266,12 +1512,13 @@ async def test_ensure_plugin_requirements_wraps_generic_dependency_install_failu
         raise RuntimeError("pip failed")
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
 
     with pytest.raises(PluginDependencyInstallError, match="pip failed") as exc_info:
-        await plugin_manager_pm._ensure_plugin_requirements(
+        await plugin_manager_pm.packages.ensure_requirements(
             str(local_updator),
             TEST_PLUGIN_DIR,
         )
@@ -1292,14 +1539,15 @@ async def test_ensure_plugin_requirements_wraps_pip_install_error(
         raise PipInstallError("install failed", code=2)
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
 
     with pytest.raises(
         PluginDependencyInstallError, match="install failed"
     ) as exc_info:
-        await plugin_manager_pm._ensure_plugin_requirements(
+        await plugin_manager_pm.packages.ensure_requirements(
             str(local_updator),
             TEST_PLUGIN_DIR,
         )
@@ -1319,15 +1567,17 @@ async def test_ensure_plugin_requirements_logs_requirements_file_install_for_mis
         return None
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.logger.info",
+        runtime_common_module.logger,
+        "info",
         lambda line, *args: logged_lines.append(line % args if args else line),
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -1363,11 +1613,12 @@ async def test_ensure_plugin_requirements_sets_target_upgrade_based_on_version_m
         observed_calls.append(kwargs)
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -1386,11 +1637,13 @@ async def test_import_plugin_prefers_installed_dependencies_before_first_import(
     sentinel_module = object()
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: MissingRequirementsPlan(
             missing_names=frozenset(),
             install_lines=(),
@@ -1403,9 +1656,9 @@ async def test_import_plugin_prefers_installed_dependencies_before_first_import(
         events.append(("import", name, tuple(fromlist)))
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="data.plugins.helloworld.main",
         module_str="main",
         root_dir_name=TEST_PLUGIN_DIR,
@@ -1429,8 +1682,9 @@ async def test_import_reserved_plugin_skips_preloading_user_site_dependencies(
     sentinel_module = object()
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -1438,9 +1692,9 @@ async def test_import_reserved_plugin_skips_preloading_user_site_dependencies(
         events.append(("import", name, tuple(fromlist)))
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="astrbot.builtin_stars.web_searcher.main",
         module_str="main",
         root_dir_name="web_searcher",
@@ -1464,11 +1718,13 @@ async def test_import_plugin_skips_preloading_when_requirements_version_mismatch
     sentinel_module = object()
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: MissingRequirementsPlan(
             missing_names=frozenset({"networkx"}),
             install_lines=("networkx>=3",),
@@ -1481,9 +1737,9 @@ async def test_import_plugin_skips_preloading_when_requirements_version_mismatch
         events.append(("import", name, tuple(fromlist)))
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="data.plugins.helloworld.main",
         module_str="main",
         root_dir_name=TEST_PLUGIN_DIR,
@@ -1507,11 +1763,13 @@ async def test_import_plugin_reinstalls_when_version_mismatch_import_fails(
     import_attempts = {"count": 0}
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: MissingRequirementsPlan(
             missing_names=frozenset({"networkx"}),
             install_lines=("networkx>=3",),
@@ -1519,13 +1777,13 @@ async def test_import_plugin_reinstalls_when_version_mismatch_import_fails(
         ),
     )
 
-    async def mock_check_plugin_dept_update(*, target_plugin=None):
-        events.append(("reinstall", target_plugin))
+    async def mock_ensure_requirements(_plugin_dir_path, plugin_label):
+        events.append(("reinstall", plugin_label))
 
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_check_plugin_dept_update",
-        mock_check_plugin_dept_update,
+        plugin_manager_pm.packages,
+        "ensure_requirements",
+        mock_ensure_requirements,
     )
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -1536,9 +1794,9 @@ async def test_import_plugin_reinstalls_when_version_mismatch_import_fails(
             raise ModuleNotFoundError("networkx")
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="data.plugins.helloworld.main",
         module_str="main",
         root_dir_name=TEST_PLUGIN_DIR,
@@ -1563,11 +1821,13 @@ async def test_import_plugin_skips_preloading_when_requirement_precheck_is_unava
     sentinel_module = object()
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: None,
     )
 
@@ -1576,9 +1836,9 @@ async def test_import_plugin_skips_preloading_when_requirement_precheck_is_unava
         events.append(("import", name, tuple(fromlist)))
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="data.plugins.helloworld.main",
         module_str="main",
         root_dir_name=TEST_PLUGIN_DIR,
@@ -1602,11 +1862,13 @@ async def test_import_plugin_attempts_dependency_recovery_when_precheck_is_unava
     import_attempts = {"count": 0}
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: None,
     )
 
@@ -1614,8 +1876,8 @@ async def test_import_plugin_attempts_dependency_recovery_when_precheck_is_unava
         raise AssertionError("dependency install fallback should not run")
 
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_check_plugin_dept_update",
+        plugin_manager_pm.packages,
+        "ensure_requirements",
         unexpected_check_plugin_dept_update,
     )
 
@@ -1627,9 +1889,9 @@ async def test_import_plugin_attempts_dependency_recovery_when_precheck_is_unava
             raise ModuleNotFoundError("networkx")
         return sentinel_module
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
-    imported_module = await plugin_manager_pm._import_plugin_with_dependency_recovery(
+    imported_module = await plugin_manager_pm.loader.import_with_dependency_recovery(
         path="data.plugins.helloworld.main",
         module_str="main",
         root_dir_name=TEST_PLUGIN_DIR,
@@ -1653,11 +1915,13 @@ async def test_import_plugin_does_not_recover_from_plain_import_error(
     events = []
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
-        lambda *, requirements_path: events.append(("prefer", requirements_path)),
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
+        lambda requirements_path: events.append(("prefer", requirements_path)),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: MissingRequirementsPlan(
             missing_names=frozenset(),
             install_lines=(),
@@ -1669,8 +1933,8 @@ async def test_import_plugin_does_not_recover_from_plain_import_error(
         raise AssertionError("dependency install fallback should not run")
 
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_check_plugin_dept_update",
+        plugin_manager_pm.packages,
+        "ensure_requirements",
         unexpected_check_plugin_dept_update,
     )
 
@@ -1679,10 +1943,10 @@ async def test_import_plugin_does_not_recover_from_plain_import_error(
         events.append(("import", name, tuple(fromlist)))
         raise ImportError("plugin import error")
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
     with pytest.raises(ImportError, match="plugin import error"):
-        await plugin_manager_pm._import_plugin_with_dependency_recovery(
+        await plugin_manager_pm.loader.import_with_dependency_recovery(
             path="data.plugins.helloworld.main",
             module_str="main",
             root_dir_name=TEST_PLUGIN_DIR,
@@ -1703,16 +1967,18 @@ async def test_import_plugin_surfaces_unexpected_recovery_errors(
     requirements_path.write_text("networkx\n", encoding="utf-8")
     events = []
 
-    def raising_prefer_installed_dependencies(*, requirements_path):
+    def raising_prefer_installed_dependencies(requirements_path):
         events.append(("prefer", requirements_path))
         raise RuntimeError("unexpected recovery failure")
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.prefer_installed_dependencies",
+        plugin_manager_pm.packages,
+        "prefer_installed_dependencies",
         raising_prefer_installed_dependencies,
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        loader_module,
+        "plan_missing_requirements_install",
         lambda requirements_path: None,
     )
 
@@ -1720,8 +1986,8 @@ async def test_import_plugin_surfaces_unexpected_recovery_errors(
         raise AssertionError("dependency install fallback should not run")
 
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_check_plugin_dept_update",
+        plugin_manager_pm.packages,
+        "ensure_requirements",
         unexpected_check_plugin_dept_update,
     )
 
@@ -1730,10 +1996,10 @@ async def test_import_plugin_surfaces_unexpected_recovery_errors(
         events.append(("import", name, tuple(fromlist)))
         raise ModuleNotFoundError("networkx")
 
-    monkeypatch.setattr(star_manager_module, "__import__", fake_import, raising=False)
+    monkeypatch.setattr(loader_module, "import_module", fake_import)
 
     with pytest.raises(RuntimeError, match="unexpected recovery failure"):
-        await plugin_manager_pm._import_plugin_with_dependency_recovery(
+        await plugin_manager_pm.loader.import_with_dependency_recovery(
             path="data.plugins.helloworld.main",
             module_str="main",
             root_dir_name=TEST_PLUGIN_DIR,
@@ -1755,7 +2021,9 @@ async def test_update_plugin_dependency_install_flow(
     dependency_install_fails: bool,
 ):
     mock_star = MockStar()
-    cast(Any, plugin_manager_pm.context).stars.append(mock_star)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+        cast(StarMetadata, mock_star)
+    )
 
     _write_requirements(local_updator)
     events = []
@@ -1765,16 +2033,19 @@ async def test_update_plugin_dependency_install_flow(
         del proxy, download_url
         events.append(("update", plugin.name))
 
-    monkeypatch.setattr(plugin_manager_pm.updator, "update", mock_update)
+    monkeypatch.setattr(plugin_manager_pm.packages._updator, "update", mock_update)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, dependency_install_fails),
     )
-    monkeypatch.setattr(plugin_manager_pm, "reload", _build_reload_mock(events))
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_reload_unlocked", _build_reload_mock(events)
+    )
 
     if dependency_install_fails:
         with pytest.raises(PluginDependencyInstallError, match="pip failed"):
-            await plugin_manager_pm.update_plugin(TEST_PLUGIN_NAME)
+            await plugin_manager_pm.lifecycle.update_plugin(TEST_PLUGIN_NAME)
         dep_event = next(event for event in events if event[0] == "deps")
         _assert_dependency_install_event_matches(
             dep_event,
@@ -1782,7 +2053,7 @@ async def test_update_plugin_dependency_install_flow(
             expected_content="networkx\n",
         )
     else:
-        await plugin_manager_pm.update_plugin(TEST_PLUGIN_NAME)
+        await plugin_manager_pm.lifecycle.update_plugin(TEST_PLUGIN_NAME)
         dep_event = next(event for event in events if event[0] == "deps")
         _assert_dependency_install_event_matches(
             dep_event,
@@ -1796,7 +2067,7 @@ async def test_update_plugin_dependency_install_flow(
 async def test_install_plugin_skips_dependency_install_when_no_requirements_missing(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / TEST_PLUGIN_DIR
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / TEST_PLUGIN_DIR
     events = []
     _mock_missing_requirements(monkeypatch, set())
 
@@ -1805,19 +2076,24 @@ async def test_install_plugin_skips_dependency_install_when_no_requirements_miss
         _write_requirements(plugin_path)
         return str(plugin_path)
 
-    monkeypatch.setattr(plugin_manager_pm.updator, "install", mock_install)
+    monkeypatch.setattr(plugin_manager_pm.packages._updator, "install", mock_install)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, False),
     )
 
     def mock_load_and_register(*args, **kwargs):
-        cast(Any, plugin_manager_pm.context).stars.append(MockStar())
+        plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+            cast(StarMetadata, MockStar())
+        )
         return _build_load_mock(events)(*args, **kwargs)
 
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load_and_register)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_load_unlocked", mock_load_and_register
+    )
 
-    await plugin_manager_pm.install_plugin(TEST_PLUGIN_REPO)
+    await plugin_manager_pm.lifecycle.install_plugin(TEST_PLUGIN_REPO)
 
     assert "deps" not in [e[0] for e in events]
     assert ("load", TEST_PLUGIN_DIR) in events
@@ -1827,7 +2103,7 @@ async def test_install_plugin_skips_dependency_install_when_no_requirements_miss
 async def test_install_plugin_runs_dependency_install_when_precheck_fails(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    plugin_path = Path(plugin_manager_pm.plugin_store_path) / TEST_PLUGIN_DIR
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / TEST_PLUGIN_DIR
     events = []
 
     async def mock_install(repo_url: str, proxy=""):
@@ -1836,19 +2112,24 @@ async def test_install_plugin_runs_dependency_install_when_precheck_fails(
         return str(plugin_path)
 
     _mock_precheck_fails(monkeypatch)
-    monkeypatch.setattr(plugin_manager_pm.updator, "install", mock_install)
+    monkeypatch.setattr(plugin_manager_pm.packages._updator, "install", mock_install)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, False),
     )
 
     def mock_load_and_register(*args, **kwargs):
-        cast(Any, plugin_manager_pm.context).stars.append(MockStar())
+        plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+            cast(StarMetadata, MockStar())
+        )
         return _build_load_mock(events)(*args, **kwargs)
 
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load_and_register)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "_load_unlocked", mock_load_and_register
+    )
 
-    await plugin_manager_pm.install_plugin(TEST_PLUGIN_REPO)
+    await plugin_manager_pm.lifecycle.install_plugin(TEST_PLUGIN_REPO)
 
     dep_event = next(event for event in events if event[0] == "deps")
     _assert_dependency_install_event_matches(
@@ -1873,11 +2154,12 @@ async def test_ensure_plugin_requirements_installs_only_missing_requirement_line
     )
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, False, capture_content=True),
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -1901,15 +2183,17 @@ async def test_ensure_plugin_requirements_creates_temp_dir_before_filtered_insta
     _mock_missing_requirements_plan(monkeypatch, {"boto3"}, ["boto3"])
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.get_astrbot_temp_path",
+        runtime_common_module,
+        "get_astrbot_temp_path",
         lambda: str(temp_dir),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, False, capture_content=True),
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -1927,7 +2211,8 @@ async def test_ensure_plugin_requirements_falls_back_when_missing_names_have_no_
     events = []
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        runtime_common_module,
+        "plan_missing_requirements_install",
         lambda path: MissingRequirementsPlan(
             missing_names=frozenset({"botocore"}),
             install_lines=(),
@@ -1935,11 +2220,12 @@ async def test_ensure_plugin_requirements_falls_back_when_missing_names_have_no_
         ),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         _build_dependency_install_mock(events, False),
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -1956,7 +2242,8 @@ async def test_ensure_plugin_requirements_fallback_full_install_keeps_upgrade_fo
     observed_calls = []
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.plan_missing_requirements_install",
+        runtime_common_module,
+        "plan_missing_requirements_install",
         lambda path: MissingRequirementsPlan(
             missing_names=frozenset({"boto3"}),
             install_lines=(),
@@ -1969,11 +2256,12 @@ async def test_ensure_plugin_requirements_fallback_full_install_keeps_upgrade_fo
         observed_calls.append(kwargs)
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
 
-    await plugin_manager_pm._ensure_plugin_requirements(
+    await plugin_manager_pm.packages.ensure_requirements(
         str(local_updator),
         TEST_PLUGIN_DIR,
     )
@@ -2007,21 +2295,24 @@ async def test_ensure_plugin_requirements_does_not_mask_install_error_when_clean
         return original_remove(path)
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.get_astrbot_temp_path",
+        runtime_common_module,
+        "get_astrbot_temp_path",
         lambda: str(temp_dir),
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.pip_installer.install",
+        plugin_manager_pm.packages._pip_installer,
+        "install",
         mock_install_requirements,
     )
-    monkeypatch.setattr("astrbot.core.star.star_manager.os.remove", flaky_remove)
+    monkeypatch.setattr(runtime_common_module.os, "remove", flaky_remove)
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.logger.warning",
+        runtime_common_module.logger,
+        "warning",
         lambda line, *args: warning_logs.append(line % args if args else line),
     )
 
     with pytest.raises(PluginDependencyInstallError, match="pip failed"):
-        await plugin_manager_pm._ensure_plugin_requirements(
+        await plugin_manager_pm.packages.ensure_requirements(
             str(local_updator),
             TEST_PLUGIN_DIR,
         )
@@ -2042,9 +2333,13 @@ async def test_cleanup_plugin_optional_artifacts_clears_kv_when_plugin_id_presen
         async def clear_preferences(self, scope, scope_id):
             cleared.append((scope, scope_id))
 
-    monkeypatch.setattr(plugin_manager_pm.context, "get_db", MockDB, raising=False)
+    monkeypatch.setattr(
+        plugin_manager_pm.loader._execution_context,
+        "database",
+        MockDB(),
+    )
 
-    await plugin_manager_pm._cleanup_plugin_optional_artifacts(
+    await plugin_manager_pm.packages.cleanup_optional_artifacts(
         root_dir_name="test_plugin",
         plugin_label="TestPlugin",
         plugin_id="test_author/test_plugin",
@@ -2065,9 +2360,14 @@ async def test_cleanup_plugin_optional_artifacts_skips_kv_when_plugin_id_none(
         async def clear_preferences(self, scope, scope_id):
             cleared.append((scope, scope_id))
 
-    monkeypatch.setattr(plugin_manager_pm.context, "get_db", MockDB, raising=False)
+    monkeypatch.setattr(
+        plugin_manager_pm.loader._execution_context,
+        "get_db",
+        MockDB,
+        raising=False,
+    )
 
-    await plugin_manager_pm._cleanup_plugin_optional_artifacts(
+    await plugin_manager_pm.packages.cleanup_optional_artifacts(
         root_dir_name="test_plugin",
         plugin_label="TestPlugin",
         plugin_id=None,
@@ -2093,9 +2393,11 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
     mock_star.star_cls = None
     mock_star.plugin_id = "mock_author/mock_name"
 
-    cast(Any, plugin_manager_pm.context).stars.append(mock_star)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+        cast(StarMetadata, mock_star)
+    )
 
-    async def mock_deactivate(plugin, *, reason, release=False):
+    async def mock_deactivate(_coordinator, plugin, *, reason, release=False):
         assert plugin is mock_star
         assert reason == "uninstall"
         assert release is True
@@ -2104,17 +2406,17 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
     async def mock_terminate(_plugin):
         transition_order.append("terminate")
 
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
+    monkeypatch.setattr(plugin_manager_pm.lifecycle, "terminate_plugin", mock_terminate)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "deactivate_plugin_extension",
+        type(plugin_manager_pm.extensions),
+        "deactivate",
         mock_deactivate,
     )
     monkeypatch.setattr(
-        plugin_manager_pm, "_unbind_plugin", lambda n, m: asyncio.sleep(0)
+        plugin_manager_pm.loader, "unpublish_plugin", lambda _module_path: None
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.remove_dir",
+        "astrbot.core.star.plugin_lifecycle.remove_dir",
         lambda p: None,
     )
 
@@ -2130,10 +2432,10 @@ async def test_uninstall_plugin_reads_plugin_id_from_metadata(
         )
 
     monkeypatch.setattr(
-        plugin_manager_pm, "_cleanup_plugin_optional_artifacts", mock_cleanup
+        plugin_manager_pm.packages, "cleanup_optional_artifacts", mock_cleanup
     )
 
-    await plugin_manager_pm.uninstall_plugin(
+    await plugin_manager_pm.lifecycle.uninstall_plugin(
         TEST_PLUGIN_NAME, delete_config=False, delete_data=True
     )
 
@@ -2156,16 +2458,18 @@ async def test_uninstall_plugin_handles_disabled_plugin_with_plugin_id(
     mock_star.star_cls = None
     mock_star.plugin_id = "mock_author/mock_name"
 
-    cast(Any, plugin_manager_pm.context).stars.append(mock_star)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(
+        cast(StarMetadata, mock_star)
+    )
 
     monkeypatch.setattr(
-        plugin_manager_pm, "_terminate_plugin", lambda p: asyncio.sleep(0)
+        plugin_manager_pm.lifecycle, "terminate_plugin", lambda p: asyncio.sleep(0)
     )
     monkeypatch.setattr(
-        plugin_manager_pm, "_unbind_plugin", lambda n, m: asyncio.sleep(0)
+        plugin_manager_pm.loader, "unpublish_plugin", lambda _module_path: None
     )
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.remove_dir",
+        "astrbot.core.star.plugin_lifecycle.remove_dir",
         lambda p: None,
     )
 
@@ -2181,10 +2485,10 @@ async def test_uninstall_plugin_handles_disabled_plugin_with_plugin_id(
         )
 
     monkeypatch.setattr(
-        plugin_manager_pm, "_cleanup_plugin_optional_artifacts", mock_cleanup
+        plugin_manager_pm.packages, "cleanup_optional_artifacts", mock_cleanup
     )
 
-    await plugin_manager_pm.uninstall_plugin(
+    await plugin_manager_pm.lifecycle.uninstall_plugin(
         TEST_PLUGIN_NAME, delete_config=False, delete_data=True
     )
 
@@ -2198,14 +2502,14 @@ async def test_uninstall_failed_plugin_passes_plugin_id_from_record(
 ):
     cleanup_calls = []
 
-    plugin_manager_pm.failed_plugin_dict[TEST_PLUGIN_DIR] = {
+    plugin_manager_pm.loader._failed_plugins[TEST_PLUGIN_DIR] = {
         "name": TEST_PLUGIN_NAME,
         "display_name": "Hello World",
         "plugin_id": "astrbot_team/helloworld",
     }
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.remove_dir",
+        "astrbot.core.star.plugin_lifecycle.remove_dir",
         lambda p: None,
     )
 
@@ -2221,10 +2525,10 @@ async def test_uninstall_failed_plugin_passes_plugin_id_from_record(
         )
 
     monkeypatch.setattr(
-        plugin_manager_pm, "_cleanup_plugin_optional_artifacts", mock_cleanup
+        plugin_manager_pm.packages, "cleanup_optional_artifacts", mock_cleanup
     )
 
-    await plugin_manager_pm.uninstall_failed_plugin(
+    await plugin_manager_pm.lifecycle.uninstall_failed_plugin(
         TEST_PLUGIN_DIR, delete_config=False, delete_data=True
     )
 
@@ -2238,13 +2542,13 @@ async def test_uninstall_failed_plugin_without_plugin_id_in_record(
 ):
     cleanup_calls = []
 
-    plugin_manager_pm.failed_plugin_dict[TEST_PLUGIN_DIR] = {
+    plugin_manager_pm.loader._failed_plugins[TEST_PLUGIN_DIR] = {
         "name": TEST_PLUGIN_NAME,
         "display_name": "Hello World",
     }
 
     monkeypatch.setattr(
-        "astrbot.core.star.star_manager.remove_dir",
+        "astrbot.core.star.plugin_lifecycle.remove_dir",
         lambda p: None,
     )
 
@@ -2260,10 +2564,10 @@ async def test_uninstall_failed_plugin_without_plugin_id_in_record(
         )
 
     monkeypatch.setattr(
-        plugin_manager_pm, "_cleanup_plugin_optional_artifacts", mock_cleanup
+        plugin_manager_pm.packages, "cleanup_optional_artifacts", mock_cleanup
     )
 
-    await plugin_manager_pm.uninstall_failed_plugin(
+    await plugin_manager_pm.lifecycle.uninstall_failed_plugin(
         TEST_PLUGIN_DIR, delete_config=False, delete_data=True
     )
 
@@ -2289,20 +2593,14 @@ async def test_load_syncs_existing_metadata_activation_from_preferences(
     expected_activated: bool,
 ):
     """Existing plugin metadata activation follows persisted preferences."""
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "demo_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    metadata = star_manager_module.StarMetadata(
-        name=plugin_name,
-        author="AstrBot Team",
-        desc="Demo plugin",
-        version="1.0.0",
-        root_dir_name=plugin_name,
-        module_path=module_path,
-        activated=False,
-    )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
+
+    class DemoPlugin:
+        def __init__(self, context):
+            self.context = context
+
     preferences = {
         "inactivated_plugins": inactivated_plugins,
         "inactivated_llm_tools": [],
@@ -2324,11 +2622,11 @@ async def test_load_syncs_existing_metadata_activation_from_preferences(
         assert path == module_path
         return ModuleType(module_path)
 
-    async def mock_sync_command_configs():
+    async def mock_sync_command_configs(*_args):
         return None
 
     def mock_load_plugin_metadata(**_kwargs):
-        return star_manager_module.StarMetadata(
+        return StarMetadata(
             name=plugin_name,
             author="AstrBot Team",
             desc="Demo plugin",
@@ -2338,169 +2636,581 @@ async def test_load_syncs_existing_metadata_activation_from_preferences(
             activated=False,
         )
 
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_get_plugin_modules",
+        plugin_manager_pm.lifecycle._preferences, "global_get", mock_global_get
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.loader,
+        "discover_modules",
         lambda: [{"pname": plugin_name, "module": "main"}],
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_import_plugin_with_dependency_recovery",
+        plugin_manager_pm.loader,
+        "import_with_dependency_recovery",
         mock_import_plugin_with_dependency_recovery,
     )
     monkeypatch.setattr(
-        plugin_manager_pm,
-        "_load_plugin_metadata",
+        plugin_manager_pm.loader,
+        "load_metadata",
         mock_load_plugin_metadata,
     )
     monkeypatch.setattr(
-        star_manager_module,
+        loader_module,
         "sync_command_configs",
         mock_sync_command_configs,
     )
+    _mock_star_declaration(monkeypatch, module_path, DemoPlugin)
 
     try:
-        success, error = await plugin_manager_pm.load(
+        success, error = await plugin_manager_pm.lifecycle.load(
             specified_module_path=module_path,
+        )
+        registered = plugin_manager_pm.catalog.runtime_catalogs.plugins.get_by_module(
+            module_path
         )
 
         assert success is True
         assert error is None
-        assert metadata.activated is expected_activated
+        assert registered is not None
+        assert registered.activated is expected_activated
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
 
 @pytest.mark.asyncio
-async def test_reload_deactivated_plugin_preserves_tools(
+async def test_failed_reload_deactivated_plugin_keeps_stale_tools(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    """Specified reload of a deactivated plugin keeps its tools in func_list."""
-    _clear_star_runtime_state()
+    """A failed stage never removes tools from a disabled live generation."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "demo_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    metadata = star_manager_module.StarMetadata(
+    metadata = StarMetadata(
         name=plugin_name,
         root_dir_name=plugin_name,
         module_path=module_path,
         activated=False,
     )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(metadata)
 
-    plugin_tool = star_manager_module.FunctionTool(
+    plugin_tool = FunctionTool(
         name="plugin_search",
         description="plugin search",
         parameters={"type": "object", "properties": {}},
         handler_module_path=f"data.plugins.{plugin_name}.main.tools.search",
     )
-    llm_tools = cast(Any, star_manager_module.llm_tools)
-    original_func_list = llm_tools.func_list
-    llm_tools.func_list = [plugin_tool]
-
-    async def mock_terminate(smd):
-        pass  # deactivated → no-op
-
-    async def mock_load(specified_module_path=None, **kwargs):
-        return True, None
-
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load)
+    tool_manager = plugin_manager_pm.catalog.runtime_catalogs.tools
+    original_func_list = tool_manager.func_list
+    tool_manager.func_list = [plugin_tool]
 
     try:
-        await plugin_manager_pm.reload(plugin_name)
-        assert plugin_tool in llm_tools.func_list
+        success, _error = await plugin_manager_pm.lifecycle.reload(plugin_name)
+        assert success is False
+        assert tool_manager.func_list == [plugin_tool]
     finally:
-        llm_tools.func_list = original_func_list
-        _clear_star_runtime_state()
+        tool_manager.func_list = original_func_list
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
 
 @pytest.mark.asyncio
-async def test_reload_activated_plugin_still_unbinds(
+async def test_failed_reload_does_not_unpublish_live_module(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    """Specified reload of an activated plugin still calls _unbind_plugin."""
-    _clear_star_runtime_state()
+    """Staging failure must not call the destructive live unpublish path."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "demo_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    metadata = star_manager_module.StarMetadata(
+    metadata = StarMetadata(
         name=plugin_name,
         root_dir_name=plugin_name,
         module_path=module_path,
         activated=True,
     )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(metadata)
 
     unbound = []
 
-    async def mock_terminate(smd):
-        pass
+    def mock_unbind(path):
+        unbound.append(path)
 
-    async def mock_unbind(name, path):
-        unbound.append(name)
-
-    async def mock_load(specified_module_path=None, **kwargs):
-        return True, None
-
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
-    monkeypatch.setattr(plugin_manager_pm, "_unbind_plugin", mock_unbind)
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load)
+    monkeypatch.setattr(plugin_manager_pm.loader, "unpublish_plugin", mock_unbind)
 
     try:
-        await plugin_manager_pm.reload(plugin_name)
-        assert unbound == [plugin_name]
+        success, _error = await plugin_manager_pm.lifecycle.reload(plugin_name)
+        assert success is False
+        assert unbound == []
+        assert (
+            plugin_manager_pm.catalog.runtime_catalogs.plugins.get_by_module(
+                module_path
+            )
+            is metadata
+        )
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
 
 
 @pytest.mark.asyncio
-async def test_full_reload_deactivated_plugin_stays_registered(
+async def test_successful_staged_reload_replaces_live_catalog(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
-    """Full reload keeps deactivated plugin in star_map with activated=False."""
-    _clear_star_runtime_state()
+    """Successful promotion replaces only the old plugin-owned declarations."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "demo_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    metadata = star_manager_module.StarMetadata(
+    current = StarMetadata(
         name=plugin_name,
         root_dir_name=plugin_name,
         module_path=module_path,
-        activated=False,
     )
-    star_manager_module.star_map[module_path] = metadata
-    star_manager_module.star_registry.append(metadata)
+    catalogs = plugin_manager_pm.catalog.runtime_catalogs
+    catalogs.plugins.publish(current)
 
-    async def mock_terminate(smd):
-        pass
+    async def old_handler(*_args: object) -> None:
+        return None
 
-    async def mock_unbind_full(name, path):
-        pass
+    old_handler_metadata = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name=f"{module_path}.old_handler",
+        handler_name="old_handler",
+        handler_module_path=module_path,
+        handler=old_handler,
+        event_filters=[],
+    )
+    catalogs.handlers.append(old_handler_metadata)
+    old_tool = FunctionTool(
+        name="demo_plugin_tool",
+        description="old tool",
+        parameters={"type": "object", "properties": {}},
+        handler_module_path=module_path,
+    )
+    catalogs.tools.func_list.append(old_tool)
 
-    async def mock_load(specified_module_path=None, **kwargs):
-        # In full reload, load() re-registers all plugins.
-        # Deactivated plugins get registered with activated=False.
-        re_registered = star_manager_module.StarMetadata(
+    staged_catalogs = RuntimeCatalogs()
+    staged_catalog = PluginCatalog(staged_catalogs)
+    replacement = StarMetadata(
+        name=plugin_name,
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    staged_catalogs.plugins.publish(replacement)
+
+    async def replacement_handler(*_args: object) -> None:
+        return None
+
+    replacement_handler_metadata = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name=f"{module_path}.replacement_handler",
+        handler_name="replacement_handler",
+        handler_module_path=module_path,
+        handler=replacement_handler,
+        event_filters=[],
+    )
+    staged_catalogs.handlers.append(replacement_handler_metadata)
+    replacement_tool = FunctionTool(
+        name="demo_plugin_tool",
+        description="replacement tool",
+        parameters={"type": "object", "properties": {}},
+        handler_module_path=module_path,
+    )
+    staged_catalogs.tools.func_list.append(replacement_tool)
+
+    context = SimpleNamespace(dashboard_extensions=None)
+    context._rebind_runtime_catalogs = MagicMock()
+    staged = SimpleNamespace(
+        metadata=replacement,
+        catalog=staged_catalog,
+        extensions=PluginExtensionCoordinator(DashboardExtensionRegistry()),
+        execution_context=SimpleNamespace(),
+        plugin_context=context,
+    )
+
+    async def stage_generation(_current):
+        return staged, None
+
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "_stage_reload_generation",
+        stage_generation,
+    )
+    terminate_plugin = AsyncMock()
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle, "terminate_plugin", terminate_plugin
+    )
+
+    try:
+        success, error = await plugin_manager_pm.lifecycle.reload(plugin_name)
+        assert success is True
+        assert error is None
+        assert catalogs.plugins.get_by_module(module_path) is replacement
+        assert list(catalogs.handlers) == [replacement_handler_metadata]
+        assert catalogs.tools.func_list == [replacement_tool]
+        terminate_plugin.assert_awaited_once_with(current)
+        context._rebind_runtime_catalogs.assert_called_once_with(catalogs)
+    finally:
+        _clear_plugin_runtime_state(catalogs)
+
+
+@pytest.mark.asyncio
+async def test_staged_reload_keeps_live_module_published_during_initialize_await(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staged initializer must never expose its module via ``sys.modules``."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    plugin_name = "module_stage_isolation"
+    module_path = f"data.plugins.{plugin_name}.main"
+    plugin_path = Path(plugin_manager_pm.packages.store_path) / plugin_name
+    plugin_path.mkdir()
+    (plugin_path / "metadata.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "name": plugin_name,
+                "author": "AstrBot Team",
+                "desc": "module stage isolation",
+                "short_desc": "module stage isolation",
+                "version": "1.0.0",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (plugin_path / "main.py").write_text(
+        "from astrbot.api.star import Star\n"
+        "\n"
+        "class LiveGeneration(Star):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    runtime_root = Path(plugin_manager_pm.packages.store_path).parents[1]
+    monkeypatch.syspath_prepend(str(runtime_root))
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle._preferences,
+        "global_get",
+        AsyncMock(side_effect=lambda _key, default=None: default),
+    )
+
+    probe_name = "plugin_stage_isolation_probe"
+    probe = ModuleType(probe_name)
+    probe.entered = asyncio.Event()
+    probe.release = asyncio.Event()
+    monkeypatch.setitem(sys.modules, probe_name, probe)
+
+    reload_task: asyncio.Task[tuple[bool, str | None]] | None = None
+    try:
+        success, error = await plugin_manager_pm.lifecycle.load(
+            specified_dir_name=plugin_name,
+        )
+        assert success is True
+        assert error is None
+        original_module = sys.modules[module_path]
+        original_metadata = plugin_manager_pm.catalog.plugins.get_by_module(module_path)
+
+        (plugin_path / "main.py").write_text(
+            "from astrbot.api.star import Star\n"
+            f"from {probe_name} import entered, release\n"
+            "\n"
+            "class ReplacementGeneration(Star):\n"
+            "    async def initialize(self):\n"
+            "        entered.set()\n"
+            "        await release.wait()\n"
+            "\n"
+            "# Deliberately changes the source size to invalidate timestamp pyc caches.\n",
+            encoding="utf-8",
+        )
+        importlib.invalidate_caches()
+        reload_task = asyncio.create_task(plugin_manager_pm.lifecycle.reload(plugin_name))
+        await asyncio.wait_for(probe.entered.wait(), timeout=1)
+
+        assert sys.modules[module_path] is original_module
+        assert (
+            plugin_manager_pm.catalog.plugins.get_by_module(module_path)
+            is original_metadata
+        )
+
+        probe.release.set()
+        success, error = await reload_task
+        assert success is True
+        assert error is None
+        assert sys.modules[module_path] is not original_module
+        assert (
+            plugin_manager_pm.catalog.plugins.get_by_module(module_path)
+            is not original_metadata
+        )
+    finally:
+        if reload_task is not None and not reload_task.done():
+            probe.release.set()
+            await reload_task
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+        for name in tuple(sys.modules):
+            if name == f"data.plugins.{plugin_name}" or name.startswith(
+                f"data.plugins.{plugin_name}."
+            ):
+                sys.modules.pop(name, None)
+
+
+@pytest.mark.asyncio
+async def test_staged_reload_does_not_share_legacy_task_registrations(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failed staging must not append deprecated tasks to the live context."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    plugin_name = "staged_task_isolation"
+    module_path = f"data.plugins.{plugin_name}.main"
+    current = StarMetadata(
+        name=plugin_name,
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    plugin_manager_pm.catalog.plugins.publish(current)
+    live_context = plugin_manager_pm.loader._execution_context
+    live_context._register_tasks = []
+    live_context.background_tasks = set()
+    registered_coroutine = None
+    observed: list[bool] = []
+
+    async def staged_load(self, **_kwargs):
+        nonlocal registered_coroutine
+        observed.extend(
+            [
+                self._execution_context._register_tasks
+                is live_context._register_tasks,
+                self._execution_context.background_tasks is live_context.background_tasks,
+            ],
+        )
+
+        async def deprecated_task() -> None:
+            await asyncio.Event().wait()
+
+        registered_coroutine = deprecated_task()
+        self._execution_context._register_tasks.append(registered_coroutine)
+        self._catalog.plugins.publish(
+            StarMetadata(
+                name=plugin_name,
+                root_dir_name=plugin_name,
+                module_path=module_path,
+            ),
+        )
+        return False, "staged initialization failed"
+
+    monkeypatch.setattr(PluginRuntimeLoader, "load", staged_load)
+    try:
+        success, error = await plugin_manager_pm.lifecycle.reload(plugin_name)
+        assert success is False
+        assert error == "staged initialization failed"
+        assert observed == [False, False]
+        assert live_context._register_tasks == []
+        assert live_context.background_tasks == set()
+        assert registered_coroutine is not None
+        assert registered_coroutine.cr_frame is None
+    finally:
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+
+
+def _make_staged_generation(
+    plugin_name: str,
+) -> tuple[StarMetadata, SimpleNamespace, StarHandlerMetadata, FunctionTool]:
+    """Build a small staged package for reload transaction tests."""
+    module_path = f"data.plugins.{plugin_name}.main"
+    catalogs = RuntimeCatalogs()
+    catalog = PluginCatalog(catalogs)
+    replacement = StarMetadata(
+        name=plugin_name,
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    catalogs.plugins.publish(replacement)
+
+    async def replacement_handler(*_args: object) -> None:
+        return None
+
+    handler = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name=f"{module_path}.replacement_handler",
+        handler_name="replacement_handler",
+        handler_module_path=module_path,
+        handler=replacement_handler,
+        event_filters=[],
+    )
+    catalogs.handlers.append(handler)
+    tool = FunctionTool(
+        name=f"{plugin_name}_tool",
+        description="replacement tool",
+        parameters={"type": "object", "properties": {}},
+        handler_module_path=module_path,
+    )
+    catalogs.tools.func_list.append(tool)
+    context = SimpleNamespace(dashboard_extensions=None)
+    context._rebind_runtime_catalogs = MagicMock()
+    return (
+        replacement,
+        SimpleNamespace(
+            metadata=replacement,
+            catalog=catalog,
+            extensions=PluginExtensionCoordinator(DashboardExtensionRegistry()),
+            execution_context=SimpleNamespace(),
+            plugin_context=context,
+        ),
+        handler,
+        tool,
+    )
+
+
+@pytest.mark.asyncio
+async def test_batch_reload_rolls_back_catalog_after_second_extension_promotion_fails(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failure on the second promotion must restore the first package too."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    catalogs = plugin_manager_pm.catalog.runtime_catalogs
+    original: list[tuple[StarMetadata, StarHandlerMetadata, FunctionTool]] = []
+    staged: list[SimpleNamespace] = []
+    for plugin_name in ("reload_batch_one", "reload_batch_two"):
+        module_path = f"data.plugins.{plugin_name}.main"
+        metadata = StarMetadata(
             name=plugin_name,
             root_dir_name=plugin_name,
             module_path=module_path,
-            activated=False,
         )
-        star_manager_module.star_map[module_path] = re_registered
-        star_manager_module.star_registry.append(re_registered)
-        return True, None
+        catalogs.plugins.publish(metadata)
 
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
-    monkeypatch.setattr(plugin_manager_pm, "_unbind_plugin", mock_unbind_full)
-    monkeypatch.setattr(plugin_manager_pm, "load", mock_load)
+        async def old_handler(*_args: object) -> None:
+            return None
 
+        handler = StarHandlerMetadata(
+            event_type=EventType.AdapterMessageEvent,
+            handler_full_name=f"{module_path}.old_handler",
+            handler_name="old_handler",
+            handler_module_path=module_path,
+            handler=old_handler,
+            event_filters=[],
+        )
+        catalogs.handlers.append(handler)
+        tool = FunctionTool(
+            name=f"{plugin_name}_tool",
+            description="old tool",
+            parameters={"type": "object", "properties": {}},
+            handler_module_path=module_path,
+        )
+        catalogs.tools.func_list.append(tool)
+        original.append((metadata, handler, tool))
+        _replacement, generation, _handler, _tool = _make_staged_generation(
+            plugin_name,
+        )
+        staged.append(generation)
+
+    async def stage_generation(_current: StarMetadata):
+        return staged.pop(0), None
+
+    promotion_calls = 0
+
+    async def fail_second_promotion(
+        _coordinator,
+        _staging,
+        _current,
+        _replacement,
+        *,
+        reason,
+    ) -> None:
+        del reason
+        nonlocal promotion_calls
+        promotion_calls += 1
+        if promotion_calls == 2:
+            raise RuntimeError("second extension promotion failed")
+
+    terminate_plugin = AsyncMock()
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "_stage_reload_generation",
+        stage_generation,
+    )
+    monkeypatch.setattr(
+        type(plugin_manager_pm.extensions),
+        "promote_staged_generation",
+        fail_second_promotion,
+    )
+    monkeypatch.setattr(plugin_manager_pm.lifecycle, "terminate_plugin", terminate_plugin)
     try:
-        await plugin_manager_pm.reload()
-        assert module_path in star_manager_module.star_map
-        assert star_manager_module.star_map[module_path].activated is False
+        success, error = await plugin_manager_pm.lifecycle.reload()
+        assert success is False
+        assert error == "second extension promotion failed"
+        assert promotion_calls == 2
+        assert [catalogs.plugins.get_by_module(item[0].module_path) for item in original] == [
+            item[0] for item in original
+        ]
+        assert list(catalogs.handlers) == [item[1] for item in original]
+        assert catalogs.tools.func_list == [item[2] for item in original]
+        terminate_plugin.assert_not_awaited()
     finally:
-        _clear_star_runtime_state()
+        _clear_plugin_runtime_state(catalogs)
+
+
+@pytest.mark.asyncio
+async def test_reload_rolls_back_catalog_when_command_refresh_fails(
+    plugin_manager_pm: PluginManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-promotion command refresh failure cannot leave new declarations live."""
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
+    plugin_name = "reload_refresh_failure"
+    module_path = f"data.plugins.{plugin_name}.main"
+    catalogs = plugin_manager_pm.catalog.runtime_catalogs
+    current = StarMetadata(
+        name=plugin_name,
+        root_dir_name=plugin_name,
+        module_path=module_path,
+    )
+    catalogs.plugins.publish(current)
+
+    async def old_handler(*_args: object) -> None:
+        return None
+
+    old_metadata = StarHandlerMetadata(
+        event_type=EventType.AdapterMessageEvent,
+        handler_full_name=f"{module_path}.old_handler",
+        handler_name="old_handler",
+        handler_module_path=module_path,
+        handler=old_handler,
+        event_filters=[],
+    )
+    catalogs.handlers.append(old_metadata)
+    old_tool = FunctionTool(
+        name=f"{plugin_name}_tool",
+        description="old tool",
+        parameters={"type": "object", "properties": {}},
+        handler_module_path=module_path,
+    )
+    catalogs.tools.func_list.append(old_tool)
+    _replacement, staged, _replacement_handler, _replacement_tool = (
+        _make_staged_generation(plugin_name)
+    )
+
+    async def stage_generation(_current: StarMetadata):
+        return staged, None
+
+    terminate_plugin = AsyncMock()
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "_stage_reload_generation",
+        stage_generation,
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle,
+        "_refresh_command_surfaces",
+        AsyncMock(side_effect=[RuntimeError("command refresh failed"), None]),
+    )
+    monkeypatch.setattr(plugin_manager_pm.lifecycle, "terminate_plugin", terminate_plugin)
+    try:
+        success, error = await plugin_manager_pm.lifecycle.reload(plugin_name)
+        assert success is False
+        assert error == "command refresh failed"
+        assert catalogs.plugins.get_by_module(module_path) is current
+        assert list(catalogs.handlers) == [old_metadata]
+        assert catalogs.tools.func_list == [old_tool]
+        terminate_plugin.assert_not_awaited()
+    finally:
+        _clear_plugin_runtime_state(catalogs)
 
 
 @pytest.mark.asyncio
@@ -2508,29 +3218,27 @@ async def test_turn_on_plugin_after_deactivated_reload_reactivates_tools(
     plugin_manager_pm: PluginManager, monkeypatch
 ):
     """turn_on_plugin reactivates tools after a deactivated plugin is reloaded."""
-    _clear_star_runtime_state()
+    _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)
     plugin_name = "demo_plugin"
     module_path = f"data.plugins.{plugin_name}.main"
-    plugin = star_manager_module.StarMetadata(
+    plugin = StarMetadata(
         name=plugin_name,
         root_dir_name=plugin_name,
         module_path=module_path,
         activated=False,
     )
-    cast(Any, plugin_manager_pm.context).stars.append(plugin)
-    star_manager_module.star_map[module_path] = plugin
-    star_manager_module.star_registry.append(plugin)
+    plugin_manager_pm.catalog.runtime_catalogs.plugins.publish(plugin)
 
-    plugin_tool = star_manager_module.FunctionTool(
+    plugin_tool = FunctionTool(
         name="plugin_search",
         description="plugin search",
         parameters={"type": "object", "properties": {}},
         handler_module_path=f"data.plugins.{plugin_name}.main.tools.search",
     )
     plugin_tool.active = False  # simulate deactivated state
-    llm_tools = cast(Any, star_manager_module.llm_tools)
-    original_func_list = llm_tools.func_list
-    llm_tools.func_list = [plugin_tool]
+    tool_manager = plugin_manager_pm.catalog.runtime_catalogs.tools
+    original_func_list = tool_manager.func_list
+    tool_manager.func_list = [plugin_tool]
     preferences = {
         "inactivated_plugins": [module_path],
         "inactivated_llm_tools": [plugin_tool.name],
@@ -2549,17 +3257,20 @@ async def test_turn_on_plugin_after_deactivated_reload_reactivates_tools(
         assert plugin_name_arg == plugin_name
         return True, None
 
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_get", mock_global_get)
-    monkeypatch.setattr(plugin_manager_pm.preferences, "global_put", mock_global_put)
-    monkeypatch.setattr(plugin_manager_pm, "_terminate_plugin", mock_terminate)
-    monkeypatch.setattr(plugin_manager_pm, "reload", mock_reload)
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle._preferences, "global_get", mock_global_get
+    )
+    monkeypatch.setattr(
+        plugin_manager_pm.lifecycle._preferences, "global_put", mock_global_put
+    )
+    monkeypatch.setattr(plugin_manager_pm.lifecycle, "terminate_plugin", mock_terminate)
+    monkeypatch.setattr(plugin_manager_pm.lifecycle, "_reload_unlocked", mock_reload)
 
     try:
-        await plugin_manager_pm.turn_on_plugin(plugin_name)
+        await plugin_manager_pm.lifecycle.turn_on_plugin(plugin_name)
         assert plugin_tool.active is True
         assert module_path not in preferences["inactivated_plugins"]
         assert plugin.activated is True
     finally:
-        llm_tools.func_list = original_func_list
-        cast(Any, plugin_manager_pm.context).stars.remove(plugin)
-        _clear_star_runtime_state()
+        tool_manager.func_list = original_func_list
+        _clear_plugin_runtime_state(plugin_manager_pm.catalog.runtime_catalogs)

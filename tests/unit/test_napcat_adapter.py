@@ -53,7 +53,7 @@ from astrbot.core.platform.sources.napcat.napcat_platform_adapter import (
     NapCatPlatformAdapter,
 )
 from astrbot.core.platform.sources.napcat.types import NapCatFetchedMessage
-from astrbot.core.star.star_handler import star_handlers_registry
+from astrbot.core.runtime_catalogs import RuntimeCatalogs
 
 pytestmark = pytest.mark.platform
 
@@ -2506,6 +2506,7 @@ async def test_napcat_private_notice_events_do_not_auto_wake_pipeline(monkeypatc
     queued = queue.get_nowait()
 
     stage = WakingCheckStage()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config={
@@ -2526,16 +2527,13 @@ async def test_napcat_private_notice_events_do_not_auto_wake_pipeline(monkeypatc
                 "plugin_set": ["*"],
             },
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
+                plugin_catalog=SimpleNamespace(
                 get_command_catalog=lambda *_args: CommandCatalogStore(),
             ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
-    )
-    monkeypatch.setattr(
-        star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *args, **kwargs: [],
     )
 
     await stage.process(queued)
@@ -2629,6 +2627,7 @@ async def test_napcat_group_notice_keeps_group_session_when_unique_session_enabl
     queued = queue.get_nowait()
 
     stage = WakingCheckStage()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config={
@@ -2645,16 +2644,13 @@ async def test_napcat_group_notice_keeps_group_session_when_unique_session_enabl
                 "plugin_set": ["*"],
             },
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
+                plugin_catalog=SimpleNamespace(
                 get_command_catalog=lambda *_args: CommandCatalogStore(),
             ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
-    )
-    monkeypatch.setattr(
-        star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *args, **kwargs: [],
     )
 
     await stage.process(queued)
@@ -2678,6 +2674,7 @@ async def test_napcat_group_message_route_identity_keeps_original_group_target_a
     queued.message_str = "hello"
 
     stage = WakingCheckStage()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config={
@@ -2694,16 +2691,13 @@ async def test_napcat_group_message_route_identity_keeps_original_group_target_a
                 "plugin_set": ["*"],
             },
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
+                plugin_catalog=SimpleNamespace(
                 get_command_catalog=lambda *_args: CommandCatalogStore(),
             ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
-    )
-    monkeypatch.setattr(
-        star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *args, **kwargs: [],
     )
 
     assert queued.route_origin == "napcat-test:GroupMessage:654321"
@@ -2756,6 +2750,7 @@ async def test_napcat_reply_only_wake_resolves_sender_lazily_in_waking_stage(
     adapter.client.get_message.assert_not_awaited()
 
     stage = WakingCheckStage()
+    catalogs = RuntimeCatalogs()
     await stage.initialize(
         SimpleNamespace(
             astrbot_config={
@@ -2776,16 +2771,13 @@ async def test_napcat_reply_only_wake_resolves_sender_lazily_in_waking_stage(
                 "plugin_set": ["*"],
             },
             astrbot_config_id="default",
-            plugin_manager=SimpleNamespace(
+                plugin_catalog=SimpleNamespace(
                 get_command_catalog=lambda *_args: CommandCatalogStore(),
             ),
             preferences=SimpleNamespace(get_async=AsyncMock(return_value={})),
+            handlers=catalogs.handlers,
+            plugins=catalogs.plugins,
         )
-    )
-    monkeypatch.setattr(
-        star_handlers_registry,
-        "get_handlers_by_event_type",
-        lambda *args, **kwargs: [],
     )
 
     await stage.process(queued)

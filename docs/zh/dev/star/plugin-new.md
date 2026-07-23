@@ -151,16 +151,17 @@ astrbot_plugin_example/
 
 ## 最小插件实现
 
-`main.py` 中的插件类继承公开的 `Star`，构造函数接收 `Context`：
+`main.py` 中的插件类继承公开的 `Star`，构造函数接收按能力划分的
+`PluginContext`：
 
 ```python
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 
 
 class ExamplePlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: PluginContext):
         super().__init__(context)
 
     async def initialize(self) -> None:
@@ -201,7 +202,7 @@ class ExamplePlugin(Star):
 Python 3.14；不要为 Python 3.10–3.13 添加兼容分支。
 
 持久化数据不要写入插件源码目录，否则更新或重装可能覆盖数据。使用
-[插件存储](./guides/storage) 中的 `StarTools.get_data_dir()` 获取专属数据目录。
+[插件存储](./guides/storage) 中的 `self.context.storage.data_directory()` 获取专属数据目录。
 
 ## 开发原则
 

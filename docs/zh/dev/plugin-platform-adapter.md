@@ -194,13 +194,13 @@ event.track_temporary_local_file(temp_path)
 注册装饰器只有在模块被导入后才会执行。插件入口中显式导入适配器：
 
 ```python
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 
 from .fake_platform_adapter import FakePlatformAdapter  # noqa: F401
 
 
 class Main(Star):
-    def __init__(self, context: Context) -> None:
+    def __init__(self, context: PluginContext) -> None:
         super().__init__(context)
 ```
 

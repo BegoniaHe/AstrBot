@@ -164,16 +164,16 @@ the plugin is updated or removed.
 ## Minimal Plugin
 
 The plugin class in `main.py` inherits from the public `Star` class and accepts
-a `Context`:
+a capability-scoped `PluginContext`:
 
 ```python
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.star import Context, Star
+from astrbot.api.star import PluginContext, Star
 
 
 class ExamplePlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: PluginContext):
         super().__init__(context)
 
     async def initialize(self) -> None:
@@ -217,8 +217,8 @@ Those packages must support Python 3.14; do not add compatibility branches for
 Python 3.10–3.13.
 
 Do not write persistent data into the plugin source directory because an update
-or reinstall can replace it. Use `StarTools.get_data_dir()` as described in
-[Plugin Storage](./guides/storage).
+or reinstall can replace it. Use `self.context.storage.data_directory()` as
+described in [Plugin Storage](./guides/storage).
 
 ## Development Principles
 
